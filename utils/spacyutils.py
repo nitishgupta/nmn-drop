@@ -3,6 +3,7 @@ import spacy
 from typing import List, Tuple
 from spacy.tokens import Doc, Span, Token
 
+
 class WhitespaceTokenizer(object):
     def __init__(self, vocab):
         self.vocab = vocab
@@ -13,13 +14,15 @@ class WhitespaceTokenizer(object):
         spaces = [True] * len(words)
         return Doc(self.vocab, words=words, spaces=spaces)
 
-def getWhiteTokenizerSpacyNLP():
-    nlp = spacy.load('en',  disable=['textcat'])
+
+def getWhiteTokenizerSpacyNLP(disable_list: List[str]=['textcat']):
+    nlp = getSpacyNLP(disable_list)
     nlp.tokenizer = WhitespaceTokenizer(nlp.vocab)
     return nlp
 
-def getSpacyNLP():
-    nlp = spacy.load('en', disable=['textcat'])
+
+def getSpacyNLP(disable_list: List[str]=['textcat']):
+    nlp = spacy.load('en', disable=disable_list)
     return nlp
 
 
@@ -27,9 +30,28 @@ def getSpacyDocs(sents: List[str], nlp):
     """ Batch processing of sentences into Spacy docs."""
     return list(nlp.pipe(sents))
 
-def getSpacyDoc(sent: str, nlp):
+
+def getSpacyDoc(sent: str, nlp) -> Doc:
     """ Single sent to Spacy doc """
     return nlp(sent)
+
+
+def getNER(spacydoc: Doc) -> List[Tuple[str, int, int, str]]:
+    """Returns a list of (ner_text, ner_start, ner_end, ner_label). ner_end is exclusive. """
+    assert spacydoc.is_tagged is True, "NER needs to run."
+
+    ner_tags = []
+    for ent in spacydoc.ents:
+        ner_tags.append((ent.text, ent.start, ent.end, ent.label_))
+
+    return ner_tags
+
+
+def getWhiteSpacedSent(spacydoc: Doc) -> str:
+    """Return a whitespaced delimited spacydoc. """
+    tokens = [token.text for token in spacydoc]
+    return ' '.join(tokens)
+
 
 def getSpanHead(doc: Doc, span: Tuple[int, int]):
     """
@@ -73,17 +95,14 @@ def getNERInToken(doc: Doc, token_idx: int):
 
 
 if __name__=='__main__':
-    nlp = getWhiteTokenizerSpacyNLP()
-    sent = "In another instance , the Pakistani security official said , Americans in a sport utility vehicle last week fled after police officers tried to search their car at a checkpoint on the outskirts of Islamabad , the capital ."
-    doc = nlp(sent)
-    print(doc.ents)
-    for i, t in enumerate(doc):
-        print(f"{i} {t}")
+    nlp = getSpacyNLP()
+    sent = "After developing a blood clot worth 25.00 million in his heart and complications from diabetes he died on 25th November 2009 ."
 
-    head = getSpanHead(doc, (34, 38))
-    print(head)
-    span = getNERInToken(doc, 34)
-    print(span)
+    doc = nlp(sent)
+
+    for ent in doc.ents:
+        ent: Span = ent
+        print(f"{ent.text} {ent.start}  {ent.end}  {ent.label_}  {ent.label}")
 
 
     # with open('/save/ngupta19/datasets/WDW/pruned_cloze/val_temp.jsonl', 'r') as inpf:
