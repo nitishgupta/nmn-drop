@@ -1,0 +1,2 @@
+SOS = "<SOS>"
+EOS = "<EOS>"
