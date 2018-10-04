@@ -4,13 +4,8 @@ import json
 import argparse
 from typing import List, Tuple
 
-import spacy
-from spacy.pipeline import SentenceSegmenter
-from spacy.tokens.doc import Doc
-from spacy.tokens.token import Token
 from utils import TAUtils, util, spacyutils
-
-
+from datasets.hotpotqa.utils import constants
 
 spacy_nlp = spacyutils.getSpacyNLP()
 
@@ -29,7 +24,8 @@ def tokenizedSent_and_NER(sent: str) -> Tuple[str, List]:
     """
     spacydoc = spacyutils.getSpacyDoc(sent, spacy_nlp)
     tokenized_sentence = spacyutils.getWhiteSpacedSent(spacydoc)
-    ner_tags = spacyutils.getNER(spacydoc)
+    # ner_tags = spacyutils.getNER(spacydoc)
+    ner_tags = spacyutils.getNER_and_PROPN(spacydoc)
 
     return (tokenized_sentence, ner_tags)
 
@@ -52,14 +48,29 @@ def tokenizedSent_and_NER_MultipleSents(sents: List[str]) -> List[Tuple[str, Lis
 
     for spacydoc in spacydocs:
         tokenized_sentence = spacyutils.getWhiteSpacedSent(spacydoc)
-        ner_tags = spacyutils.getNER(spacydoc)
+        # ner_tags = spacyutils.getNER(spacydoc)
+        ner_tags = spacyutils.getNER_and_PROPN(spacydoc)
         sent_and_tags.append((tokenized_sentence, ner_tags))
 
     return sent_and_tags
 
 
 def tokenizeDocs(input_json: str, output_jsonl: str) -> None:
-    """ Tokenize the question, answer and context in the HotPotQA Json. """
+    """ Tokenize the question, answer and context in the HotPotQA Json.
+
+    Returns:
+    --------
+    Jsonl file with same fields as input with the modification/addition of:
+    Modifications:
+        q_field: The question is tokenized
+        ans_field: The answer is now modified
+        context_field: Context sentences are now tokenized, but stored with white-space delimition
+
+    Additions:
+        q_ner_field: NER tags for question. Each NER tag is (spantext, start, end, label) with exclusive-end.
+        ans_ner_field: NER tags in answer
+        context_ner_field: NER tags in each of the context sentences
+    """
 
     print("Reading input jsonl: {}".format(input_json))
     print("Output filepath: {}".format(output_jsonl))
@@ -76,38 +87,31 @@ def tokenizeDocs(input_json: str, output_jsonl: str) -> None:
     with open(output_jsonl, 'w') as outf:
         for jsonobj in jsonobjs:
             new_doc = {}
-            new_doc[id_field] = jsonobj[id_field]
-            new_doc[suppfacts_field] = jsonobj[suppfacts_field]
-            new_doc[qtyte_field] = jsonobj[qtyte_field]
-            new_doc[qlevel_field] = jsonobj[qlevel_field]
+            new_doc[constants.id_field] = jsonobj[constants.id_field]
+            new_doc[constants.suppfacts_field] = jsonobj[constants.suppfacts_field]
+            new_doc[constants.qtyte_field] = jsonobj[constants.qtyte_field]
+            new_doc[constants.qlevel_field] = jsonobj[constants.qlevel_field]
 
             # List of paragraphs, each represented as a tuple (title, sentences)
-            contexts = jsonobj[context_field]
-            question = jsonobj[q_field]
-            answer = jsonobj[ans_field]
+            contexts = jsonobj[constants.context_field]
+            question = jsonobj[constants.q_field]
+            answer = jsonobj[constants.ans_field]
 
             (q_tokenized, q_ners) = tokenizedSent_and_NER(question)
             (a_tokenized, a_ners) = tokenizedSent_and_NER(answer)
 
-            new_doc[q_field] = q_tokenized
-            new_doc[q_field + "_ner"] = q_ners
+            new_doc[constants.q_field] = q_tokenized
+            new_doc[constants.q_ner_field] = q_ners
 
-            new_doc[ans_field] = a_tokenized
-            new_doc[ans_field + "_ner"] = a_ners
+            new_doc[constants.ans_field] = a_tokenized
+            new_doc[constants.ans_ner_field] = a_ners
 
             tokenized_contexts = []
             contexts_ners = []
             for para in contexts:
                 (title, sentences) = para
-
                 # List of tuples of (sent, ner_tags)
                 sent_ner_tuples = tokenizedSent_and_NER_MultipleSents(sentences)
-
-                '''
-                # List of tuples of (sent, ner_tags)
-                # sent_ner_tuples = [tokenizedSent_and_NER(sent) for sent in sentences]
-                '''
-
                 # tokenized_sentences: List of tokenized sentences. ners_per_sent: List of ner_tags per sent
                 [tokenized_sentences, ners_per_sent] = list(zip(*sent_ner_tuples))
                 assert len(tokenized_sentences) == len(ners_per_sent)
@@ -115,8 +119,8 @@ def tokenizeDocs(input_json: str, output_jsonl: str) -> None:
                 tokenized_contexts.append((title, tokenized_sentences))
                 contexts_ners.append(ners_per_sent)
 
-            new_doc[context_field] = tokenized_contexts
-            new_doc[context_field + "_ner"] = contexts_ners
+            new_doc[constants.context_field] = tokenized_contexts
+            new_doc[constants.context_ner_field] = contexts_ners
 
             outf.write(json.dumps(new_doc))
             outf.write("\n")

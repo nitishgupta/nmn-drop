@@ -2,6 +2,7 @@ import json
 import spacy
 from typing import List, Tuple
 from spacy.tokens import Doc, Span, Token
+from utils import util
 
 
 class WhitespaceTokenizer(object):
@@ -45,6 +46,37 @@ def getNER(spacydoc: Doc) -> List[Tuple[str, int, int, str]]:
         ner_tags.append((ent.text, ent.start, ent.end, ent.label_))
 
     return ner_tags
+
+
+
+def getNER_and_PROPN(spacydoc: Doc) -> List[Tuple[str, int, int, str]]:
+    ner_tags = getNER(spacydoc)
+    ner_spans = [(x,y) for (_, x, y, _) in ner_tags]
+
+    pos_tags = getPOSTags(spacydoc)
+    propn_spans = util.getContiguousSpansOfElement(pos_tags, "PROPN")
+
+    propn_spans_tokeep = []
+    for propnspan in propn_spans:
+        add_propn = True
+        for nerspan in ner_spans:
+            if util.doSpansIntersect(propnspan, nerspan):
+                add_propn = False
+                break
+
+        if add_propn:
+            propn_spans_tokeep.append(propnspan)
+
+    for propnspan in propn_spans_tokeep:
+        ner_tags.append((spacydoc[propnspan[0]:propnspan[1]].text, propnspan[0], propnspan[1], "PROPN"))
+
+    return ner_tags
+
+
+def getPOSTags(spacydoc: Doc) -> List[str]:
+    """ Returns a list of POS tags for the doc. """
+    pos_tags = [token.pos_ for token in spacydoc]
+    return pos_tags
 
 
 def getWhiteSpacedSent(spacydoc: Doc) -> str:
@@ -96,13 +128,21 @@ def getNERInToken(doc: Doc, token_idx: int):
 
 if __name__=='__main__':
     nlp = getSpacyNLP()
-    sent = "After developing a blood clot worth 25.00 million in his heart and complications from diabetes he died on 25th November 2009 ."
+    sent = "Are Muzzle and Screaming Trees both alternative rock bands ?"
 
-    doc = nlp(sent)
+    doc: Doc = nlp(sent)
+
+    for token in doc:
+        print(f"{token.text}_{token.pos_}", end=" ")
+    print(" ")
 
     for ent in doc.ents:
         ent: Span = ent
         print(f"{ent.text} {ent.start}  {ent.end}  {ent.label_}  {ent.label}")
+
+
+    for span in getNER_and_PROPN(doc):
+        print(span)
 
 
     # with open('/save/ngupta19/datasets/WDW/pruned_cloze/val_temp.jsonl', 'r') as inpf:

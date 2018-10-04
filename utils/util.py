@@ -42,11 +42,21 @@ def readlines(fp):
     return lines
 
 
-def readJsonlDocs(jsonlfp: str):
+def readJsonlDocs(jsonlfp: str) -> List[Dict]:
     ''' Read all docs from jsonl file. '''
     lines = readlines(jsonlfp)
     docs = [json.loads(line) for line in lines]
     return docs
+
+
+def doSpansIntersect(span1: Tuple[int, int], span2: Tuple[int, int]) -> bool:
+    span1 = set(range(span1[0], span1[1]))
+    span2 = set(range(span2[0], span2[1]))
+
+    if len(span1.intersection(span2)) > 0:
+        return True
+    else:
+        return False
 
 
 def getContiguousSpansOfElement(l: List[Any], element: Any) -> List[Tuple[int, int]]:
@@ -174,6 +184,18 @@ def _KnuthMorrisPratt(text, pattern):
         matchLen += 1
         if matchLen == len(pattern):
             yield startPos
+
+
+def round_all(stuff, prec):
+    """ Round all the number elems in nested stuff. """
+    if isinstance(stuff, list):
+        return [round_all(x, prec) for x in stuff]
+    if isinstance(stuff, tuple):
+        return tuple(round_all(x, prec) for x in stuff)
+    if isinstance(stuff, float):
+        return round(float(stuff), prec)
+    else:
+        return stuff
 
 
 if __name__=='__main__':
