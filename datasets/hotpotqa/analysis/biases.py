@@ -76,90 +76,87 @@ def _bestNERSpanPerfPerQA(qaexample: Dict) -> Tuple:
         return prediction, ans, (best_f1, best_pr, best_re, best_em)
 
 
-def bestNERPerf(input_jsonl: str, print_preds: bool = False, output_txt: str = None) -> None:
-    '''
-    For a given data_file and gold-truth, compute the max perf from predicting NERs
+def compartiveQuestionAnalysis(qaexample):
+    ques = qaexample[constants.q_field]
+    ans = qaexample[constants.ans_field]
+    q_ners = qaexample[constants.q_ner_field]
+    ners = [ner[0] for ner in q_ners]
 
-    Parameters:
-    ----------
-    input_jsonl: Input with NERs marked
-    print_preds: Gold-truth file
-    output_txt: Optional, Output the answer and prediction for lowest F1 scores
-    '''
+    print(ques)
+    print(ans)
+    print(ners)
+    print()
+
+    correct_idx = -1
+
+    for i, ner in enumerate(ners):
+        if ner == ans:
+            correct_idx = i
+
+    return correct_idx
 
 
+
+def boolBias(input_jsonl: str) -> None:
     print("Reading dataset: {}".format(input_jsonl))
     qa_examples: List[Dict] = util.readJsonlDocs(input_jsonl)
 
     print("Computing maximum NER Perf ... ")
 
-    final_f1, final_pr, final_re, final_em = 0.0, 0.0, 0.0, 0.0
+    num_yes_ans = 0
+    num_no_ans = 0
     num_examples = 0
 
-    predictions, answers = [], []
-    scores = []
+    qtype_count = {}
 
-    # Dict of F1 score to list of (ans, pred) tuples
-    f12answers = {}
+    correct_idx_dist = {}
+    comparison_noans = 0
+    comparison_nonbool = 0
 
     for qaexample in qa_examples:
-        prediction, ans, (f1, pr, re, em) = _bestNERSpanPerfPerQA(qaexample)
-        (final_f1, final_pr, final_re, final_em) = updateScores(final_f1, final_pr, final_re, final_em,
-                                                                f1, pr, re, em)
+        answer = qaexample[constants.ans_field]
         num_examples += 1
 
-        predictions.append(prediction)
-        answers.append(ans)
-        scores.append((f1, pr, re, em))
+        qtype = qaexample[constants.qtyte_field]
 
-        if f1 not in f12answers:
-            f12answers[f1] = []
-        f12answers[f1].append((ans, prediction))
 
-        if print_preds:
-            print(prediction)
-            print(ans)
-            print("f1: {} pr: {} re: {} em: {}".format(f1, pr, re, em))
-            print("\n")
+        if qtype == 'comparison':
+            if answer == 'yes':
+                num_yes_ans += 1
+            elif answer == 'no':
+                num_no_ans += 1
+            else:
+                comparison_nonbool += 1
+                correct_idx = compartiveQuestionAnalysis(qaexample)
+                if correct_idx == -1:
+                    comparison_noans += 1
+                else:
+                    correct_idx_dist[correct_idx] = correct_idx_dist.get(correct_idx, 0) + 1
 
-    final_f1, final_pr, final_re, final_em = _avgScores(final_f1, final_pr, final_re, final_em, num_examples)
+        qtype_count[qtype] = qtype_count.get(qtype, 0) + 1
+
+
+    for k,v in qtype_count.items():
+        qtype_count[k] = qtype_count[k]*100.0 / float(num_examples)
 
     print(f"Number of examples: {num_examples}")
-    print("Final F1: {} Pr: {} Re: {} EM: {}".format(final_f1, final_pr, final_re, final_em))
-
-    sorted_f12answers = util.sortDictByKey(f12answers)
-
-    # Ouput the Maximum NER performance.
-    # For the lowest 50 F1 scores, output each of the ans || pred
-    if output_txt is not None:
-        outf = open(output_txt, 'w')
-        outf.write(f"File: {input_jsonl}" + '\n')
-        outf.write(f"Number of examples: {num_examples}" + '\n')
-        outf.write("Max F1: {} Pr: {} Re: {} EM: {}\n".format(final_f1, final_pr, final_re, final_em))
-        outf.write("Lowest F1 predictions: \n\n")
-
-        for i in range(50):
-            (f1, ans_pred_tuples) = sorted_f12answers[i]
-            outf.write(f"F1: {f1} \t Count: {len(ans_pred_tuples)}\n")
-            for ans, pred in ans_pred_tuples:
-                pred = '@EMPTY@' if pred == '' else pred
-                outf.write(f"{ans} \t||\t  {pred} \n")
-            outf.write('\n\n')
-
-        outf.close()
-
+    numboolqas = num_yes_ans + num_no_ans
+    perc_boolqas = float(numboolqas)*100.0/num_examples
+    print(f"Bool: {numboolqas} Yes: {num_yes_ans} No: {num_no_ans}")
+    print(f"Percentage of Bool Ques: {perc_boolqas}")
+    print(f"Qtype : {qtype_count}")
+    print(f"Comparison non bool: {comparison_nonbool}")
+    print(f"Comparison No Ans: {comparison_noans}")
+    print(f"Comparison Idx Dist: {correct_idx_dist}")
 
 def main(args):
-
-    bestNERPerf(input_jsonl=args.input_jsonl, print_preds=args.print_preds, output_txt=args.output_txt)
+    boolBias(input_jsonl=args.input_jsonl)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--input_jsonl', required=True)
-    parser.add_argument('--print_preds', action='store_true')
-    parser.add_argument('--output_txt')
-
     args = parser.parse_args()
 
     main(args)
+

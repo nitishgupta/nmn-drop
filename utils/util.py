@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import unicodedata
 from typing import Dict, List, Any, Tuple
 
 stopwords = None
@@ -20,6 +21,25 @@ def countList(input_list: List[Any], depth: int=1) -> int:
     else:
         return sum([countList(l, depth - 1) for l in input_list])
 
+
+def pruneMultipleSpaces(sentence: str):
+    """ Prune multiple spaces in a sentence and replace with single space
+    Parameters:
+    -----------
+    sentence: Sentence string with mulitple spaces
+
+    Returns:
+    --------
+    cleaned_sentence: String with only single spaces.
+    """
+
+    sentence = sentence.strip()
+    tokens = sentence.split(' ')
+    tokens = [t for t in tokens if t !=  '']
+    if len(tokens) == 1:
+        return tokens[0]
+    else:
+        return ' '.join(tokens)
 
 
 def stopWords():
@@ -47,6 +67,17 @@ def readJsonlDocs(jsonlfp: str) -> List[Dict]:
     lines = readlines(jsonlfp)
     docs = [json.loads(line) for line in lines]
     return docs
+
+
+def isSpanOverlap(s1, s2, srt_idx, end_idx):
+    """ Returns True if the spans overlap. Works with exclusive end spans
+
+    s1, s2 : Tuples containing span start and end
+    srt_idx, end_idx: Idxs of span_srt and span_end in the input tuples
+    """
+    start1, end1 = s1[srt_idx], s1[end_idx]
+    start2, end2 = s2[srt_idx], s2[end_idx]
+    return max(start1, start2) <= (min(end1, end2) - 1)
 
 
 def doSpansIntersect(span1: Tuple[int, int], span2: Tuple[int, int]) -> bool:
@@ -92,7 +123,7 @@ def getContiguousSpansOfElement(l: List[Any], element: Any) -> List[Tuple[int, i
 
 def mostFreqKeysInDict(d: Dict) -> List[Any]:
     """ d is a dict with values as frequencies """
-    sortedDict = sortDict(d, True)
+    sortedDict = sortDictByValue(d, True)
     maxVal = sortedDict[0][1]
     mostFreqElems = []
     for elem, frq in sortedDict:
@@ -104,8 +135,12 @@ def mostFreqKeysInDict(d: Dict) -> List[Any]:
     return mostFreqElems
 
 
-def sortDict(d, decreasing=False):
+def sortDictByValue(d, decreasing=False):
     return sorted(d.items(), key=lambda x: x[1], reverse=decreasing)
+
+
+def sortDictByKey(d, decreasing=False):
+    return sorted(d.items(), key=lambda x: x[0], reverse=decreasing)
 
 
 def getContextAroundSpan(seq: List[Any], span: Tuple[int, int], context_len: int) -> Tuple[List[Any], List[Any]]:
@@ -198,6 +233,127 @@ def round_all(stuff, prec):
         return stuff
 
 
+def removeOverlappingSpans(spans):
+    """
+    Remove overlapping spans by keeping the longest ones. Span end are exclusive
+
+    spans: List of (start, end) tuples
+    """
+    def spanOverlap(s1, s2):
+        """ Works with exclusive end spans """
+        start1, end1 = s1
+        start2, end2 = s2
+        return max(start1, start2) <= (min(end1, end2) - 1)
+
+    if len(spans) == 0:
+        return spans
+    # Spans sorted by increasing order
+    sorted_spans = sorted(spans, key=lambda x: x[0])
+
+    final_spans = [sorted_spans[0]]
+    for i in range(1, len(sorted_spans)):
+        last_span = final_spans[-1]
+        span = sorted_spans[i]
+        if not spanOverlap(last_span, span):
+            final_spans.append(span)
+        else:
+            len1 = last_span[1] - last_span[0]
+            len2 = span[1] - span[0]
+            # If incoming span is longer, delete last span and put
+            if len2 > len1:
+                final_spans.pop()
+                final_spans.append(span)
+
+    return final_spans
+
+
+def mergeSpansAndRemoveOverlap(orig_spans, new_spans, srt_idx, end_idx):
+    ''' Merge a list of spans in another given list resulting in non-overlapping spans.
+    Assumes that both span lists are independently non-overlapping.
+
+    While merging, if incoming span overlaps, keep the original.
+
+    Parameters:
+    -----------
+    orig_spans: List of (..., start, ..., end, ...) tuples. Original spans
+    new_spans: New spans. Same as above
+    srt_idx: Index of span_srt in the span tuple
+    end_idx: Index of span_end in the span tuple
+
+    Returns:
+    --------
+    final_spans: List of merged spans sorted by span start.
+
+    '''
+
+    if len(orig_spans) == 0:
+        return new_spans
+    if len(new_spans) == 0:
+        return orig_spans
+
+    # Spans sorted by increasing order
+    sorted_orig_spans = sorted(orig_spans, key=lambda x: x[srt_idx])
+    sorted_new_spans = sorted(new_spans, key=lambda x: x[srt_idx])
+
+    # These will act as the head pointers in the two lists
+    orig_span_idx = 0
+    new_span_idx = 0
+
+    spans_to_add = []
+
+    while True:
+        # No new spans to merge
+        if new_span_idx == len(sorted_new_spans):
+            break
+
+        # Original List is done
+        if orig_span_idx == len(sorted_orig_spans):
+            spans_to_add.append(sorted_new_spans[new_span_idx])
+            new_span_idx += 1
+        else:
+            orig_span = sorted_orig_spans[orig_span_idx]
+            new_span = sorted_new_spans[new_span_idx]
+
+            # Spans overlap, move head to the next new span
+            if isSpanOverlap(orig_span, new_span, srt_idx, end_idx):
+                new_span_idx += 1
+            else:
+                # If new span starts after the current original span's end, then move the current original span head
+                if new_span[srt_idx] >= orig_span[end_idx]:
+                    orig_span_idx += 1
+                    # continue
+
+                # New span ends before the current head start
+                # Previous condition ensures that the new_span_start is after the previous orig_span_end
+                # Hence this span doesn't overlap with original spans ==> merge
+                if new_span[end_idx] <= orig_span[srt_idx]:
+                    spans_to_add.append(new_span)
+                    new_span_idx += 1
+                    # continue
+
+    sorted_orig_spans.extend(spans_to_add)
+    sorted_orig_spans = sorted(sorted_orig_spans, key=lambda x: x[srt_idx])
+
+    return sorted_orig_spans
+
+
+def cleanMentionSurface(arg):
+    return _getLnrm(arg)
+
+
+def _getLnrm(arg):
+    """Normalizes the given arg by stripping it of diacritics, lowercasing, and
+    removing all non-alphanumeric characters.
+    """
+    arg = ''.join(
+        [c for c in unicodedata.normalize('NFD', arg) if unicodedata.category(c) != 'Mn'])
+    arg = arg.lower()
+    arg = ''.join(
+        [c for c in arg if c in set('abcdefghijklmnopqrstuvwxyz0123456789')])
+    return arg
+
+
+
 if __name__=='__main__':
     words = stopWords()
 
@@ -206,7 +362,16 @@ if __name__=='__main__':
     pattern = [5,1,5,0,1]
 
     input_list = [[[1,2,3], [3,4,5]], [[1,2,3], [3,4,5], [9,10,10,101]], [[1,2,3,3,4,5]]]
-    print(countList(input_list, 3))
+
+
+    spans = [[2,4], [8,10], [3,6], [0, 1]]
+    spans = removeOverlappingSpans(spans)
+    new_spans = [[1,2], [6,7]]
+    print(spans)
+    print(new_spans)
+    print(mergeSpansAndRemoveOverlap(spans, new_spans, 0, 1))
+
+    print(cleanMentionSurface("Daniel José Older"))
 
 
 

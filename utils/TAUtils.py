@@ -3,6 +3,28 @@ from typing import List, Tuple
 from ccg_nlpy.local_pipeline import LocalPipeline
 
 
+def getCCGNLPLocalPipeline():
+    ccg_nlp = LocalPipeline()
+    return ccg_nlp
+
+
+def getOntonotesNER(sentence: List[str], ccg_nlp: LocalPipeline):
+    try:
+        ccgdoc: TextAnnotation = ccg_nlp.doc([sentence], pretokenized=True)
+    except:
+        return []
+
+    ner_view = ccgdoc.get_ner_ontonotes
+
+    ners = []
+
+    if ner_view.cons_list is not None:
+        for cons in ner_view.cons_list:
+            ners.append((cons['tokens'], cons['start'], cons['end'], cons['label'] + '_ccg'))
+
+    return ners
+
+
 def thresholdSentLength(ta: TextAnnotation, lp: LocalPipeline,
                         maxlen: int = 120) -> TextAnnotation:
     """ Make a new text annotation by spliting sentences longer than maxlen tokens 

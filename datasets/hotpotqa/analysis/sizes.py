@@ -5,6 +5,8 @@ from typing import List, Tuple, Any
 from datasets.hotpotqa.utils import constants
 from utils import util
 
+from allennlp.modules.seq2seq_encoders.pytorch_seq2seq_wrapper import PytorchSeq2SeqWrapper
+
 ner_type: List[Any]
 
 def statsOnListOfList(inplist: List[List[Any]], debug=False):
@@ -86,6 +88,10 @@ def dataStats(input_jsonl: str) -> None:
     answers: List[List[str]] = []
     ans_ners: List[List[Any]] = []
 
+    # Count for questions of different level
+    qlevel2count = {}
+    qlevel2len = {}
+
     for qaexample in qa_examples:
         # List of contexts. Each context is a list of (Title, [sentence])
         contexts: List[Tuple[str, List[str]]] = qaexample[constants.context_field]
@@ -124,12 +130,22 @@ def dataStats(input_jsonl: str) -> None:
 
 
         ### Question processing
-        questions.append(qaexample[constants.q_field].split(' '))
+        qlevel = qaexample[constants.qlevel_field]
+        qtokens = qaexample[constants.q_field].split(' ')
+        questions.append(qtokens)
         ques_ners.append(qaexample[constants.q_ner_field])
+        # Counting the length questions of different levels
+        qlevel2len[qlevel] = qlevel2len.get(qlevel, 0) + len(qtokens)
+        # Counting the questions of different levels
+        qlevel2count[qlevel] = qlevel2count.get(qlevel, 0) + 1
 
         ### Answer processing
         answers.append(qaexample[constants.ans_field].split(' '))
         ans_ners.append(qaexample[constants.ans_ner_field])
+
+
+
+    # End of processing questions
 
     stats = statsOnListOfList(contexts_perqa)
     printListofListStats(example="questions", elem="contexts", stats=stats)
@@ -157,7 +173,7 @@ def dataStats(input_jsonl: str) -> None:
     print()
 
     stats = statsOnListOfList(all_qa_ners)
-    printListofListStats(example="Questions", elem="Ners", stats=stats)
+    printListofListStats(example="questions (example)", elem="Ners", stats=stats)
     print()
 
     print("QUESTION STATS")
@@ -167,10 +183,14 @@ def dataStats(input_jsonl: str) -> None:
     stats = statsOnListOfList(ques_ners)
     printListofListStats(example="Questions", elem="NERs", stats=stats)
     num_nonerques = 0
-    for qner, ques in zip(ques_ners, questions):
+    for i, (qner, ques) in enumerate(zip(ques_ners, questions)):
+        qaexample = qa_examples[i]
+        titles = [title for (title, _) in qaexample[constants.context_field]]
         if len(qner) == 0:
             num_nonerques += 1
-            print(' '.join(ques))
+            # print(' '.join(ques))
+            # print(titles)
+            # print()
     print(f"Number of ques with no ner: {num_nonerques}")
     print()
 
@@ -187,11 +207,15 @@ def dataStats(input_jsonl: str) -> None:
             num_nonerans += 1
     print(f"Number of answers with no ner: {num_nonerans}")
 
+    print("Question Level counts")
+    print(qlevel2count)
 
+    # Averaging qlevel2len
+    for qlevel, length in qlevel2len.items():
+        qlevel2len[qlevel] = util.round_all(float(length) / qlevel2count[qlevel], 3)
 
-
-
-
+    print("Question Level 2 Avg. Question length")
+    print(qlevel2len)
 
 
 def main(args):

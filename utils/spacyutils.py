@@ -23,7 +23,8 @@ def getWhiteTokenizerSpacyNLP(disable_list: List[str]=['textcat']):
 
 
 def getSpacyNLP(disable_list: List[str]=['textcat']):
-    nlp = spacy.load('en', disable=disable_list)
+    # nlp = spacy.load('en', disable=disable_list)
+    nlp = spacy.load('en_core_web_lg', disable=disable_list)
     return nlp
 
 
@@ -48,8 +49,19 @@ def getNER(spacydoc: Doc) -> List[Tuple[str, int, int, str]]:
     return ner_tags
 
 
+def getPropnSpans(spacydoc: Doc) -> List[Tuple[str, int, int, str]]:
+    pos_tags = getPOSTags(spacydoc)
+    propn_span_srtend = util.getContiguousSpansOfElement(pos_tags, "PROPN")
+    propn_spans = [(spacydoc[propnspan[0]:propnspan[1]].text, propnspan[0], propnspan[1], "PROPN") \
+                   for propnspan in propn_span_srtend]
+
+    return propn_spans
+
 
 def getNER_and_PROPN(spacydoc: Doc) -> List[Tuple[str, int, int, str]]:
+    """Returns a list of (ner_text, ner_start, ner_end, ner_label). ner_end is exclusive.
+    This also includes PROPN spans that are not part of a NER
+    """
     ner_tags = getNER(spacydoc)
     ner_spans = [(x,y) for (_, x, y, _) in ner_tags]
 
@@ -79,10 +91,33 @@ def getPOSTags(spacydoc: Doc) -> List[str]:
     return pos_tags
 
 
+def getTokens(spacydoc: Doc) -> List[str]:
+    tokens = [token.text for token in spacydoc]
+    return tokens
+
+
 def getWhiteSpacedSent(spacydoc: Doc) -> str:
     """Return a whitespaced delimited spacydoc. """
-    tokens = [token.text for token in spacydoc]
+    tokens = getTokens(spacydoc)
     return ' '.join(tokens)
+
+
+def getAll_SentIdAndTokenOffset(spacydoc: Doc) -> List[Tuple[int, int]]:
+    """Get (sentence idx, withinSentOffset) for all tokens."""
+    numTokens = len(spacydoc)
+    tokenIdxs = []
+    sentence_end_pos = [sent.end for sent in spacydoc.sents]
+    sent_idx = 0
+    withinsent_tokenidx = 0
+
+    for i in range(0, numTokens):
+        if i == sentence_end_pos[sent_idx]:
+            sent_idx += 1
+            withinsent_tokenidx = 0
+
+        tokenIdxs.append((sent_idx, withinsent_tokenidx))
+        withinsent_tokenidx += 1
+    return tokenIdxs
 
 
 def getSpanHead(doc: Doc, span: Tuple[int, int]):
@@ -128,9 +163,17 @@ def getNERInToken(doc: Doc, token_idx: int):
 
 if __name__=='__main__':
     nlp = getSpacyNLP()
-    sent = "Are Muzzle and Screaming Trees both alternative rock bands ?"
 
-    doc: Doc = nlp(sent)
+    text = "He died in the destruction of the Space Shuttle \"Challenger\", on which he was serving as Mission Specialist for mission STS-51-L."
+
+    # sent = "Amherst ( ) is a town in Hampshire County , Massachusetts , United States , in the Connecticut River valley ."
+
+    doc: Doc = nlp(text)
+
+    for sent in doc.sents:
+        sent: Span = sent
+        print(getWhiteSpacedSent(doc[sent.start:sent.end]))
+        print(f"{sent.start} {sent.end}")
 
     for token in doc:
         print(f"{token.text}_{token.pos_}", end=" ")
