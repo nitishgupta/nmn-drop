@@ -221,6 +221,19 @@ def _KnuthMorrisPratt(text, pattern):
             yield startPos
 
 
+def normalizeD1byD2(dict1, dict2):
+    d = {}
+    for k,v in dict1.items():
+        d[k] = float(v)/float(dict2[k])
+    return d
+
+
+def normalizeDictbyK(dict1, constant):
+    d = {}
+    for k,v in dict1.items():
+        d[k] = float(v)/constant
+    return d
+
 def round_all(stuff, prec):
     """ Round all the number elems in nested stuff. """
     if isinstance(stuff, list):
@@ -229,6 +242,11 @@ def round_all(stuff, prec):
         return tuple(round_all(x, prec) for x in stuff)
     if isinstance(stuff, float):
         return round(float(stuff), prec)
+    if isinstance(stuff, dict):
+        d = {}
+        for k, v in stuff.items():
+            d[k] = round(v, prec)
+        return d
     else:
         return stuff
 
@@ -373,5 +391,7 @@ if __name__=='__main__':
 
     print(cleanMentionSurface("Daniel José Older"))
 
+    a = {'1': 0.1288361823, '2':9.1298836128736}
+    print(round_all(a, 3))
 
 

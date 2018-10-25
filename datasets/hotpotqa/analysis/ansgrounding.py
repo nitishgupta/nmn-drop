@@ -85,7 +85,7 @@ def getAnsFromGrounding(answer_type, answer_grounding, contexts, contexts_ws, co
     return answer_str
 
 
-def ansTypeAnalysis(input_jsonl: str, output_txt: str) -> None:
+def ansTypeAnalysis(input_jsonl: str, output_txt: str, skipeasy: bool) -> None:
     """ The input jsonl contains types and grounded answers.
     Perform the following:
         1. Distribution over types
@@ -119,6 +119,8 @@ def ansTypeAnalysis(input_jsonl: str, output_txt: str) -> None:
 
     with open(output_txt, 'w') as outf:
         for jsonobj in jsonobjs:
+            if skipeasy is True and jsonobj[constants.qlevel_field] == 'easy':
+                continue
 
             contexts = jsonobj[constants.context_field]
             contexts_ws = jsonobj[constants.context_whitespaces_field]
@@ -164,7 +166,8 @@ def main(args):
     print('Assigning Answer Types: {}'.format(args.input_jsonl))
 
     # args.input_jsonl --- is the output from preprocess.tokenize
-    ansTypeAnalysis(input_jsonl=args.input_jsonl, output_txt=args.output_txt)
+    ansTypeAnalysis(input_jsonl=args.input_jsonl, output_txt=args.output_txt,
+                    skipeasy=args.skipeasy)
 
 
 
@@ -172,6 +175,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--input_jsonl', required=True)
     parser.add_argument('--output_txt', required=True)
+    parser.add_argument('--skipeasy', action='store_true', default=False)
 
     args = parser.parse_args()
 

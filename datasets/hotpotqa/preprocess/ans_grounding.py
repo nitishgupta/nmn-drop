@@ -244,7 +244,6 @@ def main(args):
                             f1_threshold=args.f1thresh)
 
 
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--input_jsonl', required=True)
