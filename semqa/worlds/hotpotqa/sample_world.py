@@ -53,13 +53,11 @@ class SampleHotpotWorld(World):
         # boxes = set([Box(object_list, box_id) for box_id, object_list in
         #              enumerate(world_representation)])
 
+        print("Mapping names for all ques spans")
         if ques_spans is not None:
             for ques_str in ques_spans:
                 ques_str = f"qstr:{ques_str}"
-                print(ques_str)
                 self._map_name(name=ques_str, keep_mapping=True)
-                # self.print_name(name=ques_str)
-                print("finished")
 
 
         print(self.get_name_mapping())
@@ -96,18 +94,17 @@ class SampleHotpotWorld(World):
 
     @overrides
     def _map_name(self, name: str, keep_mapping: bool = False) -> str:
-        print(name)
+        print(f"running name map : {name}")
         if name not in types.COMMON_NAME_MAPPING and name not in self.local_name_mapping:
             if not keep_mapping:
                 raise ParsingError(f"Encountered un-mapped name: {name}")
             print(name)
             if name.startswith("qstr:"):
                 # Question sub-span
-                print("HERE")
-                translated_name = "Q:" + name
+                translated_name = name
                 self._add_name_mapping(name, translated_name, types.QSTR_TYPE)
             else:
-                raise ParsingError(f"Cannot handle Names apart from qstr:ques_tokens. Input: {name}")
+                raise ParsingError(f"Cannot handle names apart from qstr:ques_tokens. Input: {name}")
         else:
             if name in types.COMMON_NAME_MAPPING:
                 translated_name = types.COMMON_NAME_MAPPING[name]

@@ -57,11 +57,11 @@ name_mapper.map_name_with_signature("scalar_mult", NUM_FROM_ONENUM_TYPE)
 COMMON_NAME_MAPPING = name_mapper.common_name_mapping
 COMMON_TYPE_SIGNATURE = name_mapper.common_type_signature
 
-print("name mapping:")
-print(COMMON_NAME_MAPPING)
-
-print("type signature:")
-print(COMMON_TYPE_SIGNATURE)
+# print("name mapping:")
+# print(COMMON_NAME_MAPPING)
+#
+# print("type signature:")
+# print(COMMON_TYPE_SIGNATURE)
 '''
 
 
