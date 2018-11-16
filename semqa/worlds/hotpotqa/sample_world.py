@@ -57,7 +57,7 @@ class SampleHotpotWorld(World):
             for ques_str in ques_spans:
                 ques_str = f"qstr:{ques_str}"
                 print(ques_str)
-                self._map_name2(name=ques_str, keep_mapping=True)
+                self._map_name(name=ques_str, keep_mapping=True)
                 # self.print_name(name=ques_str)
                 print("finished")
 
@@ -68,8 +68,6 @@ class SampleHotpotWorld(World):
         print(self.all_possible_actions())
 
         sys.exit()
-
-
 
         self._executor = SampleHotpotExecutor()
 
@@ -96,8 +94,8 @@ class SampleHotpotWorld(World):
     def print_name(self, name):
         print(name)
 
-    # @overrides
-    def _map_name2(self, name: str, keep_mapping: bool = False) -> str:
+    @overrides
+    def _map_name(self, name: str, keep_mapping: bool = False) -> str:
         print(name)
         if name not in types.COMMON_NAME_MAPPING and name not in self.local_name_mapping:
             if not keep_mapping:
