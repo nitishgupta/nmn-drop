@@ -1,0 +1,2 @@
+from semqa.models.hotpotqa.hotpot_semantic_parser import HotpotSemanticParser
+from semqa.models.hotpotqa.sample_hotpot_semantic_parser import SampleHotpotSemanticParser
