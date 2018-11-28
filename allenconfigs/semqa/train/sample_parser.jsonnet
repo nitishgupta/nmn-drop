@@ -59,6 +59,18 @@ local parse_number(x) =
       "hidden_size": 10,
       "num_layers": 1
     },
+    // Spans of this will be used for action embedding. So final output should be equal to action_embedding_dim
+    // hidden_size * dir * 2 == action_embedding_dim
+    "ques2action_encoder": {
+      "type": "lstm",
+      "input_size": 25,
+      "hidden_size": 25,
+      "num_layers": 1,
+    },
+    "quesspan_extractor": {
+      "type": "endpoint",
+      "input_dim": 25,
+    },
 
     "attention": {"type": "dot_product"},
 
@@ -74,7 +86,7 @@ local parse_number(x) =
   "iterator": {
     "type": "basic",
     "batch_size": std.extVar("BS"),
-    "max_instances_in_memory": 16 //
+    "max_instances_in_memory": std.extVar("BS") //
   },
 
   "trainer": {

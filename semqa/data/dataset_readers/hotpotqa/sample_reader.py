@@ -8,7 +8,7 @@ from overrides import overrides
 
 from allennlp.data.instance import Instance
 from allennlp.data.fields import Field, TextField, ListField
-from allennlp.data.fields import ProductionRuleField, MetadataField, SpanField, ArrayField
+from allennlp.data.fields import ProductionRuleField, MetadataField, SpanField, ArrayField, LabelField
 from allennlp.data.token_indexers import TokenIndexer, SingleIdTokenIndexer
 from allennlp.data.tokenizers.token import Token
 from allennlp.data.dataset_readers.dataset_reader import DatasetReader
@@ -16,8 +16,12 @@ from allennlp.data.dataset_readers.dataset_reader import DatasetReader
 from semqa.worlds.hotpotqa.sample_world import SampleHotpotWorld
 import datasets.hotpotqa.utils.constants as hpconstants
 
+from allennlp.data.dataset_readers.wikitables import WikiTablesDatasetReader
+
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
+QSTR_PREFIX="QSTR:"
 
 
 @DatasetReader.register("sample_hotpot")
@@ -147,8 +151,64 @@ class SampleHotpotDatasetReader(DatasetReader):
                 if instance is not None:
                     yield instance
 
+    def get_ques_spans(self, ques_tokens: List[str], ques_textfield: TextField):
+        """ Make question spans (delimited by _ ) and also return their spans (inclusive)
+        Current implementation: Only take tokens as spans.
+
+        TODO(nitish): How to represent spans that occur multiple times in a question.
+                      Current solution: Only take the first occurrence span
+        TODO(nitish): 1) Extend to longer spans, 2) Don't break entity spans
+
+        Parameters:
+        -----------
+        ques_tokens: List[str]: List of question tokens
+        ques_textfield: TextField: For SpanFields
+
+        Returns:
+        --------
+        ques_spans: `List[str]` All question spans delimited by _
+        ques_span2idx:
+        ques_spans_linking_score:
+        ques_spans_spanidxs:
+        """
+
+        # Will be used for linking scores
+        qtoken2idxs = {}
+        for qtokenidx, qtoken in enumerate(ques_tokens):
+            if qtoken not in qtoken2idxs:
+                qtoken2idxs[qtoken] = []
+            qtoken2idxs[qtoken].append(qtokenidx)
+
+        uniq_ques_tokens = list(set(ques_tokens))
+
+        ques_spans = []
+        ques_spans2idx = {}
+        ques_spans_linking_score = []
+        ques_spans_spanidxs: List[SpanField] = []
+
+
+
+        for tokenidx, token in enumerate(uniq_ques_tokens):
+            span = token
+            # span --- will be _ delimited later on
+            if span not in ques_spans2idx:
+                ques_spans.append(token)
+                ques_spans2idx[span] = len(ques_spans2idx)
+                ques_spans_spanidxs.append(SpanField(span_start=tokenidx, span_end=tokenidx,
+                                                     sequence_field=ques_textfield))
+
+                span_tokens = span.split("_")
+                linking_score = [0.0]*len(ques_tokens)
+                for token in span_tokens:
+                    # Single token can occur multiple times in the question
+                    for idx in qtoken2idxs[token]:
+                        linking_score[idx] = 1.0
+                ques_spans_linking_score.append(linking_score)
+
+        return (ques_spans, ques_spans2idx, ques_spans_linking_score, ques_spans_spanidxs)
+
     @overrides
-    def text_to_instance(self,  # type: ignore
+    def text_to_instance(self,
                          ques: str,
                          qners: List,
                          contexts: List,
@@ -170,10 +230,44 @@ class SampleHotpotDatasetReader(DatasetReader):
 
         # pylint: disable=arguments-differ
         tokenized_ques = ques.strip().split(" ")
-        world = SampleHotpotWorld(ques_spans=tokenized_ques)
-        print(world.all_possible_actions())
-        tokenized_ques = [Token(token) for token in tokenized_ques]
-        ques_tokenized_field = TextField(tokenized_ques, self._sentence_token_indexers)
+
+        ques_tokens = [Token(token) for token in tokenized_ques]
+        ques_tokenized_field = TextField(ques_tokens, self._sentence_token_indexers)
+
+        (ques_spans, ques_spans2idx,
+         ques_spans_linking_score, ques_spans_spanidxs) = self.get_ques_spans(ques_tokens=tokenized_ques,
+                                                                              ques_textfield=ques_tokenized_field)
+
+        world = SampleHotpotWorld(ques_spans=ques_spans)
+        world_field = MetadataField(world)
+
+        # Action_field:
+        #   Currently, all instance-specific rules are terminal rules of the kind: q -> QSTR:ques_sub_span
+        # Action_linking_scores:
+        #   Create a dictionary mapping, linked_rule2idx: {linked_rule: int_idx}
+        #   Create a DataArray of linking scores: (num_linked_rules, num_ques_tokens)
+        #   With the linked_rule2idx map, the correct linking_score can be retrieved in the world.
+        production_rule_fields: List[Field] = []
+        linked_rule2idx = {}
+        action_to_ques_linking_scores = ques_spans_linking_score
+        for production_rule in world.all_possible_actions():
+            _, rule_right_side = production_rule.split(' -> ')
+            is_global_rule = not rule_right_side.startswith(QSTR_PREFIX)
+            rule_field = ProductionRuleField(production_rule, is_global_rule)
+            production_rule_fields.append(rule_field)
+
+            # Tokens in a ques_span; rule_right_side is QSTR_PREFIXquestion_span, hence removing the QSTR_PREFIX
+            if not is_global_rule:
+                ques_span = rule_right_side[len(QSTR_PREFIX):]
+                linked_rule2idx[production_rule] = ques_spans2idx[ques_span]
+
+        action_field = ListField(production_rule_fields)
+        linked_rule2idx_field = MetadataField(linked_rule2idx)
+        action_to_ques_linking_scores_field = ArrayField(np.array(action_to_ques_linking_scores), padding_value=0)
+        action_to_span_field = ListField(ques_spans_spanidxs)
+
+        # print(f"World actions: {world.all_possible_actions()}")
+        # print(f"DatasetReader actions: {production_rule_fields}")
 
         contexts_tokenized = []
         for context_id, context in contexts:
@@ -204,21 +298,16 @@ class SampleHotpotDatasetReader(DatasetReader):
         all_num_mens_field = ListField(all_num_mens)
         all_nummens_normval_field = ListField(all_nummens_normval)
 
-        production_rule_fields: List[Field] = []
-        instance_action_ids: Dict[str, int] = {}
-        # TODO(nitish): Assuming that possible actions are the same in all worlds. This may change later.
-        for production_rule in world.all_possible_actions():
-            instance_action_ids[production_rule] = len(instance_action_ids)
-            field = ProductionRuleField(production_rule, is_global_rule=True)
-            production_rule_fields.append(field)
-        action_field = ListField(production_rule_fields)
-        world_field = MetadataField(world)
         fields: Dict[str, Field] = {"question": ques_tokenized_field,
                                     "contexts": contexts_tokenized_field,
                                     "num_mens_field": all_num_mens_field,
                                     "num_normval_field": all_nummens_normval_field,
                                     "worlds": world_field,
-                                    "actions": action_field}
+                                    "actions": action_field,
+                                    "linked_rule2idx": linked_rule2idx_field,
+                                    "action2ques_linkingscore": action_to_ques_linking_scores_field,
+                                    "action2span": action_to_span_field
+                                    }
 
         # TODO(nitish): Figure out how to pack the answer. Multiple types; ENT, BOOL, NUM, DATE, STRING
         # One way is to have field for all types of answer, and mask all but the correct kind.
@@ -226,11 +315,19 @@ class SampleHotpotDatasetReader(DatasetReader):
         # booltype_ans_prob, enttype_ans_prob, numtype_ans_prob, \
         # datetype_ans_prob, strtype_ans_prob = 0.0, 0.0, 0.0, 0.0, 0.0
 
+
+        # Answers can have multiple types. So grounding might be tricky.
+        # ENTITY_TYPE, NUM_TYPE, DATE_TYPE:
+        # BOOL_TYPE:
+        # STRING_TYPE:
+
+        ans_type_field = LabelField(ans_type, label_namespace="anstype")
+
         if ans_grounding is not None:
             # Currently only dealing with boolean answers
             ans_field = ArrayField(np.array([ans_grounding]))
             fields["ans_grounding"] = ans_field
-
+            fields["ans_type"] = ans_type_field
 
         '''
         # Depending on the type of supervision used for training the parser, we may want either

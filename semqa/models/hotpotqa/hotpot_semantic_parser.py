@@ -14,8 +14,14 @@ from allennlp.semparse.type_declarations import type_declaration
 from allennlp.semparse.type_declarations.type_declaration import START_SYMBOL
 from allennlp.state_machines.states import GrammarBasedState, GrammarStatelet, RnnStatelet
 from allennlp.training.metrics import Average
+from allennlp.modules.span_extractors.span_extractor import SpanExtractor
 
 from semqa.worlds.hotpotqa.sample_world import SampleHotpotWorld
+from semqa.worlds.hotpotqa.sample_world import QSTR_PREFIX
+
+from allennlp.models.semantic_parsing.wikitables.wikitables_semantic_parser import WikiTablesSemanticParser
+from allennlp.models.semantic_parsing.wikitables.wikitables_mml_semantic_parser import WikiTablesMmlSemanticParser
+
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -51,6 +57,8 @@ class HotpotSemanticParser(Model):
                  question_embedder: TextFieldEmbedder,
                  action_embedding_dim: int,
                  encoder: Seq2SeqEncoder,
+                 ques2action_encoder: Seq2SeqEncoder,
+                 quesspan_extractor: SpanExtractor,
                  dropout: float = 0.0,
                  rule_namespace: str = 'rule_labels') -> None:
         super(HotpotSemanticParser, self).__init__(vocab=vocab)
@@ -59,11 +67,21 @@ class HotpotSemanticParser(Model):
         self._denotation_accuracy = Average()
         self._consistency = Average()
         self._encoder = encoder
+        self._ques2action_encoder = ques2action_encoder
+        self._quesspan_extractor = quesspan_extractor
+
         if dropout > 0:
             self._dropout = torch.nn.Dropout(p=dropout)
         else:
             self._dropout = lambda x: x
         self._rule_namespace = rule_namespace
+
+        ques2action_encoder_outdim = self._ques2action_encoder.get_output_dim()
+        ques2action_encoder_outdim = 2*ques2action_encoder_outdim if self._ques2action_encoder.is_bidirectional() \
+                                        else ques2action_encoder_outdim
+        quesspan_output_dim = 2 * ques2action_encoder_outdim   # For span concat
+
+        assert quesspan_output_dim == action_embedding_dim
 
         self._action_embedder = Embedding(num_embeddings=vocab.get_vocab_size(self._rule_namespace),
                                           embedding_dim=action_embedding_dim)
@@ -89,10 +107,12 @@ class HotpotSemanticParser(Model):
         # (B, ques_length, encoder_output_dim)
         encoder_outputs = self._dropout(self._encoder(embedded_input, question_mask))
 
+        # (B, encoder_output_dim)
         final_encoder_output = util.get_final_encoder_states(encoder_outputs,
                                                              question_mask,
                                                              self._encoder.is_bidirectional())
         memory_cell = encoder_outputs.new_zeros(batch_size, self._encoder.get_output_dim())
+        # TODO(nitish): Why does WikiTablesParser use '_first_attended_question' embedding and not this
         attended_sentence, _ = self._decoder_step.attend_on_question(final_encoder_output,
                                                                      encoder_outputs, question_mask)
         encoder_outputs_list = [encoder_outputs[i] for i in range(batch_size)]
@@ -106,6 +126,95 @@ class HotpotSemanticParser(Model):
                                                  encoder_outputs_list,
                                                  question_mask_list))
         return initial_rnn_state
+
+    def _create_grammar_state(self,
+                              world: SampleHotpotWorld,
+                              possible_actions: List[ProductionRule],
+                              linked_rule2idx: Dict,
+                              action2ques_linkingscore: torch.FloatTensor,
+                              quesspan_action_repr: torch.FloatTensor) -> GrammarStatelet:
+        """ Make grammar state for a particular instance in the batch using the global and instance-specific actions.
+        For each instance-specific action we have a linking_score vector (size:ques_tokens), and an action embedding
+
+        Parameters:
+        ------------
+        world: `SampleHotpotWorld` The world for this instance
+        possible_actions: All possible actions, global and instance-specific
+        linked_rule2idx: Dict from action_rule to idx used for the next two members
+        action2ques_linkingscore: Linking score matrix of size (instance-specific_actions, num_ques_tokens)
+            The indexing is based on the linked_rule2idx dict. The num_ques_tokens is to a padded length
+        quesspan_action_repr: Similarly, a (instance-specific_actions, action_embedding_dim) matrix.
+            The indexing is based on the linked_rule2idx dict. The num_ques_tokens is to a padded length
+
+
+        """
+
+        # ProductionRule: (rule, is_global_rule, rule_id, nonterminal)
+        action_map = {}
+        for action_index, action in enumerate(possible_actions):
+            action_string = action[0]
+            action_map[action_string] = action_index
+
+        valid_actions = world.get_valid_actions()
+        translated_valid_actions: Dict[str, Dict[str, Tuple[torch.Tensor, torch.Tensor, List[int]]]] = {}
+
+        for key, action_strings in valid_actions.items():
+            translated_valid_actions[key] = {}
+            # `key` here is a non-terminal from the grammar, and `action_strings` are all the valid
+            # productions of that non-terminal.  We'll first split those productions by global vs.
+            # linked action.
+            action_indices = [action_map[action_string] for action_string in action_strings]
+            production_rule_arrays = [(possible_actions[index], index) for index in action_indices]
+
+            # For global_actions: (rule_vocab_id_tensor, action_index)
+            global_actions = []
+            # For linked_actions: (action_string, action_index)
+            linked_actions = []
+            for production_rule_array, action_index in production_rule_arrays:
+                # production_rule_array: ProductionRule
+                if production_rule_array[1]:
+                    global_actions.append((production_rule_array[2], action_index))
+                else:
+                    linked_actions.append((production_rule_array[0], action_index))
+
+            # First: Get the embedded representations of the global actions
+            if global_actions:
+                global_action_tensors, global_action_ids = zip(*global_actions)
+                global_action_tensor = torch.cat(global_action_tensors, dim=0)
+                # TODO(nitish): Figure out if need action_bias and separate input/output action embeddings
+                # if self._add_action_bias:
+                #     global_action_biases = self._action_biases(global_action_tensor)
+                #     global_input_embeddings = torch.cat([global_input_embeddings, global_action_biases], dim=-1)
+                global_output_embeddings = self._action_embedder(global_action_tensor)
+                translated_valid_actions[key]['global'] = (global_output_embeddings,
+                                                           global_output_embeddings,
+                                                           list(global_action_ids))
+
+            # Second: Get the representations of the linked actions
+            if linked_actions:
+                linked_rules, linked_action_ids = zip(*linked_actions)
+                # ques_spans = [rule.split(' -> ')[1] for rule in linked_rules]
+                # ques_spans = [ques_span[len(QSTR_PREFIX):] for ques_span in ques_spans]
+                ques_spans_idxs = [linked_rule2idx[linked_rule] for linked_rule in linked_rules]
+                # Scores and embedding should not be batched and should be equal to the number of actions in this instance
+                # (num_linked_actions, num_question_tokens)
+                linked_action_scores = action2ques_linkingscore[ques_spans_idxs]
+                # (num_linked_actions, action_embedding_dim)
+                linked_action_embeddings = quesspan_action_repr[ques_spans_idxs]
+
+                # print(f"NumLinkedActions: {len(linked_rule2idx)}\n")
+                # print(f"ActionLinkingScore size: {action2ques_linkingscore.size()}\n")
+                # print(f"LinkedActionRepr size: {quesspan_action_repr.size()}\n")
+                # print("After Indexing")
+                # print(f"ActionLinkingScore size: {linked_action_scores.size()}\n")
+                # print(f"LinkedActionRepr size: {linked_action_embeddings.size()}\n")
+
+                translated_valid_actions[key]['linked'] = (linked_action_scores,
+                                                           linked_action_embeddings,
+                                                           list(linked_action_ids))
+        return GrammarStatelet([START_SYMBOL],
+                               translated_valid_actions,
+                               type_declaration.is_nonterminal)
 
     def _get_label_strings(self, labels):
         # TODO (pradeep): Use an unindexed field for labels?
@@ -150,11 +259,11 @@ class HotpotSemanticParser(Model):
             instance_world: SampleHotpotWorld = instance_world
             instance_denotations: List[str] = []
             for instance_action_strings in instance_action_sequences:
-                print(instance_action_strings)
+                # print(instance_action_strings)
                 if not instance_action_strings:
                     continue
+
                 logical_form = instance_world.get_logical_form(instance_action_strings)
-                print(logical_form)
 
                 instance_actionseq_denotation = instance_world.execute(logical_form)
                 instance_denotations.append(instance_actionseq_denotation)
@@ -171,43 +280,6 @@ class HotpotSemanticParser(Model):
             denotation = world.execute(logical_form)
             is_correct.append(str(denotation).lower() == label)
         return is_correct
-
-    def _create_grammar_state(self,
-                              world: SampleHotpotWorld,
-                              possible_actions: List[ProductionRule]) -> GrammarStatelet:
-
-        print("### INSIDE ###")
-        for action in possible_actions:
-            print(action)
-        print()
-
-        # ProductionRule: (rule, is_global_rule, rule_id, nonterminal)
-        valid_actions = world.get_valid_actions()
-        action_mapping = {}
-        for i, action in enumerate(possible_actions):
-            action_mapping[action[0]] = i
-        translated_valid_actions: Dict[str, Dict[str, Tuple[torch.Tensor, torch.Tensor, List[int]]]] = {}
-        for key, action_strings in valid_actions.items():
-            print(f"{key}  {action_strings}")
-
-            translated_valid_actions[key] = {}
-            # `key` here is a non-terminal from the grammar, and `action_strings` are all the valid
-            # productions of that non-terminal.
-            action_indices = [action_mapping[action_string] for action_string in action_strings]
-            # All actions in NLVR are global actions.
-            global_actions = [(possible_actions[index][2], index) for index in action_indices]
-            print(global_actions)
-
-            # Then we get the embedded representations of the global actions.
-            global_action_tensors, global_action_ids = zip(*global_actions)
-            global_action_tensor = torch.cat(global_action_tensors, dim=0)
-            global_input_embeddings = self._action_embedder(global_action_tensor)
-            translated_valid_actions[key]['global'] = (global_input_embeddings,
-                                                       global_input_embeddings,
-                                                       list(global_action_ids))
-        return GrammarStatelet([START_SYMBOL],
-                               translated_valid_actions,
-                               type_declaration.is_nonterminal)
 
     @overrides
     def decode(self, output_dict: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:

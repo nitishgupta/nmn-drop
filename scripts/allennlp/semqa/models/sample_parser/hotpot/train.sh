@@ -21,11 +21,11 @@ export TRAINING_DATA_FILE=${TRAINFILE}
 export VAL_DATA_FILE=${VALFILE}
 # export TEST_DATA_FILE=${TESTFILE}
 
-export BS=4
+export BS=2
 export LR=0.0005
 export DROPOUT=0.3
 
-export BEAMSIZE=4
+export BEAMSIZE=15
 export MAX_DECODE_STEP=32
 
 

@@ -1,3 +1,4 @@
+import sys
 import logging
 from typing import List, Dict
 
@@ -15,8 +16,9 @@ from allennlp.nn import Activation
 from allennlp.state_machines import BeamSearch
 from allennlp.state_machines.states import GrammarBasedState
 from allennlp.state_machines.trainers import MaximumMarginalLikelihood, ExpectedRiskMinimization
-from allennlp.state_machines.transition_functions import BasicTransitionFunction
-import allennlp.nn.util as allennlputil
+from allennlp.state_machines.transition_functions import BasicTransitionFunction, LinkingTransitionFunction
+from allennlp.modules.span_extractors.span_extractor import SpanExtractor
+import allennlp.nn.util as allenutil
 
 from semqa.worlds.hotpotqa.sample_world import SampleHotpotWorld
 from semqa.models.hotpotqa.hotpot_semantic_parser import HotpotSemanticParser
@@ -59,6 +61,8 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
                  question_embedder: TextFieldEmbedder,
                  action_embedding_dim: int,
                  encoder: Seq2SeqEncoder,
+                 ques2action_encoder: Seq2SeqEncoder,
+                 quesspan_extractor: SpanExtractor,
                  attention: Attention,
                  decoder_beam_search: BeamSearch,
                  beam_size: int,
@@ -68,20 +72,30 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
                                                          question_embedder=question_embedder,
                                                          action_embedding_dim=action_embedding_dim,
                                                          encoder=encoder,
+                                                         ques2action_encoder=ques2action_encoder,
+                                                         quesspan_extractor=quesspan_extractor,
                                                          dropout=dropout)
         # self._decoder_trainer = MaximumMarginalLikelihood()
         self._decoder_trainer = ExpectedRiskMinimization(beam_size=beam_size,
                                                          normalize_by_length=True,
                                                          max_decoding_steps=max_decoding_steps)
 
-        self._decoder_step = BasicTransitionFunction(encoder_output_dim=self._encoder.get_output_dim(),
-                                                     action_embedding_dim=action_embedding_dim,
-                                                     input_attention=attention,
-                                                     num_start_types=1,
-                                                     activation=Activation.by_name('tanh')(),
-                                                     predict_start_type_separately=False,
-                                                     add_action_bias=False,
-                                                     dropout=dropout)
+        # self._decoder_step = BasicTransitionFunction(encoder_output_dim=self._encoder.get_output_dim(),
+        #                                              action_embedding_dim=action_embedding_dim,
+        #                                              input_attention=attention,
+        #                                              num_start_types=1,
+        #                                              activation=Activation.by_name('tanh')(),
+        #                                              predict_start_type_separately=False,
+        #                                              add_action_bias=False,
+        #                                              dropout=dropout)
+        self._decoder_step = LinkingTransitionFunction(encoder_output_dim=self._encoder.get_output_dim(),
+                                                       action_embedding_dim=action_embedding_dim,
+                                                       input_attention=attention,
+                                                       num_start_types=1,
+                                                       activation=Activation.by_name('tanh')(),
+                                                       predict_start_type_separately=False,
+                                                       add_action_bias=False,
+                                                       dropout=dropout)
         self._decoder_beam_search = decoder_beam_search
         self._max_decoding_steps = max_decoding_steps
         self._action_padding_index = -1
@@ -95,6 +109,9 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
                 num_normval_field: List[List[float]],
                 worlds: List[SampleHotpotWorld],
                 actions: List[List[ProductionRule]],
+                linked_rule2idx: List[Dict],
+                action2ques_linkingscore: torch.FloatTensor,
+                action2span: torch.LongTensor,
                 ans_grounding: torch.FloatTensor=None) -> Dict[str, torch.Tensor]:
         # pylint: disable=arguments-differ
         """
@@ -106,10 +123,29 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
         initial_rnn_state = self._get_initial_rnn_state(question)
         initial_score_list = [next(iter(question.values())).new_zeros(1, dtype=torch.float)
                               for i in range(batch_size)]
-        # label_strings = self._get_label_strings(labels) if labels is not None else None
+
+        embedded_input = self._question_embedder(question)
+        # (B, qlen)
+        question_mask = allenutil.get_text_field_mask(question).float()
+        # (B, ques_length, encoder_output_dim)
+        quesaction_encoder_outputs = self._dropout(self._ques2action_encoder(embedded_input, question_mask))
+
+        # (B, A)
+        span_mask = (action2span[:, :, 0] >= 0).squeeze(-1).long()
+        # [B, A, action_dim]
+        quesspan_action_reprs = self._quesspan_extractor(sequence_tensor=quesaction_encoder_outputs,
+                                                         span_indices=action2span,
+                                                         span_indices_mask=span_mask)
+
+
         # TODO (pradeep): Assuming all worlds give the same set of valid actions.
-        initial_grammar_state = [self._create_grammar_state(worlds[i], actions[i]) for i in
-                                 range(batch_size)]
+        initial_grammar_state = []
+        for i in range(batch_size):
+            initial_grammar_state.append(self._create_grammar_state(worlds[i],
+                                                                    actions[i],
+                                                                    linked_rule2idx[i],
+                                                                    action2ques_linkingscore[i],
+                                                                    quesspan_action_reprs[i]))
 
         initial_state = GrammarBasedState(batch_indices=list(range(batch_size)),
                                           action_history=[[] for _ in range(batch_size)],
@@ -188,8 +224,8 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
             mask_for_denotations.append(mask)
 
         # (B, Num_of_actions)
-        predicted_vals = allennlputil.move_to_device(torch.FloatTensor(denotations_as_floats), 0)
-        mask = allennlputil.move_to_device(torch.FloatTensor(mask_for_denotations), 0)
+        predicted_vals = allenutil.move_to_device(torch.FloatTensor(denotations_as_floats), 0)
+        mask = allenutil.move_to_device(torch.FloatTensor(mask_for_denotations), 0)
 
         print(predicted_vals.size())
         print(mask.size())

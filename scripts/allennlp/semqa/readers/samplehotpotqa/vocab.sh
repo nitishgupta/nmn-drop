@@ -22,7 +22,16 @@ VOCABDIR=/srv/local/data/nitishg/semqa/vocabs/semqa/hotpotqa/sample_reader
 # Code below this shouldn't require changing for a reader
 if [ -d "${VOCABDIR}/vocabulary" ]; then
     echo "Vocabulary Dir already exists: ${VOCABDIR}/vocabulary"
-    exit 1
+    read -p "Delete (Y/N) " delete
+
+    if [ "${delete}" = "y" ] || [ "${delete}" = "Y" ]; then
+        echo "Deleting ${SERIALIZATION_DIR}"
+        rm -r ${SERIALIZATION_DIR}
+    else
+        echo "Not deleting ${SERIALIZATION_DIR}"
+        echo "Cannot continue with non-empty serialization dir. Exiting"
+        exit 1
+    fi
 fi
 
 allennlp make-vocab ${CONFIGFILE} --include-package ${INCLUDE_PACKAGE} -s ${VOCABDIR}

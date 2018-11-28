@@ -69,7 +69,7 @@ Also ground the answer:
 1. ```STRING```: List of ```(context_idx, (start, end))``` which represent the start and end of the answer span.
 Some String answers are not found, instead use ```constants.NOLINK``` for such cases.
 
-2. ```ENTITY```, ```DATE```, and ```BOOL```: List of ```(context_idx, mention_idx)```
+2. ```ENTITY```, ```DATE```, and ```NUM```: List of ```(context_idx, mention_idx)```
 
 3. ```BOOL```: Either 1 (true) or 0 (false).
 

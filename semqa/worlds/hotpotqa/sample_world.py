@@ -9,14 +9,18 @@ import sys
 from nltk.sem.logic import Type
 from overrides import overrides
 
-from semqa.type_declarations import sample_semqa_type_declaration as types
 from allennlp.semparse.worlds.world import ParsingError, World
 from semqa.executors.hotpotqa.sample_executor import SampleHotpotExecutor
+
+# from semqa.type_declarations import sample_semqa_type_declaration as types
+from semqa.type_declarations import semqa_type_declaration_wques as types
 
 from allennlp.semparse.worlds.wikitables_world import WikiTablesWorld
 from allennlp.semparse.worlds.atis_world import AtisWorld
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
+QSTR_PREFIX="QSTR:"
 
 
 class SampleHotpotWorld(World):
@@ -36,9 +40,7 @@ class SampleHotpotWorld(World):
     # functions in the logical form are curried functions, and how many arguments the function
     # actually takes.  This is necessary because NLTK curries all multi-argument functions to a
     # series of one-argument function applications.  See `world._get_transitions` for more info.
-    curried_functions = {
-            types.BOOL_FROM_TWONUM_TYPE: 2
-            }
+    curried_functions = types.curried_functions
 
     def __init__(self, ques_spans: List[str]=None) -> None:
         super(SampleHotpotWorld, self).__init__(global_type_signatures=types.COMMON_TYPE_SIGNATURE,
@@ -50,32 +52,14 @@ class SampleHotpotWorld(World):
         ques_spans: List of question spans (tokens delimited by _) to be used as actions
         """
 
-        # boxes = set([Box(object_list, box_id) for box_id, object_list in
-        #              enumerate(world_representation)])
 
-        print("Mapping names for all ques spans")
         if ques_spans is not None:
             for ques_str in ques_spans:
-                ques_str = f"qstr:{ques_str}"
+                ques_str = f"{QSTR_PREFIX}{ques_str}"
                 self._map_name(name=ques_str, keep_mapping=True)
 
 
-        print(self.get_name_mapping())
-        print(self.get_type_signatures())
-
-        print(self.all_possible_actions())
-
-        sys.exit()
-
         self._executor = SampleHotpotExecutor()
-
-        # print(f"Name Mapping Signature: {types.COMMON_NAME_MAPPING}")
-        # print(f"Type Signature: {types.COMMON_TYPE_SIGNATURE}")
-        #
-        #
-        # print("Local Name Mapping")
-        # print(self.local_name_mapping)
-        # print(self.local_type_signatures)
 
         ''' These terminal productions are used for agenda in NLVR. Shouldn't need in regular cases '''
         """
@@ -94,12 +78,10 @@ class SampleHotpotWorld(World):
 
     @overrides
     def _map_name(self, name: str, keep_mapping: bool = False) -> str:
-        print(f"running name map : {name}")
         if name not in types.COMMON_NAME_MAPPING and name not in self.local_name_mapping:
             if not keep_mapping:
                 raise ParsingError(f"Encountered un-mapped name: {name}")
-            print(name)
-            if name.startswith("qstr:"):
+            if name.startswith(QSTR_PREFIX):
                 # Question sub-span
                 translated_name = name
                 self._add_name_mapping(name, translated_name, types.QSTR_TYPE)
@@ -126,14 +108,8 @@ class SampleHotpotWorld(World):
         valid_actions = super().get_valid_actions()
         return valid_actions
 
-
-
     def _get_curried_functions(self) -> Dict[Type, int]:
         return SampleHotpotWorld.curried_functions
-
-    @overrides
-    def _map_name(self, name: str, keep_mapping: bool = False) -> str:
-        return types.COMMON_NAME_MAPPING[name] if name in types.COMMON_NAME_MAPPING else name
 
     def execute(self, logical_form: str) -> bool:
         return self._executor.execute(logical_form)

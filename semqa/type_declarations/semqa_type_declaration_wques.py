@@ -23,9 +23,9 @@ from allennlp.semparse.type_declarations.type_declaration import (ComplexType, H
 
 NUM_TYPE = NamedBasicType("NUM")
 BOOL_TYPE = NamedBasicType("BOOLEAN")
-# QSTR_TYPE = NamedBasicType("QSTR")
+QSTR_TYPE = NamedBasicType("QSTR")
 
-BASIC_TYPES = {NUM_TYPE, BOOL_TYPE} #, QSTR_TYPE}
+BASIC_TYPES = {NUM_TYPE, BOOL_TYPE, QSTR_TYPE}
 START_TYPES = {BOOL_TYPE}
 
 
@@ -37,8 +37,8 @@ BOOL_FROM_TWONUM_TYPE = ComplexType(NUM_TYPE, ComplexType(NUM_TYPE, BOOL_TYPE))
 NUM_FROM_TWONUM_TYPE = ComplexType(NUM_TYPE, ComplexType(NUM_TYPE, NUM_TYPE))
 NUM_FROM_ONENUM_TYPE = ComplexType(NUM_TYPE, NUM_TYPE)
 
-# BOOL_FROM_QSTR_TYPE = ComplexType(QSTR_TYPE, BOOL_TYPE)
-# BOOL_FROM_2QSTR_TYPE = ComplexType(QSTR_TYPE, ComplexType(QSTR_TYPE, BOOL_TYPE))
+BOOL_FROM_QSTR_TYPE = ComplexType(QSTR_TYPE, BOOL_TYPE)
+BOOL_FROM_2QSTR_TYPE = ComplexType(QSTR_TYPE, ComplexType(QSTR_TYPE, BOOL_TYPE))
 
 
 
@@ -49,8 +49,8 @@ name_mapper = NameMapper()  # pylint: disable=invalid-name
 name_mapper.map_name_with_signature("number_threshold", BOOL_FROM_ONENUM_TYPE)
 name_mapper.map_name_with_signature("number_greater", BOOL_FROM_TWONUM_TYPE)
 
-# name_mapper.map_name_with_signature("ques_bool", BOOL_FROM_QSTR_TYPE)
-# name_mapper.map_name_with_signature("two_ques_bool", BOOL_FROM_2QSTR_TYPE)
+name_mapper.map_name_with_signature("ques_bool", BOOL_FROM_QSTR_TYPE)
+name_mapper.map_name_with_signature("two_ques_bool", BOOL_FROM_2QSTR_TYPE)
 
 
 # NUM Questions
@@ -66,7 +66,7 @@ COMMON_TYPE_SIGNATURE = name_mapper.common_type_signature
 # These are all function-types that take more than one argument. Needed for world._get_curried_functions
 curried_functions = {
                          BOOL_FROM_TWONUM_TYPE: 2,
-                         # types.BOOL_FROM_2QSTR_TYPE: 2,
+                         BOOL_FROM_2QSTR_TYPE: 2,
                          NUM_FROM_TWONUM_TYPE: 2,
                      }
 
