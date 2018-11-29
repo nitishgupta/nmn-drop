@@ -4,7 +4,7 @@ import copy
 import time
 import json
 import argparse
-from typing import List, Tuple, Any
+from typing import List, Tuple, Any, Dict
 
 import dateparser
 from dateparser.search import search_dates
@@ -20,7 +20,7 @@ spacy_nlp = spacyutils.getSpacyNLP()
 NERTYPES_TO_IGNORE = [constants.DATE_TYPE, constants.NUM_TYPE, constants.STRING_TYPE, constants.BOOL_TYPE]
 
 
-def exactStringMatchCDCR(contexts_ners: List[List[Tuple]]):
+def exactStringMatchCDCR(contexts_ent_ners: List[List[Tuple]]):
     """ Perform exact string match CDCR.
 
     Parameters:
@@ -30,59 +30,108 @@ def exactStringMatchCDCR(contexts_ners: List[List[Tuple]]):
 
     Returns:
     --------
-    entity2mentions: ``Dict``
-        Dict from entity_key (lnrm mention str) --> List of (context_id, mention_id)
-    context_mention2ens: ``List of List``
-        For each context, list of entity_ids for each mention.
-        NO_LINK for DATE and NUM type mentions
+    entitystr2idx: ``Dict``
+        Maps entity_norm_str vals to entity_idxs. This is needed to ground mentions in questions
+    entity2mentions: `list of list`
+        For each eq_ent, a list of (context_idx, mention_idx) that refer to this grounding
+        Len of outer list is the number of entities of this type in the contexts
+    mens2entities: 'list of list'
+        For each mention of a particular type, the entity_idx (in entity2mentions) it resolves to.
+        The inner and outer lengths should exactly match contexts_ners
     """
 
-    # key: entity string. val: List of (context_id, mention_id) tuples
-    entity2mentions = {}
-    # For each context , List of entity ids for each mention
-    context_mention2ens = []
+    # For booking entity_repr_string to entity_idx
+    entitystr2idx = {}
+    # List (size of number of entities), each is a list of (context_idx, mention_idx) tuples.
+    entity2mens = []
+    # List (size of number of contexts) of entity_idxs for the mentions. Sizes should be same as contexts_ent_ners
+    entmens2entities = []
 
-    for context_idx, single_context_ners in enumerate(contexts_ners):
-        mention2ens = []
-        for mention_idx, ner in enumerate(single_context_ners):
-            if ner[3] in NERTYPES_TO_IGNORE:
-                mention2ens.append(constants.NO_LINK)
-            else:
-                mention_str = util._getLnrm(ner[0])
-                if mention_str not in entity2mentions:
-                    entity2mentions[mention_str] = []
-                entity2mentions[mention_str].append((context_idx, mention_idx))
-                mention2ens.append(mention_str)
-        context_mention2ens.append(mention2ens)
+    for context_idx, single_context_ent_ners in enumerate(contexts_ent_ners):
+        context_entmens2entities = []
+        for mention_idx, ner in enumerate(single_context_ent_ners):
+            mention_str = util._getLnrm(ner[0])
+            if mention_str not in entitystr2idx:
+                entitystr2idx[mention_str] = len(entity2mens)
+                entity2mens.append([])
 
-    return entity2mentions, context_mention2ens
+            entityidx = entitystr2idx[mention_str]
+            entity2mens[entityidx].append((context_idx, mention_idx))
+            context_entmens2entities.append(entityidx)
+
+        entmens2entities.append(context_entmens2entities)
+
+    return entitystr2idx, entity2mens, entmens2entities
 
 
-def groundQuestionMentions(q_ners, entity2mentions):
+def normalizableMensCDCR(contexts_ners: List[List[Tuple]], normalization_dict: Dict):
+    """ Performs CDCR for NUM / DATE mentions, i.e. mentions whose normalization can be looked up in a Dict.
+
+    Parameters:
+    -----------
+    contexts_ners: Mentions of a particular type for all contexts
+    normalization_dict: Dict mapping from mention_str to its normalized value
+
+    Returns:
+    --------
+    entity2mentions: `list of list`
+        For each eq_ent, a list of (context_idx, mention_idx) that refer to this grounding
+        Len of outer list is the number of entities of this type in the contexts
+
+    mens2entities: 'list of list'
+        For each mention of a particular type, the entity_idx (in entity2mentions) it resolves to.
+        The inner and outer lengths should exactly match contexts_ners
+    """
+
+    # For booking entity_repr_string to entity_idx
+    entitynorm2idx = {}
+    # List (size of number of entities), each is a list of (context_idx, mention_idx) tuples.
+    entity2mens = []
+    # List (size of number of contexts) of entity_idxs for the mentions. Sizes should be same as contexts_ent_ners
+    entmens2entities = []
+
+    for context_idx, single_context_ent_ners in enumerate(contexts_ners):
+        context_entmens2entities = []
+        for mention_idx, ner in enumerate(single_context_ent_ners):
+            normalized_val = normalization_dict[ner[0]]
+            if isinstance(normalized_val, list):
+                normalized_val = tuple(normalized_val)
+            if normalized_val not in entitynorm2idx:
+                entitynorm2idx[normalized_val] = len(entity2mens)
+                entity2mens.append([])
+
+            entityidx = entitynorm2idx[normalized_val]
+            entity2mens[entityidx].append((context_idx, mention_idx))
+            context_entmens2entities.append(entityidx)
+
+        entmens2entities.append(context_entmens2entities)
+
+    return entity2mens, entmens2entities
+
+
+def groundQuestionMentions(q_entners, entitystr2idx):
     """ Ground mentions in question to the identified entities in the contexts by exact string match.
     q_ners: List of ner tuples
     entity2mentions: entity string (lnrm) --> mentions in context
     """
 
-    qner_entity_links = []
-    for ner in q_ners:
-        if ner[3] in NERTYPES_TO_IGNORE:
-            qner_entity_links.append(constants.NO_LINK)
+    q_entner2entidx = []
+    for ner in q_entners:
+        mention_str = util._getLnrm(ner[0])
+        if mention_str in entitystr2idx:
+            q_entner2entidx.append(entitystr2idx[mention_str])
         else:
-            mention_str = util._getLnrm(ner[0])
-            if mention_str in entity2mentions:
-                qner_entity_links.append(mention_str)
-            else:
-                qner_entity_links.append(constants.NO_LINK)
+            q_entner2entidx.append(-1)
 
-    return qner_entity_links
+    return q_entner2entidx
 
 
 def performCDCR(input_jsonl: str, output_jsonl: str) -> None:
-    """ Perform CDCR in the contexts for identifying and linking entities.
+    """ Perform CDCR in the contexts for identifying and linking entities of different types of mentions: ENT, NUM, DATE
 
-    First, run CDCR on contexts to identify context entities. Then, link the question entities to the context entities.
-
+    For each list of contexts, and for each type, generate
+        eq_entity2mens: ``list of list`` list of entities, for each entity (context_idx, men_idx)
+        mens2entities: ``list of list`` Each mention's entity_idx (size same as the number of mentions of that type)
     """
 
     print("Reading input jsonl: {}".format(input_jsonl))
@@ -100,16 +149,35 @@ def performCDCR(input_jsonl: str, output_jsonl: str) -> None:
     with open(output_jsonl, 'w') as outf:
         for jsonobj in jsonobjs:
 
+            num_normalization_dict = jsonobj[constants.nums_normalized_field]
+            date_normalization_dict = jsonobj[constants.dates_normalized_field]
+
             # List of contexts, (title, list of sentences)
-            qners = jsonobj[constants.q_ner_field]
-            contexts_ners = jsonobj[constants.context_ner_field]
+            q_entners = jsonobj[constants.q_ent_ner_field]
+            (contexts_ent_ners, contexts_num_ners, contexts_date_ners) = (jsonobj[constants.context_ent_ner_field],
+                                                                          jsonobj[constants.context_num_ner_field],
+                                                                          jsonobj[constants.context_date_ner_field])
 
-            entity2mentions, context_mens_entlinks = exactStringMatchCDCR(contexts_ners)
-            q_mens_entlinks = groundQuestionMentions(qners, entity2mentions)
+            # entitystr2idx: {ent_norm_str: entity_idx} --- map from entity_norm_val to entity_idx
+            # eq_entity2ent_mens: [[(c_idx, m_idx)], ...] --- all mentions for each entity
+            # entmens2entities: [[ent_idx, ...], ...] --- Entity_idx for each ent_men
+            entitystr2idx, eq_entity2ent_mens, entmens2entities = exactStringMatchCDCR(contexts_ent_ners)
+            jsonobj[constants.context_entmens2entidx] = entmens2entities
+            jsonobj[constants.context_eqent2entmens] = eq_entity2ent_mens
 
-            jsonobj[constants.ENT_TO_CONTEXT_MENS] = entity2mentions
-            jsonobj[constants.CONTEXT_MENS_TO_ENT] = context_mens_entlinks
-            jsonobj[constants.Q_MENS_TO_ENT] = q_mens_entlinks
+            # Same as above for NUM mens
+            eq_entity2num_mens, nummens2entities = normalizableMensCDCR(contexts_num_ners, num_normalization_dict)
+            jsonobj[constants.context_nummens2entidx] = nummens2entities
+            jsonobj[constants.context_eqent2nummens] = eq_entity2num_mens
+
+            # Same as above for DATE mens
+            eq_entity2date_mens, datemens2entities = normalizableMensCDCR(contexts_date_ners, date_normalization_dict)
+            jsonobj[constants.context_datemens2entidx] = datemens2entities
+            jsonobj[constants.context_eqent2datemens] = eq_entity2date_mens
+
+            # List grounding the ques_ent_mens to entity_idxs. If doesnt ground, then -1 is the entity_idx used
+            q_entner2entidx = groundQuestionMentions(q_entners, entitystr2idx)
+            jsonobj[constants.q_entmens2entidx] = q_entner2entidx
 
             outf.write(json.dumps(jsonobj))
             outf.write("\n")

@@ -4,18 +4,12 @@ import copy
 import time
 import json
 import argparse
-from typing import List, Tuple, Any
-
-import dateparser
-from dateparser.search import search_dates
+from typing import List, Tuple, Any, Dict
 
 from utils import TAUtils, util, spacyutils
 from datasets.hotpotqa.utils import constants
-import datasets.hotpotqa.analysis.hotpot_evaluate_v1 as hotpot_evaluate_v1
 
-spacy_nlp = spacyutils.getSpacyNLP()
-# ccg_nlp = TAUtils.getCCGNLPLocalPipeline()
-
+'''
 anstypecounts = {constants.NUM_TYPE: 0,
                  constants.DATE_TYPE: 0,
                  constants.ENTITY_TYPE: 0,
@@ -36,7 +30,6 @@ def _printAnsTypeCounts():
         anstypecounts[k] = util.round_all((float(count)/totalAns)*100, 3)
 
     print(anstypecounts)
-
 
 def ansType(ans_str: str, q_ners, context_ners, f1_threshold):
     """ Type answer based on the context NEs
@@ -92,6 +85,21 @@ def ansType(ans_str: str, q_ners, context_ners, f1_threshold):
             ans_type = constants.STRING_TYPE
 
     return (ans_type, best_nerstr)
+'''
+
+
+def flattenMentionSpans(mentions: List, sentIdxTokenIdx2GlobalTokenIdx: Dict):
+    # Setting NER mentions' spans offset to be global token offset
+    flattened_ners = []
+
+    for sent_idx, sent_ners in enumerate(mentions):
+        for ner in sent_ners:
+            (start, end) = (sentIdxTokenIdx2GlobalTokenIdx[(sent_idx, ner[1])],
+                            sentIdxTokenIdx2GlobalTokenIdx[(sent_idx, ner[2] - 1)] + 1)
+            new_ner = (ner[0], start, end, ner[3])
+            flattened_ners.append(new_ner)
+
+    return flattened_ners
 
 
 def flattenContexts(input_jsonl: str, output_jsonl: str) -> None:
@@ -122,35 +130,42 @@ def flattenContexts(input_jsonl: str, output_jsonl: str) -> None:
 
             # List of contexts, (title, list of sentences)
             contexts = new_doc[constants.context_field]
-            contexts_ners = new_doc[constants.context_ner_field]
             contexts_whitespaces = new_doc[constants.context_whitespaces_field]
+
+            contexts_ent_ners = new_doc[constants.context_ent_ner_field]
+            contexts_num_ners = new_doc[constants.context_num_ner_field]
+            contexts_date_ners = new_doc[constants.context_date_ner_field]
 
             flattened_contexts = []
             flattened_contexts_whitespaces = []
-            flattened_context_ners = []
+            flattened_contexts_ent_ners = []
+            flattened_contexts_num_ners = []
+            flattened_contexts_date_ners = []
+
             for ((title, sentences),
                  singlecontext_whitespaces,
-                 single_context_ners) in zip(contexts, contexts_whitespaces, contexts_ners):
+                 single_context_ent_ners,
+                 single_context_num_ners,
+                 single_context_date_ners) in zip(contexts, contexts_whitespaces, contexts_ent_ners,
+                                                  contexts_num_ners, contexts_date_ners):
 
                 # Get (sentid, tokenidx) --> global token idx
                 # List[List[token]]
                 tokenized_context = [sent.strip().split(' ') for sent in sentences]
                 sentIdxTokenIdx2GlobalTokenIdx = TAUtils.getGlobalTokenOffset(tokenized_context)
 
-                # Setting NER mentions' spans offset to be global token offset
-                singlecontext_flattened_ners = []
-                for sent_idx, sent_ners in enumerate(single_context_ners):
-                    for ner in sent_ners:
-                        # print(ner)
-                        (start, end) = (sentIdxTokenIdx2GlobalTokenIdx[(sent_idx, ner[1])],
-                                        sentIdxTokenIdx2GlobalTokenIdx[(sent_idx, ner[2] - 1)] + 1)
-                        new_ner = (ner[0], start, end, ner[3])
-                        singlecontext_flattened_ners.append(new_ner)
+
+                flattened_contexts_ent_ners.append(flattenMentionSpans(single_context_ent_ners,
+                                                                       sentIdxTokenIdx2GlobalTokenIdx))
+                flattened_contexts_num_ners.append(flattenMentionSpans(single_context_num_ners,
+                                                                       sentIdxTokenIdx2GlobalTokenIdx))
+                flattened_contexts_date_ners.append(flattenMentionSpans(single_context_date_ners,
+                                                                        sentIdxTokenIdx2GlobalTokenIdx))
 
                 # Flat context: Join sentences by space
                 flattened_context = ' '.join(sentences).strip()
 
-                # Each sentence ends with a space, so for ever sent's ws, make last element a space
+                # Each sentence ends with a space, so for every sent's ws, make last element a space
                 for sentws in singlecontext_whitespaces:
                     if len(sentws) == 0:
                         print(sentences)
@@ -158,7 +173,6 @@ def flattenContexts(input_jsonl: str, output_jsonl: str) -> None:
                 flattened_whitespace = [ws for sentws in singlecontext_whitespaces for ws in sentws]
 
                 flattened_contexts.append((title, flattened_context))
-                flattened_context_ners.append(singlecontext_flattened_ners)
                 flattened_contexts_whitespaces.append(flattened_whitespace)
 
                 '''
@@ -173,8 +187,10 @@ def flattenContexts(input_jsonl: str, output_jsonl: str) -> None:
                 '''
 
             new_doc[constants.context_field] = flattened_contexts
-            new_doc[constants.context_ner_field] = flattened_context_ners
             new_doc[constants.context_whitespaces_field] = flattened_contexts_whitespaces
+            new_doc[constants.context_ent_ner_field] = flattened_contexts_ent_ners
+            new_doc[constants.context_num_ner_field] = flattened_contexts_num_ners
+            new_doc[constants.context_date_ner_field] = flattened_contexts_date_ners
 
             outf.write(json.dumps(new_doc))
             outf.write("\n")

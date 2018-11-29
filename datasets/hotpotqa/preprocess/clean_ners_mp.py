@@ -34,6 +34,20 @@ NUM_TYPE = constants.NUM_TYPE
 DATE_TYPE = constants.DATE_TYPE
 
 
+# Context mentions can be of three types:
+
+# All unchanged types will be mapped to the ENT type in out domain
+ENT_TYPE_TO_NERTYPE = UNCHANGED_NER_TYPES
+
+# All these NER types are mapped ot NUM type in out domain
+NUM_TYPE_TO_NERTYPE = ["QUANTITY", "CARDINAL", "PERCENT", "MONEY"]
+
+# "DATE" NER type is the only type getting mapped to DATE type in our domain
+DATE_TYPE_TO_NERTYPE = ["DATE"]
+
+
+
+
 def grouper(n, iterable, padvalue=None):
     """grouper(3, 'abcdefg', 'x') -->
 	('a','b','c'), ('d','e','f'), ('g','x','x')"""
@@ -342,10 +356,13 @@ def cleanNERList(ners: List[Tuple], NUMBER_DICT, DATE_DICT, dateparser_en):
 
         # These type NEs are kept as is
         if nertype in UNCHANGED_NER_TYPES:
+            ner_span[-1] = constants.ENTITY_TYPE
             normalized_ner_spans.append(ner_span)
+
         # These type NEs are removed
         elif nertype in REMOVE_NER_TYPES:
             continue
+
         else:
             # These NEs will be tried for normalization
             # Each normalization function returns a returnval
@@ -405,6 +422,23 @@ def cleanNERList(ners: List[Tuple], NUMBER_DICT, DATE_DICT, dateparser_en):
     return (normalized_ner_spans, NUMBER_DICT, DATE_DICT)
 
 
+def getNERSpansByType(ners: List):
+    ent_mens, num_mens, date_mens = [], [], []
+    for ner_span in ners:
+        nertype = ner_span[-1]
+        if nertype == constants.ENTITY_TYPE:
+            ent_mens.append(ner_span)
+        elif nertype == constants.NUM_TYPE:
+            num_mens.append(ner_span)
+        elif nertype == constants.DATE_TYPE:
+            date_mens.append(ner_span)
+        else:
+            print(f"NER type doesn't belong to contexts. Type: {ner_span}")
+
+    return (ent_mens, num_mens, date_mens)
+
+
+
 def processJsonObj(input_jsonobj):
     dateparser_en = dateparser.date.DateDataParser(languages=['en'])
 
@@ -417,18 +451,41 @@ def processJsonObj(input_jsonobj):
     contexts_ners = new_doc[constants.context_ner_field]
 
     (q_normalized_ners, NUMBER_DICT, DATE_DICT) = cleanNERList(q_ners, NUMBER_DICT, DATE_DICT, dateparser_en)
-    new_doc[constants.q_ner_field] = q_normalized_ners
+    (q_ent_ners, q_num_ners, q_date_ners) = getNERSpansByType(q_normalized_ners)
 
-    context_normalized_ners = []
+    # Delete the NEr key and instead make three corresponding to ENT, NUM, and DATE
+    new_doc.pop(constants.q_ner_field)
+    new_doc[constants.q_ent_ner_field] = q_ent_ners
+    new_doc[constants.q_num_ner_field] = q_num_ners
+    new_doc[constants.q_date_ner_field] = q_date_ners
+
+    # context_normalized_ners = []
+    context_ent_normalized_ners = []
+    context_num_normalized_ners = []
+    context_date_normalized_ners  = []
+
     for context in contexts_ners:
-        one_context_normalized_ners = []
+        ent_onecontext_normalized_ners = []
+        num_onecontext_normalized_ners = []
+        date_onecontext_normalized_ners = []
+
         for sentence_ner in context:
             (normalized_ner_spans, NUMBER_DICT, DATE_DICT) = cleanNERList(sentence_ner, NUMBER_DICT,
                                                                           DATE_DICT, dateparser_en)
-            one_context_normalized_ners.append(normalized_ner_spans)
-        context_normalized_ners.append(one_context_normalized_ners)
+            ent_mens, num_mens, date_mens = getNERSpansByType(normalized_ner_spans)
+            ent_onecontext_normalized_ners.append(ent_mens)
+            num_onecontext_normalized_ners.append(num_mens)
+            date_onecontext_normalized_ners.append(date_mens)
 
-    new_doc[constants.context_ner_field] = context_normalized_ners
+        # context_normalized_ners.append(one_context_normalized_ners)
+        context_ent_normalized_ners.append(ent_onecontext_normalized_ners)
+        context_num_normalized_ners.append(num_onecontext_normalized_ners)
+        context_date_normalized_ners.append(date_onecontext_normalized_ners)
+
+    new_doc.pop(constants.context_ner_field)
+    new_doc[constants.context_ent_ner_field] = context_ent_normalized_ners
+    new_doc[constants.context_num_ner_field] = context_num_normalized_ners
+    new_doc[constants.context_date_ner_field] = context_date_normalized_ners
 
     new_doc[constants.nums_normalized_field] = NUMBER_DICT
     new_doc[constants.dates_normalized_field] = DATE_DICT

@@ -38,11 +38,11 @@ else
     exit 1
 fi
 
-echo -e "\nTOKENIZATION AND NER\n"
-# Tokenize and NER the raw files using spacy
-time python -m datasets.hotpotqa.preprocess.tokenize_mp --input_json ${RAW_JSON_DIR}/${INPUT_JSON} \
-                                                        --output_jsonl ${TOKENIZED_DIR}/${INPUT_JSONL} \
-                                                        --nump ${NUMPROC}
+#echo -e "\nTOKENIZATION AND NER\n"
+## Tokenize and NER the raw files using spacy
+#time python -m datasets.hotpotqa.preprocess.tokenize_mp --input_json ${RAW_JSON_DIR}/${INPUT_JSON} \
+#                                                        --output_jsonl ${TOKENIZED_DIR}/${INPUT_JSONL} \
+#                                                        --nump ${NUMPROC}
 
 
 echo -e "\nNORMALIZATION AND CLEANING OF ENTITY MENTIONS\n"
@@ -51,19 +51,29 @@ time python -m datasets.hotpotqa.preprocess.clean_ners_mp --input_json ${TOKENIZ
                                                           --nump ${NUMPROC}
 
 
-echo -e "\nFLATTEN CONTEXTS INTO SINGLE STRING\n"
-time python -m datasets.hotpotqa.preprocess.flatten_contexts --input_json ${PROCESSED_DIR}/${INPUT_JSONL} \
-                                                             --replace
+tempfile=$(mktemp)
 
+echo -e "\nFLATTEN CONTEXTS INTO SINGLE STRING\n"
+time python -m datasets.hotpotqa.preprocess.flatten_contexts --input_jsonl ${PROCESSED_DIR}/${INPUT_JSONL} \
+                                                             --output_jsonl ${PROCESSED_DIR}/${INPUT_JSONL}.tmp
+
+mv ${PROCESSED_DIR}/${INPUT_JSONL}.tmp ${PROCESSED_DIR}/${INPUT_JSONL}
+
+tempfile=$(mktemp)
 
 echo -e "\nCROSS-DOC-COREF  and  GROUNDING CONTEXT AND QUESTION MENTIONS\n"
-time python -m datasets.hotpotqa.preprocess.cdcr --input_json ${PROCESSED_DIR}/${INPUT_JSONL} \
-                                                 --replace
+time python -m datasets.hotpotqa.preprocess.cdcr --input_jsonl ${PROCESSED_DIR}/${INPUT_JSONL} \
+                                                 --output_jsonl ${PROCESSED_DIR}/${INPUT_JSONL}.tmp
+mv ${PROCESSED_DIR}/${INPUT_JSONL}.tmp ${PROCESSED_DIR}/${INPUT_JSONL}
+
+tempfile=$(mktemp)
 
 echo -e "\nANSWER GROUNDING and TYPING\n"
-time python -m datasets.hotpotqa.preprocess.ans_grounding --input_json ${PROCESSED_DIR}/${INPUT_JSONL} \
-                                                          --replace --f1thresh ${F1THRESH}
+time python -m datasets.hotpotqa.preprocess.ans_grounding --input_jsonl ${PROCESSED_DIR}/${INPUT_JSONL} \
+                                                          --output_jsonl ${PROCESSED_DIR}/${INPUT_JSONL}.tmp \
+                                                          --f1thresh ${F1THRESH}
 
+mv ${PROCESSED_DIR}/${INPUT_JSONL}.tmp ${PROCESSED_DIR}/${INPUT_JSONL}
 
 
 

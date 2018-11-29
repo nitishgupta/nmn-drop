@@ -50,7 +50,8 @@ def predictedAnsPerf(ans_str: str, predicted_answer: str):
     return (pr, re, f1, em)
 
 
-def getAnsFromGrounding(answer_type, answer_grounding, contexts, contexts_ws, contexts_mentions):
+def getAnsFromGrounding(answer_type, answer_grounding, contexts, contexts_ws, contexts_mentions,
+                        ent2mens):
     """ Return the answer string from the type, grounding, contexts, and contexts mentions
 
     For
@@ -63,13 +64,16 @@ def getAnsFromGrounding(answer_type, answer_grounding, contexts, contexts_ws, co
         answer_str = "yes" if answer_grounding == 1 else "no"
 
     elif answer_type in [constants.NUM_TYPE, constants.DATE_TYPE, constants.ENTITY_TYPE]:
-        (context_idx, men_idx) = answer_grounding[0]
+        ans_entity_idx = [i for i, val in enumerate(answer_grounding) if val == 1][0]
+        ans_mentions = ent2mens[ans_entity_idx]
+        ans_mention = ans_mentions[0]
+        (context_idx, men_idx) = ans_mention
         mention = contexts_mentions[context_idx][men_idx]
         answer_str = mention[0]
 
     elif answer_type == constants.STRING_TYPE:
-        if answer_grounding == constants.NO_LINK:
-            answer_str = constants.NO_LINK
+        if answer_grounding == constants.NO_ANS_GROUNDING:
+            answer_str = constants.NO_ANS_GROUNDING
         else:
             (context_idx, (start, end)) = answer_grounding[0]
             tokenized_context = contexts[context_idx][1].split(" ")
@@ -80,7 +84,7 @@ def getAnsFromGrounding(answer_type, answer_grounding, contexts, contexts_ws, co
 
     else:
         print("UNRECOGNIZED ANSWER TYPE")
-        answer_str = constants.NO_LINK
+        answer_str = constants.NO_ANS_GROUNDING
 
     return answer_str
 
@@ -124,7 +128,18 @@ def ansTypeAnalysis(input_jsonl: str, output_txt: str, skipeasy: bool) -> None:
 
             contexts = jsonobj[constants.context_field]
             contexts_ws = jsonobj[constants.context_whitespaces_field]
-            contexts_ners = jsonobj[constants.context_ner_field]
+
+            contexts_ent_ners = jsonobj[constants.context_ent_ner_field]
+            contexts_num_ners = jsonobj[constants.context_num_ner_field]
+            contexts_date_ners = jsonobj[constants.context_date_ner_field]
+
+            context_entmens2entidx = jsonobj[constants.context_entmens2entidx]
+            context_nummens2entidx = jsonobj[constants.context_nummens2entidx]
+            context_datemens2entidx = jsonobj[constants.context_datemens2entidx]
+
+            context_eqent2entmens = jsonobj[constants.context_eqent2entmens]
+            context_eqent2nummens = jsonobj[constants.context_eqent2nummens]
+            context_eqent2datemens = jsonobj[constants.context_eqent2datemens]
 
             answer = jsonobj[constants.ans_field]
             answer_type = jsonobj[constants.ans_type_field]
@@ -132,7 +147,24 @@ def ansTypeAnalysis(input_jsonl: str, output_txt: str, skipeasy: bool) -> None:
 
             anstype_counts[answer_type] = anstype_counts.get(answer_type, 0) + 1
 
-            grounded_answer = getAnsFromGrounding(answer_type, answer_grounding, contexts, contexts_ws, contexts_ners)
+            mentions = None
+            ent2mens = None
+            if answer_type == constants.ENTITY_TYPE:
+                mentions = contexts_ent_ners
+                ent2mens = context_eqent2entmens
+            elif answer_type == constants.NUM_TYPE:
+                mentions = contexts_num_ners
+                ent2mens = context_eqent2nummens
+            elif answer_type == constants.DATE_TYPE:
+                mentions = contexts_date_ners
+                ent2mens = context_eqent2datemens
+            else:
+                mentions = None
+                ent2mens = None
+
+            grounded_answer = getAnsFromGrounding(answer_type, answer_grounding, contexts, contexts_ws,
+                                                  mentions, ent2mens)
+
             p, r, f, e = predictedAnsPerf(answer, grounded_answer)
             (p, r, f, e) = util.round_all((p, r, f, e), 3)
 
