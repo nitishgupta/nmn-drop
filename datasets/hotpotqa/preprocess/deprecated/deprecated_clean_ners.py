@@ -379,7 +379,7 @@ def cleanNERSForJsonl(input_jsonl: str, output_jsonl: str) -> None:
 
     Returns:
     --------
-    Jsonl file with same fields as input with the modification/addition of:
+    Jsonl file with same datatypes as input with the modification/addition of:
     Modifications:
         q_ner_field: The question is tokenized
         ans_ner_field: The answer is now modified

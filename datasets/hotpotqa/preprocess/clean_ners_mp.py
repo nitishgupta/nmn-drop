@@ -500,7 +500,7 @@ def cleanNERSForJsonl(input_jsonl: str, output_jsonl: str, num_processes: float)
 
     Returns:
     --------
-    Jsonl file with same fields as input with the modification/addition of:
+    Jsonl file with same datatypes as input with the modification/addition of:
     Modifications:
         q_ner_field
         context_ner_field

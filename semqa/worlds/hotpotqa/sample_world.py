@@ -78,6 +78,22 @@ class SampleHotpotWorld(World):
 
     @overrides
     def _map_name(self, name: str, keep_mapping: bool = False) -> str:
+        """
+        Naming convention for translated name:
+            - Function variables: Single upper case letter optionally followed by digits
+            - Individual variables: Single lower case letter (except e for events) optionally
+              followed by digits
+            - Constants: Everything else
+
+
+        _add_name_mapping -- Adds the name: translated_name mapping in the name_mapping dict
+            and adds the translated_name: Type mapping in the type_signature dict.
+            Eg. 'number_threshold' (name) : 'F0' (translated_name) in the name_mapping and
+                'F0':  <n,b> (Type) in the type_signature.
+
+        Since instance-specific actions we add are terminals, translated name can be the same as the name
+        'Type -> name' will be added as the action. Translated_name convention is only used for internal purposes
+        """
         if name not in types.COMMON_NAME_MAPPING and name not in self.local_name_mapping:
             if not keep_mapping:
                 raise ParsingError(f"Encountered un-mapped name: {name}")

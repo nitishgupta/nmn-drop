@@ -53,7 +53,7 @@ local parse_number(x) =
 
     "action_embedding_dim": 50,
 
-    "encoder": {
+    "qencoder": {
       "type": "lstm",
       "input_size": 25,
       "hidden_size": 10,
@@ -76,6 +76,22 @@ local parse_number(x) =
 
     "decoder_beam_search": {
       "beam_size": parse_number(std.extVar("BEAMSIZE")),
+    },
+
+    "context_embedder": {
+      "tokens": {
+        "type": "embedding",
+        "vocab_namespace": "tokens",
+        "embedding_dim": 25,
+        "trainable": true
+      }
+    },
+
+    "context_encoder": {
+      "type": "lstm",
+      "input_size": 25,
+      "hidden_size": 10,
+      "num_layers": 1
     },
 
     "beam_size": parse_number(std.extVar("BEAMSIZE")),

@@ -12,6 +12,8 @@ from allennlp.semparse.type_declarations import type_declaration as types
 from allennlp.semparse.type_declarations.type_declaration import (ComplexType, HigherOrderType,
                                                                   NamedBasicType, NameMapper)
 
+import datasets.hotpotqa.utils.constants as hpconstants
+
 # This type declaration is based on: allennlp.semparse.type_declarations.nlvr_type_declaration
 
 # All constants default to ``EntityType`` in NLTK. For domains where constants of different types
@@ -21,12 +23,22 @@ from allennlp.semparse.type_declarations.type_declaration import (ComplexType, H
 # Commenting NUM_TYPE since our language does not contain constants
 # NUM_TYPE = EntityType()
 
-NUM_TYPE = NamedBasicType("NUM")
-BOOL_TYPE = NamedBasicType("BOOLEAN")
+# NUM_TYPE = NamedBasicType("NUM")
+# BOOL_TYPE = NamedBasicType("BOOLEAN")
+# QSTR_TYPE = NamedBasicType("QSTR")
+
+ANS_TYPES = [hpconstants.ENTITY_TYPE, hpconstants.NUM_TYPE, hpconstants.DATE_TYPE, hpconstants.BOOL_TYPE]
+
+
+NUM_TYPE = NamedBasicType(hpconstants.NUM_TYPE)
+BOOL_TYPE = NamedBasicType(hpconstants.BOOL_TYPE)
+# ENT_TYPE = NamedBasicType(hpconstants.ENTITY_TYPE)
+# STR_TYPE = NamedBasicType(hpconstants.STRING_TYPE)
+# DATE_TYPE = NamedBasicType(hpconstants.DATE_TYPE)
 QSTR_TYPE = NamedBasicType("QSTR")
 
 BASIC_TYPES = {NUM_TYPE, BOOL_TYPE, QSTR_TYPE}
-START_TYPES = {BOOL_TYPE}
+START_TYPES = {BOOL_TYPE, NUM_TYPE}
 
 
 ''' First define all possible function signatures as complex types'''
@@ -70,11 +82,11 @@ curried_functions = {
                          NUM_FROM_TWONUM_TYPE: 2,
                      }
 
-# print("name mapping:")
-# print(COMMON_NAME_MAPPING)
-#
-# print("type signature:")
-# print(COMMON_TYPE_SIGNATURE)
+print("name mapping:")
+print(COMMON_NAME_MAPPING)
+
+print("type signature:")
+print(COMMON_TYPE_SIGNATURE)
 '''
 
 

@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Any
 
 from overrides import overrides
 
@@ -56,9 +56,11 @@ class HotpotSemanticParser(Model):
                  vocab: Vocabulary,
                  question_embedder: TextFieldEmbedder,
                  action_embedding_dim: int,
-                 encoder: Seq2SeqEncoder,
+                 qencoder: Seq2SeqEncoder,
                  ques2action_encoder: Seq2SeqEncoder,
                  quesspan_extractor: SpanExtractor,
+                 context_embedder: TextFieldEmbedder,
+                 context_encoder: Seq2SeqEncoder,
                  dropout: float = 0.0,
                  rule_namespace: str = 'rule_labels') -> None:
         super(HotpotSemanticParser, self).__init__(vocab=vocab)
@@ -66,9 +68,12 @@ class HotpotSemanticParser(Model):
         self._question_embedder = question_embedder
         self._denotation_accuracy = Average()
         self._consistency = Average()
-        self._encoder = encoder
+        self._qencoder = qencoder
         self._ques2action_encoder = ques2action_encoder
         self._quesspan_extractor = quesspan_extractor
+
+        self._context_embedder = context_embedder
+        self._context_encoder = context_encoder
 
         if dropout > 0:
             self._dropout = torch.nn.Dropout(p=dropout)
@@ -105,13 +110,13 @@ class HotpotSemanticParser(Model):
         batch_size = embedded_input.size(0)
 
         # (B, ques_length, encoder_output_dim)
-        encoder_outputs = self._dropout(self._encoder(embedded_input, question_mask))
+        encoder_outputs = self._dropout(self._qencoder(embedded_input, question_mask))
 
         # (B, encoder_output_dim)
         final_encoder_output = util.get_final_encoder_states(encoder_outputs,
                                                              question_mask,
-                                                             self._encoder.is_bidirectional())
-        memory_cell = encoder_outputs.new_zeros(batch_size, self._encoder.get_output_dim())
+                                                             self._qencoder.is_bidirectional())
+        memory_cell = encoder_outputs.new_zeros(batch_size, self._qencoder.get_output_dim())
         # TODO(nitish): Why does WikiTablesParser use '_first_attended_question' embedding and not this
         attended_sentence, _ = self._decoder_step.attend_on_question(final_encoder_output,
                                                                      encoder_outputs, question_mask)
@@ -127,12 +132,12 @@ class HotpotSemanticParser(Model):
                                                  question_mask_list))
         return initial_rnn_state
 
-    def _create_grammar_state(self,
-                              world: SampleHotpotWorld,
-                              possible_actions: List[ProductionRule],
-                              linked_rule2idx: Dict,
-                              action2ques_linkingscore: torch.FloatTensor,
-                              quesspan_action_repr: torch.FloatTensor) -> GrammarStatelet:
+    def _create_grammar_statelet(self,
+                                 world: SampleHotpotWorld,
+                                 possible_actions: List[ProductionRule],
+                                 linked_rule2idx: Dict,
+                                 action2ques_linkingscore: torch.FloatTensor,
+                                 quesspan_action_repr: torch.FloatTensor) -> GrammarStatelet:
         """ Make grammar state for a particular instance in the batch using the global and instance-specific actions.
         For each instance-specific action we have a linking_score vector (size:ques_tokens), and an action embedding
 
@@ -148,6 +153,8 @@ class HotpotSemanticParser(Model):
 
 
         """
+
+
 
         # ProductionRule: (rule, is_global_rule, rule_id, nonterminal)
         action_map = {}
@@ -233,42 +240,52 @@ class HotpotSemanticParser(Model):
     @classmethod
     def _get_action_strings(cls,
                             possible_actions: List[List[ProductionRule]],
-                            action_indices: Dict[int, List[List[int]]]) -> List[List[List[str]]]:
+                            action_indices: Dict[int, List[List[int]]],
+                            action_scores: Dict[int, List[torch.Tensor]]) -> Tuple[List[List[List[str]]],
+                                                                                  List[List[torch.Tensor]]]:
         """
         Takes a list of possible actions and indices of decoded actions into those possible actions
         for a batch and returns sequences of action strings. We assume ``action_indices`` is a dict
         mapping batch indices to k-best decoded sequence lists.
         """
         all_action_strings: List[List[List[str]]] = []
+        all_action_scores: List[List[torch.Tensor]] = []
         batch_size = len(possible_actions)
         for i in range(batch_size):
             batch_actions = possible_actions[i]
             batch_best_sequences = action_indices[i] if i in action_indices else []
+            batch_best_seqscores = action_scores[i] if i in action_scores else []
             # This will append an empty list to ``all_action_strings`` if ``batch_best_sequences``
             # is empty.
             action_strings = [[batch_actions[rule_id][0] for rule_id in sequence]
                               for sequence in batch_best_sequences]
             all_action_strings.append(action_strings)
-        return all_action_strings
+            all_action_scores.append(batch_best_seqscores)
+        return all_action_strings, all_action_scores
 
     @staticmethod
     def _get_denotations(action_strings: List[List[List[str]]],
-                         worlds: List[SampleHotpotWorld]) -> List[List[bool]]:
-        all_denotations: List[List[bool]] = []
+                         worlds: List[SampleHotpotWorld]) -> Tuple[List[List[Any]], List[List[str]]]:
+        all_denotations: List[List[Any]] = []
+        all_denotation_types: List[List[str]] = []
+
         for instance_world, instance_action_sequences in zip(worlds, action_strings):
             instance_world: SampleHotpotWorld = instance_world
-            instance_denotations: List[str] = []
+            instance_denotations: List[Any] = []
+            instance_denotation_types: List[str] = []
             for instance_action_strings in instance_action_sequences:
                 # print(instance_action_strings)
                 if not instance_action_strings:
                     continue
 
                 logical_form = instance_world.get_logical_form(instance_action_strings)
-
-                instance_actionseq_denotation = instance_world.execute(logical_form)
+                instance_actionseq_denotation, instance_actionseq_type = instance_world.execute(logical_form)
                 instance_denotations.append(instance_actionseq_denotation)
+                instance_denotation_types.append(instance_actionseq_type)
+
             all_denotations.append(instance_denotations)
-        return all_denotations
+            all_denotation_types.append(instance_denotation_types)
+        return all_denotations, all_denotation_types
 
     @staticmethod
     def _check_denotation(action_sequence: List[str],

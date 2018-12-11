@@ -278,7 +278,7 @@ def tokenizeDocs(input_json: str, output_jsonl: str, mark_propn: bool, nump: flo
 
     Returns:
     --------
-    Jsonl file with same fields as input with the modification/addition of:
+    Jsonl file with same datatypes as input with the modification/addition of:
     Modifications:
         q_field: The question is tokenized
         context_field: Context sentences are now tokenized, but stored with white-space delimition

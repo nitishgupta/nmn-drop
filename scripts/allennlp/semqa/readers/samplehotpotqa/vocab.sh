@@ -25,10 +25,10 @@ if [ -d "${VOCABDIR}/vocabulary" ]; then
     read -p "Delete (Y/N) " delete
 
     if [ "${delete}" = "y" ] || [ "${delete}" = "Y" ]; then
-        echo "Deleting ${SERIALIZATION_DIR}"
-        rm -r ${SERIALIZATION_DIR}
+        echo "Deleting ${VOCABDIR}/vocabulary"
+        rm -r ${VOCABDIR}/vocabulary
     else
-        echo "Not deleting ${SERIALIZATION_DIR}"
+        echo "Not deleting ${VOCABDIR}"
         echo "Cannot continue with non-empty serialization dir. Exiting"
         exit 1
     fi

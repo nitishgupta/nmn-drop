@@ -1,4 +1,4 @@
-from typing import List, Set, Dict, Union, TypeVar, Callable
+from typing import List, Set, Dict, Union, TypeVar, Callable, Tuple, Any
 from collections import defaultdict
 import operator
 import logging
@@ -6,6 +6,8 @@ import logging
 from allennlp.semparse import util as semparse_util
 
 from semqa.executors.hotpotqa.executor_functions import ExecutorFunctions
+
+import datasets.hotpotqa.utils.constants as hpconstants
 
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -45,10 +47,22 @@ class SampleHotpotExecutor:
         self.function_mappings = {
                                     'number_greater': ExecutorFunctions.number_greater,
                                     'scalar_mult': ExecutorFunctions.scalar_mult,
+                                    'multiply': ExecutorFunctions.multiply,
                                     'ground_num': ExecutorFunctions.ground_num,
                                     'number_threshold': ExecutorFunctions.number_threshold,
-                                    'two_ques_bool': ExecutorFunctions.two_ques_bool
+                                    'two_ques_bool': ExecutorFunctions.two_ques_bool,
+                                    'ques_bool': ExecutorFunctions.ques_bool
                                 }
+
+        self.func2returntype_mappings = {
+            'number_greater': hpconstants.BOOL_TYPE,
+            'scalar_mult': hpconstants.NUM_TYPE,
+            'multiply': hpconstants.NUM_TYPE,
+            'ground_num': hpconstants.NUM_TYPE,
+            'number_threshold': hpconstants.BOOL_TYPE,
+            'two_ques_bool': hpconstants.BOOL_TYPE,
+            'ques_bool': hpconstants.BOOL_TYPE
+        }
 
 
     def grounded_argument(self, arg):
@@ -89,7 +103,7 @@ class SampleHotpotExecutor:
         else:
             return False
 
-    def execute(self, logical_form: str) -> bool:
+    def execute(self, logical_form: str) -> Tuple[Any, Any]:
 
         if not logical_form.startswith("("):
             logical_form = f"({logical_form})"
@@ -97,13 +111,16 @@ class SampleHotpotExecutor:
 
         expression_as_list = semparse_util.lisp_to_nested_expression(logical_form)
 
-        print(expression_as_list[0])
+        # print(expression_as_list[0])
 
         denotation = self._handle_expression(expression_as_list[0])
 
-        print(f"Denotation: {denotation}")
+        outer_most_function = expression_as_list[0][0]
+        denotation_type = self.func2returntype_mappings[outer_most_function]
 
-        return denotation
+        # print(f"Denotation: {denotation} with type: {denotation_type}")
+
+        return denotation, denotation_type
 
     # def _handle_expression(self, expression_list):
     #     print(expression_list)
