@@ -106,7 +106,7 @@ class SampleHotpotDatasetReader(DatasetReader):
                 question = data[hpconstants.q_field]
                 # List of question mentions. Stored as mention-tuples --- (text, start, end, label)
                 # TODO(nitish): Fix this to include all types
-                qners = data[hpconstants.q_ent_ner_field]
+                q_nemens = data[hpconstants.q_ent_ner_field]
                 # List of (title, space_delimited_tokenized_contexts)
                 contexts = data[hpconstants.context_field]
                 # List of list --- For each context , list of mention-tuples as (text, start, end, label)
@@ -131,7 +131,7 @@ class SampleHotpotDatasetReader(DatasetReader):
                 # Dict from {ent_idx: [(context_idx, men_idx)]} --- output pf CDCR
 
                 # Grounding of ques entity mentions
-                qentmens_to_ent = data[hpconstants.q_entmens2entidx]
+                qnemens_to_ent = data[hpconstants.q_entmens2entidx]
 
                 ans_type = None
                 ans_grounding = None
@@ -140,7 +140,7 @@ class SampleHotpotDatasetReader(DatasetReader):
                     ans_grounding = data[hpconstants.ans_grounding_field]
 
                 instance = self.text_to_instance(question,
-                                                 qners,
+                                                 q_nemens,
                                                  contexts,
                                                  contexts_ent_ners,
                                                  contexts_num_ners,
@@ -153,7 +153,7 @@ class SampleHotpotDatasetReader(DatasetReader):
                                                  context_eqent2datemens,
                                                  dates_normalized_dict,
                                                  nums_normalized_dict,
-                                                 qentmens_to_ent,
+                                                 qnemens_to_ent,
                                                  ans_type,
                                                  ans_grounding)
                 if instance is not None:
@@ -202,14 +202,15 @@ class SampleHotpotDatasetReader(DatasetReader):
 
         for token_idx, token in enumerate(uniq_ques_tokens):
             span = token
+            span = QSTR_PREFIX + span
             # span --- will be _ delimited later on
             if span not in ques_spans2idx:
-                ques_spans.append(QSTR_PREFIX + span)
-                ques_spans2idx[QSTR_PREFIX + span] = len(ques_spans2idx)
+                ques_spans.append(span)
+                ques_spans2idx[span] = len(ques_spans2idx)
                 ques_spans_spanidxs.append(SpanField(span_start=token_idx, span_end=token_idx,
                                                      sequence_field=ques_textfield))
 
-                span_tokens = span.split(SPAN_DELIM)
+                span_tokens = span[len(QSTR_PREFIX):].split(SPAN_DELIM)
                 linking_score = [0.0]*len(ques_tokens)
                 for span_token in span_tokens:
                     # Single token can occur multiple times in the question
@@ -219,10 +220,73 @@ class SampleHotpotDatasetReader(DatasetReader):
 
         return ques_spans, ques_spans2idx, ques_spans_linking_score, ques_spans_spanidxs
 
+
+    def get_ques_nemens_ent_spans(self,
+                                  ques_tokens: List[str],
+                                  q_ent_ners,
+                                  q_entmens2entidx,
+                                  ques_textfield: TextField,
+                                  ques_spans,
+                                  ques_spans2idx,
+                                  ques_spans_linking_score,
+                                  ques_spans_spanidxs):
+        """ Make question NE mention spans (delimited by SPAN_DELIM )
+
+        Add these spans to ques_spans2idx, and append the linking score and SpanField to ques_spans_linking_score and
+        ques_spans_spanidxs, resp.
+
+        TODO(nitish): How to represent spans that occur multiple times in a question.
+                      Current solution: Only take the first occurrence span
+        TODO(nitish): 1) Extend to longer spans, 2) Possibly, don't break entity spans
+
+        Parameters:
+        -----------
+        ques_tokens: List[str]: List of question tokens
+        ques_textfield: TextField: For SpanFields
+
+        Returns:
+        --------
+        ques_spans: `List[str]`
+            All question spans delimited by _
+        ques_span2idx: ``Dict[str]: int``
+            Dict mapping from q_span to Idx
+        ques_spans_linking_score: ``List[List[float]]``
+            For each q_span, Binary list the size of q_length indicating q_token's presence in the span
+            This is used to score the q_span action in the decoder based on attention
+        ques_spans_spanidxs: List[SpanField]
+            List of SpanField for each q_span. One use case is to get an output embedding for the decoder.
+            Can possibly be used as input embedding as well (will need to figure out the TransitionFunction)
+        """
+
+        qent_spans = []
+        linking_scores = []
+        spanfields = []
+
+        for ne_men, entity_grounding in zip(q_ent_ners, q_entmens2entidx):
+            if entity_grounding == -1:
+                # These are q mens that are not grounded in the contexts
+                continue
+
+            men_span = QENT_PREFIX + SPAN_DELIM.join(ques_tokens[ne_men[1]:ne_men[2]])
+            if men_span not in ques_spans2idx:
+                ques_spans.append(men_span)
+                ques_spans2idx[men_span] = len(ques_spans2idx)
+                # qent_spans.append(men_span)
+
+                linkingscore = [0 for i in range(len(ques_tokens))]
+                linkingscore[ne_men[1]:ne_men[2]] = [1] * (ne_men[2] - ne_men[1])
+                ques_spans_linking_score.append(linkingscore)
+
+                ques_spans_spanidxs.append(SpanField(span_start=ne_men[1],
+                                                     span_end=ne_men[2] - 1,
+                                                     sequence_field=ques_textfield))
+
+        return ques_spans, ques_spans2idx, ques_spans_linking_score, ques_spans_spanidxs
+
     @overrides
     def text_to_instance(self,
                          ques: str,
-                         qners: List,
+                         q_nemens: List,
                          contexts: List,
                          contexts_ent_ners: List,
                          contexts_num_ners: List,
@@ -235,7 +299,7 @@ class SampleHotpotDatasetReader(DatasetReader):
                          context_eqent2datemens: List,
                          dates_normalized_dict: Dict,
                          nums_normalized_dict: Dict,
-                         qentmens_to_ent: List,
+                         qnemens_to_ent: List,
                          ans_type: str,
                          ans_grounding: Any) -> Instance:
         """
@@ -253,10 +317,17 @@ class SampleHotpotDatasetReader(DatasetReader):
         ques_tokens = [Token(token) for token in tokenized_ques]
         ques_tokenized_field = TextField(ques_tokens, self._sentence_token_indexers)
 
+
         # Make Ques_spans, their idxs, linking score and SpanField representations
         (ques_spans, ques_spans2idx,
          ques_spans_linking_score, ques_spans_spanidxs) = self.get_ques_spans(ques_tokens=tokenized_ques,
                                                                               ques_textfield=ques_tokenized_field)
+
+        (ques_spans, ques_spans2idx,
+         ques_spans_linking_score, ques_spans_spanidxs) = self.get_ques_nemens_ent_spans(
+            ques_tokens=tokenized_ques, q_ent_ners=q_nemens, q_entmens2entidx=qnemens_to_ent,
+            ques_textfield=ques_tokenized_field, ques_spans=ques_spans, ques_spans2idx=ques_spans2idx,
+            ques_spans_linking_score=ques_spans_linking_score, ques_spans_spanidxs=ques_spans_spanidxs)
 
         # Make world from question spans
         # This adds instance specific actions as well
@@ -274,7 +345,7 @@ class SampleHotpotDatasetReader(DatasetReader):
         action_to_ques_linking_scores = ques_spans_linking_score
         for production_rule in world.all_possible_actions():
             _, rule_right_side = production_rule.split(' -> ')
-            is_global_rule = not rule_right_side.startswith(QSTR_PREFIX)
+            is_global_rule = not (rule_right_side.startswith(QSTR_PREFIX) or rule_right_side.startswith(QENT_PREFIX))
             rule_field = ProductionRuleField(production_rule, is_global_rule)
             production_rule_fields.append(rule_field)
 

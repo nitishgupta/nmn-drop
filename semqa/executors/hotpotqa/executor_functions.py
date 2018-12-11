@@ -54,5 +54,12 @@ class ExecutorFunctions:
         else:
             return convert_float_to_tensor(0.0)
 
+    @staticmethod
+    def ques_ent_bool(arg1):
+        if len(arg1) > 5:
+            return convert_float_to_tensor(1.0)
+        else:
+            return convert_float_to_tensor(0.0)
+
 
 

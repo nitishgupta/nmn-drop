@@ -51,7 +51,8 @@ class SampleHotpotExecutor:
                                     'ground_num': ExecutorFunctions.ground_num,
                                     'number_threshold': ExecutorFunctions.number_threshold,
                                     'two_ques_bool': ExecutorFunctions.two_ques_bool,
-                                    'ques_bool': ExecutorFunctions.ques_bool
+                                    'ques_bool': ExecutorFunctions.ques_bool,
+                                    'ques_ent_bool': ExecutorFunctions.ques_ent_bool
                                 }
 
         self.func2returntype_mappings = {
@@ -61,7 +62,8 @@ class SampleHotpotExecutor:
             'ground_num': hpconstants.NUM_TYPE,
             'number_threshold': hpconstants.BOOL_TYPE,
             'two_ques_bool': hpconstants.BOOL_TYPE,
-            'ques_bool': hpconstants.BOOL_TYPE
+            'ques_bool': hpconstants.BOOL_TYPE,
+            'ques_ent_bool': hpconstants.BOOL_TYPE
         }
 
 

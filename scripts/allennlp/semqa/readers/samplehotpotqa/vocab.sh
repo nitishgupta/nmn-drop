@@ -4,7 +4,7 @@ INCLUDE_PACKAGE=semqa
 
 # DATASET FILES
 DATASET_DIR=/srv/local/data/nitishg/data/hotpotqa/processed
-TRAINFILE=${DATASET_DIR}/train.jsonl
+TRAINFILE=${DATASET_DIR}/devds.jsonl
 
 # VOCAB DATASET_READER CONFIG
 CONFIGFILE=allenconfigs/semqa/vocab/vocab_tokens.jsonnet

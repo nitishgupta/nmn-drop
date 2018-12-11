@@ -244,6 +244,8 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
                                                                                best_action_sequences,
                                                                                best_action_seqscores)
 
+        print(batch_action_strings)
+
         # Convert batch_action_scores to a single tensor the size of number of actions for each batch
         device_id = allenutil.get_device_of(batch_action_scores[0][0])
         # List[torch.Tensor] : Stores probs for each action_seq. Tensor length is same as the number of actions

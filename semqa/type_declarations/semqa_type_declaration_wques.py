@@ -36,8 +36,9 @@ BOOL_TYPE = NamedBasicType(hpconstants.BOOL_TYPE)
 # STR_TYPE = NamedBasicType(hpconstants.STRING_TYPE)
 # DATE_TYPE = NamedBasicType(hpconstants.DATE_TYPE)
 QSTR_TYPE = NamedBasicType("QSTR")
+QENT_TYPE = NamedBasicType("TQENT")
 
-BASIC_TYPES = {NUM_TYPE, BOOL_TYPE, QSTR_TYPE}
+BASIC_TYPES = {NUM_TYPE, BOOL_TYPE, QSTR_TYPE, QENT_TYPE}
 START_TYPES = {BOOL_TYPE, NUM_TYPE}
 
 
@@ -50,6 +51,7 @@ NUM_FROM_TWONUM_TYPE = ComplexType(NUM_TYPE, ComplexType(NUM_TYPE, NUM_TYPE))
 NUM_FROM_ONENUM_TYPE = ComplexType(NUM_TYPE, NUM_TYPE)
 
 BOOL_FROM_QSTR_TYPE = ComplexType(QSTR_TYPE, BOOL_TYPE)
+BOOL_FROM_QENT_TYPE = ComplexType(QENT_TYPE, BOOL_TYPE)
 BOOL_FROM_2QSTR_TYPE = ComplexType(QSTR_TYPE, ComplexType(QSTR_TYPE, BOOL_TYPE))
 
 
@@ -62,6 +64,7 @@ name_mapper.map_name_with_signature("number_threshold", BOOL_FROM_ONENUM_TYPE)
 name_mapper.map_name_with_signature("number_greater", BOOL_FROM_TWONUM_TYPE)
 
 name_mapper.map_name_with_signature("ques_bool", BOOL_FROM_QSTR_TYPE)
+name_mapper.map_name_with_signature("ques_ent_bool", BOOL_FROM_QENT_TYPE)
 name_mapper.map_name_with_signature("two_ques_bool", BOOL_FROM_2QSTR_TYPE)
 
 

@@ -21,6 +21,7 @@ from allennlp.semparse.worlds.atis_world import AtisWorld
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 QSTR_PREFIX="QSTR:"
+QENT_PREFIX="QENT:"
 
 
 class SampleHotpotWorld(World):
@@ -101,6 +102,10 @@ class SampleHotpotWorld(World):
                 # Question sub-span
                 translated_name = name
                 self._add_name_mapping(name, translated_name, types.QSTR_TYPE)
+            elif name.startswith(QENT_PREFIX):
+                # Question NE men span
+                translated_name = name
+                self._add_name_mapping(name, translated_name, types.QENT_TYPE)
             else:
                 raise ParsingError(f"Cannot handle names apart from qstr:ques_tokens. Input: {name}")
         else:
