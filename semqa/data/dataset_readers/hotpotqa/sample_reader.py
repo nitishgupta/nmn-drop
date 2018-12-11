@@ -21,6 +21,8 @@ import datasets.hotpotqa.utils.constants as hpconstants
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 QSTR_PREFIX="QSTR:"
+QENT_PREFIX="QENT:"
+SPAN_DELIM="***"
 
 
 @DatasetReader.register("sample_hotpot")
@@ -202,12 +204,12 @@ class SampleHotpotDatasetReader(DatasetReader):
             span = token
             # span --- will be _ delimited later on
             if span not in ques_spans2idx:
-                ques_spans.append(span)
-                ques_spans2idx[span] = len(ques_spans2idx)
+                ques_spans.append(QSTR_PREFIX + span)
+                ques_spans2idx[QSTR_PREFIX + span] = len(ques_spans2idx)
                 ques_spans_spanidxs.append(SpanField(span_start=token_idx, span_end=token_idx,
                                                      sequence_field=ques_textfield))
 
-                span_tokens = span.split("***")
+                span_tokens = span.split(SPAN_DELIM)
                 linking_score = [0.0]*len(ques_tokens)
                 for span_token in span_tokens:
                     # Single token can occur multiple times in the question
@@ -278,8 +280,8 @@ class SampleHotpotDatasetReader(DatasetReader):
 
             # Tokens in a ques_span; rule_right_side is QSTR_PREFIXquestion_span, hence removing the QSTR_PREFIX
             if not is_global_rule:
-                ques_span = rule_right_side[len(QSTR_PREFIX):]
-                linked_rule2idx[production_rule] = ques_spans2idx[ques_span]
+                # ques_span = rule_right_side[len(QSTR_PREFIX):]
+                linked_rule2idx[production_rule] = ques_spans2idx[rule_right_side]
 
         action_field = ListField(production_rule_fields)
         linked_rule2idx_field = MetadataField(linked_rule2idx)

@@ -2,7 +2,7 @@
 This module defines classes Object and Box (the two entities in the NLVR domain) and an NlvrWorld,
 which mainly contains an execution method and related helper methods.
 """
-from typing import Dict, Set, List
+from typing import Dict, Set, List, Tuple, Any
 import logging
 import sys
 
@@ -55,7 +55,7 @@ class SampleHotpotWorld(World):
 
         if ques_spans is not None:
             for ques_str in ques_spans:
-                ques_str = f"{QSTR_PREFIX}{ques_str}"
+                # ques_str = f"{QSTR_PREFIX}{ques_str}"
                 self._map_name(name=ques_str, keep_mapping=True)
 
 
@@ -127,5 +127,5 @@ class SampleHotpotWorld(World):
     def _get_curried_functions(self) -> Dict[Type, int]:
         return SampleHotpotWorld.curried_functions
 
-    def execute(self, logical_form: str) -> bool:
+    def execute(self, logical_form: str) -> Tuple[Any, Any]:
         return self._executor.execute(logical_form)
