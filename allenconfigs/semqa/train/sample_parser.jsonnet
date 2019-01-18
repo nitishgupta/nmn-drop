@@ -2,7 +2,7 @@ local parser = {
 //   boolparser(x): true if x == "true" else False,
   boolparser(x):
     if x == "true" then true
-    else false,
+    else false
 };
 
 local parse_number(x) =
@@ -46,30 +46,30 @@ local parse_number(x) =
       "tokens": {
         "type": "embedding",
         "vocab_namespace": "tokens",
-        "embedding_dim": 25,
+        "embedding_dim": 50,
         "trainable": true
       }
     },
 
-    "action_embedding_dim": 50,
+    "action_embedding_dim": 100,
 
     "qencoder": {
       "type": "lstm",
-      "input_size": 25,
-      "hidden_size": 10,
+      "input_size": 50,
+      "hidden_size": 50,
       "num_layers": 1
     },
     // Spans of this will be used for action embedding. So final output should be equal to action_embedding_dim
     // hidden_size * dir * 2 == action_embedding_dim
     "ques2action_encoder": {
       "type": "lstm",
-      "input_size": 25,
-      "hidden_size": 25,
+      "input_size": 50,
+      "hidden_size": 50,
       "num_layers": 1,
     },
     "quesspan_extractor": {
       "type": "endpoint",
-      "input_dim": 25,
+      "input_dim": 50,
     },
 
     "attention": {"type": "dot_product"},
@@ -78,20 +78,30 @@ local parse_number(x) =
       "beam_size": parse_number(std.extVar("BEAMSIZE")),
     },
 
-    "context_embedder": {
-      "tokens": {
-        "type": "embedding",
-        "vocab_namespace": "tokens",
-        "embedding_dim": 25,
-        "trainable": true
-      }
-    },
+    "executor_parameters": {
+      "ques_encoder": {
+        "type": "lstm",
+        "input_size": 50,
+        "hidden_size": 50,
+        "num_layers": 1,
+        "bidirectional": true
+      },
+      "context_embedder": {
+        "tokens": {
+          "type": "embedding",
+          "vocab_namespace": "tokens",
+          "embedding_dim": 50,
+          "trainable": true
+        }
+      },
 
-    "context_encoder": {
-      "type": "lstm",
-      "input_size": 25,
-      "hidden_size": 10,
-      "num_layers": 1
+      "context_encoder": {
+        "type": "lstm",
+        "input_size": 50,
+        "hidden_size": 50,
+        "num_layers": 1,
+        "bidirectional": true
+      },
     },
 
     "beam_size": parse_number(std.extVar("BEAMSIZE")),
@@ -102,13 +112,13 @@ local parse_number(x) =
   "iterator": {
     "type": "basic",
     "batch_size": std.extVar("BS"),
-    "max_instances_in_memory": std.extVar("BS") //
+    "max_instances_in_memory": 128 //
   },
 
   "trainer": {
     "grad_clipping": 10.0,
-    "cuda_device": 0,
-    "num_epochs": 15,
+    "cuda_device": parse_number(std.extVar("GPU")),
+    "num_epochs": 10,
     "shuffle": false,
     "optimizer": {
       "type": "adam",

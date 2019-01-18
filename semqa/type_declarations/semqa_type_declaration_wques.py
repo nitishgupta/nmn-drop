@@ -30,7 +30,7 @@ import datasets.hotpotqa.utils.constants as hpconstants
 ANS_TYPES = [hpconstants.ENTITY_TYPE, hpconstants.NUM_TYPE, hpconstants.DATE_TYPE, hpconstants.BOOL_TYPE]
 
 
-NUM_TYPE = NamedBasicType(hpconstants.NUM_TYPE)
+# NUM_TYPE = NamedBasicType(hpconstants.NUM_TYPE)
 BOOL_TYPE = NamedBasicType(hpconstants.BOOL_TYPE)
 # ENT_TYPE = NamedBasicType(hpconstants.ENTITY_TYPE)
 # STR_TYPE = NamedBasicType(hpconstants.STRING_TYPE)
@@ -38,41 +38,29 @@ BOOL_TYPE = NamedBasicType(hpconstants.BOOL_TYPE)
 QSTR_TYPE = NamedBasicType("QSTR")
 QENT_TYPE = NamedBasicType("TQENT")
 
-BASIC_TYPES = {NUM_TYPE, BOOL_TYPE, QSTR_TYPE, QENT_TYPE}
-START_TYPES = {BOOL_TYPE, NUM_TYPE}
+BASIC_TYPES = {BOOL_TYPE, QSTR_TYPE, QENT_TYPE}
+START_TYPES = {BOOL_TYPE}
 
 
 ''' First define all possible function signatures as complex types'''
+''' Functions: Return type is the last type '''
 
-# Functions: Return type is the last type
-BOOL_FROM_ONENUM_TYPE = ComplexType(NUM_TYPE, BOOL_TYPE)
-BOOL_FROM_TWONUM_TYPE = ComplexType(NUM_TYPE, ComplexType(NUM_TYPE, BOOL_TYPE))
-NUM_FROM_TWONUM_TYPE = ComplexType(NUM_TYPE, ComplexType(NUM_TYPE, NUM_TYPE))
-NUM_FROM_ONENUM_TYPE = ComplexType(NUM_TYPE, NUM_TYPE)
+# BOOL_FROM_ONENUM_TYPE = ComplexType(NUM_TYPE, BOOL_TYPE)
+# BOOL_FROM_TWONUM_TYPE = ComplexType(NUM_TYPE, ComplexType(NUM_TYPE, BOOL_TYPE))
+# NUM_FROM_TWONUM_TYPE = ComplexType(NUM_TYPE, ComplexType(NUM_TYPE, NUM_TYPE))
+# NUM_FROM_ONENUM_TYPE = ComplexType(NUM_TYPE, NUM_TYPE)
 
-BOOL_FROM_QSTR_TYPE = ComplexType(QSTR_TYPE, BOOL_TYPE)
-BOOL_FROM_QENT_TYPE = ComplexType(QENT_TYPE, BOOL_TYPE)
-BOOL_FROM_2QSTR_TYPE = ComplexType(QSTR_TYPE, ComplexType(QSTR_TYPE, BOOL_TYPE))
-
+BOOL_FROM_QENT_QSTR_TYPE = ComplexType(QENT_TYPE, ComplexType(QSTR_TYPE, BOOL_TYPE))
+BOOL_FROM_TWO_BOOl_TYPE = ComplexType(BOOL_TYPE, ComplexType(BOOL_TYPE, BOOL_TYPE))
 
 
 ''' Now define all functions and map their names to a name the NLTK `LogicParser` understands using name_mapper '''
 name_mapper = NameMapper()  # pylint: disable=invalid-name
 
-# BOOL functions
-name_mapper.map_name_with_signature("number_threshold", BOOL_FROM_ONENUM_TYPE)
-name_mapper.map_name_with_signature("number_greater", BOOL_FROM_TWONUM_TYPE)
-
-name_mapper.map_name_with_signature("ques_bool", BOOL_FROM_QSTR_TYPE)
-name_mapper.map_name_with_signature("ques_ent_bool", BOOL_FROM_QENT_TYPE)
-name_mapper.map_name_with_signature("two_ques_bool", BOOL_FROM_2QSTR_TYPE)
-
-
-# NUM Questions
-name_mapper.map_name_with_signature("ground_num", NUM_TYPE)
-name_mapper.map_name_with_signature("multiply", NUM_FROM_TWONUM_TYPE)
-name_mapper.map_name_with_signature("scalar_mult", NUM_FROM_ONENUM_TYPE)
-
+# BOOL return type functions
+name_mapper.map_name_with_signature("bool_qent_qstr", BOOL_FROM_QENT_QSTR_TYPE)
+name_mapper.map_name_with_signature("bool_and", BOOL_FROM_TWO_BOOl_TYPE)
+name_mapper.map_name_with_signature("bool_or", BOOL_FROM_TWO_BOOl_TYPE)
 
 
 COMMON_NAME_MAPPING = name_mapper.common_name_mapping
@@ -80,18 +68,17 @@ COMMON_TYPE_SIGNATURE = name_mapper.common_type_signature
 
 # These are all function-types that take more than one argument. Needed for world._get_curried_functions
 curried_functions = {
-                         BOOL_FROM_TWONUM_TYPE: 2,
-                         BOOL_FROM_2QSTR_TYPE: 2,
-                         NUM_FROM_TWONUM_TYPE: 2,
-                     }
+                        BOOL_FROM_QENT_QSTR_TYPE: 2,
+                        BOOL_FROM_TWO_BOOl_TYPE: 2,
+                    }
 
+
+'''
 print("name mapping:")
 print(COMMON_NAME_MAPPING)
 
 print("type signature:")
 print(COMMON_TYPE_SIGNATURE)
-'''
-
 
 world = World(global_type_signatures=COMMON_TYPE_SIGNATURE, global_name_mapping=COMMON_NAME_MAPPING)
 

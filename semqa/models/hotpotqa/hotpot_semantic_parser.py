@@ -16,8 +16,10 @@ from allennlp.state_machines.states import GrammarBasedState, GrammarStatelet, R
 from allennlp.training.metrics import Average
 from allennlp.modules.span_extractors.span_extractor import SpanExtractor
 
+import datasets.hotpotqa.utils.constants as hpcons
 from semqa.worlds.hotpotqa.sample_world import SampleHotpotWorld
-from semqa.worlds.hotpotqa.sample_world import QSTR_PREFIX
+from semqa.executors.hotpotqa.sample_executor import ExecutorParameters
+
 
 from allennlp.models.semantic_parsing.wikitables.wikitables_semantic_parser import WikiTablesSemanticParser
 from allennlp.models.semantic_parsing.wikitables.wikitables_mml_semantic_parser import WikiTablesMmlSemanticParser
@@ -25,6 +27,7 @@ from allennlp.models.semantic_parsing.wikitables.wikitables_mml_semantic_parser 
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
+SPAN_DELIM=hpcons.SPAN_DELIM
 
 class HotpotSemanticParser(Model):
     """
@@ -59,8 +62,9 @@ class HotpotSemanticParser(Model):
                  qencoder: Seq2SeqEncoder,
                  ques2action_encoder: Seq2SeqEncoder,
                  quesspan_extractor: SpanExtractor,
-                 context_embedder: TextFieldEmbedder,
-                 context_encoder: Seq2SeqEncoder,
+                 executor_parameters: ExecutorParameters,
+                 # context_embedder: TextFieldEmbedder,
+                 # context_encoder: Seq2SeqEncoder,
                  dropout: float = 0.0,
                  rule_namespace: str = 'rule_labels') -> None:
         super(HotpotSemanticParser, self).__init__(vocab=vocab)
@@ -72,8 +76,9 @@ class HotpotSemanticParser(Model):
         self._ques2action_encoder = ques2action_encoder
         self._quesspan_extractor = quesspan_extractor
 
-        self._context_embedder = context_embedder
-        self._context_encoder = context_encoder
+        # self._context_embedder = context_embedder
+        # self._context_encoder = context_encoder
+        self.executor_parameters = executor_parameters
 
         if dropout > 0:
             self._dropout = torch.nn.Dropout(p=dropout)
@@ -277,7 +282,6 @@ class HotpotSemanticParser(Model):
                 # print(instance_action_strings)
                 if not instance_action_strings:
                     continue
-
                 logical_form = instance_world.get_logical_form(instance_action_strings)
                 instance_actionseq_denotation, instance_actionseq_type = instance_world.execute(logical_form)
                 instance_denotations.append(instance_actionseq_denotation)

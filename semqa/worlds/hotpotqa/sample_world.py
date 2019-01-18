@@ -14,14 +14,12 @@ from semqa.executors.hotpotqa.sample_executor import SampleHotpotExecutor
 
 # from semqa.type_declarations import sample_semqa_type_declaration as types
 from semqa.type_declarations import semqa_type_declaration_wques as types
+import datasets.hotpotqa.utils.constants as hpcons
 
 from allennlp.semparse.worlds.wikitables_world import WikiTablesWorld
 from allennlp.semparse.worlds.atis_world import AtisWorld
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-
-QSTR_PREFIX="QSTR:"
-QENT_PREFIX="QENT:"
 
 
 class SampleHotpotWorld(World):
@@ -98,11 +96,11 @@ class SampleHotpotWorld(World):
         if name not in types.COMMON_NAME_MAPPING and name not in self.local_name_mapping:
             if not keep_mapping:
                 raise ParsingError(f"Encountered un-mapped name: {name}")
-            if name.startswith(QSTR_PREFIX):
+            if name.startswith(hpcons.QSTR_PREFIX):
                 # Question sub-span
                 translated_name = name
                 self._add_name_mapping(name, translated_name, types.QSTR_TYPE)
-            elif name.startswith(QENT_PREFIX):
+            elif name.startswith(hpcons.QENT_PREFIX):
                 # Question NE men span
                 translated_name = name
                 self._add_name_mapping(name, translated_name, types.QENT_TYPE)

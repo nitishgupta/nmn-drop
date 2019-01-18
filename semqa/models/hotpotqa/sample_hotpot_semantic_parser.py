@@ -27,6 +27,8 @@ import datasets.hotpotqa.utils.constants as hpcons
 
 from semqa.data.datatypes import DateField, NumberField
 from semqa.state_machines.constrained_beam_search import ConstrainedBeamSearch
+from semqa.executors.hotpotqa import ExecutorParameters
+from allennlp.training.metrics import Average
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -70,8 +72,9 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
                  quesspan_extractor: SpanExtractor,
                  attention: Attention,
                  decoder_beam_search: ConstrainedBeamSearch,
-                 context_embedder: TextFieldEmbedder,
-                 context_encoder: Seq2SeqEncoder,
+                 executor_parameters: ExecutorParameters,
+                 # context_embedder: TextFieldEmbedder,
+                 # context_encoder: Seq2SeqEncoder,
                  beam_size: int,
                  max_decoding_steps: int,
                  dropout: float = 0.0) -> None:
@@ -81,8 +84,9 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
                                                          qencoder=qencoder,
                                                          ques2action_encoder=ques2action_encoder,
                                                          quesspan_extractor=quesspan_extractor,
-                                                         context_embedder=context_embedder,
-                                                         context_encoder=context_encoder,
+                                                         executor_parameters=executor_parameters,
+                                                         # context_embedder=context_embedder,
+                                                         # context_encoder=context_encoder,
                                                          dropout=dropout)
 
         # self._decoder_trainer = ExpectedRiskMinimization(beam_size=beam_size,
@@ -108,6 +112,8 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
         self._decoder_beam_search = decoder_beam_search
         self._max_decoding_steps = max_decoding_steps
         self._action_padding_index = -1
+        self.average_metric = Average()
+
 
     def device_id(self):
         allenutil.get_device_of()
@@ -115,7 +121,12 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
     @overrides
     def forward(self,
                 question: Dict[str, torch.LongTensor],
-                contexts,  #: Dict[str, torch.LongTensor],
+                q_qstr2idx: List[Dict],
+                q_qstr_spans: torch.LongTensor,
+                q_nemens2groundingidx: List[Dict],
+                q_nemens_grounding: torch.FloatTensor,
+                q_nemenspan2entidx: List[Dict],
+                contexts: Dict[str, torch.LongTensor],
                 ent_mens: torch.LongTensor,
                 num_nents: torch.LongTensor,
                 num_mens: torch.LongTensor,
@@ -132,10 +143,57 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
                 gold_ans_type: List[str]=None,
                 **kwargs) -> Dict[str, torch.Tensor]:
 
-        """ Forward call to the parser.
+        """
+        Forward call to the parser.
 
         Parameters:
         -----------
+        question : Dict[str, torch.LongTensor]
+            Question from TextField
+        q_qstr2idx : List[Dict]
+            For each q, Dict from QSTR to idx into the qstr_span_field (q_qstr_spans)
+        q_qstr_spans : torch.LongTensor,
+            (B, Q_STR, 2) Spanfield for each QSTR in the q. Padding is -1
+        q_nemens2groundingidx: List[Dict]
+            For each question in batch, a Dict from NE_men_span to idx into the grounding array(q_nemens_grounding)
+        q_nemens_grounding : torch.FloatTensor
+            (B, Q_NE_M, E) shaped tensor containing one-hot grounding of ques NE mentions to NE entities. Padding is -1
+        q_nemenspan2entidx: List[Dict],
+            Map from q_ne_ent span to entity grounding idx.
+            This can be used to directly index into the context mentions tensor
+        contexts: Dict[str, torch.LongTensor]
+            TextField for each context wrapped into a ListField. Appropriate squeeze/unsqueeze needed to work with this
+        ent_mens : ``torch.LongTensor``
+            (B, E, C, M, 2) -- for each instance, for each entity, for each context, it's mentions from SpanField
+        num_nents : ``torch.LongTensor``
+            [B] sized tensor of number of NE entities in the instance
+        num_mens : torch.LongTensor
+            (B, E, C, M, 2) -- for each instance, for each entity, for each context, it's mentions from SpanField
+        num_numents: torch.LongTensor
+            [B] sized tensor of number of NUM entities in the instance
+        date_mens : torch.LongTensor
+            (B, E, C, M, 2) -- for each instance, for each entity, for each context, it's mentions from SpanField
+        num_dateents : torch.LongTensor
+            [B] sized tensor of number of DATE entities in the instance
+        num_normval : List[List[NumberField]]
+            For each instance, for each NUM entity it's normalized value
+        date_normval: List[List[DateField]]
+            For each instance, for each DATE entity it's normalized value
+        worlds: List[SampleHotpotWorld]
+            World for each instance
+        actions: List[List[ProductionRule]]
+            For each instance, List of all possible ProductionRules (global and instance-specific)
+        linked_rule2idx: List[Dict[str, int]]
+            Dict from instance-specific-actions to idx into linking_score matrix (action2ques_linkingscore) and
+            SpanField indices (ques_str_action_spans)
+            Currently this is possible since both instance-specific-action types (QSTR & QENT)
+        action2ques_linkingscore: torch.FloatTensor
+            (B, A, Q_len): Foe each instance, for each instance-specific action, the linking score for LinkingTF.
+            For each action (ques_span for us) a binary vector indicating presence of q_token in A span
+        ques_str_action_spans: torch.LongTensor
+            (B, A, 2): For each instance_specific action (ques span for us) it's span in Q to make action embeddings
+        gold_ans_type: List[str]=None
+            List of Ans's types from datasets.hotpotqa.constants
         kwargs: ``Dict``
             Is a dictionary containing datatypes for answer_groundings of different types, key being ans_grounding_TYPE
             Each key has a batched_tensor of ground_truth for the instances.
@@ -155,6 +213,8 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
         # List[Set[int]] --- Ids of the actions allowable at the first time step if the ans-type supervision is given.
         firststep_action_ids = None
 
+        # q_nemens_grounding_mask = (q_nemens_grounding >= 0).float()
+
         (firststep_action_ids,
          ans_grounding_dict,
          ans_grounding_mask) = self._get_FirstSteps_GoldAnsDict_and_Masks(gold_ans_type, actions, **kwargs)
@@ -167,7 +227,9 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
         # TODO(nitish): Matt gave 2 ideas to try:
         # (1) Same embedding for all actions
         # (2) Compose a QSTR_action embedding with span_embedding
-        # Shape: (B, A, A_d)
+        # embedded_ques, ques_mask: (B, Qlen, W_d) and (B, Qlen) shaped tensors needed for execution
+        # quesstr_action_reprs: Shape: (B, A, A_d)
+        embedded_ques, ques_mask,\
         quesstr_action_reprs = self._questionstr_action_embeddings(question=question,
                                                                    ques_str_action_spans=ques_str_action_spans)
 
@@ -193,25 +255,8 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
 
         outputs: Dict[str, torch.Tensor] = {}
 
-        # TODO(nitish): Before execution, encode the contexts, and get repr of mentions for all entities of all types
-        # TODO: Context is encoded, but still need mention spans, and mentions for all entities.
-        # Shape: (B, C, T, D)
-        contexts_encoded = self._encode_contexts(contexts)
-        print(f"Encoded contexts size: {contexts_encoded.size()}")
-
         # ent_mens_field, num_mens_field, date_mens_field -- Size is (B, E, C, M, 2)
         # For each batch, for each entity of that type, for each context, the mentions in this context
-
-
-        print(f"Ent mens field size: {ent_mens.size()}")
-        print(f"Num mens field size: {num_mens.size()}")
-        print(f"Date mens field size: {date_mens.size()}")
-
-        print(f"{num_nents} {num_numents} {num_dateents}")
-
-        ent_mens_mask = self._get_mens_mask(ent_mens)
-        num_mens_mask = self._get_mens_mask(ent_mens)
-        date_mens_mask = self._get_mens_mask(ent_mens)
 
         ''' Parsing the question to get action sequences'''
         best_final_states = self._decoder_beam_search.search(self._max_decoding_steps,
@@ -219,8 +264,6 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
                                                              self._decoder_step,
                                                              firststep_allowed_actions=firststep_action_ids,
                                                              keep_final_unfinished_states=False)
-
-
 
         best_action_sequences: Dict[int, List[List[int]]] = {}
         best_action_seqscores: Dict[int, List[torch.Tensor]] = {}
@@ -244,8 +287,6 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
                                                                                best_action_sequences,
                                                                                best_action_seqscores)
 
-        print(batch_action_strings)
-
         # Convert batch_action_scores to a single tensor the size of number of actions for each batch
         device_id = allenutil.get_device_of(batch_action_scores[0][0])
         # List[torch.Tensor] : Stores probs for each action_seq. Tensor length is same as the number of actions
@@ -255,6 +296,31 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
             scores_astensor = allenutil.move_to_device(torch.cat([x.view(1) for x in score_list]), device_id)
             action_probs = allenutil.masked_softmax(scores_astensor, mask=None)
             batch_action_probs.append(action_probs)
+
+
+        ''' THE PROGRAMS ARE EXECUTED HERE '''
+        ''' First set the instance-spcific data (question, contexts, entity_mentions, etc.) to their 
+            respective worlds (executors) so that execution can be performed.  
+        '''
+        # Shape: (B, C, T, D)
+        context_encoded, contexts_mask = self.executor_parameters._encode_contexts(contexts)
+
+        for i in range(0, len(worlds)):
+            worlds[i]._executor.set_executor_parameters(executor_parameters=self.executor_parameters)
+            worlds[i]._executor.set_arguments(ques_embedded=embedded_ques[i],
+                                              ques_mask=ques_mask[i],
+                                              contexts=context_encoded[i],
+                                              contexts_mask=contexts_mask[i],
+                                              ne_ent_mens=ent_mens[i],
+                                              num_ent_mens=num_mens[i],
+                                              date_ent_mens=date_mens[i],
+                                              q_qstr2idx=q_qstr2idx[i],
+                                              q_qstr_spans=q_qstr_spans[i],
+                                              q_nemens2groundingidx=q_nemens2groundingidx[i],
+                                              q_nemens_grounding=q_nemens_grounding[i],
+                                              q_nemenspan2entidx=q_nemenspan2entidx[i])
+
+            worlds[i]._executor.preprocess_arguments()
 
         # List[List[denotation]], List[List[str]]: For each instance, denotations by executing the action_seqs and its type
         batch_denotations, batch_denotation_types = self._get_denotations(batch_action_strings, worlds)
@@ -301,22 +367,21 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
         return outputs
 
 
-    def _get_mens_mask(self, mention_spans):
-        """ Get mask for entity_mention spans.
+    def _get_mens_mask(self, mention_spans: torch.LongTensor) -> torch.LongTensor:
+        """ Get mask for spans from a SpanField.
 
         Parameters:
         -----------
-        mention_spans: ``torch.LongTensor``
-            Mention spans for each entity of shape (B, E, C, M, 2)
+        mention_spans : ``torch.LongTensor``
+            Spanfield tensor of arbitrary size but with last dim of size=2.
 
         Returns:
         --------
         mask: ``torch.LongTensor``
-            Shape: (B, E, C, M)
-
+            A tensor of size `dim - 1` with 1 for valid spans, and 0 for padded spans
         """
-        # Shape: (B, E, C, M)
-        span_mask = (mention_spans[:, :, :, :, 0] >= 0).squeeze(-1).long()
+        # Ellipsis
+        span_mask = (mention_spans[..., 0] >= 0).squeeze(-1).long()
         return span_mask
 
 
@@ -365,43 +430,6 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
 
         return firststep_action_ids, ans_grounding_dict, ans_grounding_mask
 
-    def _encode_contexts(self, contexts):
-        """ Encode the contexts for each instance using the context_encoder RNN.
-
-        Params:
-        -------
-        contexts: ``Dict[str, torch.LongTensor]``
-            Since there are multiple contexts per instance, the contexts tensor are wrapped as (B, C, T)
-            where C is the number of contexts
-
-        Returns:
-        --------
-        contexts_encoded: ``torch.FloatTensor``
-            Tensor of shape (B, C, T, D) after encoding all the contexts for each instance in the batch
-        """
-
-        # Shape: (B, C, T, W_d)
-        embedded_contexts = self._context_embedder(contexts)
-        embcontext_size = embedded_contexts.size()
-
-        # Shape: (B, C, T)
-        # Since multiple contexts per instance, give num_wrapping_dims
-        contexts_mask = allenutil.get_text_field_mask(contexts, num_wrapping_dims=1).float()
-        conmask_size = contexts_mask.size()
-
-        (embedded_contexts_flat, contexts_mask_flat) = (
-        embedded_contexts.view(-1, embcontext_size[2], embcontext_size[3]),
-        contexts_mask.view(-1, conmask_size[2]))
-
-        # Shape: (B*C, T, D)
-        contexts_encoded_flat = self._context_encoder(embedded_contexts_flat, contexts_mask_flat)
-        conenc_size = contexts_encoded_flat.size()
-        # View such that get B, C, T from embedded context, and D from encoded contexts
-        # Shape: (B, C, T, D)
-        contexts_encoded = contexts_encoded_flat.view(*embcontext_size[0:3], conenc_size[-1])
-
-        return contexts_encoded
-
     def _questionstr_action_embeddings(self, question, ques_str_action_spans):
         """ Get input_action_embeddings for question_str_span actions
 
@@ -413,19 +441,19 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
         question: Input to the forward from the question TextField
         action2span
         """
-
-        embedded_input = self._question_embedder(question)
+        # (B, Qlen, Q_wdim)
+        embedded_ques = self._question_embedder(question)
         # Shape: (B, Qlen)
-        question_mask = allenutil.get_text_field_mask(question).float()
+        ques_mask = allenutil.get_text_field_mask(question).float()
         # (B, Qlen, encoder_output_dim)
-        quesaction_encoder_outputs = self._dropout(self._ques2action_encoder(embedded_input, question_mask))
+        quesaction_encoder_outputs = self._dropout(self._ques2action_encoder(embedded_ques, ques_mask))
         # (B, A) -- A is the number of ques_str actions
         span_mask = (ques_str_action_spans[:, :, 0] >= 0).squeeze(-1).long()
         # [B, A, action_dim]
         quesstr_action_reprs = self._quesspan_extractor(sequence_tensor=quesaction_encoder_outputs,
                                                         span_indices=ques_str_action_spans,
                                                         span_indices_mask=span_mask)
-        return quesstr_action_reprs
+        return embedded_ques, ques_mask, quesstr_action_reprs
 
     def _compute_loss(self, gold_ans_type: List[str],
                             ans_grounding_dict: Dict,
@@ -471,7 +499,12 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
             expected_denotation = expected_denotation * mask
 
             if gold_type == hpcons.BOOL_TYPE:
-                loss += torch.nn.functional.binary_cross_entropy(expected_denotation, gold_denotation)
+                instance_loss = torch.nn.functional.binary_cross_entropy(expected_denotation, gold_denotation)
+                loss += instance_loss
+
+                bool_pred = (expected_denotation > 0.5).float()
+                correct = 1.0 if (bool_pred == gold_denotation) else 0.0
+                self.average_metric(float(correct))
 
 
         return loss
@@ -498,11 +531,9 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
     #             self._denotation_accuracy(1 if correct_in_world else 0)
     #         self._consistency(1 if all(sequence_is_correct) else 0)
 
-    '''
+
     @overrides
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
         return {
-                'denotation_accuracy': self._denotation_accuracy.get_metric(reset),
-                'consistency': self._consistency.get_metric(reset)
+                'accuracy': self.average_metric.get_metric(reset)
         }
-    '''

@@ -16,6 +16,10 @@ AttributeType = TypeVar('AttributeType', str, int)  # pylint: disable=invalid-na
 
 
 def convert_float_to_tensor(val):
+    if val == 1.0:
+        val = 0.9
+    else:
+        val = 0.1
     return torch.Tensor([val]).cuda()
 
 class ExecutorFunctions:
@@ -60,6 +64,10 @@ class ExecutorFunctions:
             return convert_float_to_tensor(1.0)
         else:
             return convert_float_to_tensor(0.0)
+
+
+
+
 
 
 

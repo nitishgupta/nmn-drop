@@ -69,10 +69,10 @@ def readJsonlDocs(jsonlfp: str) -> List[Dict]:
     return docs
 
 
-def isSpanOverlap(s1, s2, srt_idx, end_idx):
+def isSpanOverlap(s1, s2, srt_idx=0, end_idx=1):
     """ Returns True if the spans overlap. Works with exclusive end spans
 
-    s1, s2 : Tuples containing span start and end
+    s1, s2 : Tuples containing span start and end (exclusive)
     srt_idx, end_idx: Idxs of span_srt and span_end in the input tuples
     """
     start1, end1 = s1[srt_idx], s1[end_idx]

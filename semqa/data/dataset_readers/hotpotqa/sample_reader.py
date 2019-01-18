@@ -1,4 +1,4 @@
-from typing import Dict, List, Any, TypeVar
+from typing import Dict, List, Any, TypeVar, Tuple
 import json
 import logging
 import copy
@@ -17,12 +17,9 @@ from allennlp.data.dataset_readers.dataset_reader import DatasetReader
 from semqa.worlds.hotpotqa.sample_world import SampleHotpotWorld
 from semqa.data.datatypes import DateField, NumberField
 import datasets.hotpotqa.utils.constants as hpconstants
+import utils.util as util
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-
-QSTR_PREFIX="QSTR:"
-QENT_PREFIX="QENT:"
-SPAN_DELIM="***"
 
 
 @DatasetReader.register("sample_hotpot")
@@ -159,129 +156,212 @@ class SampleHotpotDatasetReader(DatasetReader):
                 if instance is not None:
                     yield instance
 
-    def get_ques_spans(self, ques_tokens: List[str], ques_textfield: TextField):
-        """ Make question spans (delimited by _ ) and also return their spans (inclusive)
-        Current implementation: Only take tokens as spans.
 
-        TODO(nitish): How to represent spans that occur multiple times in a question.
-                      Current solution: Only take the first occurrence span
-        TODO(nitish): 1) Extend to longer spans, 2) Possibly, don't break entity spans
+    def make_span_str(self, span_tokens: List[str], start_idx: int, end_idx: int, prefix: str) -> str:
+        """ Make span str that will be used for in the rule names (QSTR -> Span_Str), and also
+            in dictionaries mapping to linking_score, span_fields, etc.
+
+        The span_str is a "spantoken1_delimeter_spantoken2_delimeter_..._spanstart_delimiter_spanend"
+
+        end_idx is exclusive
+        """
+
+        delim = hpconstants.SPAN_DELIM
+        span_str = prefix + delim.join(span_tokens) + delim + str(start_idx) + delim + str(end_idx)
+        return span_str
+
+
+    def spanIntersectWithAnyOneSpanInList(self, span, list_of_spans):
+        """ Returns true if given span overlaps with any span in a given list.
+
+        All spans have exclusive ends
+        """
+
+        intersects = False
+        for test_span in list_of_spans:
+            if util.isSpanOverlap(span, test_span):
+                intersects = True
+
+        return intersects
+
+
+
+    def get_ques_spans(self, ques_tokens: List[str], q_ent_ners: List[Tuple], ques_textfield: TextField):
+        """ Make question spans (delimited by constants.SPAN_DELIM) and also return their spans (inclusive)
+        Current implementation: Take unigrams, bigrams, and trigrams that don't overlap with NE mens
 
         Parameters:
         -----------
         ques_tokens: List[str]: List of question tokens
+        q_ent_ners: List[Tuple] List of q NE ner mens
         ques_textfield: TextField: For SpanFields
 
         Returns:
         --------
         ques_spans: `List[str]`
-            All question spans delimited by _
+            All question spans delimited by constants.SPAN_DELIM
         ques_span2idx: ``Dict[str]: int``
             Dict mapping from q_span to Idx
         ques_spans_linking_score: ``List[List[float]]``
             For each q_span, Binary list the size of q_length indicating q_token's presence in the span
             This is used to score the q_span action in the decoder based on attention
-        ques_spans_spanidxs: List[SpanField]
+        ques_spans_spanfields: List[SpanField]
             List of SpanField for each q_span. One use case is to get an output embedding for the decoder.
             Can possibly be used as input embedding as well (will need to figure out the TransitionFunction)
         """
 
-        # Will be used for linking scores
-        qtoken2idxs = {}
-        for qtokenidx, qtoken in enumerate(ques_tokens):
-            if qtoken not in qtoken2idxs:
-                qtoken2idxs[qtoken] = []
-            qtoken2idxs[qtoken].append(qtokenidx)
+        # This list will contain all possible spans (unigrams, bigrams ...) as (start,end) tuples
+        # start and end will inclusive
+        ques_spans_idxs = []
 
-        uniq_ques_tokens = list(set(ques_tokens))
+        qlen = len(ques_tokens)
+        unigram_spans = [(i, i+1) for i in range(0, qlen)]
+        bigram_spans = [(i, i+2) for i in range(0, qlen-1)]
+        trigam_spans = [(i, i+3) for i in range(0, qlen-2)]
+
+        ne_mens_spans = [(men[1], men[2]) for men in q_ent_ners]
+
+        # Only keep spans that don't intersect with ques NE mens
+        for span in unigram_spans:
+            if not self.spanIntersectWithAnyOneSpanInList(span, ne_mens_spans):
+                ques_spans_idxs.append(span)
+
+        for span in bigram_spans:
+            if not self.spanIntersectWithAnyOneSpanInList(span, ne_mens_spans):
+                ques_spans_idxs.append(span)
+
+        for span in trigam_spans:
+            if not self.spanIntersectWithAnyOneSpanInList(span, ne_mens_spans):
+                ques_spans_idxs.append(span)
 
         ques_spans = []
         ques_spans2idx = {}
         ques_spans_linking_score = []
-        ques_spans_spanidxs: List[SpanField] = []
+        ques_spans_spanfields: List[SpanField] = []
 
-        for token_idx, token in enumerate(uniq_ques_tokens):
-            span = token
-            span = QSTR_PREFIX + span
-            # span --- will be _ delimited later on
-            if span not in ques_spans2idx:
-                ques_spans.append(span)
-                ques_spans2idx[span] = len(ques_spans2idx)
-                ques_spans_spanidxs.append(SpanField(span_start=token_idx, span_end=token_idx,
-                                                     sequence_field=ques_textfield))
+        for span_idx, (srt, end) in enumerate(ques_spans_idxs):
+            tokens = ques_tokens[srt:end]
+            span_str = self.make_span_str(span_tokens=tokens, start_idx=srt, end_idx=end-1,
+                                          prefix=hpconstants.QSTR_PREFIX)
+            if span_str not in ques_spans2idx:
+                ques_spans.append(span_str)
+                ques_spans2idx[span_str] = len(ques_spans2idx)
+                ques_spans_spanfields.append(SpanField(span_start=srt, span_end=end-1,
+                                                       sequence_field=ques_textfield))
 
-                span_tokens = span[len(QSTR_PREFIX):].split(SPAN_DELIM)
                 linking_score = [0.0]*len(ques_tokens)
-                for span_token in span_tokens:
-                    # Single token can occur multiple times in the question
-                    for idx in qtoken2idxs[span_token]:
-                        linking_score[idx] = 1.0
+                linking_score[srt:end] = [1.0] * (end - srt)
                 ques_spans_linking_score.append(linking_score)
 
-        return ques_spans, ques_spans2idx, ques_spans_linking_score, ques_spans_spanidxs
+        return ques_spans, ques_spans2idx, ques_spans_linking_score, ques_spans_spanfields
 
 
     def get_ques_nemens_ent_spans(self,
                                   ques_tokens: List[str],
-                                  q_ent_ners,
-                                  q_entmens2entidx,
+                                  q_ent_ners: List[Tuple],
+                                  q_entmens2entidx: List[int],
+                                  num_ne_ents: int,
                                   ques_textfield: TextField,
-                                  ques_spans,
-                                  ques_spans2idx,
-                                  ques_spans_linking_score,
-                                  ques_spans_spanidxs):
-        """ Make question NE mention spans (delimited by SPAN_DELIM )
+                                  ques_spans: List[str],
+                                  ques_spans2idx: Dict[str, int],
+                                  ques_spans_linking_score: List[List[float]],
+                                  ques_spans_spanfields: List[SpanField]):
+        """ Make question NE mention spans (delimited by SPAN_DELIM)
+        Only add spans that are grounded.
 
-        Add these spans to ques_spans2idx, and append the linking score and SpanField to ques_spans_linking_score and
-        ques_spans_spanidxs, resp.
 
-        TODO(nitish): How to represent spans that occur multiple times in a question.
-                      Current solution: Only take the first occurrence span
-        TODO(nitish): 1) Extend to longer spans, 2) Possibly, don't break entity spans
+        We'll be updating the already existing list/dicts of spans from the QSTR actions
+        Add these spans to ques_spans and ques_spans2idx, and append the linking score and SpanField to
+        ques_spans_linking_score and ques_spans_spanidxs, resp.
+
+        TODO(nitish): If no NE mens present / no grounded-NE mentions then no actions from QENT -> SPAN will be found
+        and will throw an error. Need to check what to do in this case.
 
         Parameters:
         -----------
-        ques_tokens: List[str]: List of question tokens
-        ques_textfield: TextField: For SpanFields
+        See returns of get_ques_spans function
 
         Returns:
         --------
         ques_spans: `List[str]`
             All question spans delimited by _
         ques_span2idx: ``Dict[str]: int``
-            Dict mapping from q_span to Idx
+            Dict mapping from q_span to Idx into ques_spans
         ques_spans_linking_score: ``List[List[float]]``
             For each q_span, Binary list the size of q_length indicating q_token's presence in the span
             This is used to score the q_span action in the decoder based on attention
-        ques_spans_spanidxs: List[SpanField]
+        ques_spans_spanidxs : List[SpanField]
             List of SpanField for each q_span. One use case is to get an output embedding for the decoder.
             Can possibly be used as input embedding as well (will need to figure out the TransitionFunction)
+        q_nemenspan2grounding_idx : Dict[str, int]
+            Dict from NE_men_span to idx into entity grounding array (q_nemens_grounding)
+        q_nemenspan_grounding : List[List[float]]
+            For each Q NE Mention, a one-hot vector the size of NEs to indicate the mention grounding
         """
 
-        qent_spans = []
-        linking_scores = []
-        spanfields = []
+        # Ques NE mens span to idx
+        q_nemenspan2grounding_idx = {}
+        # Q NE Men span to entity_grounding_idx
+        q_nemenspan2entidx = {}
+        # Ques NE mens span entity grounding -- Each should be a one-hot vector with size as the number of NE entities
+        q_nemenspan_grounding: List[List[float]] = []
+
+        num_mens_added = 0
 
         for ne_men, entity_grounding in zip(q_ent_ners, q_entmens2entidx):
             if entity_grounding == -1:
                 # These are q mens that are not grounded in the contexts
                 continue
+            span_tokens = ques_tokens[ne_men[1]:ne_men[2]]
 
-            men_span = QENT_PREFIX + SPAN_DELIM.join(ques_tokens[ne_men[1]:ne_men[2]])
-            if men_span not in ques_spans2idx:
-                ques_spans.append(men_span)
-                ques_spans2idx[men_span] = len(ques_spans2idx)
+
+            span_str = self.make_span_str(span_tokens=span_tokens, start_idx=ne_men[1], end_idx=ne_men[2] - 1,
+                                          prefix=hpconstants.QENT_PREFIX)
+
+            if span_str not in ques_spans2idx:
+                ques_spans.append(span_str)
+                ques_spans2idx[span_str] = len(ques_spans2idx)
                 # qent_spans.append(men_span)
 
-                linkingscore = [0 for i in range(len(ques_tokens))]
-                linkingscore[ne_men[1]:ne_men[2]] = [1] * (ne_men[2] - ne_men[1])
+                linkingscore = [0.0 for _ in range(len(ques_tokens))]
+                linkingscore[ne_men[1]:ne_men[2]] = [1.0] * (ne_men[2] - ne_men[1])
                 ques_spans_linking_score.append(linkingscore)
 
-                ques_spans_spanidxs.append(SpanField(span_start=ne_men[1],
-                                                     span_end=ne_men[2] - 1,
-                                                     sequence_field=ques_textfield))
+                ques_spans_spanfields.append(SpanField(span_start=ne_men[1],
+                                                       span_end=ne_men[2] - 1,
+                                                       sequence_field=ques_textfield))
 
-        return ques_spans, ques_spans2idx, ques_spans_linking_score, ques_spans_spanidxs
+            # if men_span not in q_nemenspan2grounding_idx:  # Should'nt need this check
+                q_nemenspan2grounding_idx[span_str] = len(q_nemenspan2grounding_idx)
+                q_nemenspan2entidx[span_str] = entity_grounding
+                grounding_vec = [0.0] * num_ne_ents
+                grounding_vec[entity_grounding] = 1.0
+                q_nemenspan_grounding.append(grounding_vec)
+
+                num_mens_added += 1
+
+        # TODO(nitish): Temp solution if a question doesn't have grounded NE mens, make a new random mention
+        # Need a better solution than this
+        if num_mens_added == 0:
+            span_str = self.make_span_str(span_tokens=['RANDOMMENTION'], start_idx=0, end_idx=0,
+                                          prefix=hpconstants.QENT_PREFIX)
+            ques_spans.append(span_str)
+            ques_spans2idx[span_str] = len(ques_spans2idx)
+            linkingscore = [0 for _ in range(len(ques_tokens))]
+            linkingscore[0] = 1.0
+            ques_spans_linking_score.append(linkingscore)
+            ques_spans_spanfields.append(SpanField(span_start=0,
+                                                   span_end=0,
+                                                   sequence_field=ques_textfield))
+            q_nemenspan2grounding_idx[span_str] = len(q_nemenspan2grounding_idx)
+            # Grounding to arbitrary entity
+            q_nemenspan2entidx[span_str] = 0
+            grounding_vec = [0.0] * num_ne_ents
+            q_nemenspan_grounding.append(grounding_vec)
+
+        return (ques_spans, ques_spans2idx, ques_spans_linking_score, ques_spans_spanfields,
+                q_nemenspan2grounding_idx, q_nemenspan_grounding, q_nemenspan2entidx)
+
 
     @overrides
     def text_to_instance(self,
@@ -312,22 +392,38 @@ class SampleHotpotDatasetReader(DatasetReader):
 
         # pylint: disable=arguments-differ
         tokenized_ques = ques.strip().split(" ")
+        tokenized_ques = [hpconstants.COMMA if x == ',' else x for x in tokenized_ques]
+        tokenized_ques = [x.replace(',', hpconstants.COMMA) for x in tokenized_ques]
 
         # Question TextField
         ques_tokens = [Token(token) for token in tokenized_ques]
         ques_tokenized_field = TextField(ques_tokens, self._sentence_token_indexers)
 
-
         # Make Ques_spans, their idxs, linking score and SpanField representations
         (ques_spans, ques_spans2idx,
-         ques_spans_linking_score, ques_spans_spanidxs) = self.get_ques_spans(ques_tokens=tokenized_ques,
-                                                                              ques_textfield=ques_tokenized_field)
+         ques_spans_linking_score, ques_spans_spanfields) = self.get_ques_spans(ques_tokens=tokenized_ques,
+                                                                                q_ent_ners=q_nemens,
+                                                                                ques_textfield=ques_tokenized_field)
+        # Deep copy since ques_spans2idx changes later on
+        q_qstr2idx_field = MetadataField(copy.deepcopy(ques_spans2idx))
+        q_qstr_spanfield = ListField(ques_spans_spanfields)
 
+        num_ne_ents = len(context_eqent2entmens)
+
+        # Processing for NE mens in the question
+        # ques_spans, ques_spans2idx, ques_spans_linking_score, ques_spans_spanidxs - updated with the NE mens
+        # q_nemenspan2grounding_idx, q_nemenspan_grounding - Second contains grounding vector, first is an idx into it
         (ques_spans, ques_spans2idx,
-         ques_spans_linking_score, ques_spans_spanidxs) = self.get_ques_nemens_ent_spans(
+         ques_spans_linking_score, ques_spans_spanidxs,
+         q_nemenspan2grounding_idx, q_nemenspan_grounding, q_nemenspan2entidx) = self.get_ques_nemens_ent_spans(
             ques_tokens=tokenized_ques, q_ent_ners=q_nemens, q_entmens2entidx=qnemens_to_ent,
-            ques_textfield=ques_tokenized_field, ques_spans=ques_spans, ques_spans2idx=ques_spans2idx,
-            ques_spans_linking_score=ques_spans_linking_score, ques_spans_spanidxs=ques_spans_spanidxs)
+            num_ne_ents=num_ne_ents, ques_textfield=ques_tokenized_field,
+            ques_spans=ques_spans, ques_spans2idx=ques_spans2idx,
+            ques_spans_linking_score=ques_spans_linking_score, ques_spans_spanfields=ques_spans_spanfields)
+
+        q_nemens2groundingidx_field = MetadataField(q_nemenspan2grounding_idx)
+        q_nemens_grounding_field = ArrayField(np.array(q_nemenspan_grounding), padding_value=-1)
+        q_nemenspan2entidx_field = MetadataField(q_nemenspan2entidx)
 
         # Make world from question spans
         # This adds instance specific actions as well
@@ -345,7 +441,8 @@ class SampleHotpotDatasetReader(DatasetReader):
         action_to_ques_linking_scores = ques_spans_linking_score
         for production_rule in world.all_possible_actions():
             _, rule_right_side = production_rule.split(' -> ')
-            is_global_rule = not (rule_right_side.startswith(QSTR_PREFIX) or rule_right_side.startswith(QENT_PREFIX))
+            is_global_rule = not (rule_right_side.startswith(hpconstants.QSTR_PREFIX)
+                                  or rule_right_side.startswith(hpconstants.QENT_PREFIX))
             rule_field = ProductionRuleField(production_rule, is_global_rule)
             production_rule_fields.append(rule_field)
 
@@ -396,6 +493,11 @@ class SampleHotpotDatasetReader(DatasetReader):
                                                   ArrayField(np.array([len(context_eqent2datemens)])))
 
         fields: Dict[str, Field] = {"question": ques_tokenized_field,
+                                    "q_qstr2idx": q_qstr2idx_field,
+                                    "q_qstr_spans": q_qstr_spanfield,
+                                    "q_nemens2groundingidx": q_nemens2groundingidx_field,
+                                    "q_nemens_grounding": q_nemens_grounding_field,
+                                    "q_nemenspan2entidx": q_nemenspan2entidx_field,
                                     "contexts": contexts_tokenized_field,
                                     "ent_mens": all_ent_mens_field,
                                     "num_nents": num_nents,
