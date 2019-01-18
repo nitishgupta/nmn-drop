@@ -75,6 +75,18 @@ NO_LINK = "@NOLINK"
 
 NO_ANS_GROUNDING = "@NO_ANS_GROUNDING"
 
+# This is the prefix added to the ques_spans for instance_specific actions and the delim used between the tokens.
+# The actions' RHS then looks like, "QSTR:token1DELIMtoken2DELIMtoken3"
+QSTR_PREFIX="QSTR:"
+QENT_PREFIX="QENT:"
+# This is the delim used between the tokens of ques_spans when making instance_specific_actions
+SPAN_DELIM="@DELIM@"
+COMMA="@COMMA@"
+LRB="@LRB@"
+RRB="@RRB@"
+
+
+
 '''
 # Dict from entity id to list of (context_id, mention_id)
 ENT_TO_CONTEXT_MENS = "entity2context_mens"

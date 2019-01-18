@@ -134,8 +134,12 @@ def titleMatchAndNER(spacydoc: spacyutils.Doc, tokenized_titles: List[List[str]]
 
     Returns:
     --------
-    tokenized_sent: Space-delimited input sentence
-    finalEntitySpans: List of (text, start, end, label)-tuples for all entities
+    tokenized_sent: ``str``
+        Space-delimited input sentence
+    whitespaces: ``List[str]``
+        List the size of tokens containing empty_string '' or space ' ' denoting if the token has a space after it.
+    finalEntitySpans: ``List[Tuple]``
+        List of (text, start, end, label)-tuples for all entities
     '''
 
     tokens = spacyutils.getTokens(spacydoc)
@@ -219,6 +223,7 @@ def processJsonObj(input_args):
     contexts = jsonobj[constants.context_field]
     titles = [t for (t, _) in contexts]
     question: str = jsonobj[constants.q_field]
+    question = question.replace('\xa0', ' ')  # Found this to be causing troubles later
     answer: str = jsonobj[constants.ans_field]
     titles: List[str] = getTitleNames(titles)
     tokenized_titles: List[List[str]] = tokenizeTitles(titles)
@@ -226,6 +231,7 @@ def processJsonObj(input_args):
     # Remove trailing and multiple spaces
     question = util.pruneMultipleSpaces(question)
     q_spacydoc = spacyutils.getSpacyDoc(question, spacy_nlp)
+    # q_tokenized: str, q_whitespaces: List[str], q_ners: List[Tuple]
     q_tokenized, q_whitespaces, q_ners = titleMatchAndNER(q_spacydoc, tokenized_titles, mark_propn)
 
     new_doc[constants.q_field] = q_tokenized
@@ -234,6 +240,7 @@ def processJsonObj(input_args):
 
     answer = answer.strip()
     a_spacydoc = spacyutils.getSpacyDoc(answer, spacy_nlp)
+    # a_tokenized: str, ans_whitespaces: List[str], a_ners: List[Tuple]
     a_tokenized, ans_whitespaces, a_ners = titleMatchAndNER(a_spacydoc, tokenized_titles, mark_propn)
 
     new_doc[constants.ans_field] = answer
@@ -247,6 +254,7 @@ def processJsonObj(input_args):
         (title, sentences) = para
         processed_sentences = []
         for sent in sentences:
+            sent = sent.replace('\xa0', ' ')  # Found this to be troubling later
             psent = util.pruneMultipleSpaces(sent)
             if psent == '':
                 continue

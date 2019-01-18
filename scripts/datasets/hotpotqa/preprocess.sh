@@ -8,15 +8,17 @@ PROCESSED_DIR=${ROOT_DIR}/processed
 TRAIN_JSON=hotpot_train_v1.json
 DEVDS_JSON=hotpot_dev_distractor_v1.json
 DEVFW_JSON=hotpot_dev_fullwiki_v1.json
+SAMPLE_JSON=sample.json
 
 TRAIN_JSONL=train.jsonl
 DEVDS_JSONL=devds.jsonl
 DEVFW_JSONL=devfw.jsonl
+SAMPLE_JSONL=sample.jsonl
 
 NUMPROC=15
 F1THRESH=0.6
 
-
+mkdir ${TOKENIZED_DIR}
 mkdir ${PROCESSED_DIR}
 
 read -p "Split to preprocess: (train / devds / devfw): " SPLIT
@@ -33,16 +35,19 @@ elif [ "${SPLIT}" = "devfw" ]; then
     INPUT_JSON=${DEVFW_JSON}
     INPUT_JSONL=${DEVFW_JSONL}
     echo "SPLIT: ${SPLIT}"
+elif [ "${SPLIT}" = "sample" ]; then
+    INPUT_JSON=${SAMPLE_JSON}
+    INPUT_JSONL=${SAMPLE_JSONL}
+    echo "SPLIT: ${SPLIT}"
 else
     echo "UNRECOGNIZED SPLIT: ${SPLIT}"
     exit 1
 fi
 
-#echo -e "\nTOKENIZATION AND NER\n"
-## Tokenize and NER the raw files using spacy
-#time python -m datasets.hotpotqa.preprocess.tokenize_mp --input_json ${RAW_JSON_DIR}/${INPUT_JSON} \
-#                                                        --output_jsonl ${TOKENIZED_DIR}/${INPUT_JSONL} \
-#                                                        --nump ${NUMPROC}
+echo -e "\nTOKENIZATION AND NER\n"
+time python -m datasets.hotpotqa.preprocess.tokenize_mp --input_json ${RAW_JSON_DIR}/${INPUT_JSON} \
+                                                        --output_jsonl ${TOKENIZED_DIR}/${INPUT_JSONL} \
+                                                        --nump ${NUMPROC}
 
 
 echo -e "\nNORMALIZATION AND CLEANING OF ENTITY MENTIONS\n"
@@ -50,23 +55,16 @@ time python -m datasets.hotpotqa.preprocess.clean_ners_mp --input_json ${TOKENIZ
                                                           --output_jsonl ${PROCESSED_DIR}/${INPUT_JSONL} \
                                                           --nump ${NUMPROC}
 
-
-tempfile=$(mktemp)
-
 echo -e "\nFLATTEN CONTEXTS INTO SINGLE STRING\n"
 time python -m datasets.hotpotqa.preprocess.flatten_contexts --input_jsonl ${PROCESSED_DIR}/${INPUT_JSONL} \
                                                              --output_jsonl ${PROCESSED_DIR}/${INPUT_JSONL}.tmp
 
 mv ${PROCESSED_DIR}/${INPUT_JSONL}.tmp ${PROCESSED_DIR}/${INPUT_JSONL}
 
-tempfile=$(mktemp)
-
 echo -e "\nCROSS-DOC-COREF  and  GROUNDING CONTEXT AND QUESTION MENTIONS\n"
 time python -m datasets.hotpotqa.preprocess.cdcr --input_jsonl ${PROCESSED_DIR}/${INPUT_JSONL} \
                                                  --output_jsonl ${PROCESSED_DIR}/${INPUT_JSONL}.tmp
 mv ${PROCESSED_DIR}/${INPUT_JSONL}.tmp ${PROCESSED_DIR}/${INPUT_JSONL}
-
-tempfile=$(mktemp)
 
 echo -e "\nANSWER GROUNDING and TYPING\n"
 time python -m datasets.hotpotqa.preprocess.ans_grounding --input_jsonl ${PROCESSED_DIR}/${INPUT_JSONL} \
@@ -75,6 +73,7 @@ time python -m datasets.hotpotqa.preprocess.ans_grounding --input_jsonl ${PROCES
 
 mv ${PROCESSED_DIR}/${INPUT_JSONL}.tmp ${PROCESSED_DIR}/${INPUT_JSONL}
 
-
-
-
+echo -e "\nREPLACING BRACKETS\n"
+time python -m datasets.hotpotqa.preprocess.replace_brackets --input_jsonl ${PROCESSED_DIR}/${INPUT_JSONL} \
+                                                             --output_jsonl ${PROCESSED_DIR}/${INPUT_JSONL}.tmp
+mv ${PROCESSED_DIR}/${INPUT_JSONL}.tmp ${PROCESSED_DIR}/${INPUT_JSONL}
