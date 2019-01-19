@@ -3,7 +3,7 @@
 INCLUDE_PACKAGE=semqa
 
 # DATASET FILES
-DATASET_DIR=./data/data/hotpotqa/processed
+DATASET_DIR=./resources/data/hotpotqa/processed
 TRAINFILE=${DATASET_DIR}/train_bool_wosame.jsonl
 
 # VOCAB DATASET_READER CONFIG
@@ -16,7 +16,7 @@ export TOKEN_MIN_CNT=0
 export TRAINING_DATA_FILE=${TRAINFILE}
 
 # OUTPUT DIR
-VOCABDIR=./data/vocabs/hotpotqa_bool_wosame/sample_reader
+VOCABDIR=./resources/semqa/vocabs/hotpotqa_bool_wosame/sample_reader
 
 #######################################################################################################################
 # Code below this shouldn't require changing for a reader

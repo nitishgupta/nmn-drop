@@ -555,7 +555,7 @@ class SampleHotpotDatasetReader(DatasetReader):
 
 
             # For the correct asn type, replace the empty ans_grounding with the ground_truth
-            ans_grounding_dict = copy.deepcopy(empty_ans_groundings)
+            ans_grounding_dict = empty_ans_groundings
             ans_grounding_dict[ans_type] = ans_grounding
 
             for k, v in ans_grounding_dict.items():
@@ -566,34 +566,6 @@ class SampleHotpotDatasetReader(DatasetReader):
 
             ans_type_field =  MetadataField(ans_type) # LabelField(ans_type, label_namespace="anstype_labels")
             fields["gold_ans_type"] = ans_type_field
-
-        '''
-        # Depending on the type of supervision used for training the parser, we may want either
-        # target action sequences or an agenda in our instance. We check if target sequences are
-        # provided, and include them if they are. If not, we'll get an agenda for the sentence, and
-        # include that in the instance.
-        if target_sequences:
-            action_sequence_fields: List[Field] = []
-            for target_sequence in target_sequences:
-                index_fields = ListField([IndexField(instance_action_ids[action], action_field)
-                                          for action in target_sequence])
-                action_sequence_fields.append(index_fields)
-                # TODO(pradeep): Define a max length for this field.
-            datatypes["target_action_sequences"] = ListField(action_sequence_fields)
-        elif self._output_agendas:
-            # TODO(pradeep): Assuming every world gives the same agenda for a sentence. This is true
-            # now, but may change later too.
-            agenda = worlds[0].get_agenda_for_sentence(sentence, add_paths_to_agenda=False)
-            assert agenda, "No agenda found for sentence: %s" % sentence
-            # agenda_field contains indices into actions.
-            agenda_field = ListField([IndexField(instance_action_ids[action], action_field)
-                                      for action in agenda])
-            datatypes["agenda"] = agenda_field
-        if labels:
-            labels_field = ListField([LabelField(label, label_namespace='denotations')
-                                      for label in labels])
-            datatypes["labels"] = labels_field
-        '''
 
         return Instance(fields)
 

@@ -2,7 +2,7 @@
 
 
 ### DATASET PATHS -- should be same across models for same dataset
-DATASET_DIR=/srv/local/data/nitishg/data/hotpotqa/processed
+DATASET_DIR=./resources/data/nitishg/data/hotpotqa/processed
 TRAINFILE=${DATASET_DIR}/train.jsonl
 VALFILE=${DATASET_DIR}/devds.jsonl
 # TESTFILE=${DATASET_DIR}/test.jsonl
@@ -16,7 +16,7 @@ CONFIGFILE=allenconfigs/semqa/train/sample_parser.jsonnet
 export DATASET_READER=sample_hotpot
 
 # Check CONFIGFILE for environment variables to set
-export VOCABDIR=/srv/local/data/nitishg/semqa/vocabs/hotpotqa/sample_reader/vocabulary
+export VOCABDIR=./resources/semqa/vocabs/hotpotqa/sample_reader/vocabulary
 export TRAINING_DATA_FILE=${TRAINFILE}
 export VAL_DATA_FILE=${VALFILE}
 # export TEST_DATA_FILE=${TESTFILE}
@@ -30,7 +30,7 @@ export MAX_DECODE_STEP=32
 
 
 ####    SERIALIZATION DIR --- Check for checkpoint_root/task/dataset/model/parameters/
-CHECKPOINT_ROOT=/srv/local/data/nitishg/semqa/checkpoints
+CHECKPOINT_ROOT=./resources/semqa/checkpoints
 
 SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/hotpotqa
 MODEL_DIR=sample_parser
