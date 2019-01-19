@@ -63,8 +63,8 @@ name_mapper.map_name_with_signature("bool_and", BOOL_FROM_TWO_BOOl_TYPE)
 name_mapper.map_name_with_signature("bool_or", BOOL_FROM_TWO_BOOl_TYPE)
 
 
-COMMON_NAME_MAPPING = name_mapper.common_name_mapping
-COMMON_TYPE_SIGNATURE = name_mapper.common_type_signature
+COMMON_NAME_MAPPING = name_mapper.name_mapping
+COMMON_TYPE_SIGNATURE = name_mapper.type_signatures
 
 # These are all function-types that take more than one argument. Needed for world._get_curried_functions
 curried_functions = {

@@ -223,9 +223,9 @@ class SampleHotpotExecutor:
 
         expression_as_list = semparse_util.lisp_to_nested_expression(logical_form)
 
-        denotation = self._handle_expression(expression_as_list[0])
+        denotation = self._handle_expression(expression_as_list)
 
-        outer_most_function = expression_as_list[0][0]
+        outer_most_function = expression_as_list[0]
         denotation_type = self.func2returntype_mappings[outer_most_function]
 
         return denotation, denotation_type
