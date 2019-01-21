@@ -75,6 +75,7 @@ class ConstrainedBeamSearch(FromParams):
         finished_states: Dict[int, List[StateType]] = defaultdict(list)
         states = [initial_state]
         step_num = 1
+
         while states and step_num <= num_steps:
             next_states: Dict[int, List[StateType]] = defaultdict(list)
             grouped_state = states[0].combine_states(states)
@@ -85,7 +86,6 @@ class ConstrainedBeamSearch(FromParams):
             else:
                 possible_next_states = transition_function.take_step(grouped_state,
                                                                      max_actions=self._per_node_beam_size)
-            #for next_state in transition_function.take_step(grouped_state, max_actions=self._per_node_beam_size):
             for next_state in possible_next_states:
                 # NOTE: we're doing state.batch_indices[0] here (and similar things below),
                 # hard-coding a group size of 1.  But, our use of `next_state.is_finished()`

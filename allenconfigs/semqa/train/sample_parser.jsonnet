@@ -112,7 +112,7 @@ local parse_number(x) =
   "iterator": {
     "type": "basic",
     "batch_size": std.extVar("BS"),
-    "max_instances_in_memory": 128 //
+    "max_instances_in_memory": std.extVar("BS") //
   },
 
   "trainer": {

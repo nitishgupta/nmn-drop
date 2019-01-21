@@ -22,12 +22,12 @@ export TRAINING_DATA_FILE=${TRAINFILE}
 export VAL_DATA_FILE=${VALFILE}
 # export TEST_DATA_FILE=${TESTFILE}
 
-export BS=2
+export BS=4
 export LR=0.001
 export DROPOUT=0.2
 
 export BEAMSIZE=32
-export MAX_DECODE_STEP=7
+export MAX_DECODE_STEP=12
 
 
 ####    SERIALIZATION DIR --- Check for checkpoint_root/task/dataset/model/parameters/
