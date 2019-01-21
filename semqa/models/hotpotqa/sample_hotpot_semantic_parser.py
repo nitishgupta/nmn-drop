@@ -10,18 +10,17 @@ import torch.nn.functional as nnfunc
 from allennlp.data.fields.production_rule_field import ProductionRule
 from allennlp.data.vocabulary import Vocabulary
 from allennlp.models.model import Model
-# from allennlp.models.semantic_parsing.nlvr.nlvr_semantic_parser import NlvrSemanticParser
 from allennlp.modules import Attention, TextFieldEmbedder, Seq2SeqEncoder
 from allennlp.nn import Activation
-import allennlp.semparse.type_declarations.type_declaration as type_declr
 from allennlp.state_machines import BeamSearch
 from allennlp.state_machines.states import GrammarBasedState
-from allennlp.state_machines.transition_functions import BasicTransitionFunction, LinkingTransitionFunction
-from allennlp.modules.span_extractors import SpanExtractor, EndpointSpanExtractor
+from allennlp.state_machines.transition_functions import LinkingTransitionFunction
+from allennlp.modules.span_extractors import SpanExtractor
 import allennlp.nn.util as allenutil
+import allennlp.common.util as alcommon_util
 
 import semqa.type_declarations.semqa_type_declaration_wques as types
-from semqa.worlds.hotpotqa.sample_world import SampleHotpotWorld
+from semqa.domain_languages.hotpotqa.hotpotqa_language import HotpotQALanguage
 from semqa.models.hotpotqa.hotpot_semantic_parser import HotpotSemanticParser
 import datasets.hotpotqa.utils.constants as hpcons
 
@@ -135,7 +134,7 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
                 num_dateents: torch.LongTensor,
                 num_normval: List[List[NumberField]],
                 date_normval: List[List[DateField]],
-                worlds: List[SampleHotpotWorld],
+                languages: List[HotpotQALanguage],
                 actions: List[List[ProductionRule]],
                 linked_rule2idx: List[Dict],
                 action2ques_linkingscore: torch.FloatTensor,
@@ -202,7 +201,7 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
         """
         # pylint: disable=arguments-differ
 
-        batch_size = len(worlds)
+        batch_size = len(languages)
 
         device_id = allenutil.get_device_of(ent_mens)
 
@@ -236,7 +235,7 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
         # For each instance, create a grammar statelet containing the valid_actions and their representations
         initial_grammar_statelets = []
         for i in range(batch_size):
-            initial_grammar_statelets.append(self._create_grammar_statelet(worlds[i],
+            initial_grammar_statelets.append(self._create_grammar_statelet(languages[i],
                                                                            actions[i],
                                                                            linked_rule2idx[i],
                                                                            action2ques_linkingscore[i],
@@ -267,6 +266,7 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
 
         best_action_sequences: Dict[int, List[List[int]]] = {}
         best_action_seqscores: Dict[int, List[torch.Tensor]] = {}
+
         for i in range(batch_size):
             # Decoding may not have terminated with any completed logical forms, if `num_steps`
             # isn't long enough (or if the model is not trained enough and gets into an
@@ -305,25 +305,25 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
         # Shape: (B, C, T, D)
         context_encoded, contexts_mask = self.executor_parameters._encode_contexts(contexts)
 
-        for i in range(0, len(worlds)):
-            worlds[i]._executor.set_executor_parameters(executor_parameters=self.executor_parameters)
-            worlds[i]._executor.set_arguments(ques_embedded=embedded_ques[i],
-                                              ques_mask=ques_mask[i],
-                                              contexts=context_encoded[i],
-                                              contexts_mask=contexts_mask[i],
-                                              ne_ent_mens=ent_mens[i],
-                                              num_ent_mens=num_mens[i],
-                                              date_ent_mens=date_mens[i],
-                                              q_qstr2idx=q_qstr2idx[i],
-                                              q_qstr_spans=q_qstr_spans[i],
-                                              q_nemens2groundingidx=q_nemens2groundingidx[i],
-                                              q_nemens_grounding=q_nemens_grounding[i],
-                                              q_nemenspan2entidx=q_nemenspan2entidx[i])
+        for i in range(0, len(languages)):
+            languages[i].set_execution_parameters(execution_parameters=self.executor_parameters)
+            languages[i].set_arguments(ques_embedded=embedded_ques[i],
+                                       ques_mask=ques_mask[i],
+                                       contexts=context_encoded[i],
+                                       contexts_mask=contexts_mask[i],
+                                       ne_ent_mens=ent_mens[i],
+                                       num_ent_mens=num_mens[i],
+                                       date_ent_mens=date_mens[i],
+                                       q_qstr2idx=q_qstr2idx[i],
+                                       q_qstr_spans=q_qstr_spans[i],
+                                       q_nemens2groundingidx=q_nemens2groundingidx[i],
+                                       q_nemens_grounding=q_nemens_grounding[i],
+                                       q_nemenspan2entidx=q_nemenspan2entidx[i])
 
-            worlds[i]._executor.preprocess_arguments()
+            languages[i].preprocess_arguments()
 
         # List[List[denotation]], List[List[str]]: For each instance, denotations by executing the action_seqs and its type
-        batch_denotations, batch_denotation_types = self._get_denotations(batch_action_strings, worlds)
+        batch_denotations, batch_denotation_types = self._get_denotations(batch_action_strings, languages)
 
         # # Get probability for different denotation types by marginalizing the prob for action_seqs of same type
         # batch_type2prob: List[Dict] = []
@@ -416,7 +416,8 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
             ans_type_nltkname = ans_type.lower()[0]
             instance_allowed_actions = []
             for action_idx, action in enumerate(instance_actions):
-                if action[0] == f"{type_declr.START_SYMBOL} -> {ans_type_nltkname}":
+                # if action[0] == f"{type_declr.START_SYMBOL} -> {ans_type_nltkname}":
+                if action[0] == f"{alcommon_util.START_SYMBOL} -> Bool":
                     instance_allowed_actions.append(action_idx)
             firststep_action_ids.append(set(instance_allowed_actions))
 

@@ -10,24 +10,19 @@ from allennlp.data.vocabulary import Vocabulary
 from allennlp.models.model import Model
 from allennlp.modules import TextFieldEmbedder, Seq2SeqEncoder, Embedding
 from allennlp.nn import util
-from allennlp.semparse.type_declarations import type_declaration
-from allennlp.semparse.type_declarations.type_declaration import START_SYMBOL
 from allennlp.state_machines.states import GrammarBasedState, GrammarStatelet, RnnStatelet
 from allennlp.training.metrics import Average
 from allennlp.modules.span_extractors.span_extractor import SpanExtractor
+import allennlp.common.util as alcommon_utils
 
 import datasets.hotpotqa.utils.constants as hpcons
-from semqa.worlds.hotpotqa.sample_world import SampleHotpotWorld
+from semqa.domain_languages.hotpotqa.hotpotqa_language import HotpotQALanguage
 from semqa.executors.hotpotqa.sample_executor import ExecutorParameters
-
-
-from allennlp.models.semantic_parsing.wikitables.wikitables_semantic_parser import WikiTablesSemanticParser
-from allennlp.models.semantic_parsing.wikitables.wikitables_mml_semantic_parser import WikiTablesMmlSemanticParser
-
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
-SPAN_DELIM=hpcons.SPAN_DELIM
+SPAN_DELIM = hpcons.SPAN_DELIM
+START_SYMBOL = alcommon_utils.START_SYMBOL
 
 class HotpotSemanticParser(Model):
     """
@@ -63,8 +58,6 @@ class HotpotSemanticParser(Model):
                  ques2action_encoder: Seq2SeqEncoder,
                  quesspan_extractor: SpanExtractor,
                  executor_parameters: ExecutorParameters,
-                 # context_embedder: TextFieldEmbedder,
-                 # context_encoder: Seq2SeqEncoder,
                  dropout: float = 0.0,
                  rule_namespace: str = 'rule_labels') -> None:
         super(HotpotSemanticParser, self).__init__(vocab=vocab)
@@ -138,7 +131,7 @@ class HotpotSemanticParser(Model):
         return initial_rnn_state
 
     def _create_grammar_statelet(self,
-                                 world: SampleHotpotWorld,
+                                 language: HotpotQALanguage,
                                  possible_actions: List[ProductionRule],
                                  linked_rule2idx: Dict,
                                  action2ques_linkingscore: torch.FloatTensor,
@@ -158,16 +151,15 @@ class HotpotSemanticParser(Model):
 
 
         """
-
-
-
         # ProductionRule: (rule, is_global_rule, rule_id, nonterminal)
         action_map = {}
         for action_index, action in enumerate(possible_actions):
             action_string = action[0]
-            action_map[action_string] = action_index
+            if action_string:
+                # print("{} {}".format(action_string, action))
+                action_map[action_string] = action_index
 
-        valid_actions = world.get_valid_actions()
+        valid_actions = language.get_nonterminal_productions()
         translated_valid_actions: Dict[str, Dict[str, Tuple[torch.Tensor, torch.Tensor, List[int]]]] = {}
 
         for key, action_strings in valid_actions.items():
@@ -224,9 +216,11 @@ class HotpotSemanticParser(Model):
                 translated_valid_actions[key]['linked'] = (linked_action_scores,
                                                            linked_action_embeddings,
                                                            list(linked_action_ids))
+
         return GrammarStatelet([START_SYMBOL],
                                translated_valid_actions,
-                               type_declaration.is_nonterminal)
+                               language.is_nonterminal)
+                               #type_declaration.is_nonterminal)
 
     def _get_label_strings(self, labels):
         # TODO (pradeep): Use an unindexed field for labels?
@@ -270,21 +264,25 @@ class HotpotSemanticParser(Model):
 
     @staticmethod
     def _get_denotations(action_strings: List[List[List[str]]],
-                         worlds: List[SampleHotpotWorld]) -> Tuple[List[List[Any]], List[List[str]]]:
+                         languages: List[HotpotQALanguage]) -> Tuple[List[List[Any]], List[List[str]]]:
         all_denotations: List[List[Any]] = []
         all_denotation_types: List[List[str]] = []
 
-        for instance_world, instance_action_sequences in zip(worlds, action_strings):
-            instance_world: SampleHotpotWorld = instance_world
+        for instance_language, instance_action_sequences in zip(languages, action_strings):
+            instance_language: HotpotQALanguage = instance_language
             instance_denotations: List[Any] = []
             instance_denotation_types: List[str] = []
             for instance_action_strings in instance_action_sequences:
                 # print(instance_action_strings)
                 if not instance_action_strings:
                     continue
-                logical_form = instance_world.get_logical_form(instance_action_strings)
-                instance_actionseq_denotation, instance_actionseq_type = instance_world.execute(logical_form)
+                logical_form = instance_language.action_sequence_to_logical_form(instance_action_strings)
+
+                instance_actionseq_denotation = instance_language.execute(logical_form)
                 instance_denotations.append(instance_actionseq_denotation)
+
+                # TODO(nitish): Fix this
+                instance_actionseq_type = hpcons.BOOL_TYPE
                 instance_denotation_types.append(instance_actionseq_type)
 
             all_denotations.append(instance_denotations)
@@ -294,11 +292,11 @@ class HotpotSemanticParser(Model):
     @staticmethod
     def _check_denotation(action_sequence: List[str],
                           labels: List[str],
-                          worlds: List[SampleHotpotWorld]) -> List[bool]:
+                          languages: List[HotpotQALanguage]) -> List[bool]:
         is_correct = []
-        for world, label in zip(worlds, labels):
-            logical_form = world.get_logical_form(action_sequence)
-            denotation = world.execute(logical_form)
+        for language, label in zip(languages, labels):
+            logical_form = language.action_sequence_to_logical_form(action_sequence)
+            denotation = language.execute(logical_form)
             is_correct.append(str(denotation).lower() == label)
         return is_correct
 
@@ -311,20 +309,20 @@ class HotpotSemanticParser(Model):
         """
         best_action_strings = output_dict["best_action_strings"]
         # Instantiating an empty world for getting logical forms from action strings.
-        world = SampleHotpotWorld() # NlvrWorld([])
+        language = HotpotQALanguage(qstr_qent_spans=[]) # NlvrWorld([])
         logical_forms = []
         for instance_action_sequences in best_action_strings:
             instance_logical_forms = []
             for action_strings in instance_action_sequences:
                 if action_strings:
-                    instance_logical_forms.append(world.get_logical_form(action_strings))
+                    instance_logical_forms.append(language.action_sequence_to_logical_form(action_strings))
                 else:
                     instance_logical_forms.append('')
             logical_forms.append(instance_logical_forms)
         output_dict["logical_form"] = logical_forms
         return output_dict
 
-    def _check_state_denotations(self, state: GrammarBasedState, worlds: SampleHotpotWorld) -> List[bool]:
+    def _check_state_denotations(self, state: GrammarBasedState, language: HotpotQALanguage) -> List[bool]:
         """
         Returns whether action history in the state evaluates to the correct denotations over all
         worlds. Only defined when the state is finished.
@@ -337,4 +335,4 @@ class HotpotSemanticParser(Model):
         all_actions = state.possible_actions[0]
         action_sequence = [all_actions[action][0] for action in history]
         # This needs to change to a single world, and remove list
-        return self._check_denotation(action_sequence, instance_label_strings, [worlds])
+        return self._check_denotation(action_sequence, instance_label_strings, [language])

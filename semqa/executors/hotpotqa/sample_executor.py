@@ -12,7 +12,6 @@ from allennlp.modules import Attention, TextFieldEmbedder, Seq2SeqEncoder
 from allennlp.modules.span_extractors import SpanExtractor, EndpointSpanExtractor
 import allennlp.nn.util as allenutil
 from allennlp.common.registrable import Registrable
-from semqa.executors.hotpotqa.executor_functions import ExecutorFunctions
 
 
 import datasets.hotpotqa.utils.constants as hpconstants

@@ -9,12 +9,13 @@ from overrides import overrides
 
 from allennlp.data.instance import Instance
 from allennlp.data.fields import Field, TextField, ListField
-from allennlp.data.fields import ProductionRuleField, MetadataField, SpanField, ArrayField, LabelField
+from allennlp.data.fields import ProductionRuleField, MetadataField, SpanField, ArrayField
 from allennlp.data.token_indexers import TokenIndexer, SingleIdTokenIndexer
 from allennlp.data.tokenizers.token import Token
 from allennlp.data.dataset_readers.dataset_reader import DatasetReader
 
 from semqa.worlds.hotpotqa.sample_world import SampleHotpotWorld
+from semqa.domain_languages.hotpotqa.hotpotqa_language import HotpotQALanguage
 from semqa.data.datatypes import DateField, NumberField
 import datasets.hotpotqa.utils.constants as hpconstants
 import utils.util as util
@@ -222,10 +223,7 @@ class SampleHotpotDatasetReader(DatasetReader):
         ne_mens_spans = [(men[1], men[2]) for men in q_ent_ners]
 
         # Only keep spans that don't intersect with ques NE mens
-        for span in unigram_spans:
-            if not self.spanIntersectWithAnyOneSpanInList(span, ne_mens_spans):
-                ques_spans_idxs.append(span)
-
+        # Only keep bigrams and trigrams (if possible)
         for span in bigram_spans:
             if not self.spanIntersectWithAnyOneSpanInList(span, ne_mens_spans):
                 ques_spans_idxs.append(span)
@@ -233,6 +231,12 @@ class SampleHotpotDatasetReader(DatasetReader):
         for span in trigam_spans:
             if not self.spanIntersectWithAnyOneSpanInList(span, ne_mens_spans):
                 ques_spans_idxs.append(span)
+
+        # Add unigram spans only if no bigrams and trigrams present
+        if len(ques_spans_idxs) == 0:
+            for span in unigram_spans:
+                if not self.spanIntersectWithAnyOneSpanInList(span, ne_mens_spans):
+                    ques_spans_idxs.append(span)
 
         ques_spans = []
         ques_spans2idx = {}
@@ -427,8 +431,9 @@ class SampleHotpotDatasetReader(DatasetReader):
 
         # Make world from question spans
         # This adds instance specific actions as well
-        world = SampleHotpotWorld(ques_spans=ques_spans)
-        world_field = MetadataField(world)
+        # world = SampleHotpotWorld(ques_spans=ques_spans)
+        hplanguage = HotpotQALanguage(qstr_qent_spans=ques_spans)
+        lang_field = MetadataField(hplanguage)
 
         # Action_field:
         #   Currently, all instance-specific rules are terminal rules of the kind: q -> QSTR:ques_span
@@ -439,7 +444,7 @@ class SampleHotpotDatasetReader(DatasetReader):
         production_rule_fields: List[ProductionRuleField] = []
         linked_rule2idx = {}
         action_to_ques_linking_scores = ques_spans_linking_score
-        for production_rule in world.all_possible_actions():
+        for production_rule in hplanguage.all_possible_productions():
             _, rule_right_side = production_rule.split(' -> ')
             is_global_rule = not (rule_right_side.startswith(hpconstants.QSTR_PREFIX)
                                   or rule_right_side.startswith(hpconstants.QENT_PREFIX))
@@ -452,6 +457,7 @@ class SampleHotpotDatasetReader(DatasetReader):
                 linked_rule2idx[production_rule] = ques_spans2idx[rule_right_side]
 
         action_field = ListField(production_rule_fields)
+        # Dict from linked_rule_string -> idx in 'action_to_ques_linking_scores'
         linked_rule2idx_field = MetadataField(linked_rule2idx)
         action_to_ques_linking_scores_field = ArrayField(np.array(action_to_ques_linking_scores), padding_value=0)
         ques_span_actions_to_spanfield = ListField(ques_spans_spanidxs)
@@ -507,7 +513,7 @@ class SampleHotpotDatasetReader(DatasetReader):
                                     "num_dateents": num_dateents,
                                     "num_normval": all_nummens_normval_field,
                                     "date_normval": all_datemens_normval_field,
-                                    "worlds": world_field,
+                                    "languages": lang_field,
                                     "actions": action_field,
                                     "linked_rule2idx": linked_rule2idx_field,
                                     "action2ques_linkingscore": action_to_ques_linking_scores_field,

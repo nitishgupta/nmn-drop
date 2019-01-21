@@ -1,0 +1,1 @@
+from semqa.domain_languages.hotpotqa.hotpotqa_language import HotpotQALanguage
