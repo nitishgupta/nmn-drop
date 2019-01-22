@@ -178,8 +178,8 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
             For each instance, for each NUM entity it's normalized value
         date_normval: List[List[DateField]]
             For each instance, for each DATE entity it's normalized value
-        worlds: List[SampleHotpotWorld]
-            World for each instance
+        languages: List[HotpotQALanguage]
+            DomainLanguage object for each instance
         actions: List[List[ProductionRule]]
             For each instance, List of all possible ProductionRules (global and instance-specific)
         linked_rule2idx: List[Dict[str, int]]
@@ -216,7 +216,7 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
 
         (firststep_action_ids,
          ans_grounding_dict,
-         ans_grounding_mask) = self._get_FirstSteps_GoldAnsDict_and_Masks(gold_ans_type, actions, **kwargs)
+         ans_grounding_mask) = self._get_FirstSteps_GoldAnsDict_and_Masks(gold_ans_type, actions, languages, **kwargs)
 
         # Initial log-score list for the decoding, List of zeros.
         initial_score_list = [next(iter(question.values())).new_zeros(1, dtype=torch.float)
@@ -388,6 +388,7 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
     def _get_FirstSteps_GoldAnsDict_and_Masks(self,
                                               gold_ans_type: List[str],
                                               actions: List[List[ProductionRule]],
+                                              languages: List[HotpotQALanguage],
                                               **kwargs):
         """ If gold answer types are given, then make a dict of answers and equivalent masks based on type.
         Also give a list of possible first actions when decode to make programs of valid types only.
@@ -410,14 +411,12 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
                 anstype = k[len(ans_grounding_prefix):]
                 ans_grounding_dict[anstype] = v
 
-        for instance_actions, ans_type in zip(actions, gold_ans_type):
-            # Answer types are BASIC_TYPES in our domain.
-            # Converting the gold basic_type to nltk's naming convention
-            ans_type_nltkname = ans_type.lower()[0]
+        for instance_actions, ans_type, language in zip(actions, gold_ans_type, languages):
+            # Converting the gold ans_type to the name used in our language
+            langtype_name = language.typename_to_langtypename(ans_type)
             instance_allowed_actions = []
             for action_idx, action in enumerate(instance_actions):
-                # if action[0] == f"{type_declr.START_SYMBOL} -> {ans_type_nltkname}":
-                if action[0] == f"{alcommon_util.START_SYMBOL} -> Bool":
+                if action[0] == f"{alcommon_util.START_SYMBOL} -> {langtype_name}":
                     instance_allowed_actions.append(action_idx)
             firststep_action_ids.append(set(instance_allowed_actions))
 

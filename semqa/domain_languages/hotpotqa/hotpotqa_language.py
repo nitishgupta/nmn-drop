@@ -12,6 +12,7 @@ from allennlp.modules import TextFieldEmbedder, Seq2SeqEncoder
 from allennlp.modules.span_extractors import SpanExtractor, EndpointSpanExtractor
 from allennlp.semparse import (DomainLanguage, ExecutionError, ParsingError,
                                predicate, predicate_with_side_args, util)
+from allennlp.semparse.domain_languages.domain_language import PredicateType
 
 import datasets.hotpotqa.utils.constants as hpcons
 
@@ -72,12 +73,16 @@ class ExecutorParameters(torch.nn.Module, Registrable):
         return contexts_encoded, contexts_mask
 
 
-class Bool(Tensor):
-    pass
+class Bool():
+    def __init__(self, value: Tensor):
+        self._value = value
+        self._bool_val = (self._value >= 0.5).float()
 
 
-class Bool1(Tensor):
-    pass
+class Bool1():
+    def __init__(self, value: Tensor):
+        self._value = value
+        self._bool_val = (self._value >= 0.5).float()
 
 
 class Qstr(str):
@@ -93,6 +98,16 @@ class HotpotQALanguage(DomainLanguage):
         super().__init__(start_types={Bool})
 
         self._add_constants(qstr_qent_spans=qstr_qent_spans)
+
+        # These are mappings from Type predicates to the name of the type in the preprocessed data
+        # Useful for (1) Finding starting rules that result in a particular type. (2) Finding the type of a logical prog.
+        self.LANGTYPE_TO_TYPENAME_MAP = {
+            PredicateType.get_type(Bool).name: hpcons.BOOL_TYPE
+        }
+
+        self.TYPENAME_TO_LANGTYPE_MAP = {
+            hpcons.BOOL_TYPE: PredicateType.get_type(Bool).name
+        }
 
         self._execution_parameters = None
 
@@ -122,6 +137,30 @@ class HotpotQALanguage(DomainLanguage):
             elif span.startswith(hpcons.QENT_PREFIX):
                 # Question NE men span
                 self.add_constant(name=span, value=span, type_=Qent)
+
+
+    def typeobj_to_typename(self, obj):
+        ''' For a object of a return-type of the language, return the name of type used in the dataset.
+
+        The obj input here should be a non-terminal type of the language defined, ideally the output of an execution
+        '''
+        # This is the name of the equivalent BasicType
+        class_name =  PredicateType.get_type(obj.__class__).name
+        if class_name in self.LANGTYPE_TO_TYPENAME_MAP:
+            return self.LANGTYPE_TO_TYPENAME_MAP[class_name]
+        else:
+            raise ExecutionError(message="TypeClass to Type mapping not found! ClassName:{}".format(class_name))
+
+    def typename_to_langtypename(self, typename):
+        ''' For a given name of a type used in the dataset, return the mapped name of the type (BasicType) in the lang.
+
+        The typename entered here should have a mapping to a non-terminal type of the language defined.
+        '''
+        # This is the name of the type from the dataset
+        if typename in self.TYPENAME_TO_LANGTYPE_MAP:
+            return self.TYPENAME_TO_LANGTYPE_MAP[typename]
+        else:
+            raise ExecutionError(message="Mapping from type name to Type not found! TypeName:{}".format(typename))
 
 
     def set_arguments(self, **kwargs):
@@ -202,38 +241,46 @@ class HotpotQALanguage(DomainLanguage):
 
         boolean_prob = torch.max(probs) #.unsqueeze(0)
 
-        return boolean_prob
+        return Bool1(value=boolean_prob)
 
 
     @predicate
     def bool_and(self, bool1: Bool1, bool2: Bool1) -> Bool:
         ''' AND operation between two booleans '''
-        return bool1 * bool2
+        return Bool(value=bool1._value * bool2._value)
 
     @predicate
     def bool_or(self, bool1: Bool1, bool2: Bool1) -> Bool:
         ''' OR operation between two booleans '''
-        return torch.max(torch.cat([bool1.unsqueeze(0), bool2.unsqueeze(0)], 0))
+        returnval = torch.max(torch.cat([bool1._value.unsqueeze(0), bool2._value.unsqueeze(0)], 0))
+        return Bool(value=returnval)
 
 
 if __name__=="__main__":
-    language = HotpotQALanguage(qstr_qent_spans=["QSTR:Hi", "QENT:Nitish"])
-    all_prods = language.all_possible_productions()
 
-    print("All prods:\n{}\n".format(all_prods))
+    b = Bool(value=torch.FloatTensor([0.65]))
+    print(b._value)
+    print(b._bool_val)
+    print(PredicateType.get_type(b.__class__).name)
+    print(PredicateType.get_type(Bool).name)
 
-    nonterm_prods = language.get_nonterminal_productions()
-    print("Non terminal prods:\n{}\n".format(nonterm_prods))
-
-    functions = language._functions
-    print("Functions:\n{}\n".format(functions))
-
-    function_types = language._function_types
-    print("Function Types:\n{}\n".format(function_types))
-
-    logical_form = "(bool_qent_qstr QSTR:Hi QENT:Nitish)"
-    action_seq = language.logical_form_to_action_sequence(logical_form=logical_form)
-    print(action_seq)
+    # language = HotpotQALanguage(qstr_qent_spans=["QSTR:Hi", "QENT:Nitish"])
+    # all_prods = language.all_possible_productions()
+    #
+    # print("All prods:\n{}\n".format(all_prods))
+    #
+    # nonterm_prods = language.get_nonterminal_productions()
+    # print("Non terminal prods:\n{}\n".format(nonterm_prods))
+    #
+    # functions = language._functions
+    # print("Functions:\n{}\n".format(functions))
+    #
+    # function_types = language._function_types
+    # print("Function Types:\n{}\n".format(function_types))
+    #
+    # logical_form = "(bool_qent_qstr QSTR:Hi QENT:Nitish)"
+    # action_seq = language.logical_form_to_action_sequence(logical_form=logical_form)
+    # print(action_seq)
 
 
 

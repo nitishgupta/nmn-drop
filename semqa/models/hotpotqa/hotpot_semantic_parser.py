@@ -279,10 +279,8 @@ class HotpotSemanticParser(Model):
                 logical_form = instance_language.action_sequence_to_logical_form(instance_action_strings)
 
                 instance_actionseq_denotation = instance_language.execute(logical_form)
-                instance_denotations.append(instance_actionseq_denotation)
-
-                # TODO(nitish): Fix this
-                instance_actionseq_type = hpcons.BOOL_TYPE
+                instance_denotations.append(instance_actionseq_denotation._value)
+                instance_actionseq_type = instance_language.typeobj_to_typename(instance_actionseq_denotation)
                 instance_denotation_types.append(instance_actionseq_type)
 
             all_denotations.append(instance_denotations)
