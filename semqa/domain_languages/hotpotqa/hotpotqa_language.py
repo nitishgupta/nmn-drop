@@ -79,8 +79,8 @@ class Bool():
         self._bool_val = (self._value >= 0.5).float()
 
     def clamp(self, value: torch.Tensor):
-        new_value = value.clamp(min=1e-1, max=1.0 - 1e-1)
-        return new_value
+        new_val = value.clamp(min=1e-3, max=1.0 - 1e-3)
+        return new_val
 
 
 class Bool1():
