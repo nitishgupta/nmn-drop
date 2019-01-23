@@ -75,14 +75,22 @@ class ExecutorParameters(torch.nn.Module, Registrable):
 
 class Bool():
     def __init__(self, value: Tensor):
-        self._value = value
+        self._value = self.clamp(value)
         self._bool_val = (self._value >= 0.5).float()
+
+    def clamp(self, value: torch.Tensor):
+        new_value = value.clamp(min=1e-1, max=1.0 - 1e-1)
+        return new_value
 
 
 class Bool1():
     def __init__(self, value: Tensor):
         self._value = value
+        self.clamp()
         self._bool_val = (self._value >= 0.5).float()
+
+    def clamp(self):
+        self._value = self._value.clamp(min=1e-1, max=1.0 - 1e-1)
 
 
 class Qstr(str):
@@ -231,10 +239,14 @@ class HotpotQALanguage(DomainLanguage):
 
         # Shape: (C, M, 2)
         qent_mens = self.ne_ent_mens[entity_grounding_idx]
-        qent_mens_mask = (qent_mens[..., 0] >= 0).squeeze(-1).long()
+        qent_mens_mask = (qent_mens[..., 0] >= 0).long()
         # Shape: (C, M, 2*D)
+        # print("Exectution debug")
+        # print(self.contexts.size())
+        # print(qent_mens)
+        # print(qent_mens_mask)
         qent_men_repr = self._execution_parameters._span_extractor(self.contexts, qent_mens,
-                                                                  self.contexts_mask, qent_mens_mask)
+                                                                   self.contexts_mask, qent_mens_mask)
         qstr_repr_ex = qstr_repr.unsqueeze(0).unsqueeze(1)
         scores = torch.sum(qstr_repr_ex * qent_men_repr, 2)
         probs = torch.sigmoid(scores) * qent_mens_mask.float()
@@ -246,14 +258,17 @@ class HotpotQALanguage(DomainLanguage):
 
     @predicate
     def bool_and(self, bool1: Bool1, bool2: Bool1) -> Bool:
-        ''' AND operation between two booleans '''
-        return Bool(value=bool1._value * bool2._value)
+        """ AND operation between two booleans """
+        return_val = bool1._value * bool2._value
+        # torch.sigmoid(10.0*bool1._value + 10.0*bool2._value - 15.0)
+        return Bool(value=return_val)
+        # return Bool(value=bool1._value * bool2._value)
 
     @predicate
     def bool_or(self, bool1: Bool1, bool2: Bool1) -> Bool:
-        ''' OR operation between two booleans '''
-        returnval = torch.max(torch.cat([bool1._value.unsqueeze(0), bool2._value.unsqueeze(0)], 0))
-        return Bool(value=returnval)
+        """ OR operation between two booleans """
+        return_val = torch.max(torch.cat([bool1._value.unsqueeze(0), bool2._value.unsqueeze(0)], 0))
+        return Bool(value=return_val)
 
 
 if __name__=="__main__":

@@ -24,7 +24,6 @@ export VAL_DATA_FILE=${VALFILE}
 
 export BS=4
 export LR=0.001
-export OPT=adam
 export DROPOUT=0.2
 
 export BEAMSIZE=32
@@ -36,11 +35,16 @@ CHECKPOINT_ROOT=./resources/semqa/checkpoints
 
 SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/hotpotqa_bool_wosame
 MODEL_DIR=sample_parser
-PARAMETERS_DIR=BS_${BS}/OPT_${OPT}/LR_${LR}/Drop_${DROPOUT}/BeamSize_${BEAMSIZE}/MaxDecodeStep_${MAX_DECODE_STEP}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PARAMETERS_DIR}_WClamp
+PARAMETERS_DIR=BS_${BS}/LR_${LR}/Drop_${DROPOUT}/BeamSize_${BEAMSIZE}/MaxDecodeStep_${MAX_DECODE_STEP}
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PARAMETERS_DIR}
+
+RESUME_SER_DIR=${SERIALIZATION_DIR}/Resume
+
+MODEL_TAR_GZ=${SERIALIZATION_DIR}/model.tar.gz
 
 #######################################################################################################################
 
-bash scripts/allennlp/base/train.sh ${CONFIGFILE} \
-                                    ${INCLUDE_PACKAGE} \
-                                    ${SERIALIZATION_DIR}
+bash scripts/allennlp/base/resume.sh ${CONFIGFILE} \
+                                     ${INCLUDE_PACKAGE} \
+                                     ${RESUME_SER_DIR} \
+                                     ${MODEL_TAR_GZ}

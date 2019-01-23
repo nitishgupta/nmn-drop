@@ -5,7 +5,7 @@ from typing import List, Dict, Any
 from overrides import overrides
 
 import torch
-import torch.nn.functional as nnfunc
+import torch.nn.functional as F
 
 from allennlp.data.fields.production_rule_field import ProductionRule
 from allennlp.data.vocabulary import Vocabulary
@@ -325,36 +325,18 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
         # List[List[denotation]], List[List[str]]: For each instance, denotations by executing the action_seqs and its type
         batch_denotations, batch_denotation_types = self._get_denotations(batch_action_strings, languages)
 
-        # # Get probability for different denotation types by marginalizing the prob for action_seqs of same type
-        # batch_type2prob: List[Dict] = []
-        # for instance_denotation_types, instance_action_probs in zip(batch_denotation_types, batch_action_probs):
-        #     type2indices = {}
-        #     type2probs = {}
-        #     for i, t in enumerate(instance_denotation_types):
-        #         if t not in type2indices:
-        #             type2indices[t] = []
-        #         type2indices[t].append(i)
-        #
-        #     for t, action_indices in type2indices.items():
-        #         indices = allenutil.move_to_device(torch.tensor(action_indices), device_id)
-        #         type_prob = torch.sum(instance_action_probs.index_select(0, indices))
-        #         type2probs[t] = type_prob
-        #     batch_type2prob.append(type2probs)
-
-        # print(batch_denotations)
-        # print(batch_denotation_types)
-        # print(batch_action_scores)
-        # print(batch_action_probs)
-        #
-        # print(gold_ans_type)
+        (best_predicted_anstypes, best_predicted_denotations, best_predicted_actionprobs,
+         predicted_expected_denotations)= self._expected_best_denotations(
+                batch_denotation_types=batch_denotation_types,
+                batch_action_probs=batch_action_probs,
+                batch_denotations=batch_denotations,
+                gold_ans_type=gold_ans_type)
 
         if ans_grounding_dict is not None:
             outputs["loss"] = self._compute_loss(gold_ans_type=gold_ans_type,
                                                  ans_grounding_dict=ans_grounding_dict,
                                                  ans_grounding_mask=ans_grounding_mask,
-                                                 batch_denotations=batch_denotations,
-                                                 batch_action_probs=batch_action_probs,
-                                                 batch_denotation_types=batch_denotation_types)
+                                                 predicted_expected_denotations=predicted_expected_denotations)
 
         # if target_action_sequences is not None:
         #     self._update_metrics(action_strings=batch_action_strings,
@@ -381,7 +363,7 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
             A tensor of size `dim - 1` with 1 for valid spans, and 0 for padded spans
         """
         # Ellipsis
-        span_mask = (mention_spans[..., 0] >= 0).squeeze(-1).long()
+        span_mask = (mention_spans[..., 0] >= 0).long()
         return span_mask
 
 
@@ -455,57 +437,108 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
                                                         span_indices_mask=span_mask)
         return embedded_ques, ques_mask, quesstr_action_reprs
 
+
+    def _expected_best_denotations(self, batch_denotation_types: List[List[str]],
+                                         batch_action_probs: List[torch.FloatTensor],
+                                         batch_denotations: List[List[Any]],
+                                         gold_ans_type: List[str]=None):
+        """ Returns the best denotation and it's type. Also returns expected denotation if gold_ans_type is known.
+        This is based on the assumption that all denotations are of the gold_type in this case.
+
+        Parameters:
+        ------------
+        batch_denotation_types: ``List[List[str]]``
+            For each instance, for each program it's return type
+        batch_action_probs: ``torch.FloatTensor``
+            For each instance, a tensor of shape (A) containing the probability for each predicted program
+        batch_denotations: List[List[Any]]
+            For each instance, the denotation (ideally, tensor) for each predicted program
+        gold_ans_type: ``List[str]``, optional
+            Gold answer type for each instance. If given, the function assumes (and checks) that all programs for an
+            instance result in the gold type.
+        ans_grounding_dict: ``Dict[str, Tensor]``, optional
+            Dictionary from ans_type to a Tensor of shape (B, *) denoting the gold denotation for each instance.
+            Since all instances don't belong to the same type, these tensors are padded.
+        ans_grounding_mask: ``Dict[str, Tensor]``, optional
+            Dictionary from ans_type to a Tensor of shape (B, *) denoting the mask for each instance if
+            it doesn't belong to the key's answer type
+
+        Returns:
+        --------
+        """
+
+        # Since the batch_action_probs is sorted, the first instance is the best predicted program
+        best_predicted_anstypes = [x[0] for x in batch_denotation_types]
+        best_predicted_denotations = [x[0] for x in batch_denotations]
+        best_predicted_actionprobs = [x[0] for x in batch_action_probs]
+
+        predicted_expected_denotations = None
+
+        if gold_ans_type is not None:
+            predicted_expected_denotations = []
+            # assert(ans_grounding_dict is not None), "Ans grounding dict is None"
+            # assert (ans_grounding_mask is not None), "Ans grounding mask is None"
+            type_check = [all([ptype == gtype for ptype in ins_types]) for gtype, ins_types in
+                          zip(gold_ans_type, batch_denotation_types)]
+            assert all(
+                type_check), f"Program types mismatch gold type. \n GoldTypes:\n{gold_ans_type}" \
+                             f"PredictedTypes:\n{batch_denotation_types}"
+
+            for ins_idx in range(0, len(batch_denotations)):
+                instance_denotations = batch_denotations[ins_idx]
+                instance_action_probs = batch_action_probs[ins_idx]
+                gold_type = gold_ans_type[ins_idx]
+
+                num_actionseqs = len(instance_denotations)
+                # Making a single tensor of (A, *d) by stacking all denotations
+                # Size of all denotations for the same instance should be the same, hence no padding should be required.
+                # Shape: [A, *d]
+                ins_denotations = torch.cat([single_actionseq_d.unsqueeze(0)
+                                             for single_actionseq_d in instance_denotations], dim=0)
+                num_dim_in_denotation = len(instance_denotations[0].size())
+                # [A, 1,1, ...], dim=1 onwards depends on the size of the denotation
+                # This view allows broadcast when computing the expected denotation
+                instance_action_probs_ex = instance_action_probs.view(num_actionseqs, *([1]*num_dim_in_denotation))
+
+                # Shape: [*d]
+                expected_denotation = (ins_denotations * instance_action_probs_ex).sum(0)
+                predicted_expected_denotations.append(expected_denotation)
+        return (best_predicted_anstypes, best_predicted_denotations, best_predicted_actionprobs,
+                predicted_expected_denotations)
+
+
+
+
     def _compute_loss(self, gold_ans_type: List[str],
                             ans_grounding_dict: Dict,
                             ans_grounding_mask: Dict,
-                            batch_denotation_types: List[List[str]],
-                            batch_action_probs: List[torch.FloatTensor],
-                            batch_denotations: List[List[Any]]):
-
-        # All action_sequences and denotations should be of the gold-type
-        # (we only decode action-seqs that lead to the correct type)
-
-        type_check = [all([ptype == gtype for ptype in ins_types]) for gtype, ins_types in zip(gold_ans_type, batch_denotation_types)]
-        assert all(type_check), f"Program types mismatch gold type. \n GT:{gold_ans_type} BT: {batch_denotation_types}"
-        # print(f"Type _check:{type_check}")
+                            predicted_expected_denotations: List[torch.Tensor]):
+        """ Compute the loss given the gold type, grounding, and predicted expected denotation of that type. """
 
         loss = 0.0
 
         # All answer denotations will comes as tensors
         # For each instance, compute expected denotation based on the prob of the action-seq.
-        for ins_idx, (instance_denotations,
-                      instance_action_probs,
-                      gold_type) in enumerate(zip(batch_denotations,
-                                                  batch_action_probs,
-                                                  gold_ans_type)):
-            # print("Instance denotation and probs")
-            # print(instance_denotations)
-            # print(instance_action_probs)
-
-            num_actionseqs = len(instance_denotations)
-            # Size of all denotations for the same instance should be the same, hence no padding should be required.
-            # [A, *d]
-            ins_denotations = torch.cat([single_actionseq_d.unsqueeze(0) for single_actionseq_d in instance_denotations], dim=0)
-            num_dim_in_denotation = len(instance_denotations[0].size())
-            # [A, 1,1, ...], dim=1 onwards depends on the size of the denotation
-            instance_action_probs_ex = instance_action_probs.view(num_actionseqs, *([1]*num_dim_in_denotation))
-
-            # Shape: [*d]
-            expected_denotation = (ins_denotations * instance_action_probs_ex).sum(0)
-
+        for ins_idx in range(0, len(predicted_expected_denotations)):
+            gold_type = gold_ans_type[ins_idx]
             gold_denotation = ans_grounding_dict[gold_type][ins_idx]
+            expected_denotation = predicted_expected_denotations[ins_idx]
             mask = ans_grounding_mask[gold_type][ins_idx]
-
             expected_denotation = expected_denotation * mask
 
             if gold_type == hpcons.BOOL_TYPE:
-                instance_loss = torch.nn.functional.binary_cross_entropy(expected_denotation, gold_denotation)
+                # logger.info(f"Instance deno:\n{ins_denotations}")
+                # logger.info(f"Mask:\n{mask}")
+                # logger.info(f"Instance action probs:\n{instance_action_probs_ex}")
+                # logger.info(f"Gold annotation:\n{gold_denotation}")
+                # logger.info(f"Expected Deno:\n{expected_denotation}")
+                instance_loss = F.binary_cross_entropy(input=expected_denotation, target=gold_denotation)
+
                 loss += instance_loss
 
                 bool_pred = (expected_denotation > 0.5).float()
                 correct = 1.0 if (bool_pred == gold_denotation) else 0.0
                 self.average_metric(float(correct))
-
 
         return loss
 

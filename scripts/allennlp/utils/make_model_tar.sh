@@ -1,6 +1,6 @@
 #!/usr/bin/env
 
-SERIALIZATION_DIR=/save/ngupta19/doclm/checkpoints/spancloze/wdw/LSTM_SUM/BS_16/CONLayers_2/BIDIR_true/LR_0.0005/SM_true/Drop_0.3
+SERIALIZATION_DIR=/home/ngupta19/code/mhqa/pycode/resources/semqa/checkpoints/hotpotqa_bool_wosame/sample_parser/BS_4/LR_0.001/Drop_0.2/BeamSize_32/MaxDecodeStep_12/
 WEIGHTS_TH=best.th
 
 MODEL_ARCHIVE=${SERIALIZATION_DIR}/model.tar.gz

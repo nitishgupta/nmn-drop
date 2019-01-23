@@ -121,11 +121,11 @@ local parse_number(x) =
     "num_epochs": 10,
     "shuffle": false,
     "optimizer": {
-      "type": "adam",
+      "type": std.extVar("OPT"),
       "lr": parse_number(std.extVar("LR"))
     },
     "summary_interval": 10,
-    // "validation_metric": "+multspan_acc"
+    "validation_metric": "+accuracy"
   },
 
   "random_seed": 100,
