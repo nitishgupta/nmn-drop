@@ -90,7 +90,7 @@ class Bool1():
         self._bool_val = (self._value >= 0.5).float()
 
     def clamp(self):
-        self._value = self._value.clamp(min=1e-1, max=1.0 - 1e-1)
+        self._value = self._value.clamp(min=1e-3, max=1.0 - 1e-3)
 
 
 class Qstr(str):
