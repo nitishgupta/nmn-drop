@@ -123,7 +123,7 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
                 q_qstr2idx: List[Dict],
                 q_qstr_spans: torch.LongTensor,
                 q_nemens2groundingidx: List[Dict],
-                q_nemens_grounding: torch.FloatTensor,
+                # q_nemens_grounding: torch.FloatTensor,
                 q_nemenspan2entidx: List[Dict],
                 contexts: Dict[str, torch.LongTensor],
                 ent_mens: torch.LongTensor,
@@ -155,8 +155,8 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
             (B, Q_STR, 2) Spanfield for each QSTR in the q. Padding is -1
         q_nemens2groundingidx: List[Dict]
             For each question in batch, a Dict from NE_men_span to idx into the grounding array(q_nemens_grounding)
-        q_nemens_grounding : torch.FloatTensor
-            (B, Q_NE_M, E) shaped tensor containing one-hot grounding of ques NE mentions to NE entities. Padding is -1
+        # q_nemens_grounding : torch.FloatTensor
+        #     (B, Q_NE_M, E) shaped tensor containing one-hot grounding of ques NE mentions to NE entities. Padding is -1
         q_nemenspan2entidx: List[Dict],
             Map from q_ne_ent span to entity grounding idx.
             This can be used to directly index into the context mentions tensor
@@ -212,8 +212,6 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
         # List[Set[int]] --- Ids of the actions allowable at the first time step if the ans-type supervision is given.
         firststep_action_ids = None
 
-        # q_nemens_grounding_mask = (q_nemens_grounding >= 0).float()
-
         (firststep_action_ids,
          ans_grounding_dict,
          ans_grounding_mask) = self._get_FirstSteps_GoldAnsDict_and_Masks(gold_ans_type, actions, languages, **kwargs)
@@ -244,13 +242,17 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
         # Initial RNN state for the decoder
         initial_rnn_state = self._get_initial_rnn_state(question)
 
+        # Initial debug_info list to make the GrammarBasedState
+        initial_debug_info = [[] for i in range(0, batch_size)]
+
         # Initial grammar state for the complete batch
         initial_state = GrammarBasedState(batch_indices=list(range(batch_size)),
                                           action_history=[[] for _ in range(batch_size)],
                                           score=initial_score_list,
                                           rnn_state=initial_rnn_state,
                                           grammar_state=initial_grammar_statelets,
-                                          possible_actions=actions)
+                                          possible_actions=actions,
+                                          debug_info=initial_debug_info)
 
         outputs: Dict[str, torch.Tensor] = {}
 
@@ -258,44 +260,52 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
         # For each batch, for each entity of that type, for each context, the mentions in this context
 
         ''' Parsing the question to get action sequences'''
+        # Dict[batch_idx(int): List[StateType]]
         best_final_states = self._decoder_beam_search.search(self._max_decoding_steps,
                                                              initial_state,
                                                              self._decoder_step,
                                                              firststep_allowed_actions=firststep_action_ids,
                                                              keep_final_unfinished_states=False)
 
-        best_action_sequences: Dict[int, List[List[int]]] = {}
-        best_action_seqscores: Dict[int, List[torch.Tensor]] = {}
+        instanceidx2actionseq_idxs: Dict[int, List[List[int]]] = {}
+        instanceidx2actionseq_scores: Dict[int, List[torch.Tensor]] = {}
+        instanceidx2actionseq_sideargs: Dict[int, List[List[Dict]]] = {}
 
         for i in range(batch_size):
             # Decoding may not have terminated with any completed logical forms, if `num_steps`
             # isn't long enough (or if the model is not trained enough and gets into an
             # infinite action loop).
             if i in best_final_states:
+
                 # TODO(nitish): best_final_states[i] is a list of final states, change this to reflect that.
                 # Since the group size for any state is 1, action_history[0] can be used.
-                best_action_indices = [final_state.action_history[0] for final_state in best_final_states[i]]
-                best_action_scores = [final_state.score[0] for final_state in best_final_states[i]]
-                best_action_sequences[i] = best_action_indices
-                best_action_seqscores[i] = best_action_scores
+                instance_actionseq_idxs = [final_state.action_history[0] for final_state in best_final_states[i]]
+                instance_actionseq_scores = [final_state.score[0] for final_state in best_final_states[i]]
+                instance_actionseq_sideargs = [final_state.debug_info[0] for final_state in best_final_states[i]]
+                instanceidx2actionseq_idxs[i] = instance_actionseq_idxs
+                instanceidx2actionseq_scores[i] = instance_actionseq_scores
+                instanceidx2actionseq_sideargs[i] = instance_actionseq_sideargs
 
-        # List[List[List[str]]]: For each instance in batch, List of action sequences (ac_seq is List[str])
-        # List[List[torch.Tensor]]: For each instance in batch, score for each action sequence
+
+        # batch_action_strings: List[List[List[str]]]: Decoded action sequences for each batch. Each action_seq is List[str]
+        # batch_action_scores: List[List[torch.Tensor]]: For each instance in batch, score for each action sequence
         # The actions here should be in the exact same order as passed when creating the initial_grammar_state ...
         # since the action_ids are assigned based on the order passed there.
-        (batch_action_strings, batch_action_scores) = self._get_action_strings(actions,
-                                                                               best_action_sequences,
-                                                                               best_action_seqscores)
+        (batch_actionseqs, batch_actionseq_scores,
+         batch_actionseq_sideargs) = self._get_actionseq_strings(actions,
+                                                                 instanceidx2actionseq_idxs,
+                                                                 instanceidx2actionseq_scores,
+                                                                 instanceidx2actionseq_sideargs)
 
         # Convert batch_action_scores to a single tensor the size of number of actions for each batch
-        device_id = allenutil.get_device_of(batch_action_scores[0][0])
+        device_id = allenutil.get_device_of(batch_actionseq_scores[0][0])
         # List[torch.Tensor] : Stores probs for each action_seq. Tensor length is same as the number of actions
         # The prob is normalized across the action_seqs in the beam
-        batch_action_probs = []
-        for score_list in batch_action_scores:
+        batch_actionseq_probs = []
+        for score_list in batch_actionseq_scores:
             scores_astensor = allenutil.move_to_device(torch.cat([x.view(1) for x in score_list]), device_id)
             action_probs = allenutil.masked_softmax(scores_astensor, mask=None)
-            batch_action_probs.append(action_probs)
+            batch_actionseq_probs.append(action_probs)
 
 
         ''' THE PROGRAMS ARE EXECUTED HERE '''
@@ -317,18 +327,18 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
                                        q_qstr2idx=q_qstr2idx[i],
                                        q_qstr_spans=q_qstr_spans[i],
                                        q_nemens2groundingidx=q_nemens2groundingidx[i],
-                                       q_nemens_grounding=q_nemens_grounding[i],
                                        q_nemenspan2entidx=q_nemenspan2entidx[i])
 
             languages[i].preprocess_arguments()
 
         # List[List[denotation]], List[List[str]]: For each instance, denotations by executing the action_seqs and its type
-        batch_denotations, batch_denotation_types = self._get_denotations(batch_action_strings, languages)
+        batch_denotations, batch_denotation_types = self._get_denotations(batch_actionseqs, languages,
+                                                                          batch_actionseq_sideargs)
 
-        (best_predicted_anstypes, best_predicted_denotations, best_predicted_actionprobs,
-         predicted_expected_denotations)= self._expected_best_denotations(
+        (best_predicted_anstypes, best_predicted_denotations, best_predicted_actionseq_probs,
+         predicted_expected_denotations) = self._expected_best_denotations(
                 batch_denotation_types=batch_denotation_types,
-                batch_action_probs=batch_action_probs,
+                batch_action_probs=batch_actionseq_probs,
                 batch_denotations=batch_denotations,
                 gold_ans_type=gold_ans_type)
 
@@ -338,13 +348,7 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
                                                  ans_grounding_mask=ans_grounding_mask,
                                                  predicted_expected_denotations=predicted_expected_denotations)
 
-        # if target_action_sequences is not None:
-        #     self._update_metrics(action_strings=batch_action_strings,
-        #                          worlds=worlds,
-        #                          label_strings=label_strings)
-        # else:
-
-        outputs["best_action_strings"] = batch_action_strings
+        outputs["best_action_strings"] = batch_actionseqs
         outputs["denotations"] = batch_denotations
         return outputs
 

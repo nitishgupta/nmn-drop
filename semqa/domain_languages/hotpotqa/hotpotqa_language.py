@@ -119,23 +119,33 @@ class HotpotQALanguage(DomainLanguage):
 
         self._execution_parameters = None
 
-        self.qstr2repr = None
-        self.ne_ent_mens = None
-        self.contexts = None
-        self.contexts_mask = None
         self.q_nemenspan2entidx = None
 
+        # Shape: (QLen, Q_d)
         self.ques_embedded = None
+        # Shape: (Qlen)
         self.ques_mask = None
+        # Shape: (C, T, D)
         self.contexts = None
+        # Shape: (C, T)
+        self.contexts_mask = None
+        # Shape: (E, C, M, 2)
         self.ne_ent_mens = None
+        # Shape: (E, C, M, 2)
         self.num_ent_mens = None
+        # Shape: (E, C, M, 2)
         self.date_ent_mens = None
+        # Dict from QStr -> Idx into self.q_qstr_spans
         self.q_qstr2idx = None
+        # Shape: (Num_of_Qstr, 2)
         self.q_qstr_spans = None
+        # Dict from Qent -> Idx into self.q_nemens_grounding -- TODO(nitish) -- not used, but keep around
         self.q_nemens2groundingidx = None
-        self.q_nemens_grounding = None
+        # Dict from Q_NE_men idx to EntityIdx corresonding to self.ne_ent_mens
         self.q_nemenspan2entidx = None
+
+        # Dictionary from QStr span to it's tensor representation
+        self.qstr2repr = None
 
 
     def _add_constants(self, qstr_qent_spans: List[str]):
@@ -182,8 +192,21 @@ class HotpotQALanguage(DomainLanguage):
         self.q_qstr2idx= kwargs["q_qstr2idx"]
         self.q_qstr_spans = kwargs["q_qstr_spans"]
         self.q_nemens2groundingidx = kwargs["q_nemens2groundingidx"]
-        self.q_nemens_grounding = kwargs["q_nemens_grounding"]
         self.q_nemenspan2entidx = kwargs["q_nemenspan2entidx"]
+
+        # Keep commented for use later
+        # print(f"self.ques_embedded: {self.ques_embedded.size()}")
+        # print(f"self.ques_mask: {self.ques_mask.size()}")
+        # print(f"self.contexts: {self.contexts.size()}")
+        # print(f"self.contexts_mask: {self.contexts_mask.size()}")
+        # print(f"self.ne_ent_mens: {self.ne_ent_mens.size()}")
+        # print(f"self.date_ent_mens: {self.date_ent_mens.size()}")
+        # print(f"self.num_ent_mens: {self.num_ent_mens.size()}")
+        # print(f"self.q_qstr2idx: {self.q_qstr2idx}")
+        # print(f"self.q_qstr_spans: {self.q_qstr_spans.size()}")
+        # print(f"self.q_nemens2groundingidx: {self.q_nemens2groundingidx}")
+        # print(f"self.q_nemenspan2entidx: {self.q_nemenspan2entidx}")
+
 
 
     def set_execution_parameters(self, execution_parameters: ExecutorParameters):
@@ -216,26 +239,14 @@ class HotpotQALanguage(DomainLanguage):
 
 
     @predicate
+    # @predicate_with_side_args(['question_attention'])
     def bool_qent_qstr(self, qent: Qent, qstr: Qstr) -> Bool1:
 
         # Get Q_ent string, and Q_str and map to boolean.
-
         entity_grounding_idx = self.q_nemenspan2entidx[qent]
 
         # Shape: (2*D)
         qstr_repr = self.qstr2repr[qstr]
-
-        # qstr_span = self.q_qstr_spans[self.q_qstr2idx[qstr]]
-        # # [QSTR_len, emb_dim]
-        # qstr_embedded = self.ques_embedded[qstr_span[0]:qstr_span[1]+1]
-        # qstr_mask = self.ques_mask[qstr_span[0]:qstr_span[1]+1]
-        # # [1, QSTR_len, emb_dim]
-        # qstr_encoded_ex = self._executor_parameters._ques_encoder(qstr_embedded.unsqueeze(0), qstr_mask.unsqueeze(0))
-        # # Shape: [QSTR_len, emb_dim]
-        # qstr_encoded = qstr_encoded_ex.squeeze(0)
-        # # Concatenating first and last time step of encoded qstr
-        # # Shape: (2 * Qd)
-        # qstr_repr = torch.cat([qstr_encoded[0].unsqueeze(0), qstr_encoded[-1].unsqueeze(0)], 1).squeeze(0)
 
         # Shape: (C, M, 2)
         qent_mens = self.ne_ent_mens[entity_grounding_idx]

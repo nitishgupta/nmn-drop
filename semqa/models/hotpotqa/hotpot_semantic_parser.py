@@ -237,11 +237,13 @@ class HotpotSemanticParser(Model):
         return label_strings
 
     @classmethod
-    def _get_action_strings(cls,
-                            possible_actions: List[List[ProductionRule]],
-                            action_indices: Dict[int, List[List[int]]],
-                            action_scores: Dict[int, List[torch.Tensor]]) -> Tuple[List[List[List[str]]],
-                                                                                  List[List[torch.Tensor]]]:
+    def _get_actionseq_strings(cls,
+                               possible_actions: List[List[ProductionRule]],
+                               b2actionindices: Dict[int, List[List[int]]],
+                               b2actionscores: Dict[int, List[torch.Tensor]],
+                               b2debuginfos: Dict[int, List[List[Dict]]]) -> Tuple[List[List[List[str]]],
+                                                                                List[List[torch.Tensor]],
+                                                                                List[List[List[Dict]]]]:
         """
         Takes a list of possible actions and indices of decoded actions into those possible actions
         for a batch and returns sequences of action strings. We assume ``action_indices`` is a dict
@@ -249,38 +251,57 @@ class HotpotSemanticParser(Model):
         """
         all_action_strings: List[List[List[str]]] = []
         all_action_scores: List[List[torch.Tensor]] = []
+        all_debuginfos: List[List[List[Dict]]] = []
         batch_size = len(possible_actions)
         for i in range(batch_size):
             batch_actions = possible_actions[i]
-            batch_best_sequences = action_indices[i] if i in action_indices else []
-            batch_best_seqscores = action_scores[i] if i in action_scores else []
+            instance_actionindices = b2actionindices[i] if i in b2actionindices else []
+            instance_actionscores = b2actionscores[i] if i in b2actionscores else []
+            instance_debuginfos = b2debuginfos[i] if i in b2debuginfos else []
             # This will append an empty list to ``all_action_strings`` if ``batch_best_sequences``
             # is empty.
             action_strings = [[batch_actions[rule_id][0] for rule_id in sequence]
-                              for sequence in batch_best_sequences]
+                              for sequence in instance_actionindices]
             all_action_strings.append(action_strings)
-            all_action_scores.append(batch_best_seqscores)
-        return all_action_strings, all_action_scores
+            all_action_scores.append(instance_actionscores)
+            all_debuginfos.append(instance_debuginfos)
+        return all_action_strings, all_action_scores, all_debuginfos
 
     @staticmethod
     def _get_denotations(action_strings: List[List[List[str]]],
-                         languages: List[HotpotQALanguage]) -> Tuple[List[List[Any]], List[List[str]]]:
+                         languages: List[HotpotQALanguage],
+                         sideargs: List[List[List[Dict]]]=None) -> Tuple[List[List[Any]], List[List[str]]]:
+        """ Get denotations for all action-sequences for  every instance in a batch.
+
+        Parameters:
+        -----------
+        action_strings: ``List[List[List[str]]]``
+            Each program represented as a list of actions(str),  for all decoded programs for each instance
+        languages: ``List[HotpotQALanguage]``
+            Language instance for each instance
+        sideargs: ``List[List[List[Dict]]]``
+            Required for languages that use side_args
+            Debug-info as List[Dict] for each program. This list should be the same size as the number of actions in
+            the program. This debug-info is present for each program, for each decoded program for each instance.
+        """
         all_denotations: List[List[Any]] = []
         all_denotation_types: List[List[str]] = []
 
-        for instance_language, instance_action_sequences in zip(languages, action_strings):
+        for (instance_language, instance_action_sequences, instance_sideargs) in zip(languages,
+                                                                                     action_strings,
+                                                                                     sideargs):
             instance_language: HotpotQALanguage = instance_language
             instance_denotations: List[Any] = []
             instance_denotation_types: List[str] = []
-            for instance_action_strings in instance_action_sequences:
+            for action_sequence, debuginfo in zip(instance_action_sequences, instance_sideargs):
                 # print(instance_action_strings)
-                if not instance_action_strings:
+                if not action_sequence:
                     continue
-                logical_form = instance_language.action_sequence_to_logical_form(instance_action_strings)
-
-                instance_actionseq_denotation = instance_language.execute(logical_form)
-                instance_denotations.append(instance_actionseq_denotation._value)
-                instance_actionseq_type = instance_language.typeobj_to_typename(instance_actionseq_denotation)
+                # logical_form = instance_language.action_sequence_to_logical_form(action_sequence)
+                actionseq_denotation = instance_language.execute_action_sequence(action_sequence, debuginfo)
+                # instance_actionseq_denotation = instance_language.execute(logical_form)
+                instance_denotations.append(actionseq_denotation._value)
+                instance_actionseq_type = instance_language.typeobj_to_typename(actionseq_denotation)
                 instance_denotation_types.append(instance_actionseq_type)
 
             all_denotations.append(instance_denotations)
