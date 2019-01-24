@@ -162,7 +162,7 @@ class SampleHotpotDatasetReader(DatasetReader):
         """ Make span str that will be used for in the rule names (QSTR -> Span_Str), and also
             in dictionaries mapping to linking_score, span_fields, etc.
 
-        The span_str is a "spantoken1_delimeter_spantoken2_delimeter_..._spanstart_delimiter_spanend"
+        The span_str is a "prefix_spantoken1_delimeter_spantoken2_delimeter_..._spanstart_delimiter_spanend"
 
         end_idx is exclusive
         """
@@ -301,6 +301,8 @@ class SampleHotpotDatasetReader(DatasetReader):
             Dict from NE_men_span to idx into entity grounding array (q_nemens_grounding)
         # q_nemenspan_grounding : List[List[float]]
         #     For each Q NE Mention, a one-hot vector the size of NEs to indicate the mention grounding
+        q_nemenspan2entidx: ``Dict[str, int]``
+            Mapping from Q_NE mention span_str to entity_idx (amongst the NE entities in contexts)
         """
 
         # Ques NE mens span to idx
@@ -326,7 +328,6 @@ class SampleHotpotDatasetReader(DatasetReader):
             if span_str not in ques_spans2idx:
                 ques_spans.append(span_str)
                 ques_spans2idx[span_str] = len(ques_spans2idx)
-                # qent_spans.append(men_span)
 
                 linkingscore = [0.0 for _ in range(len(ques_tokens))]
                 linkingscore[ne_men[1]:ne_men[2]] = [1.0] * (ne_men[2] - ne_men[1])
