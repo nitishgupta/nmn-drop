@@ -156,7 +156,7 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
         q_nemens2groundingidx: List[Dict]
             For each question in batch, a Dict from NE_men_span to idx into the grounding array(q_nemens_grounding)
         # q_nemens_grounding : torch.FloatTensor
-        #     (B, Q_NE_M, E) shaped tensor containing one-hot grounding of ques NE mentions to NE entities. Padding is -1
+        #     (B, Q_NE_M, E) shaped tensor containing one-hot grounding of q_NE mentions to NE entities. Padding is -1
         q_nemenspan2entidx: List[Dict],
             Map from q_ne_ent span to entity grounding idx.
             This can be used to directly index into the context mentions tensor
@@ -287,8 +287,9 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
                 instanceidx2actionseq_sideargs[i] = instance_actionseq_sideargs
 
 
-        # batch_action_strings: List[List[List[str]]]: Decoded action sequences for each batch. Each action_seq is List[str]
-        # batch_action_scores: List[List[torch.Tensor]]: For each instance in batch, score for each action sequence
+        # batch_actionseqs: List[List[List[str]]]: All decoded action sequences for each instance in the batch
+        # batch_actionseq_scores: List[List[torch.Tensor]]: Score for each program of each instance
+        # batch_actionseq_sideargs: List[List[List[Dict]]]: List of side_args for each program of each instance
         # The actions here should be in the exact same order as passed when creating the initial_grammar_state ...
         # since the action_ids are assigned based on the order passed there.
         (batch_actionseqs, batch_actionseq_scores,
@@ -306,7 +307,6 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
             scores_astensor = allenutil.move_to_device(torch.cat([x.view(1) for x in score_list]), device_id)
             action_probs = allenutil.masked_softmax(scores_astensor, mask=None)
             batch_actionseq_probs.append(action_probs)
-
 
         ''' THE PROGRAMS ARE EXECUTED HERE '''
         ''' First set the instance-spcific data (question, contexts, entity_mentions, etc.) to their 
@@ -331,7 +331,7 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
 
             languages[i].preprocess_arguments()
 
-        # List[List[denotation]], List[List[str]]: For each instance, denotations by executing the action_seqs and its type
+        # List[List[denotation]], List[List[str]]: Denotations and their types for all instances
         batch_denotations, batch_denotation_types = self._get_denotations(batch_actionseqs, languages,
                                                                           batch_actionseq_sideargs)
 

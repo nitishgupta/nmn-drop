@@ -152,12 +152,12 @@ class HotpotSemanticParser(Model):
 
         """
         # ProductionRule: (rule, is_global_rule, rule_id, nonterminal)
-        action_map = {}
+        action2actionidx = {}
         for action_index, action in enumerate(possible_actions):
             action_string = action[0]
             if action_string:
                 # print("{} {}".format(action_string, action))
-                action_map[action_string] = action_index
+                action2actionidx[action_string] = action_index
 
         valid_actions = language.get_nonterminal_productions()
         translated_valid_actions: Dict[str, Dict[str, Tuple[torch.Tensor, torch.Tensor, List[int]]]] = {}
@@ -167,13 +167,14 @@ class HotpotSemanticParser(Model):
             # `key` here is a non-terminal from the grammar, and `action_strings` are all the valid
             # productions of that non-terminal.  We'll first split those productions by global vs.
             # linked action.
-            action_indices = [action_map[action_string] for action_string in action_strings]
+            action_indices = [action2actionidx[action_string] for action_string in action_strings]
             production_rule_arrays = [(possible_actions[index], index) for index in action_indices]
 
             # For global_actions: (rule_vocab_id_tensor, action_index)
             global_actions = []
             # For linked_actions: (action_string, action_index)
             linked_actions = []
+
             for production_rule_array, action_index in production_rule_arrays:
                 # production_rule_array: ProductionRule
                 if production_rule_array[1]:
@@ -197,30 +198,22 @@ class HotpotSemanticParser(Model):
             # Second: Get the representations of the linked actions
             if linked_actions:
                 linked_rules, linked_action_ids = zip(*linked_actions)
-                # ques_spans = [rule.split(' -> ')[1] for rule in linked_rules]
-                # ques_spans = [ques_span[len(QSTR_PREFIX):] for ques_span in ques_spans]
                 ques_spans_idxs = [linked_rule2idx[linked_rule] for linked_rule in linked_rules]
-                # Scores and embedding should not be batched and should be equal to the number of actions in this instance
+                # Scores and embedding should not be batched and
+                # should be equal to the number of actions in this instance
                 # (num_linked_actions, num_question_tokens)
                 linked_action_scores = action2ques_linkingscore[ques_spans_idxs]
                 # (num_linked_actions, action_embedding_dim)
                 linked_action_embeddings = quesspan_action_repr[ques_spans_idxs]
 
-                # print(f"NumLinkedActions: {len(linked_rule2idx)}\n")
-                # print(f"ActionLinkingScore size: {action2ques_linkingscore.size()}\n")
-                # print(f"LinkedActionRepr size: {quesspan_action_repr.size()}\n")
-                # print("After Indexing")
-                # print(f"ActionLinkingScore size: {linked_action_scores.size()}\n")
-                # print(f"LinkedActionRepr size: {linked_action_embeddings.size()}\n")
-
                 translated_valid_actions[key]['linked'] = (linked_action_scores,
                                                            linked_action_embeddings,
                                                            list(linked_action_ids))
 
+
         return GrammarStatelet([START_SYMBOL],
                                translated_valid_actions,
                                language.is_nonterminal)
-                               #type_declaration.is_nonterminal)
 
     def _get_label_strings(self, labels):
         # TODO (pradeep): Use an unindexed field for labels?

@@ -93,21 +93,19 @@ class Bool1():
         self._value = self._value.clamp(min=1e-3, max=1.0 - 1e-3)
 
 
-class Qstr():
-    def __init__(self, attention):
-        self._value = attention
+class Qstr(str):
+    pass
 
 
-class Qent():
-    def __init__(self, attention):
-        self._value = attention
+class Qent(str):
+    pass
 
 
-class HotpotQALanguage(DomainLanguage):
+class HotpotQALanguage_woSideargs(DomainLanguage):
     def __init__(self, qstr_qent_spans: List[str]):
         super().__init__(start_types={Bool})
 
-        # self._add_constants(qstr_qent_spans=qstr_qent_spans)
+        self._add_constants(qstr_qent_spans=qstr_qent_spans)
 
         # These are mappings from Type predicates to the name of the type in the preprocessed data
         # Useful for (1) Finding starting rules that result in a particular type. (2) Finding the type of a logical prog.
@@ -239,23 +237,10 @@ class HotpotQALanguage(DomainLanguage):
             self.qstr2repr[qstr] = qstr_repr
 
 
-    @predicate_with_side_args(['question_attention'])
-    def find_Qstr(self, question_attention: torch.FloatTensor) -> Qstr:
-        return Qstr(attention=question_attention)
-
-
-    @predicate_with_side_args(['question_attention'])
-    def find_Qent(self, question_attention: torch.FloatTensor) -> Qent:
-        return Qent(attention=question_attention)
-
-
     @predicate
+    # @predicate_with_side_args(['question_attention'])
     def bool_qent_qstr(self, qent: Qent, qstr: Qstr) -> Bool1:
-        dot_prod = (qent._value * qstr._value).sum()
-        prob = torch.sigmoid(dot_prod)
-        return Bool1(value=prob)
 
-        '''
         # Get Q_ent string, and Q_str and map to boolean.
         entity_grounding_idx = self.q_nemenspan2entidx[qent]
 
@@ -279,7 +264,6 @@ class HotpotQALanguage(DomainLanguage):
         boolean_prob = torch.max(probs) #.unsqueeze(0)
 
         return Bool1(value=boolean_prob)
-        '''
 
 
     @predicate
