@@ -1,0 +1,1 @@
+from semqa.predictors.hotpotqa.hotpotqa_predictor import HotpotQAPredictor

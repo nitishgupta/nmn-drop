@@ -1,1 +1,1 @@
-from semqa.worlds.hotpotqa.sample_world import SampleHotpotWorld
+from semqa.worlds.hotpotqa.hotpotqa_world import SampleHotpotWorld

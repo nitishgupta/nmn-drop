@@ -10,7 +10,7 @@ from nltk.sem.logic import Type
 from overrides import overrides
 
 from allennlp.semparse.worlds.world import ParsingError, World
-from semqa.executors.hotpotqa.sample_executor import SampleHotpotExecutor
+from semqa.executors.hotpotqa.hotpotqa_executor import SampleHotpotExecutor
 
 # from semqa.type_declarations import sample_semqa_type_declaration as types
 from semqa.type_declarations import semqa_type_declaration_wques as types

@@ -17,14 +17,14 @@ import allennlp.common.util as alcommon_utils
 
 import datasets.hotpotqa.utils.constants as hpcons
 from semqa.domain_languages.hotpotqa.hotpotqa_language import HotpotQALanguage
-from semqa.executors.hotpotqa.sample_executor import ExecutorParameters
+from semqa.executors.hotpotqa.hotpotqa_executor import ExecutorParameters
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 SPAN_DELIM = hpcons.SPAN_DELIM
 START_SYMBOL = alcommon_utils.START_SYMBOL
 
-class HotpotSemanticParser(Model):
+class HotpotQAParserBase(Model):
     """
     ``NlvrSemanticParser`` is a semantic parsing model built for the NLVR domain. This is an
     abstract class and does not have a ``forward`` method implemented. Classes that inherit from
@@ -60,7 +60,7 @@ class HotpotSemanticParser(Model):
                  executor_parameters: ExecutorParameters,
                  dropout: float = 0.0,
                  rule_namespace: str = 'rule_labels') -> None:
-        super(HotpotSemanticParser, self).__init__(vocab=vocab)
+        super(HotpotQAParserBase, self).__init__(vocab=vocab)
 
         self._question_embedder = question_embedder
         self._denotation_accuracy = Average()

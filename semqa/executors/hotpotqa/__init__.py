@@ -1,2 +1,2 @@
-from semqa.executors.hotpotqa.sample_executor import SampleHotpotExecutor
-from semqa.executors.hotpotqa.sample_executor import ExecutorParameters
+from semqa.executors.hotpotqa.hotpotqa_executor import SampleHotpotExecutor
+from semqa.executors.hotpotqa.hotpotqa_executor import ExecutorParameters

@@ -40,14 +40,15 @@ local parse_number(x) =
 
 
   "model": {
-    "type": "sample_hotpot_parser",
+    "type": "hotpotqa_parser",
 
     "question_embedder": {
       "tokens": {
         "type": "embedding",
         "vocab_namespace": "tokens",
         "embedding_dim": 50,
-        "trainable": true
+        "pretrained_file": std.extVar("WORD_EMBED_FILE"),
+        "trainable": false
       }
     },
 
@@ -61,6 +62,7 @@ local parse_number(x) =
     },
     // Spans of this will be used for action embedding. So final output should be equal to action_embedding_dim
     // hidden_size * dir * 2 == action_embedding_dim
+    // Don't really need this now ...
     "ques2action_encoder": {
       "type": "lstm",
       "input_size": 50,
@@ -91,7 +93,8 @@ local parse_number(x) =
           "type": "embedding",
           "vocab_namespace": "tokens",
           "embedding_dim": 50,
-          "trainable": true
+          "pretrained_file": std.extVar("WORD_EMBED_FILE"),
+          "trainable": false
         }
       },
 

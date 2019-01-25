@@ -21,7 +21,7 @@ import allennlp.common.util as alcommon_util
 
 import semqa.type_declarations.semqa_type_declaration_wques as types
 from semqa.domain_languages.hotpotqa.hotpotqa_language import HotpotQALanguage
-from semqa.models.hotpotqa.hotpot_semantic_parser import HotpotSemanticParser
+from semqa.models.hotpotqa.hotpotqa_parser_base import HotpotQAParserBase
 import datasets.hotpotqa.utils.constants as hpcons
 
 from semqa.data.datatypes import DateField, NumberField
@@ -31,9 +31,12 @@ from allennlp.training.metrics import Average
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
+from allennlp.predictors.wikitables_parser import WikiTablesParserPredictor
+from allennlp.commands import predict
 
-@Model.register("sample_hotpot_parser")
-class SampleHotpotSemanticParser(HotpotSemanticParser):
+
+@Model.register("hotpotqa_parser")
+class HotpotQASemanticParser(HotpotQAParserBase):
     """
     ``NlvrDirectSemanticParser`` is an ``NlvrSemanticParser`` that gets around the problem of lack
     of logical form annotations by maximizing the marginal likelihood of an approximate set of target
@@ -77,16 +80,16 @@ class SampleHotpotSemanticParser(HotpotSemanticParser):
                  beam_size: int,
                  max_decoding_steps: int,
                  dropout: float = 0.0) -> None:
-        super(SampleHotpotSemanticParser, self).__init__(vocab=vocab,
-                                                         question_embedder=question_embedder,
-                                                         action_embedding_dim=action_embedding_dim,
-                                                         qencoder=qencoder,
-                                                         ques2action_encoder=ques2action_encoder,
-                                                         quesspan_extractor=quesspan_extractor,
-                                                         executor_parameters=executor_parameters,
-                                                         # context_embedder=context_embedder,
-                                                         # context_encoder=context_encoder,
-                                                         dropout=dropout)
+        super(HotpotQASemanticParser, self).__init__(vocab=vocab,
+                                                     question_embedder=question_embedder,
+                                                     action_embedding_dim=action_embedding_dim,
+                                                     qencoder=qencoder,
+                                                     ques2action_encoder=ques2action_encoder,
+                                                     quesspan_extractor=quesspan_extractor,
+                                                     executor_parameters=executor_parameters,
+                                                     # context_embedder=context_embedder,
+                                                     # context_encoder=context_encoder,
+                                                     dropout=dropout)
 
         # self._decoder_trainer = ExpectedRiskMinimization(beam_size=beam_size,
         #                                                  normalize_by_length=True,
