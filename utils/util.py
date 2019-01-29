@@ -6,6 +6,11 @@ from typing import Dict, List, Any, Tuple
 
 stopwords = None
 
+def makedir(dirpath: str):
+    if not os.path.exists(dirpath):
+        print(f"Making directory: {dirpath}")
+        os.makedirs(dirpath)
+
 
 def countList(input_list: List[Any], depth: int=1) -> int:
     """
@@ -234,6 +239,7 @@ def normalizeDictbyK(dict1, constant):
         d[k] = float(v)/constant
     return d
 
+
 def round_all(stuff, prec):
     """ Round all the number elems in nested stuff. """
     if isinstance(stuff, list):
@@ -375,23 +381,9 @@ def _getLnrm(arg):
 if __name__=='__main__':
     words = stopWords()
 
-    l = [5,1,5,1,5,2,1,1,2,1,2,1]
+    l = [2,1,2,1,2,1,2,1,2,1]
 
-    pattern = [5,1,5,0,1]
+    pattern = [1,2,1]
 
-    input_list = [[[1,2,3], [3,4,5]], [[1,2,3], [3,4,5], [9,10,10,101]], [[1,2,3,3,4,5]]]
-
-
-    spans = [[2,4], [8,10], [3,6], [0, 1]]
-    spans = removeOverlappingSpans(spans)
-    new_spans = [[1,2], [6,7]]
-    print(spans)
-    print(new_spans)
-    print(mergeSpansAndRemoveOverlap(spans, new_spans, 0, 1))
-
-    print(cleanMentionSurface("Daniel José Older"))
-
-    a = {'1': 0.1288361823, '2':9.1298836128736}
-    print(round_all(a, 3))
-
+    print(getMatchingSubSpans(l, pattern))
 

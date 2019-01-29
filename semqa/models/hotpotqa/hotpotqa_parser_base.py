@@ -17,7 +17,10 @@ import allennlp.common.util as alcommon_utils
 
 import datasets.hotpotqa.utils.constants as hpcons
 from semqa.domain_languages.hotpotqa.hotpotqa_language import HotpotQALanguage
-from semqa.executors.hotpotqa.hotpotqa_executor import ExecutorParameters
+from semqa.domain_languages.hotpotqa.hotpotqa_language import ExecutorParameters
+import semqa.domain_languages.domain_language_utils as dl_utils
+
+
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -286,12 +289,13 @@ class HotpotQAParserBase(Model):
             instance_language: HotpotQALanguage = instance_language
             instance_denotations: List[Any] = []
             instance_denotation_types: List[str] = []
-            for action_sequence, debuginfo in zip(instance_action_sequences, instance_sideargs):
+            for action_sequence, sideargs in zip(instance_action_sequences, instance_sideargs):
                 # print(instance_action_strings)
                 if not action_sequence:
                     continue
                 # logical_form = instance_language.action_sequence_to_logical_form(action_sequence)
-                actionseq_denotation = instance_language.execute_action_sequence(action_sequence, debuginfo)
+                # print(logical_form)
+                actionseq_denotation = instance_language.execute_action_sequence(action_sequence, sideargs)
                 # instance_actionseq_denotation = instance_language.execute(logical_form)
                 instance_denotations.append(actionseq_denotation._value)
                 instance_actionseq_type = instance_language.typeobj_to_typename(actionseq_denotation)
@@ -320,18 +324,38 @@ class HotpotQAParserBase(Model):
         forms here.
         """
         best_action_strings = output_dict["best_action_strings"]
-        # Instantiating an empty world for getting logical forms from action strings.
-        language = HotpotQALanguage(qstr_qent_spans=[]) # NlvrWorld([])
+        batch_actionseq_sideargs = output_dict["batch_actionseq_sideargs"]
+        languages = output_dict["languages"]
+        # This currectly works because there aren't any instance-specific arguments to the language.
+        # language = HotpotQALanguage(qstr_qent_spans=[]) # NlvrWorld([])
         logical_forms = []
-        for instance_action_sequences in best_action_strings:
+        execution_vals = []
+        for instance_action_sequences, instance_action_sideargs, l in zip(best_action_strings,
+                                                                          batch_actionseq_sideargs,
+                                                                          languages):
             instance_logical_forms = []
-            for action_strings in instance_action_sequences:
+            instance_execution_vals = []
+            for action_strings, side_args in zip(instance_action_sequences, instance_action_sideargs):
                 if action_strings:
-                    instance_logical_forms.append(language.action_sequence_to_logical_form(action_strings))
+                    instance_logical_forms.append(l.action_sequence_to_logical_form(action_strings))
+                    # Custom function that copies the execution from domain_languages, but is used for debugging
+                    denotation, ex_vals = dl_utils.execute_action_sequence(l, action_strings, side_args)
+                    instance_execution_vals.append(ex_vals)
                 else:
                     instance_logical_forms.append('')
+                    instance_execution_vals.append([])
             logical_forms.append(instance_logical_forms)
-        output_dict["logical_form"] = logical_forms
+            execution_vals.append(instance_execution_vals)
+
+        # print(logical_forms[0][0])
+        # print('\n')
+        # print(execution_vals[0][0])
+        # print('\n')
+
+        output_dict["logical_forms"] = logical_forms
+        output_dict["execution_vals"] = execution_vals
+        output_dict.pop('languages', None)
+
         return output_dict
 
     def _check_state_denotations(self, state: GrammarBasedState, language: HotpotQALanguage) -> List[bool]:

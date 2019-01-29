@@ -16,6 +16,8 @@ from allennlp.semparse.domain_languages.domain_language import PredicateType
 
 import datasets.hotpotqa.utils.constants as hpcons
 
+from semqa.domain_languages.domain_language_utils import DomainLanguageDebug
+
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -27,12 +29,17 @@ class ExecutorParameters(torch.nn.Module, Registrable):
     def __init__(self,
                  ques_encoder: Seq2SeqEncoder,
                  context_embedder: TextFieldEmbedder,
-                 context_encoder: Seq2SeqEncoder):
+                 context_encoder: Seq2SeqEncoder,
+                 dropout: float = 0.0):
         super(ExecutorParameters, self).__init__()
         self._ques_encoder = ques_encoder
         self._context_embedder = context_embedder
         self._context_encoder = context_encoder
         self._span_extractor = EndpointSpanExtractor(input_dim=self._context_encoder.get_output_dim())
+        if dropout > 0:
+            self._dropout = torch.nn.Dropout(p=dropout)
+        else:
+            self._dropout = lambda x: x
 
 
     def _encode_contexts(self, contexts: Dict[str, torch.LongTensor]) -> torch.FloatTensor:
@@ -51,7 +58,7 @@ class ExecutorParameters(torch.nn.Module, Registrable):
         """
 
         # Shape: (B, C, T, W_d)
-        embedded_contexts = self._context_embedder(contexts)
+        embedded_contexts = self._dropout(self._context_embedder(contexts))
         embcontext_size = embedded_contexts.size()
 
         # Shape: (B, C, T)
@@ -64,7 +71,7 @@ class ExecutorParameters(torch.nn.Module, Registrable):
         contexts_mask.view(-1, conmask_size[2]))
 
         # Shape: (B*C, T, D)
-        contexts_encoded_flat = self._context_encoder(embedded_contexts_flat, contexts_mask_flat)
+        contexts_encoded_flat = self._dropout(self._context_encoder(embedded_contexts_flat, contexts_mask_flat))
         conenc_size = contexts_encoded_flat.size()
         # View such that get B, C, T from embedded context, and D from encoded contexts
         # Shape: (B, C, T, D)
@@ -356,27 +363,30 @@ class HotpotQALanguage(DomainLanguage):
     @predicate
     def bool_and(self, bool1: Bool1, bool2: Bool1) -> Bool:
         """ AND operation between two booleans """
-        return_val = bool1._value * bool2._value
-        # torch.sigmoid(10.0*bool1._value + 10.0*bool2._value - 15.0)
+        # return_val = bool1._value * bool2._value
+        return_val = torch.min(torch.cat([bool1._value.unsqueeze(0), bool2._value.unsqueeze(0)], 0))
+        # return_val = torch.sigmoid(10.0*bool1._value + 10.0*bool2._value - 15.0)
         return Bool(value=return_val)
         # return Bool(value=bool1._value * bool2._value)
 
-    @predicate
-    def bool_or(self, bool1: Bool1, bool2: Bool1) -> Bool:
-        """ OR operation between two booleans """
-        return_val = torch.max(torch.cat([bool1._value.unsqueeze(0), bool2._value.unsqueeze(0)], 0))
-        return Bool(value=return_val)
+    # @predicate
+    # def bool_or(self, bool1: Bool1, bool2: Bool1) -> Bool:
+    #     """ OR operation between two booleans """
+    #     return_val = torch.max(torch.cat([bool1._value.unsqueeze(0), bool2._value.unsqueeze(0)], 0))
+    #     return Bool(value=return_val)
 
 
 if __name__=="__main__":
 
-    b = Bool(value=torch.FloatTensor([0.65]))
-    print(b._value)
-    print(b._bool_val)
-    print(PredicateType.get_type(b.__class__).name)
-    print(PredicateType.get_type(Bool).name)
+    # b = Bool(value=torch.FloatTensor([0.65]))
+    # print(b._value)
+    # print(b._bool_val)
+    # print(PredicateType.get_type(b.__class__).name)
+    # print(PredicateType.get_type(Bool).name)
 
-    # language = HotpotQALanguage(qstr_qent_spans=["QSTR:Hi", "QENT:Nitish"])
+    language = HotpotQALanguage(qstr_qent_spans=["QSTR:Hi", "QENT:Nitish"])
+    print(language._functions)
+
     # all_prods = language.all_possible_productions()
     #
     # print("All prods:\n{}\n".format(all_prods))

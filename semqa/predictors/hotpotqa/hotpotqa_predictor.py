@@ -7,6 +7,7 @@ from allennlp.data import DatasetReader, Instance
 from allennlp.models import Model
 from allennlp.predictors.predictor import Predictor
 import datasets.hotpotqa.utils.constants as hpconstants
+import utils.util as myutils
 
 @Predictor.register("hotpotqa_predictor")
 class HotpotQAPredictor(Predictor):
@@ -15,6 +16,53 @@ class HotpotQAPredictor(Predictor):
     """
     def __init__(self, model: Model, dataset_reader: DatasetReader) -> None:
         super().__init__(model, dataset_reader)
+
+
+    @overrides
+    def predict_instance(self, instance: Instance) -> JsonDict:
+        outputs = self._model.forward_on_instance(instance)
+        return sanitize(outputs)
+
+
+    def predict_batch_instance(self, instances: List[Instance]) -> List[JsonDict]:
+        outputs = self._model.forward_on_instances(instances)
+        return sanitize(outputs)
+
+
+    def _print_ExecutionValTree(self, exval_tree, depth):
+        """
+        exval_tree: [[root_func_name, value], [], [], []]
+        """
+        tabs = '\t' * depth
+        outstr = f"{tabs}{exval_tree[0][0]}  :  {exval_tree[0][1]}\n"
+        if len(exval_tree) > 1:
+            for child in exval_tree[1:]:
+                outstr += self._print_ExecutionValTree(child, depth+1)
+        return outstr
+
+    @overrides
+    def dump_line(self, outputs: JsonDict) -> str:  # pylint: disable=no-self-use
+        # Use json.dumps(outputs) + "\n" to dump a dictionary
+
+        out_str = ''
+        metadata = outputs['metadata']
+        question = metadata['question']
+        answer = metadata['answer']
+
+        logical_forms = outputs['logical_forms']
+        execution_vals = outputs['execution_vals']
+        execution_vals = myutils.round_all(execution_vals, 4)
+        denotations = myutils.round_all(outputs['denotations'], 4)
+
+        out_str += f"Question: {metadata['question']}\n"
+        out_str += f"Question: {metadata['answer']}\n"
+        if 'logical_forms' and 'denotations' in outputs:
+            for lf, d, ex_vals in zip(logical_forms, denotations, execution_vals):
+                ex_vals_str = self._print_ExecutionValTree(ex_vals, 0)
+                out_str += f"LogicalForm: {lf}\nDenotation: {d}\nExecutionTree:\n{ex_vals_str}\n"
+        out_str += '\n'
+
+        return out_str
 
     @overrides
     def _json_to_instance(self, json_dict: JsonDict):
@@ -54,9 +102,9 @@ class HotpotQAPredictor(Predictor):
 
         ans_type = None
         ans_grounding = None
-        if hpconstants.ans_type_field in jsonobj:
-            ans_type = jsonobj[hpconstants.ans_type_field]
-            ans_grounding = jsonobj[hpconstants.ans_grounding_field]
+        # if hpconstants.ans_type_field in jsonobj:
+        #     ans_type = jsonobj[hpconstants.ans_type_field]
+        #     ans_grounding = jsonobj[hpconstants.ans_grounding_field]
 
         instance = self._dataset_reader.text_to_instance(question,
                                                          answer,

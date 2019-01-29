@@ -1,5 +1,18 @@
 # Preprocessing HotpotQA
 
+
+## Commands to run:
+1. `scripts/datasets/hotpotqa/raw_gold_contexts.sh` - 
+Makes raw json files for train and dev_distractor that contain only gold contexts as given in the dataset.
+
+2. `scripts/datasets/hotpotqa/preprocess.sh` -
+Preprocess (as explained below) the different splits of the dataset.
+
+3. `scripts/datasets/hotpotqa/extract_bool_ques.sh` -
+Extracts boolean questions for different splits.
+
+* * *
+
 ## Tokenize --- ```tokenize_mp```
 Main function: ```processJsonObj``` --- runs in multiprocesses
 

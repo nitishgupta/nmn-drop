@@ -7,12 +7,14 @@ from utils import util, spacyutils
 from datasets.hotpotqa.utils import constants
 
 
-def extractBoolQues(input_jsonl: str, outpath_wsame_jsonl: str,
-                    outpath_wosame_jsonl: str, outpath_all_jsonl: str) -> None:
+def extractBoolQues(input_jsonl: str,
+                    outpath_all_jsonl: str,
+                    outpath_wsame_jsonl: str,
+                    outpath_wosame_jsonl: str) -> None:
     """ Extract bool questions from a given preprocessed input jsonl """
 
     print("Reading input jsonl: {}".format(input_jsonl))
-    print("Output filepaths:\n{}\n{}\n{}".format(outpath_wsame_jsonl, outpath_wosame_jsonl, outpath_all_jsonl))
+    print("Output filepaths:\n{}\n{}\n{}".format(outpath_all_jsonl, outpath_wsame_jsonl, outpath_wosame_jsonl))
 
     jsonobjs = util.readJsonlDocs(input_jsonl)
 
@@ -53,22 +55,30 @@ def extractBoolQues(input_jsonl: str, outpath_wsame_jsonl: str,
 def main(args):
     print('Extracting bool questions from : {}'.format(args.input_jsonl))
     dirpath, filename = os.path.split(args.input_jsonl)
-    outfilename_wsame = filename[0:-6] + "_bool_wsame.jsonl"
-    outfilename_wosame = filename[0:-6] + "_bool_wosame.jsonl"
-    outfilename_all = filename[0:-6] + "_bool.jsonl"
 
-    outpath_wsame = os.path.join(dirpath, outfilename_wsame)
-    outpath_wosame = os.path.join(dirpath, outfilename_wosame)
-    outpath_all = os.path.join(dirpath, outfilename_all)
+    util.makedir(args.bool_outdir)
+    util.makedir(args.bool_wsame_outdir)
+    util.makedir(args.bool_wosame_outdir)
 
-    # args.input_jsonl --- is the output from preprocess.tokenize
-    extractBoolQues(input_jsonl=args.input_jsonl, outpath_wsame_jsonl=outpath_wsame,
-                    outpath_wosame_jsonl=outpath_wosame, outpath_all_jsonl=outpath_all)
+    # outfilename_wsame = filename[0:-6] + "_bool_wsame.jsonl"
+    # outfilename_wosame = filename[0:-6] + "_bool_wosame.jsonl"
+    # outfilename_all = filename[0:-6] + "_bool.jsonl"
+
+    outpath_all = os.path.join(args.bool_outdir, filename)
+    outpath_wsame = os.path.join(args.bool_wsame_outdir, filename)
+    outpath_wosame = os.path.join(args.bool_wosame_outdir, filename)
+
+    # args.input_jsonl --- is the preprocessed jsonl file for a split
+    extractBoolQues(input_jsonl=args.input_jsonl, outpath_all_jsonl=outpath_all, outpath_wsame_jsonl=outpath_wsame,
+                    outpath_wosame_jsonl=outpath_wosame)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--input_jsonl', required=True)
+    parser.add_argument('--bool_outdir', required=True)
+    parser.add_argument('--bool_wsame_outdir', required=True)
+    parser.add_argument('--bool_wosame_outdir', required=True)
     args = parser.parse_args()
 
     main(args)

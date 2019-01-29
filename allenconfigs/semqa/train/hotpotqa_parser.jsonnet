@@ -97,7 +97,6 @@ local parse_number(x) =
           "trainable": false
         }
       },
-
       "context_encoder": {
         "type": "lstm",
         "input_size": 50,
@@ -105,6 +104,7 @@ local parse_number(x) =
         "num_layers": 1,
         "bidirectional": true
       },
+      "dropout": parse_number(std.extVar("DROPOUT"))
     },
 
     "beam_size": parse_number(std.extVar("BEAMSIZE")),
@@ -121,7 +121,7 @@ local parse_number(x) =
   "trainer": {
     "grad_clipping": 10.0,
     "cuda_device": parse_number(std.extVar("GPU")),
-    "num_epochs": 10,
+    "num_epochs": parse_number(std.extVar("EPOCHS")),
     "shuffle": false,
     "optimizer": {
       "type": std.extVar("OPT"),

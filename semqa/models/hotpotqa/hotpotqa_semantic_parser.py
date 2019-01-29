@@ -22,11 +22,11 @@ import allennlp.common.util as alcommon_util
 import semqa.type_declarations.semqa_type_declaration_wques as types
 from semqa.domain_languages.hotpotqa.hotpotqa_language import HotpotQALanguage
 from semqa.models.hotpotqa.hotpotqa_parser_base import HotpotQAParserBase
+from semqa.domain_languages.hotpotqa.hotpotqa_language import ExecutorParameters
 import datasets.hotpotqa.utils.constants as hpcons
 
 from semqa.data.datatypes import DateField, NumberField
 from semqa.state_machines.constrained_beam_search import ConstrainedBeamSearch
-from semqa.executors.hotpotqa import ExecutorParameters
 from allennlp.training.metrics import Average
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -90,10 +90,6 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                                                      # context_embedder=context_embedder,
                                                      # context_encoder=context_encoder,
                                                      dropout=dropout)
-
-        # self._decoder_trainer = ExpectedRiskMinimization(beam_size=beam_size,
-        #                                                  normalize_by_length=True,
-        #                                                  max_decoding_steps=max_decoding_steps)
 
         # self._decoder_step = BasicTransitionFunction(encoder_output_dim=self._encoder.get_output_dim(),
         #                                              action_embedding_dim=action_embedding_dim,
@@ -203,6 +199,11 @@ class HotpotQASemanticParser(HotpotQAParserBase):
             to make batching easier. See the reader code for more details.
         """
         # pylint: disable=arguments-differ
+
+        if 'metadata' in kwargs:
+            metadata = kwargs['metadata']
+        else:
+            metadata = None
 
         batch_size = len(languages)
 
@@ -351,8 +352,12 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                                                  ans_grounding_mask=ans_grounding_mask,
                                                  predicted_expected_denotations=predicted_expected_denotations)
 
+        if metadata is not None:
+            outputs["metadata"] = metadata
         outputs["best_action_strings"] = batch_actionseqs
+        outputs["batch_actionseq_sideargs"] = batch_actionseq_sideargs
         outputs["denotations"] = batch_denotations
+        outputs["languages"] = languages
         return outputs
 
 
@@ -409,7 +414,6 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                     instance_allowed_actions.append(action_idx)
             firststep_action_ids.append(set(instance_allowed_actions))
 
-
         ans_grounding_mask = {}
         # Create masks for different types
         for ans_type, ans_grounding in ans_grounding_dict.items():
@@ -431,7 +435,7 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         action2span
         """
         # (B, Qlen, Q_wdim)
-        embedded_ques = self._question_embedder(question)
+        embedded_ques = self._dropout(self._question_embedder(question))
         # Shape: (B, Qlen)
         ques_mask = allenutil.get_text_field_mask(question).float()
         # (B, Qlen, encoder_output_dim)

@@ -12,5 +12,6 @@ allennlp predict --output-file ${OUTPUT_FILE} \
                  --cuda-device ${GPU} \
                  --include-package ${INCLUDE_PACKAGE} \
                  --silent \
+                 --batch-size 1 \
                  ${MODEL_TAR} ${TEST_FILE}
 
