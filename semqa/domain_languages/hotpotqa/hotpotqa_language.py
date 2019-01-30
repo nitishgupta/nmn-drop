@@ -5,7 +5,6 @@ import torch
 import torch.nn.functional
 from torch import Tensor
 
-
 from allennlp.common.registrable import Registrable
 import allennlp.nn.util as allenutil
 from allennlp.modules import TextFieldEmbedder, Seq2SeqEncoder
@@ -15,8 +14,6 @@ from allennlp.semparse import (DomainLanguage, ExecutionError, ParsingError,
 from allennlp.semparse.domain_languages.domain_language import PredicateType
 
 import datasets.hotpotqa.utils.constants as hpcons
-
-from semqa.domain_languages.domain_language_utils import DomainLanguageDebug
 
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name

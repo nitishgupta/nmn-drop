@@ -1,1 +1,2 @@
 import semqa.domain_languages.hotpotqa
+import semqa.domain_languages.domain_language_utils

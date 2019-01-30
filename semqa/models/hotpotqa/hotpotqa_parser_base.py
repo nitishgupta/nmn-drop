@@ -131,7 +131,7 @@ class HotpotQAParserBase(Model):
                                                  attended_sentence[i],
                                                  encoder_outputs_list,
                                                  question_mask_list))
-        return initial_rnn_state
+        return initial_rnn_state, embedded_input, encoder_outputs_list, question_mask_list
 
     def _create_grammar_statelet(self,
                                  language: HotpotQALanguage,

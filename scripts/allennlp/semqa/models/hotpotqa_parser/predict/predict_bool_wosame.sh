@@ -2,7 +2,7 @@
 
 ### DATASET PATHS -- should be same across models for same dataset
 DATASET_DIR=./resources/data/hotpotqa/processed/bool_wosame
-VALFILE=${DATASET_DIR}/train_goldcontexts.jsonl
+VALFILE=${DATASET_DIR}/devds_goldcontexts.jsonl
 
 # PACKAGE TO BE INCLUDED WHICH HOUSES ALL THE CODE
 INCLUDE_PACKAGE=semqa
@@ -19,7 +19,7 @@ export BEAMSIZE=32
 export MAX_DECODE_STEP=12
 
 #### PREDICTION FILENAME ####
-PRED_FILENAME=predictions_train.txt
+PRED_FILENAME=predictions_devds.txt
 
 ####    SERIALIZATION DIR --- Check for checkpoint_root/task/dataset/model/parameters/
 CHECKPOINT_ROOT=./resources/semqa/checkpoints

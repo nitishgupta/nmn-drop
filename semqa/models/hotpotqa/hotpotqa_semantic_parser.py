@@ -230,7 +230,6 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         # (2) Compose a QSTR_action embedding with span_embedding
         # embedded_ques, ques_mask: (B, Qlen, W_d) and (B, Qlen) shaped tensors needed for execution
         # quesstr_action_reprs: Shape: (B, A, A_d)
-        embedded_ques, ques_mask,\
         quesstr_action_reprs = self._questionstr_action_embeddings(question=question,
                                                                    ques_str_action_spans=ques_str_action_spans)
 
@@ -243,8 +242,10 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                                                                            action2ques_linkingscore[i],
                                                                            quesstr_action_reprs[i]))
 
-        # Initial RNN state for the decoder
-        initial_rnn_state = self._get_initial_rnn_state(question)
+        # Initial RNN state for the decoder, embedded question (B, Qlen, W_D),
+        # List[Encoded_question] - (B, Qlen, Qenc_d), List[Question_Mask] - (B, Qlen)
+        (initial_rnn_state, embedded_ques,
+         qencoder_outputs_list, question_mask_list) = self._get_initial_rnn_state(question)
 
         # Initial debug_info list to make the GrammarBasedState
         initial_debug_info = [[] for i in range(0, batch_size)]
@@ -322,7 +323,7 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         for i in range(0, len(languages)):
             languages[i].set_execution_parameters(execution_parameters=self.executor_parameters)
             languages[i].set_arguments(ques_embedded=embedded_ques[i],
-                                       ques_mask=ques_mask[i],
+                                       ques_mask=question_mask_list[i],
                                        contexts=context_encoded[i],
                                        contexts_mask=contexts_mask[i],
                                        ne_ent_mens=ent_mens[i],
@@ -446,7 +447,7 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         quesstr_action_reprs = self._quesspan_extractor(sequence_tensor=quesaction_encoder_outputs,
                                                         span_indices=ques_str_action_spans,
                                                         span_indices_mask=span_mask)
-        return embedded_ques, ques_mask, quesstr_action_reprs
+        return quesstr_action_reprs
 
 
     def _expected_best_denotations(self, batch_denotation_types: List[List[str]],
