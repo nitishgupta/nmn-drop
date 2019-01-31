@@ -18,6 +18,8 @@ from allennlp.state_machines.transition_functions import LinkingTransitionFuncti
 from allennlp.modules.span_extractors import SpanExtractor
 import allennlp.nn.util as allenutil
 import allennlp.common.util as alcommon_util
+from allennlp.models.archival import load_archive
+from allennlp.models.reading_comprehension.bidaf import BidirectionalAttentionFlow
 
 import semqa.type_declarations.semqa_type_declaration_wques as types
 from semqa.domain_languages.hotpotqa.hotpotqa_language import HotpotQALanguage
@@ -28,6 +30,8 @@ import datasets.hotpotqa.utils.constants as hpcons
 from semqa.data.datatypes import DateField, NumberField
 from semqa.state_machines.constrained_beam_search import ConstrainedBeamSearch
 from allennlp.training.metrics import Average
+
+import allennlp.pretrained as pretrained
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -111,6 +115,12 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         self._max_decoding_steps = max_decoding_steps
         self._action_padding_index = -1
         self.average_metric = Average()
+
+        self.bidaf_predictor = pretrained.bidirectional_attention_flow_seo_2017()
+
+        bidaf_model_path = 'https://s3-us-west-2.amazonaws.com/allennlp/models/bidaf-model-2017.09.15-charpad.tar.gz'
+        archive = load_archive(bidaf_model_path)
+        self.bidaf_model: BidirectionalAttentionFlow = archive.model
 
 
     def device_id(self):
@@ -200,12 +210,12 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         """
         # pylint: disable=arguments-differ
 
+        batch_size = len(languages)
+
         if 'metadata' in kwargs:
             metadata = kwargs['metadata']
         else:
             metadata = None
-
-        batch_size = len(languages)
 
         device_id = allenutil.get_device_of(ent_mens)
 
