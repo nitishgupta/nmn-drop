@@ -79,6 +79,8 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                  attention: Attention,
                  decoder_beam_search: ConstrainedBeamSearch,
                  executor_parameters: ExecutorParameters,
+                 bidaf_model_path: str,
+                 bidaf_wordemb_file: str,
                  # context_embedder: TextFieldEmbedder,
                  # context_encoder: Seq2SeqEncoder,
                  beam_size: int,
@@ -114,27 +116,24 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         self._action_padding_index = -1
         self.average_metric = Average()
 
-        self.bidaf_predictor = pretrained.bidirectional_attention_flow_seo_2017()
+        if bidaf_model_path is not None:
+            logger.info(f"Loading BIDAF model from {bidaf_model_path}")
+            bidaf_model_archive = load_archive(bidaf_model_path)
+            self.bidaf_model: BidirectionalAttentionFlow = bidaf_model_archive.model
+            logger.info(f"BIDAF model successfully lodade!")
 
-        bidaf_model_path = 'https://s3-us-west-2.amazonaws.com/allennlp/models/bidaf-model-2017.09.15-charpad.tar.gz'
-        archive = load_archive(bidaf_model_path)
-        self.bidaf_model: BidirectionalAttentionFlow = archive.model
-
-        # self.bidaf_model.extend_embedder_vocab(extended_vocab=vocab)
-        for key, _ in self.bidaf_model._text_field_embedder._token_embedders.items():
-            token_embedder = getattr(self.bidaf_model._text_field_embedder, 'token_embedder_{}'.format(key))
-            if isinstance(token_embedder, Embedding):
-                token_embedder.extend_vocab(extended_vocab=vocab)
-                print(token_embedder.weight.size())
-
-
-        # for k, v in self.bidaf_model._text_field_embedder._token_embedders.items():
-        #     if isinstance(v, Embedding):
-        #         v: Embedding = v
-        #         v.extend_vocab(extended_vocab=vocab)
-        #         print(k)
-        #         print(f"Num Emb: {v.num_embeddings}")
-        print("Vocabulary extended")
+            # self.bidaf_model.extend_embedder_vocab(extended_vocab=vocab)
+            logger.info(f"Extending bidaf model's embedders based on the extended_vocab")
+            logger.info(f"Preatrained word embedding file being used: {bidaf_wordemb_file}")
+            for key, _ in self.bidaf_model._text_field_embedder._token_embedders.items():
+                token_embedder = getattr(self.bidaf_model._text_field_embedder, 'token_embedder_{}'.format(key))
+                if isinstance(token_embedder, Embedding):
+                    token_embedder.extend_vocab(extended_vocab=vocab, pretrained_file=bidaf_wordemb_file)
+                    print()
+            logger.info(f"Embedder for bidaf extended. New size: {token_embedder.weight.size()}")
+        else:
+            logger.info(f"NOT loading pretrained bidaf model. bidaf_model_path - not given")
+            self.bidaf_model = None
 
 
     def device_id(self):
@@ -225,6 +224,13 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         # pylint: disable=arguments-differ
 
         batch_size = len(languages)
+
+        # Making a separate dict of {token_inderxer: (C, T, *)} for each instance, so it can be passed to bidaf easily.
+        contexts_indices_list: List[Dict[str, torch.LongTensor]] = [{} for _ in range(0, batch_size)]
+        for token_indexer_name, token_indices_tensor in contexts.items():
+            assert token_indices_tensor.size()[0] == batch_size
+            for i in range(0, batch_size):
+                contexts_indices_list[i][token_indexer_name] = token_indices_tensor[i]
 
         if 'metadata' in kwargs:
             metadata = kwargs['metadata']

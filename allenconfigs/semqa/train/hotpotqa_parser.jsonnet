@@ -82,16 +82,6 @@ local parse_number(x) =
       }
     },
 
-//    "question_embedder": {
-//      "tokens": {
-//        "type": "embedding",
-//        "vocab_namespace": "tokens",
-//        "embedding_dim": 50,
-//        "pretrained_file": std.extVar("WORD_EMBED_FILE"),
-//        "trainable": false
-//      }
-//    },
-
     "action_embedding_dim": 100,
 
     "qencoder": {
@@ -137,10 +127,11 @@ local parse_number(x) =
       },
       "dropout": parse_number(std.extVar("DROPOUT"))
     },
-
     "beam_size": parse_number(std.extVar("BEAMSIZE")),
     "max_decoding_steps": parse_number(std.extVar("MAX_DECODE_STEP")),
     "dropout": parse_number(std.extVar("DROPOUT")),
+    "bidaf_model_path": std.extVar("BIDAF_MODEL_TAR"),
+    "bidaf_wordemb_file": std.extVar("BIDAF_WORDEMB_FILE"),
   },
 
   "iterator": {

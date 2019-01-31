@@ -23,6 +23,9 @@ export VAL_DATA_FILE=${VALFILE}
 
 export WORD_EMBED_FILE=./resources/embeddings/glove/glove.6B.100d.txt.gz
 
+export BIDAF_MODEL_TAR='https://s3-us-west-2.amazonaws.com/allennlp/models/bidaf-model-2017.09.15-charpad.tar.gz'
+export BIDAF_WORDEMB_FILE='./resources/embeddings/glove/glove.6B.100d.txt.gz'
+
 export BS=2
 export LR=0.001
 export OPT=adam
