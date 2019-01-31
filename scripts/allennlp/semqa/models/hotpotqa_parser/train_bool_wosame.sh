@@ -21,7 +21,7 @@ export TRAINING_DATA_FILE=${TRAINFILE}
 export VAL_DATA_FILE=${VALFILE}
 # export TEST_DATA_FILE=${TESTFILE}
 
-export WORD_EMBED_FILE=./resources/embeddings/glove/glove.6B.50d.txt.gz
+export WORD_EMBED_FILE=./resources/embeddings/glove/glove.6B.100d.txt.gz
 
 export BS=2
 export LR=0.001

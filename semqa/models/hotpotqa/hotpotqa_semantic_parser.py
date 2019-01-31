@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 from allennlp.predictors.wikitables_parser import WikiTablesParserPredictor
 from allennlp.commands import predict
-
+from allennlp.modules.token_embedders.embedding import Embedding
 
 @Model.register("hotpotqa_parser")
 class HotpotQASemanticParser(HotpotQAParserBase):
@@ -71,7 +71,7 @@ class HotpotQASemanticParser(HotpotQAParserBase):
 
     def __init__(self,
                  vocab: Vocabulary,
-                 question_embedder: TextFieldEmbedder,
+                 text_field_embedder: TextFieldEmbedder,
                  action_embedding_dim: int,
                  qencoder: Seq2SeqEncoder,
                  ques2action_encoder: Seq2SeqEncoder,
@@ -85,14 +85,12 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                  max_decoding_steps: int,
                  dropout: float = 0.0) -> None:
         super(HotpotQASemanticParser, self).__init__(vocab=vocab,
-                                                     question_embedder=question_embedder,
+                                                     text_field_embedder=text_field_embedder,
                                                      action_embedding_dim=action_embedding_dim,
                                                      qencoder=qencoder,
                                                      ques2action_encoder=ques2action_encoder,
                                                      quesspan_extractor=quesspan_extractor,
                                                      executor_parameters=executor_parameters,
-                                                     # context_embedder=context_embedder,
-                                                     # context_encoder=context_encoder,
                                                      dropout=dropout)
 
         # self._decoder_step = BasicTransitionFunction(encoder_output_dim=self._encoder.get_output_dim(),
@@ -121,6 +119,22 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         bidaf_model_path = 'https://s3-us-west-2.amazonaws.com/allennlp/models/bidaf-model-2017.09.15-charpad.tar.gz'
         archive = load_archive(bidaf_model_path)
         self.bidaf_model: BidirectionalAttentionFlow = archive.model
+
+        # self.bidaf_model.extend_embedder_vocab(extended_vocab=vocab)
+        for key, _ in self.bidaf_model._text_field_embedder._token_embedders.items():
+            token_embedder = getattr(self.bidaf_model._text_field_embedder, 'token_embedder_{}'.format(key))
+            if isinstance(token_embedder, Embedding):
+                token_embedder.extend_vocab(extended_vocab=vocab)
+                print(token_embedder.weight.size())
+
+
+        # for k, v in self.bidaf_model._text_field_embedder._token_embedders.items():
+        #     if isinstance(v, Embedding):
+        #         v: Embedding = v
+        #         v.extend_vocab(extended_vocab=vocab)
+        #         print(k)
+        #         print(f"Num Emb: {v.num_embeddings}")
+        print("Vocabulary extended")
 
 
     def device_id(self):
@@ -446,7 +460,7 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         action2span
         """
         # (B, Qlen, Q_wdim)
-        embedded_ques = self._dropout(self._question_embedder(question))
+        embedded_ques = self._dropout(self._text_field_embedder(question))
         # Shape: (B, Qlen)
         ques_mask = allenutil.get_text_field_mask(question).float()
         # (B, Qlen, encoder_output_dim)

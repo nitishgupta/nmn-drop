@@ -55,7 +55,7 @@ class HotpotQAParserBase(Model):
     """
     def __init__(self,
                  vocab: Vocabulary,
-                 question_embedder: TextFieldEmbedder,
+                 text_field_embedder: TextFieldEmbedder,
                  action_embedding_dim: int,
                  qencoder: Seq2SeqEncoder,
                  ques2action_encoder: Seq2SeqEncoder,
@@ -65,7 +65,7 @@ class HotpotQAParserBase(Model):
                  rule_namespace: str = 'rule_labels') -> None:
         super(HotpotQAParserBase, self).__init__(vocab=vocab)
 
-        self._question_embedder = question_embedder
+        self._text_field_embedder = text_field_embedder
         self._denotation_accuracy = Average()
         self._consistency = Average()
         self._qencoder = qencoder
@@ -75,6 +75,7 @@ class HotpotQAParserBase(Model):
         # self._context_embedder = context_embedder
         # self._context_encoder = context_encoder
         self.executor_parameters = executor_parameters
+        self.executor_parameters._text_field_embedder = self._text_field_embedder
 
         if dropout > 0:
             self._dropout = torch.nn.Dropout(p=dropout)
@@ -104,7 +105,7 @@ class HotpotQAParserBase(Model):
         raise NotImplementedError
 
     def _get_initial_rnn_state(self, question: Dict[str, torch.LongTensor]):
-        embedded_input = self._question_embedder(question)
+        embedded_input = self._text_field_embedder(question)
         # (batch_size, sentence_length)
         question_mask = util.get_text_field_mask(question).float()
 

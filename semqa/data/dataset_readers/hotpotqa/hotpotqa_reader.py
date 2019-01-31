@@ -87,11 +87,11 @@ class HotpotQADatasetReader(DatasetReader):
     """
     def __init__(self,
                  lazy: bool = False,
-                 sentence_token_indexers: Dict[str, TokenIndexer] = None,
+                 token_indexers: Dict[str, TokenIndexer] = None,
                  nonterminal_indexers: Dict[str, TokenIndexer] = None,
                  terminal_indexers: Dict[str, TokenIndexer] = None) -> None:
         super().__init__(lazy)
-        self._sentence_token_indexers = sentence_token_indexers or {"tokens": SingleIdTokenIndexer()}
+        self._token_indexers = token_indexers or {"tokens": SingleIdTokenIndexer()}
         self._nonterminal_indexers = nonterminal_indexers or {"tokens":
                                                               SingleIdTokenIndexer("rule_labels")}
         self._terminal_indexers = terminal_indexers or {"tokens": SingleIdTokenIndexer("rule_labels")}
@@ -424,7 +424,7 @@ class HotpotQADatasetReader(DatasetReader):
 
         # Question TextField
         ques_tokens: List[Token] = [Token(token) for token in tokenized_ques]
-        ques_tokenized_field = TextField(ques_tokens, self._sentence_token_indexers)
+        ques_tokenized_field = TextField(ques_tokens, self._token_indexers)
 
         # bidaf_question_field = TextField(ques_tokens, self.bidaf_dataset_reader._token_indexers)
 
@@ -493,7 +493,7 @@ class HotpotQADatasetReader(DatasetReader):
         for context_id, context in contexts:
             tokenized_context = context.strip().split(" ")
             tokenized_context = [Token(token) for token in tokenized_context]
-            tokenized_context = TextField(tokenized_context, self._sentence_token_indexers)
+            tokenized_context = TextField(tokenized_context, self._token_indexers)
             # bidaf_context = TextField(tokenized_context, self.bidaf_dataset_reader._token_indexers)
             contexts_tokenized.append(tokenized_context)
             # bidaf_contexts_tokenized.append(bidaf_context)

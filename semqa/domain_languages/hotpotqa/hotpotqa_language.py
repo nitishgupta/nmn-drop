@@ -25,18 +25,20 @@ class ExecutorParameters(torch.nn.Module, Registrable):
     """
     def __init__(self,
                  ques_encoder: Seq2SeqEncoder,
-                 context_embedder: TextFieldEmbedder,
+                 # context_embedder: TextFieldEmbedder,
                  context_encoder: Seq2SeqEncoder,
                  dropout: float = 0.0):
         super(ExecutorParameters, self).__init__()
         self._ques_encoder = ques_encoder
-        self._context_embedder = context_embedder
         self._context_encoder = context_encoder
         self._span_extractor = EndpointSpanExtractor(input_dim=self._context_encoder.get_output_dim())
         if dropout > 0:
             self._dropout = torch.nn.Dropout(p=dropout)
         else:
             self._dropout = lambda x: x
+
+        # Set this in the model init -- same as the model's text_field_embedder
+        self._text_field_embedder: TextFieldEmbedder = None
 
 
     def _encode_contexts(self, contexts: Dict[str, torch.LongTensor]) -> torch.FloatTensor:
@@ -55,7 +57,7 @@ class ExecutorParameters(torch.nn.Module, Registrable):
         """
 
         # Shape: (B, C, T, W_d)
-        embedded_contexts = self._dropout(self._context_embedder(contexts))
+        embedded_contexts = self._dropout(self._text_field_embedder(contexts, num_wrapping_dims=1))
         embcontext_size = embedded_contexts.size()
 
         # Shape: (B, C, T)

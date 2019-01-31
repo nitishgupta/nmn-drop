@@ -21,11 +21,27 @@ local parse_number(x) =
     "type": std.extVar("DATASET_READER"),
     "lazy": true,
 
-    "sentence_token_indexers": {
+    "token_indexers": {
       "tokens": {
-        "type": "single_id",
-        "lowercase_tokens": true,
-        "namespace": "tokens"
+          "type": "single_id",
+          "lowercase_tokens": true
+      },
+      "token_characters": {
+          "type": "characters",
+          "character_tokenizer": {
+              "byte_encoding": "utf-8",
+              "start_tokens": [
+                  259
+              ],
+              "end_tokens": [
+                  260,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+              ]
+          }
       }
     }
   },
@@ -41,22 +57,46 @@ local parse_number(x) =
 
   "model": {
     "type": "hotpotqa_parser",
-
-    "question_embedder": {
+    "text_field_embedder": {
       "tokens": {
-        "type": "embedding",
-        "vocab_namespace": "tokens",
-        "embedding_dim": 50,
-        "pretrained_file": std.extVar("WORD_EMBED_FILE"),
-        "trainable": false
+          "type": "embedding",
+          "pretrained_file": std.extVar("WORD_EMBED_FILE"),
+          "embedding_dim": 100,
+          "trainable": false
+      },
+      "token_characters": {
+          "type": "character_encoding",
+          "embedding": {
+              "num_embeddings": 262,
+              "embedding_dim": 16
+          },
+          "encoder": {
+              "type": "cnn",
+              "embedding_dim": 16,
+              "num_filters": 100,
+              "ngram_filter_sizes": [
+                  5
+              ]
+          },
+          "dropout": 0.2
       }
     },
+
+//    "question_embedder": {
+//      "tokens": {
+//        "type": "embedding",
+//        "vocab_namespace": "tokens",
+//        "embedding_dim": 50,
+//        "pretrained_file": std.extVar("WORD_EMBED_FILE"),
+//        "trainable": false
+//      }
+//    },
 
     "action_embedding_dim": 100,
 
     "qencoder": {
       "type": "lstm",
-      "input_size": 50,
+      "input_size": 200,
       "hidden_size": 50,
       "num_layers": 1
     },
@@ -65,7 +105,7 @@ local parse_number(x) =
     // Don't really need this now ...
     "ques2action_encoder": {
       "type": "lstm",
-      "input_size": 50,
+      "input_size": 200,
       "hidden_size": 50,
       "num_layers": 1,
     },
@@ -83,23 +123,14 @@ local parse_number(x) =
     "executor_parameters": {
       "ques_encoder": {
         "type": "lstm",
-        "input_size": 50,
+        "input_size": 200,
         "hidden_size": 50,
         "num_layers": 1,
         "bidirectional": true
       },
-      "context_embedder": {
-        "tokens": {
-          "type": "embedding",
-          "vocab_namespace": "tokens",
-          "embedding_dim": 50,
-          "pretrained_file": std.extVar("WORD_EMBED_FILE"),
-          "trainable": false
-        }
-      },
       "context_encoder": {
         "type": "lstm",
-        "input_size": 50,
+        "input_size": 200,
         "hidden_size": 50,
         "num_layers": 1,
         "bidirectional": true
