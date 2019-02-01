@@ -24,13 +24,14 @@ class ExecutorParameters(torch.nn.Module, Registrable):
     Global parameters for execution. Executor objects are made for each instance, where as these will be shared across.
     """
     def __init__(self,
-                 ques_encoder: Seq2SeqEncoder,
-                 context_encoder: Seq2SeqEncoder,
+                 ques_encoder: Seq2SeqEncoder = None,
+                 context_encoder: Seq2SeqEncoder = None,
                  dropout: float = 0.0):
         super(ExecutorParameters, self).__init__()
         # self._ques_encoder = ques_encoder
-        self._context_encoder = context_encoder
-        self._span_extractor = EndpointSpanExtractor(input_dim=self._context_encoder.get_output_dim())
+        # self._context_encoder = context_encoder
+        # TODO(nitish): Figure out a way to pass this programatically from bidaf
+        self._span_extractor = EndpointSpanExtractor(input_dim=200)
         if dropout > 0:
             self._dropout = torch.nn.Dropout(p=dropout)
         else:
@@ -146,10 +147,12 @@ class HotpotQALanguage(DomainLanguage):
         self.num_ent_mens = None
         # Shape: (E, C, M, 2)
         self.date_ent_mens = None
+
         # Dict from QStr -> Idx into self.q_qstr_spans
-        self.q_qstr2idx = None
-        # Shape: (Num_of_Qstr, 2)
-        self.q_qstr_spans = None
+        # self.q_qstr2idx = None
+        # # Shape: (Num_of_Qstr, 2)
+        # self.q_qstr_spans = None
+
         # Dict from Qent -> Idx into self.q_nemens_grounding -- TODO(nitish) -- not used, but keep around
         self.q_nemens2groundingidx = None
         # Dict from Q_NE_men idx to EntityIdx corresonding to self.ne_ent_mens
@@ -206,8 +209,8 @@ class HotpotQALanguage(DomainLanguage):
         self.ne_ent_mens = kwargs["ne_ent_mens"]
         self.num_ent_mens = kwargs["num_ent_mens"]
         self.date_ent_mens = kwargs["date_ent_mens"]
-        self.q_qstr2idx= kwargs["q_qstr2idx"]
-        self.q_qstr_spans = kwargs["q_qstr_spans"]
+        # self.q_qstr2idx= kwargs["q_qstr2idx"]
+        # self.q_qstr_spans = kwargs["q_qstr_spans"]
         self.q_nemens2groundingidx = kwargs["q_nemens2groundingidx"]
         self.q_nemenspan2entidx = kwargs["q_nemenspan2entidx"]
         self.device_id = allenutil.get_device_of(self.ques_encoded)

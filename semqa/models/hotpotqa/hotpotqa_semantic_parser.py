@@ -71,11 +71,7 @@ class HotpotQASemanticParser(HotpotQAParserBase):
 
     def __init__(self,
                  vocab: Vocabulary,
-                 text_field_embedder: TextFieldEmbedder,
                  action_embedding_dim: int,
-                 qencoder: Seq2SeqEncoder,
-                 ques2action_encoder: Seq2SeqEncoder,
-                 quesspan_extractor: SpanExtractor,
                  attention: Attention,
                  decoder_beam_search: ConstrainedBeamSearch,
                  executor_parameters: ExecutorParameters,
@@ -84,14 +80,18 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                  beam_size: int,
                  max_decoding_steps: int,
                  fine_tune_bidaf: bool = False,
-                 dropout: float = 0.0) -> None:
+                 dropout: float = 0.0,
+                 text_field_embedder: TextFieldEmbedder = None,
+                 qencoder: Seq2SeqEncoder = None,
+                 ques2action_encoder: Seq2SeqEncoder = None,
+                 quesspan_extractor: SpanExtractor = None) -> None:
         super(HotpotQASemanticParser, self).__init__(vocab=vocab,
-                                                     text_field_embedder=text_field_embedder,
                                                      action_embedding_dim=action_embedding_dim,
+                                                     executor_parameters=executor_parameters,
+                                                     text_field_embedder=text_field_embedder,
                                                      qencoder=qencoder,
                                                      ques2action_encoder=ques2action_encoder,
                                                      quesspan_extractor=quesspan_extractor,
-                                                     executor_parameters=executor_parameters,
                                                      dropout=dropout)
 
         if bidaf_model_path is None:
@@ -114,6 +114,7 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         logger.info(f"Embedder for bidaf extended. New size: {token_embedder.weight.size()}")
         self.bidaf_encoder_bidirectional = self.bidaf_model._phrase_layer.is_bidirectional()
         self.qencoded_dim = self.bidaf_model._phrase_layer.get_output_dim()
+        self.context_encoded_size = self.bidaf_model._phrase_layer.get_output_dim()
 
         self._decoder_step = LinkingTransitionFunction(encoder_output_dim=self.qencoded_dim,
                                                        action_embedding_dim=action_embedding_dim,
@@ -398,8 +399,8 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                                        ne_ent_mens=ent_mens[i],
                                        num_ent_mens=num_mens[i],
                                        date_ent_mens=date_mens[i],
-                                       q_qstr2idx=q_qstr2idx[i],
-                                       q_qstr_spans=q_qstr_spans[i],
+                                       # q_qstr2idx=q_qstr2idx[i],
+                                       # q_qstr_spans=q_qstr_spans[i],
                                        q_nemens2groundingidx=q_nemens2groundingidx[i],
                                        q_nemenspan2entidx=q_nemenspan2entidx[i])
 

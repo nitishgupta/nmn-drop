@@ -55,27 +55,29 @@ class HotpotQAParserBase(Model):
     """
     def __init__(self,
                  vocab: Vocabulary,
-                 text_field_embedder: TextFieldEmbedder,
                  action_embedding_dim: int,
-                 qencoder: Seq2SeqEncoder,
-                 ques2action_encoder: Seq2SeqEncoder,
-                 quesspan_extractor: SpanExtractor,
                  executor_parameters: ExecutorParameters,
+                 text_field_embedder: TextFieldEmbedder = None,
+                 qencoder: Seq2SeqEncoder = None,
+                 ques2action_encoder: Seq2SeqEncoder = None,
+                 quesspan_extractor: SpanExtractor = None,
                  dropout: float = 0.0,
                  rule_namespace: str = 'rule_labels') -> None:
         super(HotpotQAParserBase, self).__init__(vocab=vocab)
 
-        self._text_field_embedder = text_field_embedder
         self._denotation_accuracy = Average()
         self._consistency = Average()
-        self._qencoder = qencoder
-        self._ques2action_encoder = ques2action_encoder
-        self._quesspan_extractor = quesspan_extractor
+
+        # Don't need these now that we're using bidaf for reprs.
+        # self._text_field_embedder = text_field_embedder
+        # self._qencoder = qencoder
+        # self._ques2action_encoder = ques2action_encoder
+        # self._quesspan_extractor = quesspan_extractor
 
         # self._context_embedder = context_embedder
         # self._context_encoder = context_encoder
         self.executor_parameters = executor_parameters
-        self.executor_parameters._text_field_embedder = self._text_field_embedder
+        # self.executor_parameters._text_field_embedder = self._text_field_embedder
 
         if dropout > 0:
             self._dropout = torch.nn.Dropout(p=dropout)
@@ -83,12 +85,12 @@ class HotpotQAParserBase(Model):
             self._dropout = lambda x: x
         self._rule_namespace = rule_namespace
 
-        ques2action_encoder_outdim = self._ques2action_encoder.get_output_dim()
-        ques2action_encoder_outdim = 2*ques2action_encoder_outdim if self._ques2action_encoder.is_bidirectional() \
-                                        else ques2action_encoder_outdim
-        quesspan_output_dim = 2 * ques2action_encoder_outdim   # For span concat
-
-        assert quesspan_output_dim == action_embedding_dim
+        # ques2action_encoder_outdim = self._ques2action_encoder.get_output_dim()
+        # ques2action_encoder_outdim = 2*ques2action_encoder_outdim if self._ques2action_encoder.is_bidirectional() \
+        #                                 else ques2action_encoder_outdim
+        # quesspan_output_dim = 2 * ques2action_encoder_outdim   # For span concat
+        #
+        # assert quesspan_output_dim == action_embedding_dim
 
         self._action_embedder = Embedding(num_embeddings=vocab.get_vocab_size(self._rule_namespace),
                                           embedding_dim=action_embedding_dim)
