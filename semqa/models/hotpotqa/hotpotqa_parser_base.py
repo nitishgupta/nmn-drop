@@ -104,42 +104,81 @@ class HotpotQAParserBase(Model):
         # Sub-classes should define their own logic here.
         raise NotImplementedError
 
-    def _get_initial_rnn_state(self, question: Dict[str, torch.LongTensor]):
-        embedded_input = self._text_field_embedder(question)
-        # (batch_size, sentence_length)
-        question_mask = util.get_text_field_mask(question).float()
+    # def _get_initial_rnn_state(self, question: Dict[str, torch.LongTensor]):
+    #     embedded_input = self._text_field_embedder(question)
+    #     # (batch_size, sentence_length)
+    #     question_mask = util.get_text_field_mask(question).float()
+    #
+    #     batch_size = embedded_input.size(0)
+    #
+    #     # (B, ques_length, encoder_output_dim)
+    #     encoder_outputs = self._dropout(self._qencoder(embedded_input, question_mask))
+    #
+    #     # (B, encoder_output_dim)
+    #     final_encoder_output = util.get_final_encoder_states(encoder_outputs,
+    #                                                          question_mask,
+    #                                                          self._qencoder.is_bidirectional())
+    #     memory_cell = encoder_outputs.new_zeros(batch_size, self._qencoder.get_output_dim())
+    #     # TODO(nitish): Why does WikiTablesParser use '_first_attended_question' embedding and not this
+    #     attended_sentence, _ = self._decoder_step.attend_on_question(final_encoder_output,
+    #                                                                  encoder_outputs, question_mask)
+    #     encoder_outputs_list = [encoder_outputs[i] for i in range(batch_size)]
+    #     question_mask_list = [question_mask[i] for i in range(batch_size)]
+    #     initial_rnn_state = []
+    #     for i in range(batch_size):
+    #         initial_rnn_state.append(RnnStatelet(final_encoder_output[i],
+    #                                              memory_cell[i],
+    #                                              self._first_action_embedding,
+    #                                              attended_sentence[i],
+    #                                              encoder_outputs_list,
+    #                                              question_mask_list))
+    #     return initial_rnn_state, embedded_input, encoder_outputs_list, question_mask_list
 
-        batch_size = embedded_input.size(0)
+    def _get_initial_rnn_state(self,
+                               ques_repr: torch.FloatTensor,
+                               ques_mask: torch.LongTensor,
+                               question_final_repr: torch.FloatTensor,
+                               ques_encoded_list: List[torch.FloatTensor],
+                               ques_mask_list: List[torch.LongTensor]):
+        """ Get the initial RnnStatelet for the decoder based on the question encoding
 
-        # (B, ques_length, encoder_output_dim)
-        encoder_outputs = self._dropout(self._qencoder(embedded_input, question_mask))
+        Parameters:
+        -----------
+        ques_repr: (B, T, D)
+        ques_mask: (B, T)
+        question_final_repr: (B, D)
+        ques_encoded_list: [(T, D)]
+        ques_mask_list: [(T)]
 
-        # (B, encoder_output_dim)
-        final_encoder_output = util.get_final_encoder_states(encoder_outputs,
-                                                             question_mask,
-                                                             self._qencoder.is_bidirectional())
-        memory_cell = encoder_outputs.new_zeros(batch_size, self._qencoder.get_output_dim())
+
+
+        """
+
+        batch_size = question_final_repr.size(0)
+        ques_encoded_dim = question_final_repr.size()[-1]
+
+        # Shape: (B, D)
+        memory_cell = question_final_repr.new_zeros(batch_size, ques_encoded_dim)
         # TODO(nitish): Why does WikiTablesParser use '_first_attended_question' embedding and not this
-        attended_sentence, _ = self._decoder_step.attend_on_question(final_encoder_output,
-                                                                     encoder_outputs, question_mask)
-        encoder_outputs_list = [encoder_outputs[i] for i in range(batch_size)]
-        question_mask_list = [question_mask[i] for i in range(batch_size)]
+        attended_sentence, _ = self._decoder_step.attend_on_question(question_final_repr,
+                                                                     ques_repr, ques_mask)
+
         initial_rnn_state = []
         for i in range(batch_size):
-            initial_rnn_state.append(RnnStatelet(final_encoder_output[i],
+            initial_rnn_state.append(RnnStatelet(question_final_repr[i],
                                                  memory_cell[i],
                                                  self._first_action_embedding,
                                                  attended_sentence[i],
-                                                 encoder_outputs_list,
-                                                 question_mask_list))
-        return initial_rnn_state, embedded_input, encoder_outputs_list, question_mask_list
+                                                 ques_encoded_list,
+                                                 ques_mask_list))
+        return initial_rnn_state
 
     def _create_grammar_statelet(self,
                                  language: HotpotQALanguage,
                                  possible_actions: List[ProductionRule],
-                                 linked_rule2idx: Dict,
-                                 action2ques_linkingscore: torch.FloatTensor,
-                                 quesspan_action_repr: torch.FloatTensor) -> GrammarStatelet:
+                                 linked_rule2idx: Dict = None,
+                                 action2ques_linkingscore: torch.FloatTensor = None,
+                                 quesspan_action_repr: torch.FloatTensor = None) -> GrammarStatelet:
         """ Make grammar state for a particular instance in the batch using the global and instance-specific actions.
         For each instance-specific action we have a linking_score vector (size:ques_tokens), and an action embedding
 
@@ -185,6 +224,10 @@ class HotpotQAParserBase(Model):
                     global_actions.append((production_rule_array[2], action_index))
                 else:
                     linked_actions.append((production_rule_array[0], action_index))
+
+            if linked_actions:
+                if (linked_rule2idx is None) or (action2ques_linkingscore is None) or (quesspan_action_repr is None):
+                    raise RuntimeError('Linked rule info not given')
 
             # First: Get the embedded representations of the global actions
             if global_actions:

@@ -25,11 +25,10 @@ class ExecutorParameters(torch.nn.Module, Registrable):
     """
     def __init__(self,
                  ques_encoder: Seq2SeqEncoder,
-                 # context_embedder: TextFieldEmbedder,
                  context_encoder: Seq2SeqEncoder,
                  dropout: float = 0.0):
         super(ExecutorParameters, self).__init__()
-        self._ques_encoder = ques_encoder
+        # self._ques_encoder = ques_encoder
         self._context_encoder = context_encoder
         self._span_extractor = EndpointSpanExtractor(input_dim=self._context_encoder.get_output_dim())
         if dropout > 0:
@@ -41,6 +40,7 @@ class ExecutorParameters(torch.nn.Module, Registrable):
         self._text_field_embedder: TextFieldEmbedder = None
 
 
+    ''' This is deprecated since we're getting context encodings from bidaf's model
     def _encode_contexts(self, contexts: Dict[str, torch.LongTensor]) -> torch.FloatTensor:
         """ Encode the contexts for each instance using the context_encoder RNN.
 
@@ -77,6 +77,7 @@ class ExecutorParameters(torch.nn.Module, Registrable):
         contexts_encoded = contexts_encoded_flat.view(*embcontext_size[0:3], conenc_size[-1])
 
         return contexts_encoded, contexts_mask
+    '''
 
 
 class Bool():
@@ -132,7 +133,7 @@ class HotpotQALanguage(DomainLanguage):
         self.q_nemenspan2entidx = None
 
         # Shape: (QLen, Q_d)
-        self.ques_embedded = None
+        self.ques_encoded = None
         # Shape: (Qlen)
         self.ques_mask = None
         # Shape: (C, T, D)
@@ -154,10 +155,10 @@ class HotpotQALanguage(DomainLanguage):
         # Dict from Q_NE_men idx to EntityIdx corresonding to self.ne_ent_mens
         self.q_nemenspan2entidx = None
 
-        # Question encoded representation
-        self.ques_encoded = None
-        # Dictionary from QStr span to it's tensor representation
-        self.qstr2repr = None
+        # # Question encoded representation
+        # self.ques_encoded = None
+        # # Dictionary from QStr span to it's tensor representation
+        # self.qstr2repr = None
         # Map from Qent span_str to LongTensor(2) of it's span in the question
         self.entidx2spans = None
         # Map from Qent span_str to LongTensor(Qlen) - a multi-hot vector with 1s at span token locations
@@ -198,7 +199,7 @@ class HotpotQALanguage(DomainLanguage):
 
 
     def set_arguments(self, **kwargs):
-        self.ques_embedded = kwargs["ques_embedded"]
+        self.ques_encoded = kwargs["ques_encoded"]
         self.ques_mask = kwargs["ques_mask"]
         self.contexts = kwargs["contexts"]
         self.contexts_mask = kwargs["contexts_mask"]
@@ -209,7 +210,7 @@ class HotpotQALanguage(DomainLanguage):
         self.q_qstr_spans = kwargs["q_qstr_spans"]
         self.q_nemens2groundingidx = kwargs["q_nemens2groundingidx"]
         self.q_nemenspan2entidx = kwargs["q_nemenspan2entidx"]
-        self.device_id = allenutil.get_device_of(self.ques_embedded)
+        self.device_id = allenutil.get_device_of(self.ques_encoded)
 
         # Keep commented for use later
         # print(f"self.ques_embedded: {self.ques_embedded.size()}")
@@ -236,13 +237,13 @@ class HotpotQALanguage(DomainLanguage):
         logical forms.
         """
 
-        self._preprocess_ques_representations()
+        # self._preprocess_ques_representations()
         self._preprocess_ques_NE_menspans()
 
-
+    ''' This function is deprecated now that we pass in question_reprs and don't have ques_spans to represent
     def _preprocess_ques_representations(self):
         # Embedding the complete question
-        ques_encoded_ex = self._execution_parameters._ques_encoder(self.ques_embedded.unsqueeze(0),
+        ques_encoded_ex = self._execution_parameters._ques_encoder(self.ques_encoded.unsqueeze(0),
                                                                    self.ques_mask.unsqueeze(0))
         # Shape: (Qlen, Q_d)
         self.ques_encoded = ques_encoded_ex.squeeze(0)
@@ -253,7 +254,7 @@ class HotpotQALanguage(DomainLanguage):
             # Shape: [2] denoting the span in the question
             qstr_span = self.q_qstr_spans[qstr_idx]
             # Shape: (QSTR_len, emb_dim)
-            qstr_embedded = self.ques_embedded[qstr_span[0]:qstr_span[1] + 1]
+            qstr_embedded = self.ques_encoded[qstr_span[0]:qstr_span[1] + 1]
             qstr_mask = self.ques_mask[qstr_span[0]:qstr_span[1] + 1]
             # [1, QSTR_len, emb_dim]
             qstr_encoded_ex = self._execution_parameters._ques_encoder(qstr_embedded.unsqueeze(0),
@@ -264,6 +265,8 @@ class HotpotQALanguage(DomainLanguage):
             # Shape: (2 * Qd)
             qstr_repr = torch.cat([qstr_encoded[0].unsqueeze(0), qstr_encoded[-1].unsqueeze(0)], 1).squeeze(0)
             self.qstr2repr[qstr] = qstr_repr
+
+    '''
 
 
     def _preprocess_ques_NE_menspans(self):
