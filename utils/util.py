@@ -31,7 +31,7 @@ def pruneMultipleSpaces(sentence: str):
     """ Prune multiple spaces in a sentence and replace with single space
     Parameters:
     -----------
-    sentence: Sentence string with mulitple spaces
+    sentence: Sentence string with multiple spaces
 
     Returns:
     --------
@@ -40,7 +40,7 @@ def pruneMultipleSpaces(sentence: str):
 
     sentence = sentence.strip()
     tokens = sentence.split(' ')
-    tokens = [t for t in tokens if t !=  '']
+    tokens = [t for t in tokens if t != '']
     if len(tokens) == 1:
         return tokens[0]
     else:

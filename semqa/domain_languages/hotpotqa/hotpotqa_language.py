@@ -139,6 +139,8 @@ class HotpotQALanguage(DomainLanguage):
         self.ques_mask = None
         # Shape: (C, T, D)
         self.contexts = None
+        # Shape: (C, D)
+        self.contexts_vec = None
         # Shape: (C, T)
         self.contexts_mask = None
         # Shape: (E, C, M, 2)
@@ -166,6 +168,9 @@ class HotpotQALanguage(DomainLanguage):
         self.entidx2spans = None
         # Map from Qent span_str to LongTensor(Qlen) - a multi-hot vector with 1s at span token locations
         self.entidx2spanvecs = None
+
+        self.entitymention_idxs_vec = None
+
 
 
     def _add_constants(self, qstr_qent_spans: List[str]):
@@ -205,6 +210,7 @@ class HotpotQALanguage(DomainLanguage):
         self.ques_encoded = kwargs["ques_encoded"]
         self.ques_mask = kwargs["ques_mask"]
         self.contexts = kwargs["contexts"]
+        self.contexts_vec = kwargs["contexts_vec"]
         self.contexts_mask = kwargs["contexts_mask"]
         self.ne_ent_mens = kwargs["ne_ent_mens"]
         self.num_ent_mens = kwargs["num_ent_mens"]
@@ -271,7 +277,6 @@ class HotpotQALanguage(DomainLanguage):
 
     '''
 
-
     def _preprocess_ques_NE_menspans(self):
         """ Preprocess Ques NE mens to extract spans for each of the entity mentioned.
         Makes two dictionaries, (1) Stores a list of mention spans (Tensor(2)) in the question for each entity
@@ -287,6 +292,13 @@ class HotpotQALanguage(DomainLanguage):
         # Since an entity can be mentioned multiple times, we'll create a dictionary from entityidx2spans
         self.entidx2spans = {}
         self.entidx2spanvecs = {}
+
+        if self.device_id > -1:
+            self.entitymention_idxs_vec = torch.cuda.FloatTensor(q_len, device=self.device_id).fill_(0)
+        else:
+            self.entitymention_idxs_vec = torch.FloatTensor(q_len).fill_(0)
+
+
         for span, entity_idx in self.q_nemenspan2entidx.items():
             # Span: QENT:TOKEN_1@DELIM@TOKEN_2...TOKEN_N@DELIM@SPAN_START@DELIM@SPAN_END
             # Start and end are inclusive
@@ -305,6 +317,7 @@ class HotpotQALanguage(DomainLanguage):
                 self.entidx2spanvecs[entity_idx] = []
             self.entidx2spans[entity_idx].append(span_tensor)
             self.entidx2spanvecs[entity_idx].append(onehot_span_tensor)
+            self.entitymention_idxs_vec += onehot_span_tensor
 
 
     @predicate_with_side_args(['question_attention'])
@@ -316,42 +329,44 @@ class HotpotQALanguage(DomainLanguage):
     def find_Qent(self, question_attention: torch.FloatTensor) -> Qent:
         return Qent(attention=question_attention)
 
-
     @predicate
     def bool_qent_qstr(self, qent: Qent, qstr: Qstr) -> Bool1:
-
         qent_att = qent._value * self.ques_mask
         qstr_att = qstr._value * self.ques_mask
 
         # Shape: (Q_d)
         qstr_repr = (self.ques_encoded * qstr_att.unsqueeze(1)).sum(0)
 
-        # Computing a distribution over all entities mentioned in the question based on the qent ques_attention
+        # Computing score/distribution over all entities mentioned in the question based on the qent ques_attention
         # Entity_prob is proportional to the sum of the attention values of the tokens in the entity's mention
         entidx2prob = {}
+        entidx2score = {}
         total_score = 0.0
         for entidx, span_onehot_vecs in self.entidx2spanvecs.items():
             entity_score = sum([(spanvec * qent_att).sum() for spanvec in span_onehot_vecs])
             total_score += entity_score
-            entidx2prob[entidx] = entity_score
-        for entidx, entity_score in entidx2prob.items():
-            entidx2prob[entidx] = entity_score/total_score
+            entidx2score[entidx] = entity_score
+            # entidx2prob[entidx] = entity_score
+        for entidx, entity_score in entidx2score.items():
+            entidx2prob[entidx] = entity_score / total_score
 
         # Find the answer prob based on each entity mentioned in the question, and compute the expection later ...
         entidx2ansprob = {}
-        for entidx in entidx2prob:
-            # Shape: (C, M, 2)
-            qent_mens = self.ne_ent_mens[entidx]
-            qent_mens_mask = (qent_mens[..., 0] >= 0).long()
+        for entidx, span_onehot_vecs in self.entidx2spanvecs.items():
+            # Shape: (Qlen)
+            entity_token_att = sum([(spanvec * qent_att) for spanvec in span_onehot_vecs])
+            # Shape: Q_d
+            qent_repr = (self.ques_encoded * entity_token_att.unsqueeze(1)).sum(0)
+            # Shape: 2*Q_d
+            qent_qstr_repr = torch.cat([qstr_repr, qent_repr])
 
-            # Shape: (C, M, 2*D)
-            qent_men_repr = self._execution_parameters._span_extractor(self.contexts, qent_mens,
-                                                                       self.contexts_mask,
-                                                                       qent_mens_mask)
-            q_repr_cat = torch.cat([qstr_repr, qstr_repr], 0)
-            qstr_repr_ex = q_repr_cat.unsqueeze(0).unsqueeze(1)
-            scores = torch.sum(qstr_repr_ex * qent_men_repr, 2)
-            probs = torch.sigmoid(scores) * qent_mens_mask.float()
+            # Now dot prod with context vecs
+            # Shape: (C, 2 * D)
+            context_vecs = torch.cat([self.contexts_vec, self.contexts_vec], 1)
+
+            # Shape: C
+            dot_prod = (qent_qstr_repr.unsqueeze(0) * context_vecs).sum(1)
+            probs = torch.sigmoid(dot_prod)
 
             boolean_prob = torch.max(probs)  # .unsqueeze(0)
             entidx2ansprob[entidx] = boolean_prob
@@ -359,10 +374,60 @@ class HotpotQALanguage(DomainLanguage):
         # Computing the expected boolean_answer based on the qent probs
         expected_prob = 0.0
         for entidx, ent_ans_prob in entidx2ansprob.items():
-            ent_prob = entidx2prob[entidx]
+            # ent_prob = entidx2prob[entidx]
+            ent_prob = entidx2score[entidx]
             expected_prob += ent_prob * ent_ans_prob
 
         return Bool1(value=expected_prob)
+
+    # @predicate
+    # def bool_qent_qstr(self, qent: Qent, qstr: Qstr) -> Bool1:
+    #     qent_att = qent._value * self.ques_mask
+    #     qstr_att = qstr._value * self.ques_mask
+    #
+    #     # Shape: (Q_d)
+    #     qstr_repr = (self.ques_encoded * qstr_att.unsqueeze(1)).sum(0)
+    #
+    #     # Computing score/distribution over all entities mentioned in the question based on the qent ques_attention
+    #     # Entity_prob is proportional to the sum of the attention values of the tokens in the entity's mention
+    #     entidx2prob = {}
+    #     entidx2score = {}
+    #     total_score = 0.0
+    #     for entidx, span_onehot_vecs in self.entidx2spanvecs.items():
+    #         entity_score = sum([(spanvec * qent_att).sum() for spanvec in span_onehot_vecs])
+    #         total_score += entity_score
+    #         entidx2score[entidx] = entity_score
+    #         # entidx2prob[entidx] = entity_score
+    #     for entidx, entity_score in entidx2score.items():
+    #         entidx2prob[entidx] = entity_score/total_score
+    #
+    #     # Find the answer prob based on each entity mentioned in the question, and compute the expection later ...
+    #     entidx2ansprob = {}
+    #     for entidx in entidx2prob.keys():
+    #         # Shape: (C, M, 2)
+    #         qent_mens = self.ne_ent_mens[entidx]
+    #         qent_mens_mask = (qent_mens[..., 0] >= 0).long()
+    #
+    #         # Shape: (C, M, 2*D)
+    #         qent_men_repr = self._execution_parameters._span_extractor(self.contexts, qent_mens,
+    #                                                                    self.contexts_mask,
+    #                                                                    qent_mens_mask)
+    #         q_repr_cat = torch.cat([qstr_repr, qstr_repr], 0)
+    #         qstr_repr_ex = q_repr_cat.unsqueeze(0).unsqueeze(1)
+    #         scores = torch.sum(qstr_repr_ex * qent_men_repr, 2)
+    #         probs = torch.sigmoid(scores) * qent_mens_mask.float()
+    #
+    #         boolean_prob = torch.max(probs)  # .unsqueeze(0)
+    #         entidx2ansprob[entidx] = boolean_prob
+    #
+    #     # Computing the expected boolean_answer based on the qent probs
+    #     expected_prob = 0.0
+    #     for entidx, ent_ans_prob in entidx2ansprob.items():
+    #         # ent_prob = entidx2prob[entidx]
+    #         ent_prob = entidx2score[entidx]
+    #         expected_prob += ent_prob * ent_ans_prob
+    #
+    #     return Bool1(value=expected_prob)
 
 
     @predicate
@@ -392,9 +457,9 @@ if __name__=="__main__":
     language = HotpotQALanguage(qstr_qent_spans=["QSTR:Hi", "QENT:Nitish"])
     print(language._functions)
 
-    # all_prods = language.all_possible_productions()
-    #
-    # print("All prods:\n{}\n".format(all_prods))
+    all_prods = language.all_possible_productions()
+
+    print("All prods:\n{}\n".format(all_prods))
     #
     # nonterm_prods = language.get_nonterminal_productions()
     # print("Non terminal prods:\n{}\n".format(nonterm_prods))

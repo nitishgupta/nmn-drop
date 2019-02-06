@@ -80,6 +80,9 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                  beam_size: int,
                  max_decoding_steps: int,
                  fine_tune_bidaf: bool = False,
+                 bidaf_question_key: str = 'encoded_question',
+                 bidaf_context_key: str = 'modeled_passage',
+                 entityspan_qatt_loss: bool = False,
                  dropout: float = 0.0,
                  text_field_embedder: TextFieldEmbedder = None,
                  qencoder: Seq2SeqEncoder = None,
@@ -101,22 +104,46 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         bidaf_model_archive = load_archive(bidaf_model_path)
         self.bidaf_model: BidirectionalAttentionFlow = bidaf_model_archive.model
 
+        print('Printing parameter names')
+        # Needs to be a tuple
+        untuneable_parameter_prefixes = ('_text_field_embedder', '_highway_layer')
+
+        # for n, p in self.bidaf_model.named_parameters(recurse=True):
+        #     n: str = n
+        #     if n.startswith(untuneable_parameter_prefixes):
+        #         p.requires_grad = False
+
         if not fine_tune_bidaf:
             for p in self.bidaf_model.parameters():
                 p.requires_grad = False
+
         logger.info(f"Bidaf model successfully loaded! Bidaf fine-tuning is set to {fine_tune_bidaf}")
         logger.info(f"Extending bidaf model's embedders based on the extended_vocab")
         logger.info(f"Preatrained word embedding file being used: {bidaf_wordemb_file}")
+
         for key, _ in self.bidaf_model._text_field_embedder._token_embedders.items():
             token_embedder = getattr(self.bidaf_model._text_field_embedder, 'token_embedder_{}'.format(key))
             if isinstance(token_embedder, Embedding):
                 token_embedder.extend_vocab(extended_vocab=vocab, pretrained_file=bidaf_wordemb_file)
         logger.info(f"Embedder for bidaf extended. New size: {token_embedder.weight.size()}")
         self.bidaf_encoder_bidirectional = self.bidaf_model._phrase_layer.is_bidirectional()
-        self.qencoded_dim = self.bidaf_model._phrase_layer.get_output_dim()
-        self.context_encoded_size = self.bidaf_model._phrase_layer.get_output_dim()
+        self._bidaf_question_key = bidaf_question_key
+        self._bidaf_context_key = bidaf_context_key
+        if bidaf_question_key not in ['encoded_question']:
+            raise NotImplementedError(f"{bidaf_question_key} is an unrecognized bidaf question key")
+        if self._bidaf_question_key == 'encoded_question':
+            self._bidaf_question_dim = self.bidaf_model._phrase_layer.get_output_dim()
+        logger.info(f"Using {self._bidaf_question_key} for question repr with dim = {self._bidaf_question_dim}")
 
-        self._decoder_step = LinkingTransitionFunction(encoder_output_dim=self.qencoded_dim,
+        if self._bidaf_context_key not in ['encoded_passage', 'modeled_passage']:
+            raise NotImplementedError(f"{bidaf_context_key} is an unrecognized bidaf context key")
+        if self._bidaf_context_key == 'encoded_passage':
+            self._bidaf_context_dim = self.bidaf_model._phrase_layer.get_output_dim()
+        elif self._bidaf_context_key == 'modeled_passage':
+            self._bidaf_context_dim = self.bidaf_model._modeling_layer.get_output_dim()
+        logger.info(f"Using {self._bidaf_context_key} for context repr with dim = {self._bidaf_context_dim}")
+
+        self._decoder_step = LinkingTransitionFunction(encoder_output_dim=self._bidaf_question_dim,
                                                        action_embedding_dim=action_embedding_dim,
                                                        input_attention=attention,
                                                        num_start_types=1,
@@ -129,6 +156,9 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         self._max_decoding_steps = max_decoding_steps
         self._action_padding_index = -1
         self.average_metric = Average()
+
+        # Addition loss to enforce high ques attention on mention spans when predicting Qent -> find_Qent action
+        self._entityspan_qatt_loss = entityspan_qatt_loss
 
 
     def device_id(self):
@@ -242,13 +272,16 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         bidaf_ques_reprs = []
         bidaf_ques_masks = []
         bidaf_context_reprs = []
+        bidaf_context_vecs = []
         bidaf_context_masks = []
 
         for context in contexts_indices_list:
             bidaf_output_dict = self.bidaf_model(question=question, passage=context)
-            bidaf_ques_reprs.append(bidaf_output_dict['encoded_question'])
+            bidaf_ques_reprs.append(bidaf_output_dict[self._bidaf_question_key])
             bidaf_ques_masks.append(bidaf_output_dict['question_mask'])
-            bidaf_context_reprs.append(bidaf_output_dict['encoded_passage'])
+            # bidaf_context_reprs.append(bidaf_output_dict['encoded_passage'])
+            bidaf_context_reprs.append(bidaf_output_dict[self._bidaf_context_key])
+            bidaf_context_vecs.append(bidaf_output_dict['passage_vector'])
             bidaf_context_masks.append(bidaf_output_dict['passage_mask'])
 
 
@@ -264,9 +297,10 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         # Shape: (B, D)
         ques_final_state = allenutil.get_final_encoder_states(ques_repr, ques_mask, self.bidaf_encoder_bidirectional)
 
-        # List of (C, T, D) and (T, D) resp.
-        context_repr_list, context_mask_list = self._concatenate_context_reprs(bidaf_context_reprs,
-                                                                               bidaf_context_masks)
+        # List of (C, T, D), (C, D) and (T, D) resp.
+        context_repr_list, context_vec_list, context_mask_list = self._concatenate_context_reprs(bidaf_context_reprs,
+                                                                                                 bidaf_context_vecs,
+                                                                                                 bidaf_context_masks)
 
         if 'metadata' in kwargs:
             metadata = kwargs['metadata']
@@ -395,6 +429,7 @@ class HotpotQASemanticParser(HotpotQAParserBase):
             languages[i].set_arguments(ques_encoded=ques_repr_list[i],
                                        ques_mask=ques_mask_list[i],
                                        contexts=context_repr_list[i],
+                                       contexts_vec=context_vec_list[i],
                                        contexts_mask=context_repr_list[i],
                                        ne_ent_mens=ent_mens[i],
                                        num_ent_mens=num_mens[i],
@@ -418,10 +453,22 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                 gold_ans_type=gold_ans_type)
 
         if ans_grounding_dict is not None:
-            outputs["loss"] = self._compute_loss(gold_ans_type=gold_ans_type,
+            loss = 0.0
+            denotation_loss = self._compute_loss(gold_ans_type=gold_ans_type,
                                                  ans_grounding_dict=ans_grounding_dict,
                                                  ans_grounding_mask=ans_grounding_mask,
                                                  predicted_expected_denotations=predicted_expected_denotations)
+            loss += denotation_loss
+            outputs["denotation_loss"] = denotation_loss
+
+            if self._entityspan_qatt_loss:
+                entityspan_ques_att_loss = self._entity_attention_loss(languages=languages,
+                                                                       batch_actionseqs=batch_actionseqs,
+                                                                       batch_side_args=batch_actionseq_sideargs)
+                loss += entityspan_ques_att_loss
+                outputs["entityspan_ques_att_loss"] = entityspan_ques_att_loss
+
+            outputs["loss"] = loss
 
         if metadata is not None:
             outputs["metadata"] = metadata
@@ -429,8 +476,31 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         outputs["batch_actionseq_sideargs"] = batch_actionseq_sideargs
         outputs["denotations"] = batch_denotations
         outputs["languages"] = languages
+
         return outputs
 
+
+    def _entity_attention_loss(self,
+                               languages: List[HotpotQALanguage],
+                               batch_actionseqs: List[List[List[str]]],
+                               batch_side_args: List[List[List[Dict]]]):
+        relevant_action = 'Qent -> find_Qent'
+        batch_size = len(languages)
+        loss = 0.0
+
+        for i in range(0, batch_size):
+            # Shape: (Qlen)
+            entity_span_vec_gold = languages[i].entitymention_idxs_vec
+            instance_action_seqs: List[List[str]] = batch_actionseqs[i]
+            instance_sideargs: List[List[Dict]] = batch_side_args[i]
+
+            for program, side_args in zip(instance_action_seqs, instance_sideargs):
+                for action, side_arg in zip(program, side_args):
+                    if action == relevant_action:
+                        question_attention = side_arg['question_attention']
+                        loss += torch.sum(question_attention * entity_span_vec_gold)
+
+        return -1 * loss
 
     def _average_ques_repr(self, ques_reprs, ques_masks):
         """ Average question reprs from multiple runs of bidaf
@@ -440,14 +510,13 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         ques_reprs: `List[torch.FloatTensor]`
             A list of (B, T, D) sized tensors from multiple runs of bidaf for different contexts
         """
-
         avg_ques_repr = sum(ques_reprs)/float(len(ques_reprs))
         # Since mask for each run should be the same
         avg_ques_mask = ques_masks[0]
 
         return (avg_ques_repr, avg_ques_mask)
 
-    def _concatenate_context_reprs(self, context_reprs, context_masks):
+    def _concatenate_context_reprs(self, context_reprs, context_vecs, context_masks):
         """ Concatenate context_repr from same instance into a single tensor, and return a list of these for the batch
         Input is list of different batched context_repr from different runs of the bidaf model. Here we extract
         different contexts for the same instance and concatenate them.
@@ -456,6 +525,8 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         -----------
         context_reprs: `List[torch.FloatTensor]`
             A C-sized list of (B, T, D) sized tensors
+        context_vecs: `List[torch.FloatTensor]`
+            A C-sized list of (B, D) sized tensors
         context_masks: `List[torch.FloatTensor]`
             A C-sized list of (B, T) sized tensors
         """
@@ -467,14 +538,17 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         # (B, C, T, D) and then slice instances out of it
 
         context_reprs_expanded = [t.unsqueeze(1) for t in context_reprs]
+        context_vecs_expanded = [t.unsqueeze(1) for t in context_vecs]
         context_masks_expanded = [t.unsqueeze(1) for t in context_masks]
         context_reprs_concatenated = torch.cat(context_reprs_expanded, dim=1)
+        context_vecs_concatenated = torch.cat(context_vecs_expanded, dim=1)
         context_masks_concatenated = torch.cat(context_masks_expanded, dim=1)
 
         context_repr_list = [context_reprs_concatenated[i] for i in range(batch_size)]
+        context_vec_list = [context_vecs_concatenated[i] for i in range(batch_size)]
         context_mask_list = [context_masks_concatenated[i] for i in range(batch_size)]
 
-        return (context_repr_list, context_mask_list)
+        return (context_repr_list, context_vec_list, context_mask_list)
 
 
     def _get_mens_mask(self, mention_spans: torch.LongTensor) -> torch.LongTensor:

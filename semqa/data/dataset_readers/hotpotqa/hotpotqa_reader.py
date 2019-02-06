@@ -342,7 +342,8 @@ class HotpotQADatasetReader(DatasetReader):
         for ne_men, entity_grounding in zip(q_ent_ners, q_entmens2entidx):
             if entity_grounding == -1:
                 # These are q mens that are not grounded in the contexts
-                continue
+                # continue
+                entity_grounding = 0
             span_tokens = ques_tokens[ne_men[1]:ne_men[2]]
 
 
