@@ -171,6 +171,8 @@ def flattenContexts(input_jsonl: str, output_jsonl: str) -> None:
                         print(sentences)
                     sentws[-1] = ' '
                 flattened_whitespace = [ws for sentws in singlecontext_whitespaces for ws in sentws]
+                # The end of a context shouldn't have a whitespace after it
+                flattened_whitespace[-1] = ''
 
                 flattened_contexts.append((title, flattened_context))
                 flattened_contexts_whitespaces.append(flattened_whitespace)
