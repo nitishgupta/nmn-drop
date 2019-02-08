@@ -29,6 +29,7 @@ def execute_action_sequence(language, action_sequence: List[str], side_arguments
 
     execution_value, _, _, execution_vals = _execute_sequence(language, action_sequence[1:],
                                                               remaining_side_args, execution_vals)
+
     return execution_value, execution_vals[0]
 
 
@@ -98,15 +99,17 @@ def _execute_sequence(language,
                                                                                              remaining_actions,
                                                                                              remaining_side_args,
                                                                                              execution_vals)
-        # print(f"After function name: {function.__name__} {r}")
+
         args_list = []
         arguments = []
         for _ in right_side_parts[1:]:
-            argument, remaining_actions, remaining_side_args, args_list = _execute_sequence(language,
+            argument, remaining_actions, remaining_side_args, args_list_i = _execute_sequence(language,
                                                                                              remaining_actions,
                                                                                              remaining_side_args,
-                                                                                             args_list)
+                                                                                             [])
             arguments.append(argument)
+            args_list.append(args_list_i[0])
+
 
 
         execution_value = function(*arguments)
