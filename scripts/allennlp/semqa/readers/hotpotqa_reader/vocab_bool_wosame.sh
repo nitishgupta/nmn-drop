@@ -18,7 +18,7 @@ export EXISTING_VOCAB_DIR=./resources/semqa/pretrained_bidaf/vocabulary
 export EXTEND_VOCAB=true
 
 # OUTPUT DIR
-VOCABDIR=./resources/semqa/vocabs/hotpotqa/merged_contexts/bool_wosame/gold_contexts_onlyand
+VOCABDIR=./resources/semqa/vocabs/hotpotqa/merged_contexts/bool_wosame/gold_contexts
 
 # Don't need since we're extending vocab from bidaf
 #export TOKEN_MIN_CNT=0

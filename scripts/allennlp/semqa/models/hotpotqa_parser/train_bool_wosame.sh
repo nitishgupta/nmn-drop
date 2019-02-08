@@ -18,12 +18,14 @@ export GPU=0
 
 export TRAINING_DATA_FILE=${TRAINFILE}
 export VAL_DATA_FILE=${VALFILE}
-export VOCABDIR=./resources/semqa/vocabs/hotpotqa/merged_contexts/bool_wosame/gold_contexts_onlyand/vocabulary
+export VOCABDIR=./resources/semqa/vocabs/hotpotqa/merged_contexts/bool_wosame/gold_contexts/vocabulary
 
 export WORD_EMBED_FILE=./resources/embeddings/glove/glove.6B.100d.txt.gz
 
 export BIDAF_MODEL_TAR='https://s3-us-west-2.amazonaws.com/allennlp/models/bidaf-model-2017.09.15-charpad.tar.gz'
 export BIDAF_WORDEMB_FILE='./resources/embeddings/glove/glove.6B.100d.txt.gz'
+export BIDAF_CONTEXT_KEY='encoded_passage'
+export BOOL_QSTRQENT_FUNC='context'
 
 export BS=4
 export LR=0.001
@@ -38,8 +40,8 @@ export EPOCHS=15
 CHECKPOINT_ROOT=./resources/semqa/checkpoints
 SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/hotpotqa/merged_contexts/bool_wosame
 MODEL_DIR=hotpotqa_parser
-PARAMETERS_DIR=BS_${BS}/OPT_${OPT}/LR_${LR}/Drop_${DROPOUT}/BeamSize_${BEAMSIZE}/MaxDecodeStep_${MAX_DECODE_STEP}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PARAMETERS_DIR}_onlyAND_Score_directdot
+PARAMETERS_DIR=BS_${BS}/OPT_${OPT}/LR_${LR}/Drop_${DROPOUT}/B_CONTEXT_${BIDAF_CONTEXT_KEY}/FUNC_${BOOL_QSTRQENT_FUNC}
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PARAMETERS_DIR}_bilinear
 
 #######################################################################################################################
 

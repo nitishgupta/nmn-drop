@@ -21,13 +21,16 @@ export DROPOUT=0.2
 export BEAMSIZE=32
 export MAX_DECODE_STEP=12
 
+export BIDAF_CONTEXT_KEY='modeled_passage'
+export BOOL_QSTRQENT_FUNC='context'
+
 ####    SERIALIZATION DIR --- Check for checkpoint_root/task/dataset/model/parameters/
 CHECKPOINT_ROOT=./resources/semqa/checkpoints
 
-SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/hotpotqa/bool_wosame
+SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/hotpotqa/merged_contexts/bool_wosame
 MODEL_DIR=hotpotqa_parser
-PARAMETERS_DIR=BS_${BS}/OPT_${OPT}/LR_${LR}/Drop_${DROPOUT}/BeamSize_${BEAMSIZE}/MaxDecodeStep_${MAX_DECODE_STEP}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PARAMETERS_DIR}_onlyAND_Score_sample
+PARAMETERS_DIR=BS_${BS}/OPT_${OPT}/LR_${LR}/Drop_${DROPOUT}/B_CONTEXT_${BIDAF_CONTEXT_KEY}/FUNC_${BOOL_QSTRQENT_FUNC}
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PARAMETERS_DIR}_bilinear
 
 # PREDICTION DATASET
 PREDICT_OUTPUT_DIR=${SERIALIZATION_DIR}/predictions/
@@ -37,7 +40,6 @@ TESTFILE=${VALFILE}
 MODEL_TAR=${SERIALIZATION_DIR}/model.tar.gz
 PREDICTION_FILE=${PREDICT_OUTPUT_DIR}/${PRED_FILENAME}
 PREDICTOR=hotpotqa_predictor
-
 
 #######################################################################################################################
 

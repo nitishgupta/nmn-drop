@@ -321,21 +321,11 @@ class HotpotQADatasetReader(DatasetReader):
         ques_spans_spanidxs : List[SpanField]
             List of SpanField for each q_span. One use case is to get an output embedding for the decoder.
             Can possibly be used as input embedding as well (will need to figure out the TransitionFunction)
-        q_nemenspan2grounding_idx : Dict[str, int]
-            Dict from NE_men_span to idx into entity grounding array (q_nemens_grounding)
-        # q_nemenspan_grounding : List[List[float]]
-        #     For each Q NE Mention, a one-hot vector the size of NEs to indicate the mention grounding
         q_nemenspan2entidx: ``Dict[str, int]``
             Mapping from Q_NE mention span_str to entity_idx (amongst the NE entities in contexts)
         """
-
-        # Ques NE mens span to idx
-        q_nemenspan2grounding_idx = {}
         # Q NE Men span to entity_grounding_idx
         q_nemenspan2entidx = {}
-
-        # Ques NE mens span entity grounding -- Each should be a one-hot vector with size as the number of NE entities
-        # q_nemenspan_grounding: List[List[float]] = []
 
         num_mens_added = 0
 
@@ -361,12 +351,7 @@ class HotpotQADatasetReader(DatasetReader):
                 ques_spans_spanfields.append(SpanField(span_start=ne_men[1],
                                                        span_end=ne_men[2] - 1,
                                                        sequence_field=ques_textfield))
-
-                q_nemenspan2grounding_idx[span_str] = len(q_nemenspan2grounding_idx)
                 q_nemenspan2entidx[span_str] = entity_grounding
-                # grounding_vec = [0.0] * num_ne_ents
-                # grounding_vec[entity_grounding] = 1.0
-                # q_nemenspan_grounding.append(grounding_vec)
 
                 num_mens_added += 1
 
@@ -383,14 +368,11 @@ class HotpotQADatasetReader(DatasetReader):
             ques_spans_spanfields.append(SpanField(span_start=0,
                                                    span_end=0,
                                                    sequence_field=ques_textfield))
-            q_nemenspan2grounding_idx[span_str] = len(q_nemenspan2grounding_idx)
             # Grounding to arbitrary entity
             q_nemenspan2entidx[span_str] = 0
-            # grounding_vec = [0.0] * num_ne_ents
-            # q_nemenspan_grounding.append(grounding_vec)
 
         return (ques_spans, ques_spans2idx, ques_spans_linking_score, ques_spans_spanfields,
-                q_nemenspan2grounding_idx, q_nemenspan2entidx)
+                q_nemenspan2entidx)
 
 
     @overrides
@@ -443,16 +425,14 @@ class HotpotQADatasetReader(DatasetReader):
 
         # Processing for NE mens in the question
         # ques_spans, ques_spans2idx, ques_spans_linking_score, ques_spans_spanidxs - updated with the NE mens
-        # q_nemenspan2grounding_idx, q_nemenspan_grounding - Second contains grounding vector, first is an idx into it
         (ques_spans, ques_spans2idx,
          ques_spans_linking_score, ques_spans_spanidxs,
-         q_nemenspan2grounding_idx, q_nemenspan2entidx) = self.get_ques_nemens_ent_spans(
+         q_nemenspan2entidx) = self.get_ques_nemens_ent_spans(
             ques_tokens=tokenized_ques, q_ent_ners=q_nemens, q_entmens2entidx=qnemens_to_ent,
             num_ne_ents=num_ne_ents, ques_textfield=ques_tokenized_field,
             ques_spans=ques_spans, ques_spans2idx=ques_spans2idx,
             ques_spans_linking_score=ques_spans_linking_score, ques_spans_spanfields=ques_spans_spanfields)
 
-        q_nemens2groundingidx_field = MetadataField(q_nemenspan2grounding_idx)
         # q_nemens_grounding_field = ArrayField(np.array(q_nemenspan_grounding), padding_value=-1)
         q_nemenspan2entidx_field = MetadataField(q_nemenspan2entidx)
 
@@ -529,7 +509,6 @@ class HotpotQADatasetReader(DatasetReader):
         fields: Dict[str, Field] = {"question": ques_tokenized_field,
                                     "q_qstr2idx": q_qstr2idx_field,
                                     "q_qstr_spans": q_qstr_spanfield,
-                                    "q_nemens2groundingidx": q_nemens2groundingidx_field,
                                     "q_nemenspan2entidx": q_nemenspan2entidx_field,
                                     "contexts": contexts_tokenized_field,
                                     "ent_mens": all_ent_mens_field,
