@@ -20,7 +20,8 @@ from allennlp.data.dataset_readers.reading_comprehension.squad import SquadReade
 import allennlp.data.dataset_readers.reading_comprehension.util as rcutils
 
 from semqa.worlds.hotpotqa.hotpotqa_world import SampleHotpotWorld
-from semqa.domain_languages.hotpotqa.hotpotqa_language import HotpotQALanguage
+from semqa.domain_languages.hotpotqa.hotpotqa_language_w_sideargs import HotpotQALanguage
+from semqa.domain_languages.hotpotqa.hotpotqa_language_wo_sideargs import HotpotQALanguageNoSideArgs
 from semqa.data.datatypes import DateField, NumberField
 import datasets.hotpotqa.utils.constants as hpconstants
 import utils.util as util
@@ -87,6 +88,7 @@ class HotpotQADatasetReader(DatasetReader):
     """
     def __init__(self,
                  lazy: bool = False,
+                 wsideargs: bool = True,
                  token_indexers: Dict[str, TokenIndexer] = None,
                  nonterminal_indexers: Dict[str, TokenIndexer] = None,
                  terminal_indexers: Dict[str, TokenIndexer] = None) -> None:
@@ -95,6 +97,8 @@ class HotpotQADatasetReader(DatasetReader):
         self._nonterminal_indexers = nonterminal_indexers or {"tokens":
                                                               SingleIdTokenIndexer("rule_labels")}
         self._terminal_indexers = terminal_indexers or {"tokens": SingleIdTokenIndexer("rule_labels")}
+
+        self.HotpotQALanguageClass = HotpotQALanguage if wsideargs else HotpotQALanguageNoSideArgs
 
         # bidaf_model_path = 'https://s3-us-west-2.amazonaws.com/allennlp/models/bidaf-model-2017.09.15-charpad.tar.gz'
         # archive = load_archive(bidaf_model_path)
@@ -178,10 +182,6 @@ class HotpotQADatasetReader(DatasetReader):
 
         return instance
 
-
-
-
-
     def make_span_str(self, span_tokens: List[str], start_idx: int, end_idx: int, prefix: str) -> str:
         """ Make span str that will be used for in the rule names (QSTR -> Span_Str), and also
             in dictionaries mapping to linking_score, span_fields, etc.
@@ -249,18 +249,18 @@ class HotpotQADatasetReader(DatasetReader):
         # Only keep spans that don't intersect with ques NE mens
         # Only keep bigrams and trigrams (if possible)
         for span in bigram_spans:
-            if not self.spanIntersectWithAnyOneSpanInList(span, ne_mens_spans):
-                ques_spans_idxs.append(span)
+            #if not self.spanIntersectWithAnyOneSpanInList(span, ne_mens_spans):
+            ques_spans_idxs.append(span)
 
         for span in trigam_spans:
-            if not self.spanIntersectWithAnyOneSpanInList(span, ne_mens_spans):
-                ques_spans_idxs.append(span)
+            #if not self.spanIntersectWithAnyOneSpanInList(span, ne_mens_spans):
+            ques_spans_idxs.append(span)
 
         # Add unigram spans only if no bigrams and trigrams present
         if len(ques_spans_idxs) == 0:
             for span in unigram_spans:
-                if not self.spanIntersectWithAnyOneSpanInList(span, ne_mens_spans):
-                    ques_spans_idxs.append(span)
+                #if not self.spanIntersectWithAnyOneSpanInList(span, ne_mens_spans):
+                ques_spans_idxs.append(span)
 
         ques_spans = []
         ques_spans2idx = {}
@@ -326,7 +326,6 @@ class HotpotQADatasetReader(DatasetReader):
         """
         # Q NE Men span to entity_grounding_idx
         q_nemenspan2entidx = {}
-
         num_mens_added = 0
 
         for ne_men, entity_grounding in zip(q_ent_ners, q_entmens2entidx):
@@ -335,7 +334,6 @@ class HotpotQADatasetReader(DatasetReader):
                 # continue
                 entity_grounding = 0
             span_tokens = ques_tokens[ne_men[1]:ne_men[2]]
-
 
             span_str = self.make_span_str(span_tokens=span_tokens, start_idx=ne_men[1], end_idx=ne_men[2] - 1,
                                           prefix=hpconstants.QENT_PREFIX)
@@ -352,7 +350,6 @@ class HotpotQADatasetReader(DatasetReader):
                                                        span_end=ne_men[2] - 1,
                                                        sequence_field=ques_textfield))
                 q_nemenspan2entidx[span_str] = entity_grounding
-
                 num_mens_added += 1
 
         # TODO(nitish): Temp solution if a question doesn't have grounded NE mens, make a new random mention
@@ -417,10 +414,6 @@ class HotpotQADatasetReader(DatasetReader):
                                                                                 q_ent_ners=q_nemens,
                                                                                 ques_textfield=ques_tokenized_field)
 
-        # Deep copy since ques_spans2idx changes later on
-        q_qstr2idx_field = MetadataField(copy.deepcopy(ques_spans2idx))
-        q_qstr_spanfield = ListField(ques_spans_spanfields)
-
         num_ne_ents = len(context_eqent2entmens)
 
         # Processing for NE mens in the question
@@ -433,13 +426,16 @@ class HotpotQADatasetReader(DatasetReader):
             ques_spans=ques_spans, ques_spans2idx=ques_spans2idx,
             ques_spans_linking_score=ques_spans_linking_score, ques_spans_spanfields=ques_spans_spanfields)
 
+        # Deep copy since ques_spans2idx changes later on
+        q_qstr2idx_field = MetadataField(copy.deepcopy(ques_spans2idx))
+        q_qstr_spanfield = ListField(ques_spans_spanidxs)
+
         # q_nemens_grounding_field = ArrayField(np.array(q_nemenspan_grounding), padding_value=-1)
         q_nemenspan2entidx_field = MetadataField(q_nemenspan2entidx)
 
         # Make world from question spans
         # This adds instance specific actions as well
-        # world = SampleHotpotWorld(ques_spans=ques_spans)
-        hplanguage = HotpotQALanguage(qstr_qent_spans=ques_spans)
+        hplanguage = self.HotpotQALanguageClass(qstr_qent_spans=ques_spans)
         lang_field = MetadataField(hplanguage)
 
         # Action_field:
@@ -470,16 +466,12 @@ class HotpotQADatasetReader(DatasetReader):
         ques_span_actions_to_spanfield = ListField(ques_spans_spanidxs)
 
         contexts_tokenized = []
-        # bidaf_contexts_tokenized = []
         for context_id, context in contexts:
             tokenized_context = context.strip().split(" ")
             tokenized_context = [Token(token) for token in tokenized_context]
             tokenized_context = TextField(tokenized_context, self._token_indexers)
-            # bidaf_context = TextField(tokenized_context, self.bidaf_dataset_reader._token_indexers)
             contexts_tokenized.append(tokenized_context)
-            # bidaf_contexts_tokenized.append(bidaf_context)
         contexts_tokenized_field = ListField(contexts_tokenized)
-        # bidaf_contexts_field = ListField(bidaf_contexts_tokenized)
 
         # all_ent_mens = self.processEntMens(contexts_ent_ners, contexts_tokenized)
         all_ent_mens, _ = self.processMens(mens=contexts_ent_ners, eqent2mens=context_eqent2entmens,
@@ -524,8 +516,6 @@ class HotpotQADatasetReader(DatasetReader):
                                     "linked_rule2idx": linked_rule2idx_field,
                                     "action2ques_linkingscore": action_to_ques_linking_scores_field,
                                     "ques_str_action_spans": ques_span_actions_to_spanfield,
-                                    # "bidaf_ques": bidaf_question_field,
-                                    # "bidaf_contexts": bidaf_contexts_field
                                     }
 
         # TODO(nitish): Figure out how to pack the answer. Multiple types; ENT, BOOL, NUM, DATE, STRING

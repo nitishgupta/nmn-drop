@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 from allennlp.modules.token_embedders.embedding import Embedding
 
-@Model.register("hotpotqa_parser")
+@Model.register("hotpotqa_parser_wosideargs")
 class HotpotQASemanticParser(HotpotQAParserBase):
     """
     ``NlvrDirectSemanticParser`` is an ``NlvrSemanticParser`` that gets around the problem of lack
@@ -76,7 +76,6 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                  bidaf_wordemb_file: str,
                  beam_size: int,
                  max_decoding_steps: int,
-                 wsideargs: bool = True,
                  fine_tune_bidaf: bool = False,
                  bidaf_question_key: str = 'encoded_question',
                  bidaf_context_key: str = 'modeled_passage',
@@ -95,9 +94,6 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                                                      ques2action_encoder=ques2action_encoder,
                                                      quesspan_extractor=quesspan_extractor,
                                                      dropout=dropout)
-
-        # using langauge with or without sideargs
-        self._wsideargs = wsideargs
 
         if bidaf_model_path is None:
             logger.info(f"NOT loading pretrained bidaf model. bidaf_model_path - not given")
@@ -249,10 +245,6 @@ class HotpotQASemanticParser(HotpotQAParserBase):
             to make batching easier. See the reader code for more details.
         """
         # pylint: disable=arguments-differ
-        # for d in q_qstr2idx:
-        #     print(d)
-        #     print()
-        # exit()
 
         batch_size = len(languages)
         if 'metadata' in kwargs:
@@ -341,9 +333,10 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         initial_grammar_statelets = []
         for i in range(batch_size):
             initial_grammar_statelets.append(self._create_grammar_statelet(languages[i],
-                                                                           actions[i],
-                                                                           linked_rule2idx[i],
-                                                                           action2ques_linkingscore[i]))
+                                                                           actions[i]))
+                                                                           # linked_rule2idx[i],
+                                                                           # action2ques_linkingscore[i],
+                                                                           # quesstr_action_reprs[i]))
 
         # Initial RNN state for the decoder
         initial_rnn_state = self._get_initial_rnn_state(ques_repr=ques_repr,
@@ -424,8 +417,7 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         batch_gold_attentions = []
         for i in range(0, len(languages)):
             languages[i].set_execution_parameters(execution_parameters=self.executor_parameters)
-            languages[i].set_arguments(ques_embedded=ques_embed_list[i],
-                                       ques_encoded=ques_repr_list[i],
+            languages[i].set_arguments(ques_encoded=ques_repr_list[i],
                                        ques_mask=ques_mask_list[i],
                                        contexts=context_repr_list[i],
                                        contexts_vec=context_vec_list[i],
@@ -433,8 +425,8 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                                        ne_ent_mens=ent_mens[i],
                                        num_ent_mens=num_mens[i],
                                        date_ent_mens=date_mens[i],
-                                       q_qstr2idx=q_qstr2idx[i],
-                                       q_qstr_spans=q_qstr_spans[i],
+                                       # q_qstr2idx=q_qstr2idx[i],
+                                       # q_qstr_spans=q_qstr_spans[i],
                                        q_nemenspan2entidx=q_nemenspan2entidx[i],
                                        bool_qstr_qent_func=self._bool_qstrqent_func)
 

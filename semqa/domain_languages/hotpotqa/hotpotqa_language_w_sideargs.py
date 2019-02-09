@@ -1,23 +1,16 @@
-from typing import Callable, List, Dict, Tuple
+from typing import List
 import logging
 
 import torch
 import torch.nn.functional
 from torch import Tensor
 
-from allennlp.common.registrable import Registrable
 import allennlp.nn.util as allenutil
-from allennlp.modules import TextFieldEmbedder, Seq2SeqEncoder
-from allennlp.modules.span_extractors import SpanExtractor, EndpointSpanExtractor
-from allennlp.modules.similarity_functions import SimilarityFunction, BilinearSimilarity
-from allennlp.semparse import (DomainLanguage, ExecutionError, ParsingError,
-                               predicate, predicate_with_side_args, util)
+from allennlp.semparse import (DomainLanguage, ExecutionError, predicate, predicate_with_side_args)
 from allennlp.semparse.domain_languages.domain_language import PredicateType
 
-from  semqa.domain_languages.hotpotqa.execution_params import ExecutorParameters
-
 import datasets.hotpotqa.utils.constants as hpcons
-
+from semqa.domain_languages.hotpotqa.execution_params import ExecutorParameters
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -43,20 +36,19 @@ class Bool1():
 
 
 class Qstr():
-    def __init__(self, qstr):
-        self._value = qstr
+    def __init__(self, attention):
+        self._value = attention
 
 
 class Qent():
-    def __init__(self, qent):
-        self._value = qent
+    def __init__(self, attention):
+        self._value = attention
 
 
-class HotpotQALanguageNoSideArgs(DomainLanguage):
+class HotpotQALanguage(DomainLanguage):
     def __init__(self, qstr_qent_spans: List[str]):
         super().__init__(start_types={Bool})
-
-        self._add_constants(qstr_qent_spans=qstr_qent_spans)
+        # self._add_constants(qstr_qent_spans=qstr_qent_spans)
 
         # These are mappings from Type predicates to the name of the type in the preprocessed data
         # Useful for (1) Finding starting rules that result in a particular type. (2) Finding the type of a logical prog.
@@ -77,8 +69,6 @@ class HotpotQALanguageNoSideArgs(DomainLanguage):
         self.q_nemenspan2entidx = None
 
         # Shape: (QLen, Q_d)
-        self.ques_embedded = None
-        # Shape: (QLen, Q_d)
         self.ques_encoded = None
         # Shape: (Qlen)
         self.ques_mask = None
@@ -96,31 +86,33 @@ class HotpotQALanguageNoSideArgs(DomainLanguage):
         self.date_ent_mens = None
 
         # Dict from QStr -> Idx into self.q_qstr_spans
-        self.q_qstr2idx = None
-        # Shape: (Num_of_Qstr, 2)
-        self.q_qstr_spans = None
+        #         # self.q_qstr2idx = None
+        #         # # Shape: (Num_of_Qstr, 2)
+        #         # self.q_qstr_spans = None
 
         # Dict from Q_NE_men idx to EntityIdx corresonding to self.ne_ent_mens
         self.q_nemenspan2entidx = None
 
-        # Dictionary from QStr span to it's tensor representation - using self._preprocess_ques_representations
-        # Shape (2 * D)
-        self.qstr2repr = None
-
+        # # Question encoded representation
+        # self.ques_encoded = None
+        # # Dictionary from QStr span to it's tensor representation
+        # self.qstr2repr = None
         # Map from Qent span_str to LongTensor(2) of it's span in the question
         self.entidx2spans = None
         # Map from Qent span_str to LongTensor(Qlen) - a multi-hot vector with 1s at span token locations
         self.entidx2spanvecs = None
-        # A vector of length Qlen -- that is 1 at all locations containing entity mentions, 0 otherwise
+
         self.entitymention_idxs_vec = None
+
+
 
     def _add_constants(self, qstr_qent_spans: List[str]):
         for span in qstr_qent_spans:
             if span.startswith(hpcons.QSTR_PREFIX):
-                self.add_constant(name=span, value=Qstr(span), type_=Qstr)
+                self.add_constant(name=span, value=span, type_=Qstr)
             elif span.startswith(hpcons.QENT_PREFIX):
                 # Question NE men span
-                self.add_constant(name=span, value=Qent(span), type_=Qent)
+                self.add_constant(name=span, value=span, type_=Qent)
 
     def typeobj_to_typename(self, obj):
         ''' For a object of a return-type of the language, return the name of type used in the dataset.
@@ -145,8 +137,8 @@ class HotpotQALanguageNoSideArgs(DomainLanguage):
         else:
             raise ExecutionError(message="Mapping from type name to Type not found! TypeName:{}".format(typename))
 
+
     def set_arguments(self, **kwargs):
-        self.ques_embedded = kwargs["ques_embedded"]
         self.ques_encoded = kwargs["ques_encoded"]
         self.ques_mask = kwargs["ques_mask"]
         self.contexts = kwargs["contexts"]
@@ -155,8 +147,8 @@ class HotpotQALanguageNoSideArgs(DomainLanguage):
         self.ne_ent_mens = kwargs["ne_ent_mens"]
         self.num_ent_mens = kwargs["num_ent_mens"]
         self.date_ent_mens = kwargs["date_ent_mens"]
-        self.q_qstr2idx= kwargs["q_qstr2idx"]
-        self.q_qstr_spans = kwargs["q_qstr_spans"]
+        # self.q_qstr2idx= kwargs["q_qstr2idx"]
+        # self.q_qstr_spans = kwargs["q_qstr_spans"]
         self.q_nemenspan2entidx = kwargs["q_nemenspan2entidx"]
         self.device_id = allenutil.get_device_of(self.ques_encoded)
         self.bool_qstr_qent_func = kwargs["bool_qstr_qent_func"]
@@ -183,7 +175,7 @@ class HotpotQALanguageNoSideArgs(DomainLanguage):
         For example, question span representations will be precomputed and stored here to reuse when executing different
         logical forms.
         """
-        self._preprocess_ques_representations()
+        # self._preprocess_ques_representations()
         self._preprocess_ques_NE_menspans()
 
 
@@ -233,20 +225,34 @@ class HotpotQALanguageNoSideArgs(DomainLanguage):
 
         return qent1, qent2, qstr
 
+
+    ''' This function is deprecated now that we pass in question_reprs and don't have ques_spans to represent
     def _preprocess_ques_representations(self):
         # Embedding the complete question
-        # For all QSTR, computing repr by running ques_encoder, and concatenating repr of end-points
+        ques_encoded_ex = self._execution_parameters._ques_encoder(self.ques_encoded.unsqueeze(0),
+                                                                   self.ques_mask.unsqueeze(0))
+        # Shape: (Qlen, Q_d)
+        self.ques_encoded = ques_encoded_ex.squeeze(0)
+
+        # For all QSTR, computing repr by running ques_encoder, and concatenating repr of end-points.
         self.qstr2repr = {}
         for qstr, qstr_idx in self.q_qstr2idx.items():
             # Shape: [2] denoting the span in the question
             qstr_span = self.q_qstr_spans[qstr_idx]
             # Shape: (QSTR_len, emb_dim)
-            qstart = self.ques_encoded[qstr_span[0]]
-            qend = self.ques_encoded[qstr_span[1]]
-
+            qstr_embedded = self.ques_encoded[qstr_span[0]:qstr_span[1] + 1]
+            qstr_mask = self.ques_mask[qstr_span[0]:qstr_span[1] + 1]
+            # [1, QSTR_len, emb_dim]
+            qstr_encoded_ex = self._execution_parameters._ques_encoder(qstr_embedded.unsqueeze(0),
+                                                                       qstr_mask.unsqueeze(0))
+            # Shape: [QSTR_len, emb_dim]
+            qstr_encoded = qstr_encoded_ex.squeeze(0)
+            # Concatenating first and last time step of encoded qstr
             # Shape: (2 * Qd)
-            qstr_repr = torch.cat([qstart, qend], 0).squeeze(0)
+            qstr_repr = torch.cat([qstr_encoded[0].unsqueeze(0), qstr_encoded[-1].unsqueeze(0)], 1).squeeze(0)
             self.qstr2repr[qstr] = qstr_repr
+
+    '''
 
     def _preprocess_ques_NE_menspans(self):
         """ Preprocess Ques NE mens to extract spans for each of the entity mentioned.
@@ -292,39 +298,80 @@ class HotpotQALanguageNoSideArgs(DomainLanguage):
             self.entitymention_idxs_vec += onehot_span_tensor
 
 
+    @predicate_with_side_args(['question_attention'])
+    def find_Qstr(self, question_attention: torch.FloatTensor) -> Qstr:
+        return Qstr(attention=question_attention)
+
+
+    @predicate_with_side_args(['question_attention'])
+    def find_Qent(self, question_attention: torch.FloatTensor) -> Qent:
+        return Qent(attention=question_attention)
+
+
     @predicate
     def bool_qent_qstr(self, qent: Qent, qstr: Qstr) -> Bool1:
         returnval = None
         if self.bool_qstr_qent_func == 'mentions':
-            # returnval = self.bool_qent_qstr_wmens(qent=qent, qstr=qstr)
-            raise NotImplementedError
+            returnval = self.bool_qent_qstr_wmens(qent=qent, qstr=qstr)
         elif self.bool_qstr_qent_func == 'context':
-            returnval = self.bool_qent_qstr_wcontext(qent_obj=qent, qstr_obj=qstr)
+            returnval = self.bool_qent_qstr_wcontext(qent=qent, qstr=qstr)
         else:
             raise NotImplementedError
 
         return returnval
 
 
-    def bool_qent_qstr_wcontext(self, qent_obj: Qent, qstr_obj: Qstr) -> Bool1:
-        # qent_att = qent._value * self.ques_mask
-        # qstr_att = qstr._value * self.ques_mask
+    def bool_qent_qstr_wcontext(self, qent: Qent, qstr: Qstr) -> Bool1:
+        qent_att = qent._value * self.ques_mask
+        qstr_att = qstr._value * self.ques_mask
 
-        qent = qent_obj._value
-        qstr = qstr_obj._value
+        # Shape: (Q_d)
+        qstr_repr = (self.ques_encoded * qstr_att.unsqueeze(1)).sum(0)
 
-        # Shape: 2 * D
-        qstr_repr = self.qstr2repr[qstr]
-        qent_repr = self.qstr2repr[qent]
+        # Computing score/distribution over all entities mentioned in the question based on the qent ques_attention
+        # Entity_prob is proportional to the sum of the attention values of the tokens in the entity's mention
+        entidx2prob = {}
+        entidx2score = {}
+        total_score = 0.0
+        for entidx, span_onehot_vecs in self.entidx2spanvecs.items():
+            entity_score = sum([(spanvec * qent_att).sum() for spanvec in span_onehot_vecs])
+            total_score += entity_score
+            entidx2score[entidx] = entity_score
+            # entidx2prob[entidx] = entity_score
+        for entidx, entity_score in entidx2score.items():
+            entidx2prob[entidx] = entity_score / total_score
 
-        # Shape: 4 * Q_d
-        qent_qstr_repr = torch.cat([qent_repr, qstr_repr])
-        # Shape: C
-        ques_context_sim = self._execution_parameters._bool_bilinear(qent_qstr_repr, self.contexts_vec)
+        # Find the answer prob based on each entity mentioned in the question, and compute the expection later ...
+        entidx2ansprob = {}
+        for entidx, span_onehot_vecs in self.entidx2spanvecs.items():
+            # Shape: (Qlen)
+            entity_token_att = sum([(spanvec * qent_att) for spanvec in span_onehot_vecs])
+            # Shape: Q_d
+            qent_repr = (self.ques_encoded * entity_token_att.unsqueeze(1)).sum(0)
+            # Shape: 2*Q_d
+            qent_qstr_repr = torch.cat([qent_repr, qstr_repr])
 
-        probs = torch.sigmoid(ques_context_sim)
-        boolean_prob = torch.max(probs)
-        return Bool1(value=boolean_prob)
+            # Now dot prod with context vecs
+            # Shape: (C, 2 * D)
+            context_vecs = torch.cat([self.contexts_vec, self.contexts_vec], 1)
+
+            # Shape: C
+            dot_prod = self._execution_parameters._bool_bilinear(qent_qstr_repr, self.contexts_vec)
+            # dot_prod = (qent_qstr_repr.unsqueeze(0) * context_vecs).sum(1)
+
+            probs = torch.sigmoid(dot_prod)
+
+            boolean_prob = torch.max(probs)  # .unsqueeze(0)
+            entidx2ansprob[entidx] = boolean_prob
+
+        # Computing the expected boolean_answer based on the qent probs
+        expected_prob = 0.0
+        for entidx, ent_ans_prob in entidx2ansprob.items():
+            # ent_prob = entidx2prob[entidx]
+            ent_prob = entidx2score[entidx]
+            expected_prob += ent_prob * ent_ans_prob
+
+        return Bool1(value=expected_prob)
 
     def bool_qent_qstr_wmens(self, qent: Qent, qstr: Qstr) -> Bool1:
         qent_att = qent._value * self.ques_mask
@@ -399,7 +446,7 @@ if __name__=="__main__":
     # print(PredicateType.get_type(b.__class__).name)
     # print(PredicateType.get_type(Bool).name)
 
-    language = HotpotQALanguageNoSideArgs(qstr_qent_spans=["QSTR:Hi", "QENT:Nitish"])
+    language = HotpotQALanguage(qstr_qent_spans=["QSTR:Hi", "QENT:Nitish"])
     print(language._functions)
 
     all_prods = language.all_possible_productions()

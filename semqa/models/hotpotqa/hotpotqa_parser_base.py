@@ -16,8 +16,8 @@ from allennlp.modules.span_extractors.span_extractor import SpanExtractor
 import allennlp.common.util as alcommon_utils
 
 import datasets.hotpotqa.utils.constants as hpcons
-from semqa.domain_languages.hotpotqa.hotpotqa_language import HotpotQALanguage
-from semqa.domain_languages.hotpotqa.hotpotqa_language import ExecutorParameters
+from semqa.domain_languages.hotpotqa.hotpotqa_language_w_sideargs import HotpotQALanguage
+from semqa.domain_languages.hotpotqa.execution_params import ExecutorParameters
 import semqa.domain_languages.domain_language_utils as dl_utils
 
 
@@ -95,9 +95,13 @@ class HotpotQAParserBase(Model):
         self._action_embedder = Embedding(num_embeddings=vocab.get_vocab_size(self._rule_namespace),
                                           embedding_dim=action_embedding_dim)
 
+        self._action_embedding_dim = action_embedding_dim
         # This is what we pass as input in the first step of decoding, when we don't have a
         # previous action.
         self._first_action_embedding = torch.nn.Parameter(torch.FloatTensor(action_embedding_dim))
+        torch.nn.init.normal_(self._first_action_embedding)
+
+        self._qspan_action_embedding = torch.nn.Parameter(torch.FloatTensor(action_embedding_dim))
         torch.nn.init.normal_(self._first_action_embedding)
 
     @overrides
@@ -228,7 +232,7 @@ class HotpotQAParserBase(Model):
                     linked_actions.append((production_rule_array[0], action_index))
 
             if linked_actions:
-                if (linked_rule2idx is None) or (action2ques_linkingscore is None) or (quesspan_action_repr is None):
+                if linked_rule2idx is None:
                     raise RuntimeError('Linked rule info not given')
 
             # First: Get the embedded representations of the global actions
@@ -253,12 +257,15 @@ class HotpotQAParserBase(Model):
                 # (num_linked_actions, num_question_tokens)
                 linked_action_scores = action2ques_linkingscore[ques_spans_idxs]
                 # (num_linked_actions, action_embedding_dim)
-                linked_action_embeddings = quesspan_action_repr[ques_spans_idxs]
+                action_embedding_mat = self._qspan_action_embedding.unsqueeze(0).expand(len(linked_rules),
+                                                                                        self._action_embedding_dim)
+                linked_action_embeddings = action_embedding_mat   # quesspan_action_repr[ques_spans_idxs]
 
                 translated_valid_actions[key]['linked'] = (linked_action_scores,
                                                            linked_action_embeddings,
                                                            list(linked_action_ids))
 
+        # print(translated_valid_actions)
 
         return GrammarStatelet([START_SYMBOL],
                                translated_valid_actions,
