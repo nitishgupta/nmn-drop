@@ -14,105 +14,19 @@ from allennlp.semparse import (DomainLanguage, ExecutionError, ParsingError,
                                predicate, predicate_with_side_args, util)
 from allennlp.semparse.domain_languages.domain_language import PredicateType
 
-from  semqa.domain_languages.hotpotqa.execution_params import ExecutorParameters
+from semqa.domain_languages.hotpotqa.execution_params import ExecutorParameters
+from semqa.domain_languages.hotpotqa.hotpotqa_language import Qstr, Qent, Bool, Bool1, HotpotQALanguage
 
 import datasets.hotpotqa.utils.constants as hpcons
 
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
-
-class Bool():
-    def __init__(self, value: Tensor):
-        self._value = self.clamp(value)
-        self._bool_val = (self._value >= 0.5).float()
-
-    def clamp(self, value: torch.Tensor):
-        new_val = value.clamp(min=1e-3, max=1.0 - 1e-3)
-        return new_val
-
-
-class Bool1():
-    def __init__(self, value: Tensor):
-        self._value = value
-        self.clamp()
-        self._bool_val = (self._value >= 0.5).float()
-
-    def clamp(self):
-        self._value = self._value.clamp(min=1e-3, max=1.0 - 1e-3)
-
-
-class Qstr():
-    def __init__(self, qstr):
-        self._value = qstr
-
-
-class Qent():
-    def __init__(self, qent):
-        self._value = qent
-
-
-class HotpotQALanguageNoSideArgs(DomainLanguage):
+class HotpotQALanguageWOSideArgs(HotpotQALanguage):
     def __init__(self, qstr_qent_spans: List[str]):
         super().__init__(start_types={Bool})
 
         self._add_constants(qstr_qent_spans=qstr_qent_spans)
-
-        # These are mappings from Type predicates to the name of the type in the preprocessed data
-        # Useful for (1) Finding starting rules that result in a particular type. (2) Finding the type of a logical prog.
-        self.LANGTYPE_TO_TYPENAME_MAP = {
-            PredicateType.get_type(Bool).name: hpcons.BOOL_TYPE
-        }
-
-        self.TYPENAME_TO_LANGTYPE_MAP = {
-            hpcons.BOOL_TYPE: PredicateType.get_type(Bool).name
-        }
-
-        self.device_id = -1
-
-        self._execution_parameters: ExecutorParameters = None
-
-        self.bool_qstr_qent_func = None
-
-        self.q_nemenspan2entidx = None
-
-        # Shape: (QLen, Q_d)
-        self.ques_embedded = None
-        # Shape: (QLen, Q_d)
-        self.ques_encoded = None
-        # Shape: (Qlen)
-        self.ques_mask = None
-        # Shape: (C, T, D)
-        self.contexts = None
-        # Shape: (C, D)
-        self.contexts_vec = None
-        # Shape: (C, T)
-        self.contexts_mask = None
-        # Shape: (E, C, M, 2)
-        self.ne_ent_mens = None
-        # Shape: (E, C, M, 2)
-        self.num_ent_mens = None
-        # Shape: (E, C, M, 2)
-        self.date_ent_mens = None
-
-        # Dict from QStr -> Idx into self.q_qstr_spans
-        self.q_qstr2idx = None
-        # Shape: (Num_of_Qstr, 2)
-        self.q_qstr_spans = None
-
-        # Dict from Q_NE_men idx to EntityIdx corresonding to self.ne_ent_mens
-        self.q_nemenspan2entidx = None
-
-        # Dictionary from QStr span to it's tensor representation - using self._preprocess_ques_representations
-        # Shape (2 * D)
-        self.qstr2repr = None
-
-        # Map from Qent span_str to LongTensor(2) of it's span in the question
-        self.entidx2spans = None
-        # Map from Qent span_str to LongTensor(Qlen) - a multi-hot vector with 1s at span token locations
-        self.entidx2spanvecs = None
-        # A vector of length Qlen -- that is 1 at all locations containing entity mentions, 0 otherwise
-        self.entitymention_idxs_vec = None
 
     def _add_constants(self, qstr_qent_spans: List[str]):
         for span in qstr_qent_spans:
@@ -122,60 +36,6 @@ class HotpotQALanguageNoSideArgs(DomainLanguage):
                 # Question NE men span
                 self.add_constant(name=span, value=Qent(span), type_=Qent)
 
-    def typeobj_to_typename(self, obj):
-        ''' For a object of a return-type of the language, return the name of type used in the dataset.
-
-        The obj input here should be a non-terminal type of the language defined, ideally the output of an execution
-        '''
-        # This is the name of the equivalent BasicType
-        class_name =  PredicateType.get_type(obj.__class__).name
-        if class_name in self.LANGTYPE_TO_TYPENAME_MAP:
-            return self.LANGTYPE_TO_TYPENAME_MAP[class_name]
-        else:
-            raise ExecutionError(message="TypeClass to Type mapping not found! ClassName:{}".format(class_name))
-
-    def typename_to_langtypename(self, typename):
-        ''' For a given name of a type used in the dataset, return the mapped name of the type (BasicType) in the lang.
-
-        The typename entered here should have a mapping to a non-terminal type of the language defined.
-        '''
-        # This is the name of the type from the dataset
-        if typename in self.TYPENAME_TO_LANGTYPE_MAP:
-            return self.TYPENAME_TO_LANGTYPE_MAP[typename]
-        else:
-            raise ExecutionError(message="Mapping from type name to Type not found! TypeName:{}".format(typename))
-
-    def set_arguments(self, **kwargs):
-        self.ques_embedded = kwargs["ques_embedded"]
-        self.ques_encoded = kwargs["ques_encoded"]
-        self.ques_mask = kwargs["ques_mask"]
-        self.contexts = kwargs["contexts"]
-        self.contexts_vec = kwargs["contexts_vec"]
-        self.contexts_mask = kwargs["contexts_mask"]
-        self.ne_ent_mens = kwargs["ne_ent_mens"]
-        self.num_ent_mens = kwargs["num_ent_mens"]
-        self.date_ent_mens = kwargs["date_ent_mens"]
-        self.q_qstr2idx= kwargs["q_qstr2idx"]
-        self.q_qstr_spans = kwargs["q_qstr_spans"]
-        self.q_nemenspan2entidx = kwargs["q_nemenspan2entidx"]
-        self.device_id = allenutil.get_device_of(self.ques_encoded)
-        self.bool_qstr_qent_func = kwargs["bool_qstr_qent_func"]
-
-        # Keep commented for use later
-        # print(f"self.ques_embedded: {self.ques_embedded.size()}")
-        # print(f"self.ques_mask: {self.ques_mask.size()}")
-        # print(f"self.contexts: {self.contexts.size()}")
-        # print(f"self.contexts_mask: {self.contexts_mask.size()}")
-        # print(f"self.ne_ent_mens: {self.ne_ent_mens.size()}")
-        # print(f"self.date_ent_mens: {self.date_ent_mens.size()}")
-        # print(f"self.num_ent_mens: {self.num_ent_mens.size()}")
-        # print(f"self.q_qstr2idx: {self.q_qstr2idx}")
-        # print(f"self.q_qstr_spans: {self.q_qstr_spans.size()}")
-        # print(f"self.q_nemenspan2entidx: {self.q_nemenspan2entidx}")
-
-
-    def set_execution_parameters(self, execution_parameters: ExecutorParameters):
-        self._execution_parameters: ExecutorParameters = execution_parameters
 
     def preprocess_arguments(self):
         """ Preprocessing arguments to make tensors that can be reused across logical forms during execution.
@@ -184,62 +44,14 @@ class HotpotQALanguageNoSideArgs(DomainLanguage):
         logical forms.
         """
         self._preprocess_ques_representations()
-        self._preprocess_ques_NE_menspans()
-
-
-    def _make_gold_attentions(self):
-        """ For questions of the kind: XXX E1 yyy E2 zzz zzz zzz
-
-        We want
-            Two qent attentions, one for E1 and E2
-            One qstr attention, for zz zzz zzz
-
-        Assume that the first entity is  Qent_1, second is Qent_2, and all tokens after that are Qstr
-        """
-        qlen = self.ques_mask.size()
-        if self.device_id > -1:
-            qent1 = torch.cuda.FloatTensor(qlen, device=self.device_id).fill_(0)
-            qent2 = torch.cuda.FloatTensor(qlen, device=self.device_id).fill_(0)
-            qstr = torch.cuda.FloatTensor(qlen, device=self.device_id).fill_(0)
-        else:
-            qent1 = torch.FloatTensor(qlen).fill_(0)
-            qent2 = torch.FloatTensor(qlen).fill_(0)
-            qstr = torch.FloatTensor(qlen).fill_(0)
-
-        ne_mens = []
-        for span in self.q_nemenspan2entidx.keys():
-            # span is tokens@DELIM@START@END
-            split_tokens = span.split(hpcons.SPAN_DELIM)
-            start, end = int(split_tokens[-2]), int(split_tokens[-1])
-            ne_mens.append((start, end))
-        # Sort based on start token
-        sorted_ne_mens = sorted(ne_mens, key=lambda x: x[0])
-
-        # Assume that first mention is E1 and second is E2.
-        if len(sorted_ne_mens) < 2:
-            e1 = sorted_ne_mens[0]
-            e2 = sorted_ne_mens[0]
-        else:
-            e1 = sorted_ne_mens[0]
-            e2 = sorted_ne_mens[1]
-
-        qent1[e1[0]:e1[1] + 1] = 1.0
-        qent2[e2[0]:e2[1] + 1] = 1.0
-        qstr[e2[1] + 1:] = 1.0
-
-        qent1 = qent1 * self.ques_mask
-        qent2 = qent2 * self.ques_mask
-        qstr = qstr * self.ques_mask
-
-        return qent1, qent2, qstr
 
     def _preprocess_ques_representations(self):
         # Embedding the complete question
         # For all QSTR, computing repr by running ques_encoder, and concatenating repr of end-points
         self.qstr2repr = {}
-        for qstr, qstr_idx in self.q_qstr2idx.items():
+        for qstr, qstr_idx in self.quesspans2idx.items():
             # Shape: [2] denoting the span in the question
-            qstr_span = self.q_qstr_spans[qstr_idx]
+            qstr_span = self.quesspans_spans[qstr_idx]
             # Shape: (QSTR_len, emb_dim)
             qstart = self.ques_encoded[qstr_span[0]]
             qend = self.ques_encoded[qstr_span[1]]
@@ -247,50 +59,6 @@ class HotpotQALanguageNoSideArgs(DomainLanguage):
             # Shape: (2 * Qd)
             qstr_repr = torch.cat([qstart, qend], 0).squeeze(0)
             self.qstr2repr[qstr] = qstr_repr
-
-    def _preprocess_ques_NE_menspans(self):
-        """ Preprocess Ques NE mens to extract spans for each of the entity mentioned.
-        Makes two dictionaries, (1) Stores a list of mention spans (Tensor(2)) in the question for each entity
-        mentioned. (2) For each entity mentioned, a list of binary-vectors the size of Qlen, with 1s for tokens in the
-        span. For example, if the question (len=5) has two mentions, [1,2] and [3,4] linking to entities e1 and e2.
-        The two dictionaries made will be {e1: [Tensor([1,2])], e2: [Tensor([3,4])]} and
-        {e1: [FloatTensor([0,..,1,1,.0])], e2: [FloatTensor([0...,0,1,1])]}
-
-        Additionally, self.entitymention_idxs_vec -- a vector of QLen is made that contains 1 at all locations
-        that are NE mens is made; this is used for Qent attention loss.
-        """
-        q_len = self.ques_mask.size()
-        # Use the qent attention to get a distribution over entities.
-        # Use the self.q_nemenspan2entidx map to extract spans for entities in the question.
-        # Since an entity can be mentioned multiple times, we'll create a dictionary from entityidx2spans
-        self.entidx2spans = {}
-        self.entidx2spanvecs = {}
-
-        if self.device_id > -1:
-            self.entitymention_idxs_vec = torch.cuda.FloatTensor(q_len, device=self.device_id).fill_(0)
-        else:
-            self.entitymention_idxs_vec = torch.FloatTensor(q_len).fill_(0)
-
-        for span, entity_idx in self.q_nemenspan2entidx.items():
-            # Span: QENT:TOKEN_1@DELIM@TOKEN_2...TOKEN_N@DELIM@SPAN_START@DELIM@SPAN_END
-            # Start and end are inclusive
-            split_tokens = span.split(hpcons.SPAN_DELIM)
-            start, end = int(split_tokens[-2]), int(split_tokens[-1])
-            if self.device_id > -1:
-                span_tensor = torch.cuda.LongTensor([start, end], device=self.device_id)
-                onehot_span_tensor = torch.cuda.FloatTensor(q_len, device=self.device_id).fill_(0)
-                onehot_span_tensor[start:end + 1] = 1
-            else:
-                span_tensor = torch.LongTensor([start, end])
-                onehot_span_tensor = torch.FloatTensor(q_len).fill_(0)
-                onehot_span_tensor[start:end + 1] = 1
-            if entity_idx not in self.entidx2spans:
-                self.entidx2spans[entity_idx] = []
-                self.entidx2spanvecs[entity_idx] = []
-            self.entidx2spans[entity_idx].append(span_tensor)
-            self.entidx2spanvecs[entity_idx].append(onehot_span_tensor)
-            self.entitymention_idxs_vec += onehot_span_tensor
-
 
     @predicate
     def bool_qent_qstr(self, qent: Qent, qstr: Qstr) -> Bool1:
@@ -399,7 +167,7 @@ if __name__=="__main__":
     # print(PredicateType.get_type(b.__class__).name)
     # print(PredicateType.get_type(Bool).name)
 
-    language = HotpotQALanguageNoSideArgs(qstr_qent_spans=["QSTR:Hi", "QENT:Nitish"])
+    language = HotpotQALanguageWOSideArgs(qstr_qent_spans=["QSTR:Hi", "QENT:Nitish"])
     print(language._functions)
 
     all_prods = language.all_possible_productions()

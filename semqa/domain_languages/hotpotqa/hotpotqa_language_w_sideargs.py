@@ -11,163 +11,15 @@ from allennlp.semparse.domain_languages.domain_language import PredicateType
 
 import datasets.hotpotqa.utils.constants as hpcons
 from semqa.domain_languages.hotpotqa.execution_params import ExecutorParameters
+from semqa.domain_languages.hotpotqa.hotpotqa_language import Qstr, Qent, Bool, Bool1, HotpotQALanguage
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-class Bool():
-    def __init__(self, value: Tensor):
-        self._value = self.clamp(value)
-        self._bool_val = (self._value >= 0.5).float()
-
-    def clamp(self, value: torch.Tensor):
-        new_val = value.clamp(min=1e-3, max=1.0 - 1e-3)
-        return new_val
-
-
-class Bool1():
-    def __init__(self, value: Tensor):
-        self._value = value
-        self.clamp()
-        self._bool_val = (self._value >= 0.5).float()
-
-    def clamp(self):
-        self._value = self._value.clamp(min=1e-3, max=1.0 - 1e-3)
-
-
-class Qstr():
-    def __init__(self, attention):
-        self._value = attention
-
-
-class Qent():
-    def __init__(self, attention):
-        self._value = attention
-
-
-class HotpotQALanguage(DomainLanguage):
-    def __init__(self, qstr_qent_spans: List[str]):
+class HotpotQALanguageWSideArgs(HotpotQALanguage):
+    def __init__(self):
         super().__init__(start_types={Bool})
-        # self._add_constants(qstr_qent_spans=qstr_qent_spans)
 
-        # These are mappings from Type predicates to the name of the type in the preprocessed data
-        # Useful for (1) Finding starting rules that result in a particular type. (2) Finding the type of a logical prog.
-        self.LANGTYPE_TO_TYPENAME_MAP = {
-            PredicateType.get_type(Bool).name: hpcons.BOOL_TYPE
-        }
-
-        self.TYPENAME_TO_LANGTYPE_MAP = {
-            hpcons.BOOL_TYPE: PredicateType.get_type(Bool).name
-        }
-
-        self.device_id = -1
-
-        self._execution_parameters: ExecutorParameters = None
-
-        self.bool_qstr_qent_func = None
-
-        self.q_nemenspan2entidx = None
-
-        # Shape: (QLen, Q_d)
-        self.ques_encoded = None
-        # Shape: (Qlen)
-        self.ques_mask = None
-        # Shape: (C, T, D)
-        self.contexts = None
-        # Shape: (C, D)
-        self.contexts_vec = None
-        # Shape: (C, T)
-        self.contexts_mask = None
-        # Shape: (E, C, M, 2)
-        self.ne_ent_mens = None
-        # Shape: (E, C, M, 2)
-        self.num_ent_mens = None
-        # Shape: (E, C, M, 2)
-        self.date_ent_mens = None
-
-        # Dict from QStr -> Idx into self.q_qstr_spans
-        #         # self.q_qstr2idx = None
-        #         # # Shape: (Num_of_Qstr, 2)
-        #         # self.q_qstr_spans = None
-
-        # Dict from Q_NE_men idx to EntityIdx corresonding to self.ne_ent_mens
-        self.q_nemenspan2entidx = None
-
-        # # Question encoded representation
-        # self.ques_encoded = None
-        # # Dictionary from QStr span to it's tensor representation
-        # self.qstr2repr = None
-        # Map from Qent span_str to LongTensor(2) of it's span in the question
-        self.entidx2spans = None
-        # Map from Qent span_str to LongTensor(Qlen) - a multi-hot vector with 1s at span token locations
-        self.entidx2spanvecs = None
-
-        self.entitymention_idxs_vec = None
-
-
-
-    def _add_constants(self, qstr_qent_spans: List[str]):
-        for span in qstr_qent_spans:
-            if span.startswith(hpcons.QSTR_PREFIX):
-                self.add_constant(name=span, value=span, type_=Qstr)
-            elif span.startswith(hpcons.QENT_PREFIX):
-                # Question NE men span
-                self.add_constant(name=span, value=span, type_=Qent)
-
-    def typeobj_to_typename(self, obj):
-        ''' For a object of a return-type of the language, return the name of type used in the dataset.
-
-        The obj input here should be a non-terminal type of the language defined, ideally the output of an execution
-        '''
-        # This is the name of the equivalent BasicType
-        class_name =  PredicateType.get_type(obj.__class__).name
-        if class_name in self.LANGTYPE_TO_TYPENAME_MAP:
-            return self.LANGTYPE_TO_TYPENAME_MAP[class_name]
-        else:
-            raise ExecutionError(message="TypeClass to Type mapping not found! ClassName:{}".format(class_name))
-
-    def typename_to_langtypename(self, typename):
-        ''' For a given name of a type used in the dataset, return the mapped name of the type (BasicType) in the lang.
-
-        The typename entered here should have a mapping to a non-terminal type of the language defined.
-        '''
-        # This is the name of the type from the dataset
-        if typename in self.TYPENAME_TO_LANGTYPE_MAP:
-            return self.TYPENAME_TO_LANGTYPE_MAP[typename]
-        else:
-            raise ExecutionError(message="Mapping from type name to Type not found! TypeName:{}".format(typename))
-
-
-    def set_arguments(self, **kwargs):
-        self.ques_encoded = kwargs["ques_encoded"]
-        self.ques_mask = kwargs["ques_mask"]
-        self.contexts = kwargs["contexts"]
-        self.contexts_vec = kwargs["contexts_vec"]
-        self.contexts_mask = kwargs["contexts_mask"]
-        self.ne_ent_mens = kwargs["ne_ent_mens"]
-        self.num_ent_mens = kwargs["num_ent_mens"]
-        self.date_ent_mens = kwargs["date_ent_mens"]
-        # self.q_qstr2idx= kwargs["q_qstr2idx"]
-        # self.q_qstr_spans = kwargs["q_qstr_spans"]
-        self.q_nemenspan2entidx = kwargs["q_nemenspan2entidx"]
-        self.device_id = allenutil.get_device_of(self.ques_encoded)
-        self.bool_qstr_qent_func = kwargs["bool_qstr_qent_func"]
-
-        # Keep commented for use later
-        # print(f"self.ques_embedded: {self.ques_embedded.size()}")
-        # print(f"self.ques_mask: {self.ques_mask.size()}")
-        # print(f"self.contexts: {self.contexts.size()}")
-        # print(f"self.contexts_mask: {self.contexts_mask.size()}")
-        # print(f"self.ne_ent_mens: {self.ne_ent_mens.size()}")
-        # print(f"self.date_ent_mens: {self.date_ent_mens.size()}")
-        # print(f"self.num_ent_mens: {self.num_ent_mens.size()}")
-        # print(f"self.q_qstr2idx: {self.q_qstr2idx}")
-        # print(f"self.q_qstr_spans: {self.q_qstr_spans.size()}")
-        # print(f"self.q_nemenspan2entidx: {self.q_nemenspan2entidx}")
-
-
-    def set_execution_parameters(self, execution_parameters: ExecutorParameters):
-        self._execution_parameters: ExecutorParameters = execution_parameters
 
     def preprocess_arguments(self):
         """ Preprocessing arguments to make tensors that can be reused across logical forms during execution.
@@ -175,7 +27,6 @@ class HotpotQALanguage(DomainLanguage):
         For example, question span representations will be precomputed and stored here to reuse when executing different
         logical forms.
         """
-        # self._preprocess_ques_representations()
         self._preprocess_ques_NE_menspans()
 
 
@@ -226,34 +77,6 @@ class HotpotQALanguage(DomainLanguage):
         return qent1, qent2, qstr
 
 
-    ''' This function is deprecated now that we pass in question_reprs and don't have ques_spans to represent
-    def _preprocess_ques_representations(self):
-        # Embedding the complete question
-        ques_encoded_ex = self._execution_parameters._ques_encoder(self.ques_encoded.unsqueeze(0),
-                                                                   self.ques_mask.unsqueeze(0))
-        # Shape: (Qlen, Q_d)
-        self.ques_encoded = ques_encoded_ex.squeeze(0)
-
-        # For all QSTR, computing repr by running ques_encoder, and concatenating repr of end-points.
-        self.qstr2repr = {}
-        for qstr, qstr_idx in self.q_qstr2idx.items():
-            # Shape: [2] denoting the span in the question
-            qstr_span = self.q_qstr_spans[qstr_idx]
-            # Shape: (QSTR_len, emb_dim)
-            qstr_embedded = self.ques_encoded[qstr_span[0]:qstr_span[1] + 1]
-            qstr_mask = self.ques_mask[qstr_span[0]:qstr_span[1] + 1]
-            # [1, QSTR_len, emb_dim]
-            qstr_encoded_ex = self._execution_parameters._ques_encoder(qstr_embedded.unsqueeze(0),
-                                                                       qstr_mask.unsqueeze(0))
-            # Shape: [QSTR_len, emb_dim]
-            qstr_encoded = qstr_encoded_ex.squeeze(0)
-            # Concatenating first and last time step of encoded qstr
-            # Shape: (2 * Qd)
-            qstr_repr = torch.cat([qstr_encoded[0].unsqueeze(0), qstr_encoded[-1].unsqueeze(0)], 1).squeeze(0)
-            self.qstr2repr[qstr] = qstr_repr
-
-    '''
-
     def _preprocess_ques_NE_menspans(self):
         """ Preprocess Ques NE mens to extract spans for each of the entity mentioned.
         Makes two dictionaries, (1) Stores a list of mention spans (Tensor(2)) in the question for each entity
@@ -300,12 +123,12 @@ class HotpotQALanguage(DomainLanguage):
 
     @predicate_with_side_args(['question_attention'])
     def find_Qstr(self, question_attention: torch.FloatTensor) -> Qstr:
-        return Qstr(attention=question_attention)
+        return Qstr(value=question_attention)
 
 
     @predicate_with_side_args(['question_attention'])
     def find_Qent(self, question_attention: torch.FloatTensor) -> Qent:
-        return Qent(attention=question_attention)
+        return Qent(value=question_attention)
 
 
     @predicate
@@ -440,31 +263,12 @@ class HotpotQALanguage(DomainLanguage):
 
 if __name__=="__main__":
 
-    # b = Bool(value=torch.FloatTensor([0.65]))
-    # print(b._value)
-    # print(b._bool_val)
-    # print(PredicateType.get_type(b.__class__).name)
-    # print(PredicateType.get_type(Bool).name)
-
-    language = HotpotQALanguage(qstr_qent_spans=["QSTR:Hi", "QENT:Nitish"])
+    language = HotpotQALanguageWSideArgs()
     print(language._functions)
 
     all_prods = language.all_possible_productions()
 
     print("All prods:\n{}\n".format(all_prods))
-    #
-    # nonterm_prods = language.get_nonterminal_productions()
-    # print("Non terminal prods:\n{}\n".format(nonterm_prods))
-    #
-    # functions = language._functions
-    # print("Functions:\n{}\n".format(functions))
-    #
-    # function_types = language._function_types
-    # print("Function Types:\n{}\n".format(function_types))
-    #
-    # logical_form = "(bool_qent_qstr QSTR:Hi QENT:Nitish)"
-    # action_seq = language.logical_form_to_action_sequence(logical_form=logical_form)
-    # print(action_seq)
 
 
 

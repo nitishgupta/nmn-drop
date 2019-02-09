@@ -16,7 +16,7 @@ from allennlp.modules.span_extractors.span_extractor import SpanExtractor
 import allennlp.common.util as alcommon_utils
 
 import datasets.hotpotqa.utils.constants as hpcons
-from semqa.domain_languages.hotpotqa.hotpotqa_language_w_sideargs import HotpotQALanguage
+from semqa.domain_languages.hotpotqa.hotpotqa_language_w_sideargs import HotpotQALanguageWSideArgs
 from semqa.domain_languages.hotpotqa.execution_params import ExecutorParameters
 import semqa.domain_languages.domain_language_utils as dl_utils
 
@@ -180,7 +180,7 @@ class HotpotQAParserBase(Model):
         return initial_rnn_state
 
     def _create_grammar_statelet(self,
-                                 language: HotpotQALanguage,
+                                 language: HotpotQALanguageWSideArgs,
                                  possible_actions: List[ProductionRule],
                                  linked_rule2idx: Dict = None,
                                  action2ques_linkingscore: torch.FloatTensor = None,
@@ -318,7 +318,7 @@ class HotpotQAParserBase(Model):
 
     @staticmethod
     def _get_denotations(action_strings: List[List[List[str]]],
-                         languages: List[HotpotQALanguage],
+                         languages: List[HotpotQALanguageWSideArgs],
                          sideargs: List[List[List[Dict]]]=None) -> Tuple[List[List[Any]], List[List[str]]]:
         """ Get denotations for all action-sequences for  every instance in a batch.
 
@@ -339,7 +339,7 @@ class HotpotQAParserBase(Model):
         for (instance_language, instance_action_sequences, instance_sideargs) in zip(languages,
                                                                                      action_strings,
                                                                                      sideargs):
-            instance_language: HotpotQALanguage = instance_language
+            instance_language: HotpotQALanguageWSideArgs = instance_language
             instance_denotations: List[Any] = []
             instance_denotation_types: List[str] = []
             for action_sequence, sideargs in zip(instance_action_sequences, instance_sideargs):
@@ -361,7 +361,7 @@ class HotpotQAParserBase(Model):
     @staticmethod
     def _check_denotation(action_sequence: List[str],
                           labels: List[str],
-                          languages: List[HotpotQALanguage]) -> List[bool]:
+                          languages: List[HotpotQALanguageWSideArgs]) -> List[bool]:
         is_correct = []
         for language, label in zip(languages, labels):
             logical_form = language.action_sequence_to_logical_form(action_sequence)
@@ -411,7 +411,7 @@ class HotpotQAParserBase(Model):
 
         return output_dict
 
-    def _check_state_denotations(self, state: GrammarBasedState, language: HotpotQALanguage) -> List[bool]:
+    def _check_state_denotations(self, state: GrammarBasedState, language: HotpotQALanguageWSideArgs) -> List[bool]:
         """
         Returns whether action history in the state evaluates to the correct denotations over all
         worlds. Only defined when the state is finished.

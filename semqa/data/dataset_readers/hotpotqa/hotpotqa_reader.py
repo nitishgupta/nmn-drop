@@ -20,8 +20,8 @@ from allennlp.data.dataset_readers.reading_comprehension.squad import SquadReade
 import allennlp.data.dataset_readers.reading_comprehension.util as rcutils
 
 from semqa.worlds.hotpotqa.hotpotqa_world import SampleHotpotWorld
-from semqa.domain_languages.hotpotqa.hotpotqa_language_w_sideargs import HotpotQALanguage
-from semqa.domain_languages.hotpotqa.hotpotqa_language_wo_sideargs import HotpotQALanguageNoSideArgs
+from semqa.domain_languages.hotpotqa.hotpotqa_language_w_sideargs import HotpotQALanguageWSideArgs
+from semqa.domain_languages.hotpotqa.hotpotqa_language_wo_sideargs import HotpotQALanguageWOSideArgs
 from semqa.data.datatypes import DateField, NumberField
 import datasets.hotpotqa.utils.constants as hpconstants
 import utils.util as util
@@ -93,12 +93,13 @@ class HotpotQADatasetReader(DatasetReader):
                  nonterminal_indexers: Dict[str, TokenIndexer] = None,
                  terminal_indexers: Dict[str, TokenIndexer] = None) -> None:
         super().__init__(lazy)
+        self._wsideargs = wsideargs
         self._token_indexers = token_indexers or {"tokens": SingleIdTokenIndexer()}
         self._nonterminal_indexers = nonterminal_indexers or {"tokens":
                                                               SingleIdTokenIndexer("rule_labels")}
         self._terminal_indexers = terminal_indexers or {"tokens": SingleIdTokenIndexer("rule_labels")}
 
-        self.HotpotQALanguageClass = HotpotQALanguage if wsideargs else HotpotQALanguageNoSideArgs
+        self.HotpotQALanguageClass = HotpotQALanguageWSideArgs if wsideargs else HotpotQALanguageWOSideArgs
 
         # bidaf_model_path = 'https://s3-us-west-2.amazonaws.com/allennlp/models/bidaf-model-2017.09.15-charpad.tar.gz'
         # archive = load_archive(bidaf_model_path)
@@ -427,15 +428,18 @@ class HotpotQADatasetReader(DatasetReader):
             ques_spans_linking_score=ques_spans_linking_score, ques_spans_spanfields=ques_spans_spanfields)
 
         # Deep copy since ques_spans2idx changes later on
-        q_qstr2idx_field = MetadataField(copy.deepcopy(ques_spans2idx))
-        q_qstr_spanfield = ListField(ques_spans_spanidxs)
+        ques_spans2idx_field = MetadataField(ques_spans2idx)
+        ques_spans_spanfield = ListField(ques_spans_spanidxs)
 
         # q_nemens_grounding_field = ArrayField(np.array(q_nemenspan_grounding), padding_value=-1)
         q_nemenspan2entidx_field = MetadataField(q_nemenspan2entidx)
 
         # Make world from question spans
         # This adds instance specific actions as well
-        hplanguage = self.HotpotQALanguageClass(qstr_qent_spans=ques_spans)
+        if self._wsideargs:
+            hplanguage = self.HotpotQALanguageClass()
+        else:
+            hplanguage = self.HotpotQALanguageClass(qstr_qent_spans=ques_spans)
         lang_field = MetadataField(hplanguage)
 
         # Action_field:
@@ -499,8 +503,8 @@ class HotpotQADatasetReader(DatasetReader):
                                                   ArrayField(np.array([len(context_eqent2datemens)])))
 
         fields: Dict[str, Field] = {"question": ques_tokenized_field,
-                                    "q_qstr2idx": q_qstr2idx_field,
-                                    "q_qstr_spans": q_qstr_spanfield,
+                                    "quesspans2idx": ques_spans2idx_field,
+                                    "quesspans_spans": ques_spans_spanfield,
                                     "q_nemenspan2entidx": q_nemenspan2entidx_field,
                                     "contexts": contexts_tokenized_field,
                                     "ent_mens": all_ent_mens_field,

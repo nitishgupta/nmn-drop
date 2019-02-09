@@ -22,7 +22,7 @@ from allennlp.models.archival import load_archive
 from allennlp.models.reading_comprehension.bidaf import BidirectionalAttentionFlow
 
 import semqa.type_declarations.semqa_type_declaration_wques as types
-from semqa.domain_languages.hotpotqa.hotpotqa_language_w_sideargs import HotpotQALanguage, Qent, Qstr
+from semqa.domain_languages.hotpotqa.hotpotqa_language_w_sideargs import HotpotQALanguageWSideArgs, Qent, Qstr
 from semqa.models.hotpotqa.hotpotqa_parser_base import HotpotQAParserBase
 from semqa.domain_languages.hotpotqa.execution_params import ExecutorParameters
 
@@ -183,7 +183,7 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                 num_dateents: torch.LongTensor,
                 num_normval: List[List[NumberField]],
                 date_normval: List[List[DateField]],
-                languages: List[HotpotQALanguage],
+                languages: List[HotpotQALanguageWSideArgs],
                 actions: List[List[ProductionRule]],
                 linked_rule2idx: List[Dict],
                 action2ques_linkingscore: torch.FloatTensor,
@@ -476,7 +476,7 @@ class HotpotQASemanticParser(HotpotQAParserBase):
 
 
     def _entity_attention_loss(self,
-                               languages: List[HotpotQALanguage],
+                               languages: List[HotpotQALanguageWSideArgs],
                                batch_actionseqs: List[List[List[str]]],
                                batch_side_args: List[List[List[Dict]]]):
         relevant_action = 'Qent -> find_Qent'
@@ -567,7 +567,7 @@ class HotpotQASemanticParser(HotpotQAParserBase):
     def _get_FirstSteps_GoldAnsDict_and_Masks(self,
                                               gold_ans_type: List[str],
                                               actions: List[List[ProductionRule]],
-                                              languages: List[HotpotQALanguage],
+                                              languages: List[HotpotQALanguageWSideArgs],
                                               **kwargs):
         """ If gold answer types are given, then make a dict of answers and equivalent masks based on type.
         Also give a list of possible first actions when decode to make programs of valid types only.
