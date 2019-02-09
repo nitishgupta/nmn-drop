@@ -59,6 +59,7 @@ local parse_number(x) =
   "model": {
     "type": "hotpotqa_parser",
     "wsideargs": false,
+    "goldactions": false,
 
     "action_embedding_dim": 100,
 
@@ -77,7 +78,6 @@ local parse_number(x) =
       "dropout": parse_number(std.extVar("DROPOUT"))
     },
 
-    "beam_size": parse_number(std.extVar("BEAMSIZE")),
     "max_decoding_steps": parse_number(std.extVar("MAX_DECODE_STEP")),
     "dropout": parse_number(std.extVar("DROPOUT")),
     "bidaf_model_path": std.extVar("BIDAF_MODEL_TAR"),

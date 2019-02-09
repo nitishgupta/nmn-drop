@@ -74,9 +74,9 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                  executor_parameters: ExecutorParameters,
                  bidaf_model_path: str,
                  bidaf_wordemb_file: str,
-                 beam_size: int,
                  max_decoding_steps: int,
                  wsideargs: bool = True,
+                 goldactions: bool = False,
                  fine_tune_bidaf: bool = False,
                  bidaf_question_key: str = 'encoded_question',
                  bidaf_context_key: str = 'modeled_passage',
@@ -94,10 +94,11 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                                                      qencoder=qencoder,
                                                      ques2action_encoder=ques2action_encoder,
                                                      quesspan_extractor=quesspan_extractor,
+                                                     wsideargs=wsideargs,
                                                      dropout=dropout)
 
-        # using langauge with or without sideargs
-        self._wsideargs = wsideargs
+        # Use the gold attention (for w sideargs) or gold actions (for wo sideargs)
+        self._goldactions = goldactions
 
         if bidaf_model_path is None:
             logger.info(f"NOT loading pretrained bidaf model. bidaf_model_path - not given")
@@ -352,8 +353,10 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                                                         ques_encoded_list=ques_repr_list,
                                                         ques_mask_list=ques_mask_list)
 
-        # Initial debug_info list to make the GrammarBasedState
-        initial_side_args = [[] for i in range(0, batch_size)]
+        # Initial side_args list to make the GrammarBasedState if using Language with sideargs
+        initial_side_args = None
+        if self._wsideargs:
+            initial_side_args = [[] for i in range(0, batch_size)]
 
         # Initial grammar state for the complete batch
         initial_state = GrammarBasedState(batch_indices=list(range(batch_size)),
@@ -376,7 +379,7 @@ class HotpotQASemanticParser(HotpotQAParserBase):
 
         instanceidx2actionseq_idxs: Dict[int, List[List[int]]] = {}
         instanceidx2actionseq_scores: Dict[int, List[torch.Tensor]] = {}
-        instanceidx2actionseq_sideargs: Dict[int, List[List[Dict]]] = {}
+        instanceidx2actionseq_sideargs: Dict[int, List[List[Dict]]] = {} if self._wsideargs else None
 
         for i in range(batch_size):
             # Decoding may not have terminated with any completed logical forms, if `num_steps`
@@ -386,10 +389,11 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                 # Since the group size for any state is 1, action_history[0] can be used.
                 instance_actionseq_idxs = [final_state.action_history[0] for final_state in best_final_states[i]]
                 instance_actionseq_scores = [final_state.score[0] for final_state in best_final_states[i]]
-                instance_actionseq_sideargs = [final_state.debug_info[0] for final_state in best_final_states[i]]
                 instanceidx2actionseq_idxs[i] = instance_actionseq_idxs
                 instanceidx2actionseq_scores[i] = instance_actionseq_scores
-                instanceidx2actionseq_sideargs[i] = instance_actionseq_sideargs
+                if self._wsideargs:
+                    instance_actionseq_sideargs = [final_state.debug_info[0] for final_state in best_final_states[i]]
+                    instanceidx2actionseq_sideargs[i] = instance_actionseq_sideargs
 
 
         # batch_actionseqs: List[List[List[str]]]: All decoded action sequences for each instance in the batch
@@ -413,15 +417,15 @@ class HotpotQASemanticParser(HotpotQAParserBase):
             action_probs = allenutil.masked_softmax(scores_astensor, mask=None)
             batch_actionseq_probs.append(action_probs)
 
+        # for ins in batch_actionseqs:
+        #     print(f"{ins}\n")
+
         ''' THE PROGRAMS ARE EXECUTED HERE '''
         ''' First set the instance-spcific data (question, contexts, entity_mentions, etc.) to their 
-            respective worlds (executors) so that execution can be performed.  
+            respective worlds (executors) so that execution can be performed.
         '''
-        # Shape: (B, C, T, D)
-        # context_encoded, contexts_mask = self.executor_parameters._encode_contexts(contexts)
-
-        # This is a list of tuples for bool_qent_qstr supervision that is being used for diagnostic purposes
-        batch_gold_attentions = []
+        # This is a list of attention/action tuples for bool_qent_qstr supervision being used for diagnostics
+        batch_gold_actions = []
         for i in range(0, len(languages)):
             languages[i].set_execution_parameters(execution_parameters=self.executor_parameters)
             languages[i].set_arguments(ques_embedded=ques_embed_list[i],
@@ -439,12 +443,13 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                                        bool_qstr_qent_func=self._bool_qstrqent_func)
 
             languages[i].preprocess_arguments()
-            if self._wsideargs:
+            if self._wsideargs and self._goldactions:
+                # These are attentions for wsideargs
                 qent1, qent2, qstr = languages[i]._make_gold_attentions()
-                batch_gold_attentions.append((qent1, qent2, qstr))
+                batch_gold_actions.append((qent1, qent2, qstr))
 
-        if self._wsideargs:
-            self.add_goldatt_to_sideargs(batch_actionseqs, batch_actionseq_sideargs, batch_gold_attentions)
+        if self._wsideargs and self._goldactions:
+            self.add_goldatt_to_sideargs(batch_actionseqs, batch_actionseq_sideargs, batch_gold_actions)
 
         # List[List[denotation]], List[List[str]]: Denotations and their types for all instances
         batch_denotations, batch_denotation_types = self._get_denotations(batch_actionseqs, languages,

@@ -143,22 +143,6 @@ class HotpotQALanguageWOSideArgs(HotpotQALanguage):
         return Bool1(value=expected_prob)
 
 
-    @predicate
-    def bool_and(self, bool1: Bool1, bool2: Bool1) -> Bool:
-        """ AND operation between two booleans """
-        # return_val = bool1._value * bool2._value
-        return_val = torch.min(torch.cat([bool1._value.unsqueeze(0), bool2._value.unsqueeze(0)], 0))
-        # return_val = torch.sigmoid(10.0*bool1._value + 10.0*bool2._value - 15.0)
-        return Bool(value=return_val)
-        # return Bool(value=bool1._value * bool2._value)
-
-    # @predicate
-    # def bool_or(self, bool1: Bool1, bool2: Bool1) -> Bool:
-    #     """ OR operation between two booleans """
-    #     return_val = torch.max(torch.cat([bool1._value.unsqueeze(0), bool2._value.unsqueeze(0)], 0))
-    #     return Bool(value=return_val)
-
-
 if __name__=="__main__":
 
     # b = Bool(value=torch.FloatTensor([0.65]))
