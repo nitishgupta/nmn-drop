@@ -30,6 +30,9 @@ class HotpotQALanguageWSideArgs(HotpotQALanguage):
         self._preprocess_ques_NE_menspans()
 
 
+    def _get_gold_actions(self) -> Tuple[torch.FloatTensor, torch.FloatTensor , torch.FloatTensor]:
+        return self._make_gold_attentions()
+
     def _make_gold_attentions(self) -> Tuple[torch.FloatTensor, torch.FloatTensor , torch.FloatTensor]:
         """ For questions of the kind: XXX E1 yyy E2 zzz zzz zzz
 

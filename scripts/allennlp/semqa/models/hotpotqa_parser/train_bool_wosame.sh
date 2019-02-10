@@ -9,7 +9,7 @@ VALFILE=${DATASET_DIR}/devds_goldcontexts.jsonl
 INCLUDE_PACKAGE=semqa
 
 ### TRAINING MODEL CONFIG -- should be same across datasets for the same model
-CONFIGFILE=allenconfigs/semqa/train/hotpotqa_parser_wosideargs.jsonnet
+CONFIGFILE=allenconfigs/semqa/train/hotpotqa_parser.jsonnet
 # CONFIGFILE=allenconfigs/semqa/train/hotpotqa_parser.jsonnet
 
 export DATASET_READER=hotpotqa_reader
@@ -42,7 +42,7 @@ CHECKPOINT_ROOT=./resources/semqa/checkpoints
 SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/hotpotqa/merged_contexts/bool_wosame
 MODEL_DIR=hotpotqa_parser
 PARAMETERS_DIR=BS_${BS}/OPT_${OPT}/LR_${LR}/Drop_${DROPOUT}/B_CONTEXT_${BIDAF_CONTEXT_KEY}/FUNC_${BOOL_QSTRQENT_FUNC}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PARAMETERS_DIR}_woside_newand
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PARAMETERS_DIR}_wside_predatt
 
 #######################################################################################################################
 

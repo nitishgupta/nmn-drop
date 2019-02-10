@@ -59,7 +59,7 @@ local parse_number(x) =
   "model": {
     "type": "hotpotqa_parser",
     "wsideargs": false,
-    "goldactions": false,
+    "goldactions": true,
 
     "action_embedding_dim": 100,
 

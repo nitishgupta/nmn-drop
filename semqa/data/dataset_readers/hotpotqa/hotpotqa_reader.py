@@ -213,6 +213,15 @@ class HotpotQADatasetReader(DatasetReader):
 
 
     def get_ques_spans(self, ques_tokens: List[str], q_ent_ners: List[Tuple], ques_textfield: TextField):
+        def get_ngram_spans(length: int, ngram: int):
+            """ Return all possible spans positions (exclusive-end) for a given ngram.
+                Eg. for bigram and length = 4, spans returned will be (0,2) (1,3), (2,4)
+            """
+            if ngram < 1:
+                raise Exception(f"Ngram cannot be less than 1. Given: {ngram}")
+            spans = [(i, i + ngram) for i in range(0, length-ngram + 1)]
+            return spans
+
         """ Make question spans (delimited by constants.SPAN_DELIM) and also return their spans (inclusive)
         Current implementation: Take unigrams, bigrams, and trigrams that don't overlap with NE mens
 
@@ -241,27 +250,24 @@ class HotpotQADatasetReader(DatasetReader):
         ques_spans_idxs = []
 
         qlen = len(ques_tokens)
-        unigram_spans = [(i, i+1) for i in range(0, qlen)]
-        bigram_spans = [(i, i+2) for i in range(0, qlen-1)]
-        trigam_spans = [(i, i+3) for i in range(0, qlen-2)]
+        unigram_spans = get_ngram_spans(length=qlen, ngram=1)
+        bigram_spans = get_ngram_spans(length=qlen, ngram=2)
+        trigam_spans = get_ngram_spans(length=qlen, ngram=3)
+        fourgram_spans = get_ngram_spans(length=qlen, ngram=4)
+        fivegram_spans = get_ngram_spans(length=qlen, ngram=5)
 
         ne_mens_spans = [(men[1], men[2]) for men in q_ent_ners]
 
-        # Only keep spans that don't intersect with ques NE mens
-        # Only keep bigrams and trigrams (if possible)
-        for span in bigram_spans:
-            #if not self.spanIntersectWithAnyOneSpanInList(span, ne_mens_spans):
-            ques_spans_idxs.append(span)
-
-        for span in trigam_spans:
-            #if not self.spanIntersectWithAnyOneSpanInList(span, ne_mens_spans):
-            ques_spans_idxs.append(span)
-
-        # Add unigram spans only if no bigrams and trigrams present
+        ques_spans_idxs.extend(fivegram_spans)
+        ques_spans_idxs.extend(fourgram_spans)
+        ques_spans_idxs.extend(trigam_spans)
         if len(ques_spans_idxs) == 0:
-            for span in unigram_spans:
-                #if not self.spanIntersectWithAnyOneSpanInList(span, ne_mens_spans):
-                ques_spans_idxs.append(span)
+            ques_spans_idxs.extend(bigram_spans)
+        if len(ques_spans_idxs) == 0:
+            ques_spans_idxs.extend(unigram_spans)
+
+        # Can be used if no intersection with mentions, but spurious mentions are present, so this is not a good idea
+        # if not self.spanIntersectWithAnyOneSpanInList(span, ne_mens_spans):
 
         ques_spans = []
         ques_spans2idx = {}

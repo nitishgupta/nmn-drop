@@ -250,10 +250,6 @@ class HotpotQASemanticParser(HotpotQAParserBase):
             to make batching easier. See the reader code for more details.
         """
         # pylint: disable=arguments-differ
-        # for d in q_qstr2idx:
-        #     print(d)
-        #     print()
-        # exit()
 
         batch_size = len(languages)
         if 'metadata' in kwargs:
@@ -443,13 +439,17 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                                        bool_qstr_qent_func=self._bool_qstrqent_func)
 
             languages[i].preprocess_arguments()
-            if self._wsideargs and self._goldactions:
-                # These are attentions for wsideargs
-                qent1, qent2, qstr = languages[i]._make_gold_attentions()
+            if self._goldactions:
+                # Works for both with and w/o sideargs
+                qent1, qent2, qstr = languages[i]._get_gold_actions()
                 batch_gold_actions.append((qent1, qent2, qstr))
 
-        if self._wsideargs and self._goldactions:
-            self.add_goldatt_to_sideargs(batch_actionseqs, batch_actionseq_sideargs, batch_gold_actions)
+        if self._goldactions:
+            if self._wsideargs:
+                self.add_goldatt_to_sideargs(batch_actionseqs, batch_actionseq_sideargs, batch_gold_actions)
+            else:
+
+                self.replace_qentqstr_actions_w_gold(batch_actionseqs, batch_gold_actions)
 
         # List[List[denotation]], List[List[str]]: Denotations and their types for all instances
         batch_denotations, batch_denotation_types = self._get_denotations(batch_actionseqs, languages,
@@ -775,6 +775,26 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                     elif action == 'Qstr -> find_Qstr':
                         sidearg_dict['question_attention'] = instance_gold_attentions[2]
 
+    def replace_qentqstr_actions_w_gold(self,
+                                        batch_actionseqs: List[List[List[str]]],
+                                        batch_gold_actions: List[Tuple]):
+        # For each instance, batch_gold_actions contains a tuple of (qent1, qent2, qstr) action.
+        # From each instances' program, replace the first 'Qent -> xxx' with qent1, second with qent2 and 'Qstr -> ..'
+        for ins_idx in range(len(batch_actionseqs)):
+            instance_programs: List[List[str]] = batch_actionseqs[ins_idx]
+            instance_gold_actions: Tuple[str, str, str] = batch_gold_actions[ins_idx]
+
+            for program in instance_programs:
+                first_entity = True   # This tells model which qent attention to use
+                for idx, action in enumerate(program):
+                    if action.startswith('Qent ->'):
+                        if first_entity:
+                            program[idx] = instance_gold_actions[0]
+                            first_entity = False
+                        else:
+                            program[idx] = instance_gold_actions[1]
+                    elif action.startswith('Qstr ->'):
+                        program[idx] = instance_gold_actions[2]
 
 
     # def _update_metrics(self,

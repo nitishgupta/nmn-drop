@@ -1,5 +1,6 @@
 from typing import Callable, List, Dict, Tuple
 import logging
+from functools import cmp_to_key
 
 import torch
 import torch.nn.functional
@@ -59,6 +60,100 @@ class HotpotQALanguageWOSideArgs(HotpotQALanguage):
             # Shape: (2 * Qd)
             qstr_repr = torch.cat([qstart, qend], 0).squeeze(0)
             self.qstr2repr[qstr] = qstr_repr
+
+
+    def _get_gold_actions(self) -> Tuple[str, str, str]:
+        def getspanfromaction(actionstr):
+            """ Action string of the type Qent -> QENT:Tokens@DELIM@START@DELIM@END
+                Return (START, END)
+            """
+            splittokens = actionstr.split(hpcons.SPAN_DELIM)
+            start, end = int(splittokens[-2]), int(splittokens[-1])
+            return (start, end)
+
+        def tuplecomparision(t1, t2):
+            # when arranging in ascending, longest with greater end should come first
+            len1 = t1[1] - t1[0]
+            len2 = t2[1] - t2[0]
+            if len2 < len1:
+                return -1
+            elif len1 < len2:
+                return 1
+            else:
+                if t1[1] < t2[1]:
+                    return 1
+                elif t1[1] > t2[1]:
+                    return -1
+                else:
+                    return 0
+        # def tuplecomparision(t1, t2):
+        #     # When arranging in ascending, lower start but longest within should come first
+        #     if t1[0] < t2[0]:
+        #         return -1
+        #     elif t1[0] > t2[0]:
+        #         return 1
+        #     else:
+        #         if t1[1] < t2[1]:
+        #             return 1
+        #         elif t1[1] > t2[1]:
+        #             return -1
+        #         else:
+        #             return 0
+
+
+
+        """ For boolean questions of the kind: XXX E1 yyy E2 zzz zzz zzz
+
+        We want
+            Two Qent -> QENT:Tokens@DELIM@START@DELIM@END' style actions
+            One Qstr -> QSTR:Tokens@DELIM@START@DELIM@END' action for zz zzz zzz
+
+        Assume that the first two entities are first/second Qent actions, and longest span that starts right after
+        second entity is the Qstr action
+        """
+        qent_actions = self.get_nonterminal_productions()['Qent']
+        qstr_actions = self.get_nonterminal_productions()['Qstr']
+
+        # Dict from span tuple to action str. this will make sorting easier.
+        span2qentactions = {}
+        span2qstractions = {}
+        for a in qent_actions:
+            span = getspanfromaction(a)
+            span2qentactions[span] = a
+        for a in qstr_actions:
+            span = getspanfromaction(a)
+            span2qstractions[span] = a
+
+        sorted_qentspans = sorted(span2qentactions.keys(),
+                                  key=cmp_to_key(tuplecomparision),
+                                  reverse=False)
+        sorted_qstrspans = sorted(span2qstractions.keys(),
+                                  key=cmp_to_key(tuplecomparision),
+                                  reverse=False)
+        if len(sorted_qentspans) >= 2:
+            gold_qent1span = sorted_qentspans[0]
+            gold_qent2span = sorted_qentspans[1]
+        else:
+            gold_qent1span = sorted_qentspans[0]
+            gold_qent2span = sorted_qentspans[0]
+
+
+        gold_qent2end = gold_qent2span[1]
+        gold_qstr_span = None
+        for qstrspan in sorted_qstrspans:
+            if qstrspan[0] > gold_qent2end:
+                gold_qstr_span = qstrspan
+                break
+
+        if gold_qstr_span is None:
+            gold_qstr_span = sorted_qstrspans[-1]
+
+        qent1_action = span2qentactions[gold_qent1span]
+        qent2_action = span2qentactions[gold_qent2span]
+        qstr_action = span2qstractions[gold_qstr_span]
+
+        return qent1_action, qent2_action, qstr_action
+
 
     @predicate
     def bool_qent_qstr(self, qent: Qent, qstr: Qstr) -> Bool1:
