@@ -59,7 +59,8 @@ class HotpotQAPredictor(Predictor):
         out_str += f"Answer: {answer}\n"
         if 'logical_forms' and 'denotations' in outputs:
             for lf, d, ex_vals in zip(logical_forms, denotations, execution_vals):
-                ex_vals_str = self._print_ExecutionValTree(ex_vals, 0)
+                # Stripping the trailing new line
+                ex_vals_str = self._print_ExecutionValTree(ex_vals, 0).strip()
                 out_str += f"LogicalForm: {lf}\nDenotation: {d}\nExecutionTree:\n{ex_vals_str}\n"
 
         out_str += "Contexts:\n"

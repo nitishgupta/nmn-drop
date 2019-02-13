@@ -51,8 +51,8 @@ class BidafPredictor(Predictor):
         if denotation >= 0.5:
             pred_ans = 'yes'
 
-        if pred_ans == answer:
-            return ''
+        # if pred_ans == answer:
+        #     return ''
 
         return out_str
 

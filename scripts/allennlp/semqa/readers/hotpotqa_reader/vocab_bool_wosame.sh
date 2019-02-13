@@ -3,7 +3,7 @@
 INCLUDE_PACKAGE=semqa
 
 # DATASET FILES
-DATASET_DIR=./resources/data/hotpotqa/processed/merged_contexts/bool_wosame
+DATASET_DIR=./resources/data/hotpotqa/processed/bool_wosame
 TRAINFILE=${DATASET_DIR}/train_resplit.jsonl
 
 # VOCAB DATASET_READER CONFIG
@@ -16,10 +16,10 @@ export TRAINING_DATA_FILE=${TRAINFILE}
 # These are used to extend an existing vocab. For eg. When using pretrained bidaf, this would be bidaf's vocabulary
 export EXISTING_VOCAB_DIR=./resources/semqa/pretrained_bidaf/vocabulary
 export EXTEND_VOCAB=true
-export W_SIDEARGS=true
+export W_SIDEARGS=false
 
 # OUTPUT DIR
-VOCABDIR=./resources/semqa/vocabs/hotpotqa/merged_contexts/bool_wosame/gold_contexts/wsideargs_resplit
+VOCABDIR=./resources/semqa/vocabs/hotpotqa/bool_wosame/gold_contexts/wosideargs_${W_SIDEARGS}_resplit
 
 # Don't need since we're extending vocab from bidaf
 #export TOKEN_MIN_CNT=0

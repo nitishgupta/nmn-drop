@@ -261,8 +261,9 @@ class HotpotQADatasetReader(DatasetReader):
         ques_spans_idxs.extend(fivegram_spans)
         ques_spans_idxs.extend(fourgram_spans)
         ques_spans_idxs.extend(trigam_spans)
-        if len(ques_spans_idxs) == 0:
-            ques_spans_idxs.extend(bigram_spans)
+        ques_spans_idxs.extend(bigram_spans)
+        # if len(ques_spans_idxs) == 0:
+        #     ques_spans_idxs.extend(bigram_spans)
         if len(ques_spans_idxs) == 0:
             ques_spans_idxs.extend(unigram_spans)
 
