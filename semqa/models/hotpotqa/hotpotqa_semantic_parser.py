@@ -168,6 +168,8 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         # Addition loss to enforce high ques attention on mention spans when predicting Qent -> find_Qent action
         self._entityspan_qatt_loss = entityspan_qatt_loss
 
+        self.executor_parameters._bidafmodel = self.bidaf_model
+
 
     def device_id(self):
         allenutil.get_device_of()
@@ -274,6 +276,7 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         bidaf_ques_embed = []           # Just embedded token repr for the question
         bidaf_ques_reprs = []
         bidaf_ques_masks = []
+        bidaf_context_embeds = []
         bidaf_context_reprs = []
         bidaf_context_vecs = []
         bidaf_context_masks = []
@@ -283,6 +286,7 @@ class HotpotQASemanticParser(HotpotQAParserBase):
             bidaf_ques_embed.append(bidaf_output_dict['embedded_question'])
             bidaf_ques_reprs.append(bidaf_output_dict[self._bidaf_question_key])
             bidaf_ques_masks.append(bidaf_output_dict['question_mask'])
+            bidaf_context_embeds.append(bidaf_output_dict['embedded_passage'])
             bidaf_context_reprs.append(bidaf_output_dict[self._bidaf_context_key])
             bidaf_context_vecs.append(bidaf_output_dict['passage_vector'])
             bidaf_context_masks.append(bidaf_output_dict['passage_mask'])
@@ -306,9 +310,11 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                                                                       self.bidaf_encoder_bidirectional)
 
         # List of (C, T, D), (C, D) and (T, D) resp.
-        context_repr_list, context_vec_list, context_mask_list = self._concatenate_context_reprs(bidaf_context_reprs,
-                                                                                                 bidaf_context_vecs,
-                                                                                                 bidaf_context_masks)
+        (context_embed_list, context_repr_list,
+         context_vec_list, context_mask_list) = self._concatenate_context_reprs(bidaf_context_embeds,
+                                                                                bidaf_context_reprs,
+                                                                                bidaf_context_vecs,
+                                                                                bidaf_context_masks)
 
         # Gold truth dict of {type: grounding}.
         # The reader passes datatypes with name "ans_grounding_TYPE" where prefix needs to be cleaned.
@@ -402,7 +408,6 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                                                                  instanceidx2actionseq_idxs,
                                                                  instanceidx2actionseq_scores,
                                                                  instanceidx2actionseq_sideargs)
-
         # Convert batch_action_scores to a single tensor the size of number of actions for each batch
         device_id = allenutil.get_device_of(batch_actionseq_scores[0][0])
         # List[torch.Tensor] : Stores probs for each action_seq. Tensor length is same as the number of actions
@@ -427,9 +432,10 @@ class HotpotQASemanticParser(HotpotQAParserBase):
             languages[i].set_arguments(ques_embedded=ques_embed_list[i],
                                        ques_encoded=ques_repr_list[i],
                                        ques_mask=ques_mask_list[i],
+                                       contexts_embedded=context_embed_list[i],
                                        contexts=context_repr_list[i],
                                        contexts_vec=context_vec_list[i],
-                                       contexts_mask=context_repr_list[i],
+                                       contexts_mask=context_mask_list[i],
                                        ne_ent_mens=ent_mens[i],
                                        num_ent_mens=num_mens[i],
                                        date_ent_mens=date_mens[i],
@@ -526,13 +532,15 @@ class HotpotQASemanticParser(HotpotQAParserBase):
 
         return (avg_ques_repr, avg_ques_mask)
 
-    def _concatenate_context_reprs(self, context_reprs, context_vecs, context_masks):
+    def _concatenate_context_reprs(self, context_embeds, context_reprs, context_vecs, context_masks):
         """ Concatenate context_repr from same instance into a single tensor, and return a list of these for the batch
         Input is list of different batched context_repr from different runs of the bidaf model. Here we extract
         different contexts for the same instance and concatenate them.
 
         Parameters:
         -----------
+        context_embeds: `List[torch.FloatTensor]`
+            A C-sized list of (B, T, D) sized tensors
         context_reprs: `List[torch.FloatTensor]`
             A C-sized list of (B, T, D) sized tensors
         context_vecs: `List[torch.FloatTensor]`
@@ -547,18 +555,22 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         # We will unsqueeze dim-1 of all input tensors, concatenate it along that axis to make single tensor of
         # (B, C, T, D) and then slice instances out of it
 
+        context_embeds_expanded = [t.unsqueeze(1) for t in context_embeds]
         context_reprs_expanded = [t.unsqueeze(1) for t in context_reprs]
         context_vecs_expanded = [t.unsqueeze(1) for t in context_vecs]
         context_masks_expanded = [t.unsqueeze(1) for t in context_masks]
+
+        context_embeds_concatenated = torch.cat(context_embeds_expanded, dim=1)
         context_reprs_concatenated = torch.cat(context_reprs_expanded, dim=1)
         context_vecs_concatenated = torch.cat(context_vecs_expanded, dim=1)
         context_masks_concatenated = torch.cat(context_masks_expanded, dim=1)
 
+        context_embed_list = [context_embeds_concatenated[i] for i in range(batch_size)]
         context_repr_list = [context_reprs_concatenated[i] for i in range(batch_size)]
         context_vec_list = [context_vecs_concatenated[i] for i in range(batch_size)]
         context_mask_list = [context_masks_concatenated[i] for i in range(batch_size)]
 
-        return (context_repr_list, context_vec_list, context_mask_list)
+        return (context_embed_list, context_repr_list, context_vec_list, context_mask_list)
 
 
     def _get_mens_mask(self, mention_spans: torch.LongTensor) -> torch.LongTensor:

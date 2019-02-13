@@ -52,37 +52,18 @@ local parse_number(x) =
 
   "train_data_path": std.extVar("TRAINING_DATA_FILE"),
   "validation_data_path": std.extVar("VAL_DATA_FILE"),
-//  "test_data_path": std.extVar("testfile"),
-
 
   "model": {
-    "type": "hotpotqa_parser",
-    "wsideargs": true,
-    "goldactions": false,
+    "type": "bidaf_model",
 
-    "action_embedding_dim": 100,
-
-    "attention": {"type": "dot_product"},
-
-    "decoder_beam_search": {
-      "beam_size": parse_number(std.extVar("BEAMSIZE")),
+    "bool_bilinear": {
+      "type": "bilinear",
+      "tensor_1_dim": 200,
+      "tensor_2_dim": 200,
     },
-
-    "executor_parameters": {
-      "bool_bilinear": {
-        "type": "bilinear",
-        "tensor_1_dim": 400,
-        "tensor_2_dim": 200,
-      },
-      "dropout": parse_number(std.extVar("DROPOUT"))
-    },
-
-    "max_decoding_steps": parse_number(std.extVar("MAX_DECODE_STEP")),
     "dropout": parse_number(std.extVar("DROPOUT")),
     "bidaf_model_path": std.extVar("BIDAF_MODEL_TAR"),
     "bidaf_wordemb_file": std.extVar("BIDAF_WORDEMB_FILE"),
-    "bidaf_context_key": std.extVar("BIDAF_CONTEXT_KEY"),
-    "bool_qstrqent_func": std.extVar("BOOL_QSTRQENT_FUNC")
   },
 
   "iterator": {

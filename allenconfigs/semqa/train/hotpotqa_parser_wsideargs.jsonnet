@@ -20,7 +20,7 @@ local parse_number(x) =
   "dataset_reader": {
     "type": std.extVar("DATASET_READER"),
     "lazy": true,
-    "wsideargs": false,
+    "wsideargs": true,
 
     "token_indexers": {
       "tokens": {
@@ -58,7 +58,7 @@ local parse_number(x) =
 
   "model": {
     "type": "hotpotqa_parser",
-    "wsideargs": false,
+    "wsideargs": true,
     "goldactions": parser.boolparser(std.extVar("GOLDACTIONS")),
 
     "action_embedding_dim": 100,
@@ -72,7 +72,7 @@ local parse_number(x) =
     "executor_parameters": {
       "bool_bilinear": {
         "type": "bilinear",
-        "tensor_1_dim": 200,
+        "tensor_1_dim": 400,
         "tensor_2_dim": 200,
       },
       "dropout": parse_number(std.extVar("DROPOUT"))

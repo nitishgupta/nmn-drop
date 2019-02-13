@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 def forward_bidaf(bidaf_model: BidirectionalAttentionFlow,
                   embedded_question: torch.FloatTensor,
-                  embedded_passage: torch.FloatTensor,
+                  encoded_passage: torch.FloatTensor,
                   question_lstm_mask: torch.FloatTensor,
                   passage_lstm_mask: torch.FloatTensor):
 
@@ -36,9 +36,9 @@ def forward_bidaf(bidaf_model: BidirectionalAttentionFlow,
 
     """
     batch_size = embedded_question.size(0)
-    passage_length = embedded_passage.size(1)
+    passage_length = encoded_passage.size(1)
     encoded_question = bidaf_model._dropout(bidaf_model._phrase_layer(embedded_question, question_lstm_mask))
-    encoded_passage = bidaf_model._dropout(bidaf_model._phrase_layer(embedded_passage, passage_lstm_mask))
+    # encoded_passage = bidaf_model._dropout(bidaf_model._phrase_layer(embedded_passage, passage_lstm_mask))
     encoding_dim = encoded_question.size(-1)
 
     # Shape: (batch_size, passage_length, question_length)

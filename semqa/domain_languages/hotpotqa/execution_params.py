@@ -3,6 +3,8 @@ import torch.nn
 from allennlp.common import Registrable
 from allennlp.modules import Seq2SeqEncoder, SimilarityFunction, TextFieldEmbedder
 from allennlp.modules.span_extractors import EndpointSpanExtractor
+from allennlp.models.reading_comprehension.bidaf import BidirectionalAttentionFlow
+from allennlp.modules.matrix_attention.dot_product_matrix_attention import DotProductMatrixAttention
 
 
 class ExecutorParameters(torch.nn.Module, Registrable):
@@ -13,6 +15,7 @@ class ExecutorParameters(torch.nn.Module, Registrable):
                  ques_encoder: Seq2SeqEncoder = None,
                  context_encoder: Seq2SeqEncoder = None,
                  bool_bilinear: SimilarityFunction = None,
+                 bidafmodel: BidirectionalAttentionFlow = None,
                  dropout: float = 0.0):
         super(ExecutorParameters, self).__init__()
         # self._ques_encoder = ques_encoder
@@ -20,6 +23,8 @@ class ExecutorParameters(torch.nn.Module, Registrable):
         # TODO(nitish): Figure out a way to pass this programatically from bidaf
         self._span_extractor = EndpointSpanExtractor(input_dim=200)
         self._bool_bilinear = bool_bilinear
+        self._bidafmodel = bidafmodel
+        self._matrix_attention = DotProductMatrixAttention()
 
         if dropout > 0:
             self._dropout = torch.nn.Dropout(p=dropout)

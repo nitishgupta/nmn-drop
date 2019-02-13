@@ -64,9 +64,13 @@ class HotpotQALanguage(DomainLanguage):
         self.bool_qstr_qent_func = None
         self.q_nemenspan2entidx = None
         # Shape: (QLen, Q_d)
+        self.ques_embedded = None
+        # Shape: (QLen, Q_d)
         self.ques_encoded = None
         # Shape: (Qlen)
         self.ques_mask = None
+        # Shape: (C, T, D)
+        self.contexts_embedded = None
         # Shape: (C, T, D)
         self.contexts = None
         # Shape: (C, D)
@@ -119,8 +123,10 @@ class HotpotQALanguage(DomainLanguage):
             raise ExecutionError(message="Mapping from type name to Type not found! TypeName:{}".format(typename))
 
     def set_arguments(self, **kwargs):
+        self.ques_embedded = kwargs["ques_embedded"]
         self.ques_encoded = kwargs["ques_encoded"]
         self.ques_mask = kwargs["ques_mask"]
+        self.contexts_embedded = kwargs["contexts_embedded"]
         self.contexts = kwargs["contexts"]
         self.contexts_vec = kwargs["contexts_vec"]
         self.contexts_mask = kwargs["contexts_mask"]
@@ -152,8 +158,8 @@ class HotpotQALanguage(DomainLanguage):
     def bool_and(self, bool1: Bool1, bool2: Bool1) -> Bool:
         """ AND operation between two booleans """
         # return_val = bool1._value * bool2._value
-        # return_val = torch.min(torch.cat([bool1._value.unsqueeze(0), bool2._value.unsqueeze(0)], 0))
-        return_val = torch.sigmoid(10.0*bool1._value + 10.0*bool2._value - 15.0)
+        return_val = torch.min(torch.cat([bool1._value.unsqueeze(0), bool2._value.unsqueeze(0)], 0))
+        # return_val = torch.sigmoid(10.0*bool1._value + 10.0*bool2._value - 15.0)
         return Bool(value=return_val)
         # return Bool(value=bool1._value * bool2._value)
 

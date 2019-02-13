@@ -30,82 +30,15 @@ import utils.util as util
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-@DatasetReader.register("hotpotqa_reader")
-class HotpotQADatasetReader(DatasetReader):
-    """
-    Copied from NlvrDatasetReader
-    (https://github.com/allenai/allennlp/blob/master/allennlp/data/dataset_readers/semantic_parsing/nlvr.py)
-    """
-
-    """
-    Instance-specific-actions (linked actions):
-    We currently deal with linked actions that lead to terminals. For example "QSTR -> ques_span"
-    Much goes behind making such a rule possible, and some decisions need to be taken.
-    
-    1. The right-hand-side gets a name, this is used in the World to add to the name_mapping and type_signatures.
-    We will add the prefix of the acrtion_type to the actual context.
-    For example QSTR:ques_span_tokens, QENT:ques_mention_tokens
-    
-    2. After getting added to the world, in the reader it is added as a non-global production rule
-    
-    3. linked_rule_idx: Current reader implementation make a dictionary from RHS: idx to store other data
-    about rule in lists. See below.
-    
-    4. Linking_score: For each action, a binary vector of length as ques_length is made to score the action.
-    Passed as a list, the idx is from linked_rule_idx (3.)
-    
-    5. Output_embedding: An action needs an output_embedding if selected in the decoder to feed to the next time step. 
-    Since all our instance-specific-actions are spans, we use span_embeddings for which we pass a list of SpanField
-    Idxs from linked_rule_idx (3.)
-    
-    6. Denotation: This is the representation used in the execution.
-    For example, QSTR might need a span embedding for which 5. can be used.
-    QENT will need a vector the size of the number of NE entities in the instance.
-    For QSTR: Pass Dict from {ques_span: idx} indexing into the SpanField list of 5.
-    For QENT: Pass Dict from {ques_span: idx} indexing into a ArrayField wiht shape: (Num_QENT_spans, Num_NE_entities)
-
-    Parameters
-    ----------
-    lazy : ``bool`` (optional, default=False)
-        Passed to ``DatasetReader``.  If this is ``True``, training will start sooner, but will
-        take longer per batch.
-    tokenizer : ``Tokenizer`` (optional)
-        The tokenizer used for sentences in NLVR. Default is ``WordTokenizer``
-    sentence_token_indexers : ``Dict[str, TokenIndexer]`` (optional)
-        Token indexers for tokens in input sentences.
-        Default is ``{"tokens": SingleIdTokenIndexer()}``
-    nonterminal_indexers : ``Dict[str, TokenIndexer]`` (optional)
-        Indexers for non-terminals in production rules. The default is to index terminals and
-        non-terminals in the same way, but you may want to change it.
-        Default is ``{"tokens": SingleIdTokenIndexer("rule_labels")}``
-    terminal_indexers : ``Dict[str, TokenIndexer]`` (optional)
-        Indexers for terminals in production rules. The default is to index terminals and
-        non-terminals in the same way, but you may want to change it.
-        Default is ``{"tokens": SingleIdTokenIndexer("rule_labels")}``
-    output_agendas : ``bool`` (optional)
-        If preparing data for a trainer that uses agendas, set this flag and the datset reader will
-        output agendas.
-    """
+@DatasetReader.register("bidaf_reader")
+class BidafDatasetReader(DatasetReader):
+    """ """
     def __init__(self,
                  lazy: bool = False,
                  wsideargs: bool = True,
-                 token_indexers: Dict[str, TokenIndexer] = None,
-                 nonterminal_indexers: Dict[str, TokenIndexer] = None,
-                 terminal_indexers: Dict[str, TokenIndexer] = None) -> None:
+                 token_indexers: Dict[str, TokenIndexer] = None) -> None:
         super().__init__(lazy)
-        self._wsideargs = wsideargs
         self._token_indexers = token_indexers or {"tokens": SingleIdTokenIndexer()}
-        self._nonterminal_indexers = nonterminal_indexers or {"tokens":
-                                                              SingleIdTokenIndexer("rule_labels")}
-        self._terminal_indexers = terminal_indexers or {"tokens": SingleIdTokenIndexer("rule_labels")}
-
-        self.HotpotQALanguageClass = HotpotQALanguageWSideArgs if wsideargs else HotpotQALanguageWOSideArgs
-
-        # bidaf_model_path = 'https://s3-us-west-2.amazonaws.com/allennlp/models/bidaf-model-2017.09.15-charpad.tar.gz'
-        # archive = load_archive(bidaf_model_path)
-        # bidaf_config = archive.config.duplicate()
-        # dataset_reader_params = bidaf_config["dataset_reader"]
-        # self.bidaf_dataset_reader: SquadReader = DatasetReader.from_params(dataset_reader_params)
 
     @overrides
     def _read(self, file_path: str):
@@ -124,6 +57,7 @@ class HotpotQADatasetReader(DatasetReader):
 
 
     def _json_to_instance(self, jsonobj: JsonDict):
+
         # space delimited tokenized
         question = jsonobj[hpconstants.q_field]
         answer = jsonobj[hpconstants.ans_field]
@@ -407,46 +341,43 @@ class HotpotQADatasetReader(DatasetReader):
         # pylint: disable=arguments-differ
         tokenized_ques = ques.strip().split(" ")
         tokenized_ques = [hpconstants.COMMA if x == ',' else x for x in tokenized_ques]
-        # tokenized_ques = [x.replace(',', hpconstants.COMMA) for x in tokenized_ques]
 
         # Question TextField
         ques_tokens: List[Token] = [Token(token) for token in tokenized_ques]
         ques_tokenized_field = TextField(ques_tokens, self._token_indexers)
 
-        # bidaf_question_field = TextField(ques_tokens, self.bidaf_dataset_reader._token_indexers)
-
-        # Make Ques_spans, their idxs, linking score and SpanField representations
-        (ques_spans, ques_spans2idx,
-         ques_spans_linking_score, ques_spans_spanfields) = self.get_ques_spans(ques_tokens=tokenized_ques,
-                                                                                q_ent_ners=q_nemens,
-                                                                                ques_textfield=ques_tokenized_field)
+        # # Make Ques_spans, their idxs, linking score and SpanField representations
+        # (ques_spans, ques_spans2idx,
+        #  ques_spans_linking_score, ques_spans_spanfields) = self.get_ques_spans(ques_tokens=tokenized_ques,
+        #                                                                         q_ent_ners=q_nemens,
+        #                                                                         ques_textfield=ques_tokenized_field)
 
         num_ne_ents = len(context_eqent2entmens)
 
-        # Processing for NE mens in the question
-        # ques_spans, ques_spans2idx, ques_spans_linking_score, ques_spans_spanidxs - updated with the NE mens
-        (ques_spans, ques_spans2idx,
-         ques_spans_linking_score, ques_spans_spanidxs,
-         q_nemenspan2entidx) = self.get_ques_nemens_ent_spans(
-            ques_tokens=tokenized_ques, q_ent_ners=q_nemens, q_entmens2entidx=qnemens_to_ent,
-            num_ne_ents=num_ne_ents, ques_textfield=ques_tokenized_field,
-            ques_spans=ques_spans, ques_spans2idx=ques_spans2idx,
-            ques_spans_linking_score=ques_spans_linking_score, ques_spans_spanfields=ques_spans_spanfields)
-
-        # Deep copy since ques_spans2idx changes later on
-        ques_spans2idx_field = MetadataField(ques_spans2idx)
-        ques_spans_spanfield = ListField(ques_spans_spanidxs)
-
-        # q_nemens_grounding_field = ArrayField(np.array(q_nemenspan_grounding), padding_value=-1)
-        q_nemenspan2entidx_field = MetadataField(q_nemenspan2entidx)
-
-        # Make world from question spans
-        # This adds instance specific actions as well
-        if self._wsideargs:
-            hplanguage = self.HotpotQALanguageClass()
-        else:
-            hplanguage = self.HotpotQALanguageClass(qstr_qent_spans=ques_spans)
-        lang_field = MetadataField(hplanguage)
+        # # Processing for NE mens in the question
+        # # ques_spans, ques_spans2idx, ques_spans_linking_score, ques_spans_spanidxs - updated with the NE mens
+        # (ques_spans, ques_spans2idx,
+        #  ques_spans_linking_score, ques_spans_spanidxs,
+        #  q_nemenspan2entidx) = self.get_ques_nemens_ent_spans(
+        #     ques_tokens=tokenized_ques, q_ent_ners=q_nemens, q_entmens2entidx=qnemens_to_ent,
+        #     num_ne_ents=num_ne_ents, ques_textfield=ques_tokenized_field,
+        #     ques_spans=ques_spans, ques_spans2idx=ques_spans2idx,
+        #     ques_spans_linking_score=ques_spans_linking_score, ques_spans_spanfields=ques_spans_spanfields)
+        #
+        # # Deep copy since ques_spans2idx changes later on
+        # ques_spans2idx_field = MetadataField(ques_spans2idx)
+        # ques_spans_spanfield = ListField(ques_spans_spanidxs)
+        #
+        # # q_nemens_grounding_field = ArrayField(np.array(q_nemenspan_grounding), padding_value=-1)
+        # q_nemenspan2entidx_field = MetadataField(q_nemenspan2entidx)
+        #
+        # # Make world from question spans
+        # # This adds instance specific actions as well
+        # if self._wsideargs:
+        #     hplanguage = self.HotpotQALanguageClass()
+        # else:
+        #     hplanguage = self.HotpotQALanguageClass(qstr_qent_spans=ques_spans)
+        # lang_field = MetadataField(hplanguage)
 
         # Action_field:
         #   Currently, all instance-specific rules are terminal rules of the kind: q -> QSTR:ques_span
@@ -454,26 +385,26 @@ class HotpotQADatasetReader(DatasetReader):
         #   Create a dictionary mapping, linked_rule2idx: {linked_rule: int_idx}
         #   Create a DataArray of linking scores: (num_linked_rules, num_ques_tokens)
         #   With the linked_rule2idx map, the correct linking_score can be retrieved in the world.
-        production_rule_fields: List[ProductionRuleField] = []
-        linked_rule2idx = {}
-        action_to_ques_linking_scores = ques_spans_linking_score
-        for production_rule in hplanguage.all_possible_productions():
-            _, rule_right_side = production_rule.split(' -> ')
-            is_global_rule = not (rule_right_side.startswith(hpconstants.QSTR_PREFIX)
-                                  or rule_right_side.startswith(hpconstants.QENT_PREFIX))
-            rule_field = ProductionRuleField(production_rule, is_global_rule)
-            production_rule_fields.append(rule_field)
-
-            # Tokens in a ques_span; rule_right_side is QSTR_PREFIXquestion_span, hence removing the QSTR_PREFIX
-            if not is_global_rule:
-                # ques_span = rule_right_side[len(QSTR_PREFIX):]
-                linked_rule2idx[production_rule] = ques_spans2idx[rule_right_side]
-
-        action_field = ListField(production_rule_fields)
-        # Dict from linked_rule_string -> idx in 'action_to_ques_linking_scores'
-        linked_rule2idx_field = MetadataField(linked_rule2idx)
-        action_to_ques_linking_scores_field = ArrayField(np.array(action_to_ques_linking_scores), padding_value=0)
-        ques_span_actions_to_spanfield = ListField(ques_spans_spanidxs)
+        # production_rule_fields: List[ProductionRuleField] = []
+        # linked_rule2idx = {}
+        # action_to_ques_linking_scores = ques_spans_linking_score
+        # for production_rule in hplanguage.all_possible_productions():
+        #     _, rule_right_side = production_rule.split(' -> ')
+        #     is_global_rule = not (rule_right_side.startswith(hpconstants.QSTR_PREFIX)
+        #                           or rule_right_side.startswith(hpconstants.QENT_PREFIX))
+        #     rule_field = ProductionRuleField(production_rule, is_global_rule)
+        #     production_rule_fields.append(rule_field)
+        #
+        #     # Tokens in a ques_span; rule_right_side is QSTR_PREFIXquestion_span, hence removing the QSTR_PREFIX
+        #     if not is_global_rule:
+        #         # ques_span = rule_right_side[len(QSTR_PREFIX):]
+        #         linked_rule2idx[production_rule] = ques_spans2idx[rule_right_side]
+        #
+        # action_field = ListField(production_rule_fields)
+        # # Dict from linked_rule_string -> idx in 'action_to_ques_linking_scores'
+        # linked_rule2idx_field = MetadataField(linked_rule2idx)
+        # action_to_ques_linking_scores_field = ArrayField(np.array(action_to_ques_linking_scores), padding_value=0)
+        # ques_span_actions_to_spanfield = ListField(ques_spans_spanidxs)
 
         contexts_tokenized = []
         contexts_text = []
@@ -511,9 +442,9 @@ class HotpotQADatasetReader(DatasetReader):
                                                   ArrayField(np.array([len(context_eqent2datemens)])))
 
         fields: Dict[str, Field] = {"question": ques_tokenized_field,
-                                    "quesspans2idx": ques_spans2idx_field,
-                                    "quesspans_spans": ques_spans_spanfield,
-                                    "q_nemenspan2entidx": q_nemenspan2entidx_field,
+                                    # "quesspans2idx": ques_spans2idx_field,
+                                    # "quesspans_spans": ques_spans_spanfield,
+                                    # "q_nemenspan2entidx": q_nemenspan2entidx_field,
                                     "contexts": contexts_tokenized_field,
                                     "ent_mens": all_ent_mens_field,
                                     "num_nents": num_nents,
@@ -523,11 +454,11 @@ class HotpotQADatasetReader(DatasetReader):
                                     "num_dateents": num_dateents,
                                     "num_normval": all_nummens_normval_field,
                                     "date_normval": all_datemens_normval_field,
-                                    "languages": lang_field,
-                                    "actions": action_field,
-                                    "linked_rule2idx": linked_rule2idx_field,
-                                    "action2ques_linkingscore": action_to_ques_linking_scores_field,
-                                    "ques_str_action_spans": ques_span_actions_to_spanfield,
+                                    # "languages": lang_field,
+                                    # "actions": action_field,
+                                    # "linked_rule2idx": linked_rule2idx_field,
+                                    # "action2ques_linkingscore": action_to_ques_linking_scores_field,
+                                    # "ques_str_action_spans": ques_span_actions_to_spanfield,
                                     }
 
         # TODO(nitish): Figure out how to pack the answer. Multiple types; ENT, BOOL, NUM, DATE, STRING

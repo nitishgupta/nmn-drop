@@ -176,12 +176,11 @@ class HotpotQALanguageWSideArgs(HotpotQALanguage):
             # Shape: 2*Q_d
             qent_qstr_repr = torch.cat([qent_repr, qstr_repr])
 
-            # Now dot prod with context vecs
-            # Shape: (C, 2 * D)
-            context_vecs = torch.cat([self.contexts_vec, self.contexts_vec], 1)
+            qent_qstr_repr = self._execution_parameters._dropout(qent_qstr_repr)
+            contexts_vec = self._execution_parameters._dropout(self.contexts_vec)
 
             # Shape: C
-            dot_prod = self._execution_parameters._bool_bilinear(qent_qstr_repr, self.contexts_vec)
+            dot_prod = self._execution_parameters._bool_bilinear(qent_qstr_repr, contexts_vec)
             # dot_prod = (qent_qstr_repr.unsqueeze(0) * context_vecs).sum(1)
 
             probs = torch.sigmoid(dot_prod)

@@ -14,14 +14,26 @@ from allennlp.modules.similarity_functions import SimilarityFunction, BilinearSi
 from allennlp.semparse import (DomainLanguage, ExecutionError, ParsingError,
                                predicate, predicate_with_side_args, util)
 from allennlp.semparse.domain_languages.domain_language import PredicateType
+from allennlp.modules.matrix_attention.dot_product_matrix_attention import DotProductMatrixAttention
 
 from semqa.domain_languages.hotpotqa.execution_params import ExecutorParameters
 from semqa.domain_languages.hotpotqa.hotpotqa_language import Qstr, Qent, Bool, Bool1, HotpotQALanguage
+import  semqa.utils.bidaf_utils as bidaf_utils
 
 import datasets.hotpotqa.utils.constants as hpcons
 
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
+
+def getspanfromaction(actionstr):
+    """ Action string of the type Qent -> QENT:Tokens@DELIM@START@DELIM@END or just RHS
+        Return (START, END)
+    """
+    splittokens = actionstr.split(hpcons.SPAN_DELIM)
+    start, end = int(splittokens[-2]), int(splittokens[-1])
+    return (start, end)
+
 
 class HotpotQALanguageWOSideArgs(HotpotQALanguage):
     def __init__(self, qstr_qent_spans: List[str]):
@@ -63,15 +75,7 @@ class HotpotQALanguageWOSideArgs(HotpotQALanguage):
 
 
     def _get_gold_actions(self) -> Tuple[str, str, str]:
-        def getspanfromaction(actionstr):
-            """ Action string of the type Qent -> QENT:Tokens@DELIM@START@DELIM@END
-                Return (START, END)
-            """
-            splittokens = actionstr.split(hpcons.SPAN_DELIM)
-            start, end = int(splittokens[-2]), int(splittokens[-1])
-            return (start, end)
-
-        def tuplecomparision(t1, t2):
+        def longestfirst_cmp(t1, t2):
             # when arranging in ascending, longest with greater end should come first
             len1 = t1[1] - t1[0]
             len2 = t2[1] - t2[0]
@@ -86,19 +90,19 @@ class HotpotQALanguageWOSideArgs(HotpotQALanguage):
                     return -1
                 else:
                     return 0
-        # def tuplecomparision(t1, t2):
-        #     # When arranging in ascending, lower start but longest within should come first
-        #     if t1[0] < t2[0]:
-        #         return -1
-        #     elif t1[0] > t2[0]:
-        #         return 1
-        #     else:
-        #         if t1[1] < t2[1]:
-        #             return 1
-        #         elif t1[1] > t2[1]:
-        #             return -1
-        #         else:
-        #             return 0
+        def startfirst_cmp(t1, t2):
+            # When arranging in ascending, lower start but longest within should come first
+            if t1[0] < t2[0]:
+                return -1
+            elif t1[0] > t2[0]:
+                return 1
+            else:
+                if t1[1] < t2[1]:
+                    return 1
+                elif t1[1] > t2[1]:
+                    return -1
+                else:
+                    return 0
 
 
 
@@ -125,10 +129,10 @@ class HotpotQALanguageWOSideArgs(HotpotQALanguage):
             span2qstractions[span] = a
 
         sorted_qentspans = sorted(span2qentactions.keys(),
-                                  key=cmp_to_key(tuplecomparision),
+                                  key=cmp_to_key(startfirst_cmp),
                                   reverse=False)
         sorted_qstrspans = sorted(span2qstractions.keys(),
-                                  key=cmp_to_key(tuplecomparision),
+                                  key=cmp_to_key(longestfirst_cmp),
                                   reverse=False)
         if len(sorted_qentspans) >= 2:
             gold_qent1span = sorted_qentspans[0]
@@ -152,8 +156,11 @@ class HotpotQALanguageWOSideArgs(HotpotQALanguage):
         qent2_action = span2qentactions[gold_qent2span]
         qstr_action = span2qstractions[gold_qstr_span]
 
-        return qent1_action, qent2_action, qstr_action
+        # print(qent1_action)
+        # print(qent2_action)
+        # print(qstr_action)
 
+        return qent1_action, qent2_action, qstr_action
 
     @predicate
     def bool_qent_qstr(self, qent: Qent, qstr: Qstr) -> Bool1:
@@ -163,16 +170,14 @@ class HotpotQALanguageWOSideArgs(HotpotQALanguage):
             raise NotImplementedError
         elif self.bool_qstr_qent_func == 'context':
             returnval = self.bool_qent_qstr_wcontext(qent_obj=qent, qstr_obj=qstr)
+        elif self.bool_qstr_qent_func == 'rawbidaf':
+            returnval = self.bool_qent_qstr_rawbidaf(qent_obj=qent, qstr_obj=qstr)
         else:
             raise NotImplementedError
 
         return returnval
 
-
     def bool_qent_qstr_wcontext(self, qent_obj: Qent, qstr_obj: Qstr) -> Bool1:
-        # qent_att = qent._value * self.ques_mask
-        # qstr_att = qstr._value * self.ques_mask
-
         qent = qent_obj._value
         qstr = qstr_obj._value
 
@@ -186,6 +191,61 @@ class HotpotQALanguageWOSideArgs(HotpotQALanguage):
         ques_context_sim = self._execution_parameters._bool_bilinear(qent_qstr_repr, self.contexts_vec)
 
         probs = torch.sigmoid(ques_context_sim)
+        boolean_prob = torch.max(probs)
+        return Bool1(value=boolean_prob)
+
+    def bool_qent_qstr_rawbidaf(self, qent_obj: Qent, qstr_obj: Qstr) -> Bool1:
+        qent = qent_obj._value
+        qstr = qstr_obj._value
+
+        qent_start, qent_end = getspanfromaction(qent)
+        qstr_start, qstr_end = getspanfromaction(qstr)
+        # For are (*, D)
+        qent_embedded = self.ques_embedded[qent_start:qent_end + 1]
+        qent_mask = self.ques_mask[qent_start:qent_end + 1]
+        qstr_embedded = self.ques_embedded[qstr_start:qstr_end + 1]
+        qstr_mask = self.ques_mask[qstr_start:qstr_end + 1]
+        # This can go into bidaf utils forward
+        q_ent_str_embed = torch.cat([qent_embedded, qstr_embedded], dim=0)
+        q_ent_str_mask = torch.cat([qent_mask, qstr_mask], dim=0)
+
+        # Shape : (C, T, D)
+        contexts_embedded = self.contexts_embedded
+        context_encoded = self.contexts
+
+        # (C, T)
+        context_mask = self.contexts_mask
+        num_contexts = context_encoded.size(0)
+
+        # (C, Qlen, D) -- copy of the question C times to get independent reprs
+        q_ent_str_embed_ex = q_ent_str_embed.unsqueeze(0).expand([num_contexts, *q_ent_str_embed.size()])
+        q_ent_str_mask_ex = q_ent_str_mask.unsqueeze(0).expand([num_contexts, *q_ent_str_mask.size()])
+
+        output_dict = bidaf_utils.forward_bidaf(bidaf_model=self._execution_parameters._bidafmodel,
+                                                embedded_question=q_ent_str_embed_ex,
+                                                encoded_passage=context_encoded,
+                                                question_lstm_mask=q_ent_str_mask_ex,
+                                                passage_lstm_mask=context_mask)
+
+        # (C, T, D)
+        q_encoded_ex = output_dict["encoded_question"]
+
+        # Shape: (C, D) == C, 200 for bidaf
+        q_vec_ex = allenutil.get_final_encoder_states(q_encoded_ex, q_ent_str_mask.unsqueeze(0), True)
+        # Shape: (D)
+        q_vec = q_vec_ex[0]
+
+        # Shape: (C, D) == (C, 200) for bidaf
+        context_vec = output_dict["passage_vector"]    # Since only one passage
+
+        q_vec = self._execution_parameters._dropout(q_vec)
+        context_vec = self._execution_parameters._dropout(context_vec)
+
+        # Shape: C
+        question_context_similarity = self._execution_parameters._bool_bilinear(q_vec, context_vec)
+
+        best_score = torch.max(question_context_similarity)
+        probs = torch.sigmoid(best_score)
         boolean_prob = torch.max(probs)
         return Bool1(value=boolean_prob)
 
@@ -252,6 +312,8 @@ if __name__=="__main__":
     all_prods = language.all_possible_productions()
 
     print("All prods:\n{}\n".format(all_prods))
+
+    print(f"\n {language.get_nonterminal_productions()}")
     #
     # nonterm_prods = language.get_nonterminal_productions()
     # print("Non terminal prods:\n{}\n".format(nonterm_prods))

@@ -9,7 +9,6 @@ local parser = {
   "dataset_reader": {
     "type": std.extVar("DATASET_READER"),
     "lazy": true,
-    "wsideargs": parser.boolparser(std.extVar("W_SIDEARGS")),
 
     "token_indexers": {
       "tokens": {
@@ -37,18 +36,9 @@ local parser = {
   },
 
   "vocabulary": {
-//    "min_count": {
-//      "tokens": std.parseInt(std.extVar("TOKEN_MIN_CNT"))
-//    },
-//    "pretrained_files": {
-//      "tokens": std.extVar("WORD_EMBED_FILE")
-//    },
-//    "only_include_pretrained_words": false,
     "extend": parser.boolparser(std.extVar("EXTEND_VOCAB")),
     "directory_path": std.extVar("EXISTING_VOCAB_DIR")
   },
 
   "train_data_path": std.extVar("TRAINING_DATA_FILE")
-//  "validation_data_path": std.extVar("valfile"),
-//  "test_data_path": std.extVar("testfile"),
 }
