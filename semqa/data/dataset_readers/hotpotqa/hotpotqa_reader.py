@@ -14,17 +14,15 @@ from allennlp.data.fields import ProductionRuleField, MetadataField, SpanField, 
 from allennlp.data.token_indexers import TokenIndexer, SingleIdTokenIndexer
 from allennlp.data.tokenizers.token import Token
 from allennlp.data.dataset_readers.dataset_reader import DatasetReader
-import allennlp.data.dataset
-from allennlp.models.archival import load_archive
-from allennlp.data.dataset_readers.reading_comprehension.squad import SquadReader
-import allennlp.data.dataset_readers.reading_comprehension.util as rcutils
+from allennlp.data.tokenizers.tokenizer import Tokenizer
 
-from semqa.worlds.hotpotqa.hotpotqa_world import SampleHotpotWorld
 from semqa.domain_languages.hotpotqa.hotpotqa_language_w_sideargs import HotpotQALanguageWSideArgs
 from semqa.domain_languages.hotpotqa.hotpotqa_language_wo_sideargs import HotpotQALanguageWOSideArgs
 from semqa.data.datatypes import DateField, NumberField
 import datasets.hotpotqa.utils.constants as hpconstants
 import utils.util as util
+
+from allennlp.commands.make_vocab import MakeVocab
 
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -90,14 +88,22 @@ class HotpotQADatasetReader(DatasetReader):
                  lazy: bool = False,
                  wsideargs: bool = True,
                  token_indexers: Dict[str, TokenIndexer] = None,
+                 # snli_tokenizer: Tokenizer = None,
+                 # snli_token_indexers: Dict[str, TokenIndexer] = None,
                  nonterminal_indexers: Dict[str, TokenIndexer] = None,
                  terminal_indexers: Dict[str, TokenIndexer] = None) -> None:
         super().__init__(lazy)
+        if token_indexers is None:
+            raise NotImplementedError
+
         self._wsideargs = wsideargs
-        self._token_indexers = token_indexers or {"tokens": SingleIdTokenIndexer()}
+        self._token_indexers = token_indexers
         self._nonterminal_indexers = nonterminal_indexers or {"tokens":
                                                               SingleIdTokenIndexer("rule_labels")}
         self._terminal_indexers = terminal_indexers or {"tokens": SingleIdTokenIndexer("rule_labels")}
+
+        # self._snli_tokenizer = snli_tokenizer
+        # self._snli_token_indexers = snli_token_indexers
 
         self.HotpotQALanguageClass = HotpotQALanguageWSideArgs if wsideargs else HotpotQALanguageWOSideArgs
 
@@ -408,7 +414,6 @@ class HotpotQADatasetReader(DatasetReader):
         # pylint: disable=arguments-differ
         tokenized_ques = ques.strip().split(" ")
         tokenized_ques = [hpconstants.COMMA if x == ',' else x for x in tokenized_ques]
-        # tokenized_ques = [x.replace(',', hpconstants.COMMA) for x in tokenized_ques]
 
         # Question TextField
         ques_tokens: List[Token] = [Token(token) for token in tokenized_ques]
@@ -486,6 +491,20 @@ class HotpotQADatasetReader(DatasetReader):
             contexts_tokenized.append(tokenized_context)
         contexts_tokenized_field = ListField(contexts_tokenized)
 
+        ''' SNLI FIELDS '''
+        # if self._snli_tokenizer:
+        #     snli_questokens = self._snli_tokenizer.tokenize(ques)
+        #     snli_ques_field = TextField(snli_questokens, self._snli_token_indexers)
+        #     snli_contexts_tokenized = []
+        #     for context_id, context in contexts:
+        #         snli_context_tokenized = self._snli_tokenizer.tokenize(context.strip())
+        #         snli_context_field = TextField(snli_context_tokenized, self._snli_token_indexers)
+        #         snli_contexts_tokenized.append(snli_context_field)
+        #     snli_contexts_field = ListField(snli_contexts_tokenized)
+        # else:
+        #     snli_ques_field = None
+        #     snli_contexts_field = None
+
         # all_ent_mens = self.processEntMens(contexts_ent_ners, contexts_tokenized)
         all_ent_mens, _ = self.processMens(mens=contexts_ent_ners, eqent2mens=context_eqent2entmens,
                                            contexts_tokenized=contexts_tokenized)
@@ -530,6 +549,9 @@ class HotpotQADatasetReader(DatasetReader):
                                     "action2ques_linkingscore": action_to_ques_linking_scores_field,
                                     "ques_str_action_spans": ques_span_actions_to_spanfield,
                                     }
+        # if snli_ques_field is not None:
+        #     fields["snli_ques"] = snli_ques_field
+        #     fields["snli_contexts"] = snli_contexts_field
 
         # TODO(nitish): Figure out how to pack the answer. Multiple types; ENT, BOOL, NUM, DATE, STRING
         # One way is to have field for all types of answer, and mask all but the correct kind.

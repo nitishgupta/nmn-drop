@@ -43,7 +43,20 @@ local parse_number(x) =
                   0
               ]
           }
+      },
+    },
+    "snli_token_indexers": {
+      "elmo": {
+        "type": "elmo_characters"
       }
+    },
+    "snli_tokenizer": {
+      "word_splitter": {
+        "type": "just_spaces"
+      },
+      "end_tokens": [
+        "@@NULL@@"
+      ]
     }
   },
 
@@ -75,6 +88,12 @@ local parse_number(x) =
         "tensor_1_dim": 200,
         "tensor_2_dim": 200,
       },
+      "matrix_attention": {
+//        "type": "dot_product",
+        "type": "bilinear",
+        "matrix_1_dim": 200,
+        "matrix_2_dim": 200
+      },
       "dropout": parse_number(std.extVar("DROPOUT"))
     },
 
@@ -82,8 +101,9 @@ local parse_number(x) =
     "dropout": parse_number(std.extVar("DROPOUT")),
     "bidaf_model_path": std.extVar("BIDAF_MODEL_TAR"),
     "bidaf_wordemb_file": std.extVar("BIDAF_WORDEMB_FILE"),
-    "bidaf_context_key": std.extVar("BIDAF_CONTEXT_KEY"),
-    "bool_qstrqent_func": std.extVar("BOOL_QSTRQENT_FUNC")
+    "bool_qstrqent_func": std.extVar("BOOL_QSTRQENT_FUNC"),
+    "question_token_repr_key": std.extVar("QTK"),
+    "context_token_repr_key": std.extVar("CTK")
   },
 
   "iterator": {

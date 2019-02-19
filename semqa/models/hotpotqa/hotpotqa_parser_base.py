@@ -20,7 +20,7 @@ from semqa.domain_languages.hotpotqa.hotpotqa_language import HotpotQALanguage
 from semqa.domain_languages.hotpotqa.execution_params import ExecutorParameters
 import semqa.domain_languages.domain_language_utils as dl_utils
 
-
+from allennlp.pretrained import PretrainedModel
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -73,8 +73,8 @@ class HotpotQAParserBase(Model):
         self._consistency = Average()
 
         # Don't need these now that we're using bidaf for reprs.
-        # self._text_field_embedder = text_field_embedder
-        # self._qencoder = qencoder
+        self._text_field_embedder = text_field_embedder
+        self._qencoder = qencoder
         # self._ques2action_encoder = ques2action_encoder
         # self._quesspan_extractor = quesspan_extractor
 

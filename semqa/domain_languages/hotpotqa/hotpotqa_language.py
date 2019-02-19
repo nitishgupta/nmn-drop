@@ -61,7 +61,9 @@ class HotpotQALanguage(DomainLanguage):
         self.device_id = -1
         self._execution_parameters: ExecutorParameters = None
 
+        # key telling which execution function to use to implement bool_qstr_qent function
         self.bool_qstr_qent_func = None
+
         self.q_nemenspan2entidx = None
         # Shape: (QLen, Q_d)
         self.ques_embedded = None
@@ -69,10 +71,10 @@ class HotpotQALanguage(DomainLanguage):
         self.ques_encoded = None
         # Shape: (Qlen)
         self.ques_mask = None
-        # Shape: (C, T, D)
+        # Shape: (C, T, D) - The three token-level context representations
         self.contexts_embedded = None
-        # Shape: (C, T, D)
-        self.contexts = None
+        self.contexts_encoded = None
+        self.contexts_modeled = None
         # Shape: (C, D)
         self.contexts_vec = None
         # Shape: (C, T)
@@ -91,8 +93,13 @@ class HotpotQALanguage(DomainLanguage):
         self.q_nemens2groundingidx = None
         # Dict from Q_NE_men idx to EntityIdx corresonding to self.ne_ent_mens
         self.q_nemenspan2entidx = None
-        # Dictionary from QStr span to it's tensor representation
-        self.qstr2repr = None
+
+        # Dictionary from QStr/Qent span to it's tokens' tensor representation which is implemented by diff languages.
+        # Should be a mapping from QuesSpan tensor to a tensor of shape (SpanLen, D)
+        # These can be embeded or encoded repr. based on the question_token_repr_key
+        self.questionspan2tokensembed = None
+        self.questionspan2tokensrepr = None
+        self.questionspan2mask = None
         # Map from Qent span_str to LongTensor(2) of it's span in the question
         self.entidx2spans = None
         # Map from Qent span_str to LongTensor(Qlen) - a multi-hot vector with 1s at span token locations
@@ -127,7 +134,8 @@ class HotpotQALanguage(DomainLanguage):
         self.ques_encoded = kwargs["ques_encoded"]
         self.ques_mask = kwargs["ques_mask"]
         self.contexts_embedded = kwargs["contexts_embedded"]
-        self.contexts = kwargs["contexts"]
+        self.contexts_encoded = kwargs["contexts_encoded"]
+        self.contexts_modeled = kwargs["contexts_modeled"]
         self.contexts_vec = kwargs["contexts_vec"]
         self.contexts_mask = kwargs["contexts_mask"]
         self.ne_ent_mens = kwargs["ne_ent_mens"]
@@ -138,6 +146,10 @@ class HotpotQALanguage(DomainLanguage):
         self.q_nemenspan2entidx = kwargs["q_nemenspan2entidx"]
         self.device_id = allenutil.get_device_of(self.ques_encoded)
         self.bool_qstr_qent_func = kwargs["bool_qstr_qent_func"]
+        # self.snli_ques = kwargs["snli_ques"]
+        # self.snli_contexts = kwargs["snli_contexts"]
+        # self.snliques_mask = kwargs["snliques_mask"]
+        # self.snlicontexts_mask = kwargs["snlicontexts_mask"]
         # Keep commented for use later
         # print(f"self.ques_embedded: {self.ques_embedded.size()}")
         # print(f"self.ques_mask: {self.ques_mask.size()}")
@@ -162,6 +174,40 @@ class HotpotQALanguage(DomainLanguage):
         # return_val = torch.sigmoid(10.0*bool1._value + 10.0*bool2._value - 15.0)
         return Bool(value=return_val)
         # return Bool(value=bool1._value * bool2._value)
+
+
+    def closest_context(self,
+                        ques_token_repr,
+                        ques_mask,
+                        contexts_token_repr,
+                        contexts_mask):
+        num_contexts = contexts_mask.size()[0]
+        # (C, Qlen, D)
+        ques_token_repr_ex = ques_token_repr.unsqueeze(0).expand(num_contexts, *ques_token_repr.size())
+        # (C, Qlen, Clen)
+        ques_context_token_similarity = self._execution_parameters._dotprod_matrixattn(ques_token_repr_ex,
+                                                                                       contexts_token_repr)
+        # (C, Qlen, Clen)
+        ques_context_token_similarity = ques_context_token_similarity * contexts_mask.unsqueeze(1)
+        ques_context_token_similarity = ques_context_token_similarity * ques_mask.unsqueeze(0).unsqueeze(2)
+
+        masked_ques_context_similarity = allenutil.replace_masked_values(tensor=ques_context_token_similarity,
+                                                                         mask=contexts_mask.unsqueeze(1),
+                                                                         replace_with=-1e7)
+        # (C, Qlen, Clen)
+        masked_ques_context_similarity = allenutil.replace_masked_values(tensor=masked_ques_context_similarity,
+                                                                         mask=ques_mask.unsqueeze(0).unsqueeze(2),
+                                                                         replace_with=-1e7)
+        # (C, Qlen)
+        cwise_maxquestoken_context_similarity, _ = torch.max(masked_ques_context_similarity, dim=2)
+
+        # Shape: (C)
+        question_context_similarity =  cwise_maxquestoken_context_similarity.sum(1)
+
+        closest_context_idx = torch.argmax(question_context_similarity)
+
+        return closest_context_idx
+
 
     # @predicate
     # def bool_or(self, bool1: Bool1, bool2: Bool1) -> Bool:

@@ -1,5 +1,7 @@
 #!/usr/bin/env
 
+export TMPDIR=/srv/local/data/nitishg/tmp
+
 ### DATASET PATHS -- should be same across models for same dataset
 DATASET_DIR=./resources/data/hotpotqa/processed/bool_wosame
 TRAINFILE=${DATASET_DIR}/train_goldcontexts.jsonl
@@ -12,8 +14,9 @@ INCLUDE_PACKAGE=semqa
 export W_SIDEARGS=false
 
 ### TRAINING MODEL CONFIG -- should be same across datasets for the same model
-CONFIGFILE=allenconfigs/semqa/train/hotpotqa_parser_wosideargs.jsonnet
-export VOCABDIR=./resources/semqa/vocabs/hotpotqa/bool_wosame/gold_contexts/wosideargs_${W_SIDEARGS}/vocabulary
+CONFIGFILE=allenconfigs/semqa/train/hotpotqa_parser_wosideargs_snli.jsonnet
+export TOKENIDX="elmo"
+export VOCABDIR=./resources/semqa/vocabs/hotpotqa/bool_wosame/gold_contexts/wosideargs_${W_SIDEARGS}/tokens_${TOKENIDX}/vocabulary
 
 export DATASET_READER=hotpotqa_reader
 
@@ -32,7 +35,7 @@ export QTK='encoded'
 export CTK='modeled'
 export GOLDACTIONS=true
 
-export BS=1
+export BS=4
 export LR=0.001
 export OPT=adam
 export DROPOUT=0.2
@@ -45,9 +48,9 @@ export EPOCHS=15
 CHECKPOINT_ROOT=./resources/semqa/checkpoints
 SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/hotpotqa/bool_wosame
 MODEL_DIR=hotpotqa_parser
-PARAMETERS_DIR1=BS_${BS}/OPT_${OPT}/LR_${LR}/Drop_${DROPOUT}/FUNC_${BOOL_QSTRQENT_FUNC}/ATTN_BIL/QTK_${QTK}/CTK_${CTK}
+PARAMETERS_DIR1=BS_${BS}/OPT_${OPT}/LR_${LR}/Drop_${DROPOUT}/TOKENS_${TOKENIDX}/FUNC_${BOOL_QSTRQENT_FUNC}
 PARAMETERS_DIR2=SIDEARG_${W_SIDEARGS}/GOLDAC_${GOLDACTIONS}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PARAMETERS_DIR1}/${PARAMETERS_DIR2}_normalized_test
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PARAMETERS_DIR1}/${PARAMETERS_DIR2}_scratchtrain
 
 #######################################################################################################################
 

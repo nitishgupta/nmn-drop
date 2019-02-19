@@ -18,7 +18,6 @@ from allennlp.modules.matrix_attention.dot_product_matrix_attention import DotPr
 
 from semqa.domain_languages.hotpotqa.execution_params import ExecutorParameters
 from semqa.domain_languages.hotpotqa.hotpotqa_language import Qstr, Qent, Bool, Bool1, HotpotQALanguage
-import  semqa.utils.bidaf_utils as bidaf_utils
 
 import datasets.hotpotqa.utils.constants as hpcons
 
@@ -56,22 +55,51 @@ class HotpotQALanguageWOSideArgs(HotpotQALanguage):
         For example, question span representations will be precomputed and stored here to reuse when executing different
         logical forms.
         """
-        self._preprocess_ques_representations()
+        (self.questionspan2tokensrepr,
+         self.questionspan2tokensembed,
+         self.questionspan2mask) = self._preprocess_ques_representations()
+
 
     def _preprocess_ques_representations(self):
-        # Embedding the complete question
-        # For all QSTR, computing repr by running ques_encoder, and concatenating repr of end-points
-        self.qstr2repr = {}
-        for qstr, qstr_idx in self.quesspans2idx.items():
-            # Shape: [2] denoting the span in the question
-            qstr_span = self.quesspans_spans[qstr_idx]
-            # Shape: (QSTR_len, emb_dim)
-            qstart = self.ques_encoded[qstr_span[0]]
-            qend = self.ques_encoded[qstr_span[1]]
+        """ Makes questionspan 2 tokenrepr (Shape: (SpanLen, D)) dictionaries.
+            First is based on the question_token_repr_key and the second question_token_embedding
+            A dictionary from questionspan 2 mask (Shape: (SpanLen)) is also made
+        """
 
-            # Shape: (2 * Qd)
-            qstr_repr = torch.cat([qstart, qend], 0).squeeze(0)
-            self.qstr2repr[qstr] = qstr_repr
+        questionspan2tokensrepr = {}
+        questionspan2tokensembed = {}
+        questionspan2mask = {}
+
+        ques_tokenrepr_key = self._execution_parameters._question_token_repr_key
+        # This tensor should be (QLen, D)
+        if ques_tokenrepr_key == 'embeded':
+            question_token_repr = self.ques_embedded
+        elif ques_tokenrepr_key == 'encoded':
+            question_token_repr = self.ques_encoded
+        else:
+            raise NotImplementedError(f"Question Token Repr Key not recognized: {ques_tokenrepr_key}")
+
+        ques_tokenembed = self.ques_embedded
+        ques_mask = self.ques_mask
+
+        qstr_actions = self.get_nonterminal_productions()['Qstr']
+        qent_actions = self.get_nonterminal_productions()['Qent']
+
+        for qstraction in qstr_actions:
+            (start, end) = getspanfromaction(qstraction)
+            span_str = qstraction.split(' -> ')[1]
+            questionspan2tokensrepr[span_str] = question_token_repr[start:end + 1]
+            questionspan2tokensembed[span_str] = ques_tokenembed[start:end + 1]
+            questionspan2mask[span_str] = ques_mask[start: end + 1]
+
+        for qentaction in qent_actions:
+            (start, end) = getspanfromaction(qentaction)
+            span_str = qentaction.split(' -> ')[1]
+            questionspan2tokensrepr[span_str] = question_token_repr[start:end + 1]
+            questionspan2tokensembed[span_str] = ques_tokenembed[start:end + 1]
+            questionspan2mask[span_str] = ques_mask[start: end + 1]
+
+        return questionspan2tokensrepr, questionspan2tokensembed, questionspan2mask
 
 
     def _get_gold_actions(self) -> Tuple[str, str, str]:
@@ -168,86 +196,251 @@ class HotpotQALanguageWOSideArgs(HotpotQALanguage):
         if self.bool_qstr_qent_func == 'mentions':
             # returnval = self.bool_qent_qstr_wmens(qent=qent, qstr=qstr)
             raise NotImplementedError
-        elif self.bool_qstr_qent_func == 'context':
-            returnval = self.bool_qent_qstr_wcontext(qent_obj=qent, qstr_obj=qstr)
+        elif self.bool_qstr_qent_func == 'slicebidaf':
+            returnval = self.bool_qent_qstr_slicebidaf(qent_obj=qent, qstr_obj=qstr)
         elif self.bool_qstr_qent_func == 'rawbidaf':
             returnval = self.bool_qent_qstr_rawbidaf(qent_obj=qent, qstr_obj=qstr)
+        elif self.bool_qstr_qent_func == 'snli':
+            returnval = self.bool_qent_qstr_snli(qent_obj=qent, qstr_obj=qstr)
         else:
             raise NotImplementedError
 
         return returnval
 
-    def bool_qent_qstr_wcontext(self, qent_obj: Qent, qstr_obj: Qstr) -> Bool1:
+
+    def bool_qent_qstr_snli(self, qent_obj: Qent, qstr_obj: Qstr) -> Bool1:
         qent = qent_obj._value
         qstr = qstr_obj._value
 
-        # Shape: 2 * D
-        qstr_repr = self.qstr2repr[qstr]
-        qent_repr = self.qstr2repr[qent]
+        (qent_start, qent_end) = getspanfromaction(qent)
+        (qstr_start, qstr_end) = getspanfromaction(qstr)
 
-        # Shape: 4 * Q_d
-        qent_qstr_repr = torch.cat([qent_repr, qstr_repr])
-        # Shape: C
-        ques_context_sim = self._execution_parameters._bool_bilinear(qent_qstr_repr, self.contexts_vec)
+        qent_embed = self.ques_embedded[qent_start: qent_end + 1]
+        qent_mask = self.ques_mask[qent_start: qent_end + 1]
+        qstr_embed = self.ques_embedded[qstr_start: qstr_end + 1]
+        qstr_mask = self.ques_mask[qstr_start: qstr_end + 1]
 
-        probs = torch.sigmoid(ques_context_sim)
-        boolean_prob = torch.max(probs)
+        # Shape: (Span1len + Span2len, D)
+        q_ent_str_repr = torch.cat([qent_embed, qstr_embed], dim=0)
+        q_ent_str_mask = torch.cat([qent_mask, qstr_mask], dim=0)
+
+        contexts_mask = self.contexts_mask
+
+        num_contexts = contexts_mask.size()[0]
+        # (C, Qlen, D)
+        ques_token_repr_ex = q_ent_str_repr.unsqueeze(0).expand(num_contexts, *q_ent_str_repr.size())
+        q_ent_str_mask_ex = q_ent_str_mask.unsqueeze(0).expand(num_contexts, *q_ent_str_mask.size())
+
+        # snli_output = self._execution_parameters._snli_model.forward_from_embeddings(
+        #         embedded_premise=self.snli_contexts, embedded_hypothesis=ques_token_repr_ex,
+        #         premise_mask=contexts_mask, hypothesis_mask=q_ent_str_mask_ex)
+        snli_output = self._execution_parameters._decompatt.forward(
+            embedded_premise=self.contexts_embedded, embedded_hypothesis=ques_token_repr_ex,
+            premise_mask=contexts_mask, hypothesis_mask=q_ent_str_mask_ex)
+
+        # C, 3
+        output_probs = snli_output['label_probs']
+        # print(f"OutputProbs:{output_probs}")
+        # C
+        boolean_probs = output_probs[:, 0]
+
+        closest_context = self.closest_context(qent_embed, qent_mask, self.contexts_embedded, contexts_mask)
+        # print(f"Closest ContextIdx: {closest_context}")
+
+        ans_prob = boolean_probs[closest_context]
+
+        # print(f"Ansprob: {ans_prob}")
+        # print()
+
+        return Bool1(value=ans_prob)
+
+
+    def bool_qent_qstr_slicebidaf(self, qent_obj: Qent, qstr_obj: Qstr) -> Bool1:
+        qent = qent_obj._value
+        qstr = qstr_obj._value
+
+        # Already sliced representation of token repr based on question_token_repr_key
+        # Shape: (SpanLen, D)
+        qent_embedded = self.questionspan2tokensembed[qent]
+        qstr_embedded = self.questionspan2tokensembed[qstr]
+
+        qent_token_repr = self.questionspan2tokensrepr[qent]
+        qstr_token_repr = self.questionspan2tokensrepr[qstr]
+        qent_mask = self.questionspan2mask[qent]
+        qstr_mask = self.questionspan2mask[qstr]
+
+        # Concatenation of spliced Qent and Qstr repr
+        # Shape: (Span1len + Span2len, D)
+        q_ent_str_repr = torch.cat([qent_token_repr, qstr_token_repr], dim=0)
+        q_ent_str_mask = torch.cat([qent_mask, qstr_mask], dim=0)
+
+        context_token_repr = None
+        if self._execution_parameters._context_token_repr_key == 'embeded':
+            context_token_repr = self.contexts_embedded
+        elif self._execution_parameters._context_token_repr_key == 'encoded':
+            context_token_repr = self.contexts_encoded
+        elif self._execution_parameters._context_token_repr_key == 'modeled':
+            context_token_repr = self.contexts_modeled
+        context_mask = self.contexts_mask
+
+        boolean_prob = self.boolean_q_c_token_repr(ques_token_repr=q_ent_str_repr,
+                                                   ques_mask=q_ent_str_mask,
+                                                   contexts_token_repr=context_token_repr,
+                                                   contexts_mask=context_mask)
         return Bool1(value=boolean_prob)
+
 
     def bool_qent_qstr_rawbidaf(self, qent_obj: Qent, qstr_obj: Qstr) -> Bool1:
         qent = qent_obj._value
         qstr = qstr_obj._value
 
-        qent_start, qent_end = getspanfromaction(qent)
-        qstr_start, qstr_end = getspanfromaction(qstr)
+        # print(f"QENT: {qent.split(hpcons.SPAN_DELIM)}")
+        # print(f"QSTR: {qstr.split(hpcons.SPAN_DELIM)}")
+
         # For are (*, D)
-        qent_embedded = self.ques_embedded[qent_start:qent_end + 1]
-        qent_mask = self.ques_mask[qent_start:qent_end + 1]
-        qstr_embedded = self.ques_embedded[qstr_start:qstr_end + 1]
-        qstr_mask = self.ques_mask[qstr_start:qstr_end + 1]
+        qent_embedded = self.questionspan2tokensembed[qent]
+        qent_mask = self.questionspan2mask[qent]
+
+        qstr_embedded = self.questionspan2tokensembed[qstr]
+        qstr_mask = self.questionspan2mask[qstr]
+
         # This can go into bidaf utils forward
+        # Shape: (Span1len + Span2len, D)
         q_ent_str_embed = torch.cat([qent_embedded, qstr_embedded], dim=0)
         q_ent_str_mask = torch.cat([qent_mask, qstr_mask], dim=0)
 
         # Shape : (C, T, D)
-        contexts_embedded = self.contexts_embedded
-        context_encoded = self.contexts
+        context_embeded = self.contexts_embedded
+        context_encoded = self.contexts_encoded
 
         # (C, T)
         context_mask = self.contexts_mask
         num_contexts = context_encoded.size(0)
 
+        # Shape: (1, ques_len, D)
+        encoded_q_ent_str = self._execution_parameters._bidafutils.encode_question(
+            embedded_question=q_ent_str_embed.unsqueeze(0),
+            question_lstm_mask=q_ent_str_mask.unsqueeze(0))
+
         # (C, Qlen, D) -- copy of the question C times to get independent reprs
-        q_ent_str_embed_ex = q_ent_str_embed.unsqueeze(0).expand([num_contexts, *q_ent_str_embed.size()])
+        q_ent_str_encoded_ex = encoded_q_ent_str.expand([num_contexts, *q_ent_str_embed.size()])
         q_ent_str_mask_ex = q_ent_str_mask.unsqueeze(0).expand([num_contexts, *q_ent_str_mask.size()])
 
-        output_dict = bidaf_utils.forward_bidaf(bidaf_model=self._execution_parameters._bidafmodel,
-                                                embedded_question=q_ent_str_embed_ex,
-                                                encoded_passage=context_encoded,
-                                                question_lstm_mask=q_ent_str_mask_ex,
-                                                passage_lstm_mask=context_mask)
 
-        # (C, T, D)
-        q_encoded_ex = output_dict["encoded_question"]
+        output_dict = self._execution_parameters._bidafutils.forward_bidaf(encoded_question=q_ent_str_encoded_ex,
+                                                                           encoded_passage=context_encoded,
+                                                                           question_lstm_mask=q_ent_str_mask_ex,
+                                                                           passage_lstm_mask=context_mask)
 
-        # Shape: (C, D) == C, 200 for bidaf
-        q_vec_ex = allenutil.get_final_encoder_states(q_encoded_ex, q_ent_str_mask.unsqueeze(0), True)
-        # Shape: (D)
-        q_vec = q_vec_ex[0]
+            # bidaf_utils.forward_bidaf(bidaf_model=self._execution_parameters._bidafmodel,
+            #                                     embedded_question=q_ent_str_embed_ex,
+            #                                     encoded_passage=context_encoded,
+            #                                     question_lstm_mask=q_ent_str_mask_ex,
+            #                                     passage_lstm_mask=context_mask)
 
+        # (C, T1, D) -- T1 = Len of Qent + Qstr
+        q_embeded = q_ent_str_embed
+        q_encoded = output_dict["encoded_question"][0]
+        # (T1)
+        q_mask = q_ent_str_mask
+
+        # Shape: (C, T2, D) -- T2 is the length of the context. This is modeled based on the truncated question
+        context_modeled = output_dict["modeled_passage"]
         # Shape: (C, D) == (C, 200) for bidaf
         context_vec = output_dict["passage_vector"]    # Since only one passage
 
-        q_vec = self._execution_parameters._dropout(q_vec)
-        context_vec = self._execution_parameters._dropout(context_vec)
+        ques_token_repr = None
+        if self._execution_parameters._question_token_repr_key == 'embeded':
+            ques_token_repr = q_embeded
+        elif self._execution_parameters._question_token_repr_key == 'encoded':
+            ques_token_repr = q_encoded
+        else:
+            raise NotImplementedError
+
+        context_token_repr = None
+        if self._execution_parameters._context_token_repr_key == 'embeded':
+            context_token_repr = context_embeded
+        elif self._execution_parameters._context_token_repr_key == 'encoded':
+            context_token_repr = context_encoded
+        elif self._execution_parameters._context_token_repr_key == 'modeled':
+            context_token_repr = context_modeled
+        else:
+            raise NotImplementedError
+
+        boolean_prob = self.boolean_q_c_token_repr(ques_token_repr=ques_token_repr,
+                                                   ques_mask=q_mask,
+                                                   contexts_token_repr=context_token_repr,
+                                                   contexts_mask=context_mask)
+
+        return Bool1(value=boolean_prob)
+
+
+    def boolean_q_c_token_repr(self,
+                               ques_token_repr: torch.FloatTensor,
+                               ques_mask: torch.FloatTensor,
+                               contexts_token_repr: torch.FloatTensor,
+                               contexts_mask: torch.FloatTensor):
+        """ Given token reprs for question and context, return a boolean probability value
+
+        Parameters:
+        -----------
+        ques_token_repr: Shape (Qlen, D)
+        ques_mask: Shape (Qlen)
+        contexts_token_repr: Shape: (C, Clen, D)
+        contexts_mask: Shape: (C, Clen)
+        """
+
+        num_contexts = contexts_mask.size()[0]
+        # (C, Qlen, D)
+        ques_token_repr_ex = ques_token_repr.unsqueeze(0).expand(num_contexts, *ques_token_repr.size())
+        # (C, Qlen, Clen)
+        ques_context_token_similarity = self._execution_parameters._matrix_attention(ques_token_repr_ex,
+                                                                                    contexts_token_repr)
+        # (C, Qlen, Clen)
+        ques_context_token_similarity = ques_context_token_similarity * contexts_mask.unsqueeze(1)
+        ques_context_token_similarity = ques_context_token_similarity * ques_mask.unsqueeze(0).unsqueeze(2)
+
+        masked_ques_context_similarity = allenutil.replace_masked_values(tensor=ques_context_token_similarity,
+                                                           mask=contexts_mask.unsqueeze(1),
+                                                           replace_with=-1e7)
+        # (C, Qlen, Clen)
+        masked_ques_context_similarity = allenutil.replace_masked_values(tensor=masked_ques_context_similarity,
+                                                           mask=ques_mask.unsqueeze(0).unsqueeze(2),
+                                                           replace_with=-1e7)
+
+        # Below the tensors store,
+        # 1) max ques-context token similarity for each question token
+        # 2) max context-ques token similarity for each context token
+        # Shape: (C, Qlen)
+        contextwise_qtoken_maxsimilarity = torch.max(masked_ques_context_similarity, dim=2)[0]
+        # Shape: (C, Clen)
+        contextwise_ctoken_maxsimilarity = torch.max(masked_ques_context_similarity, dim=1)[0]
+
+        # Shape: (C, Qlen)
+        cwise_qtoken_attention = allenutil.masked_softmax(contextwise_qtoken_maxsimilarity,
+                                                          mask=ques_mask.unsqueeze(0))
+        # Shape: (C, Clen)
+        cwise_ctoken_attention = allenutil.masked_softmax(contextwise_ctoken_maxsimilarity,
+                                                          mask=contexts_mask)
+
+        # Shape: (C, D)
+        cwise_averaged_quesrepr = (ques_token_repr.unsqueeze(0) * cwise_qtoken_attention.unsqueeze(2)).sum(1)
+
+        # Shape: (C, D)
+        cwise_averaged_contextrepr = (contexts_token_repr * cwise_ctoken_attention.unsqueeze(2)).sum(1)
 
         # Shape: C
-        question_context_similarity = self._execution_parameters._bool_bilinear(q_vec, context_vec)
+        context_scores = self._execution_parameters._quescontext_bilinear(cwise_averaged_quesrepr,
+                                                                          cwise_averaged_contextrepr)
 
-        best_score = torch.max(question_context_similarity)
-        probs = torch.sigmoid(best_score)
-        boolean_prob = torch.max(probs)
-        return Bool1(value=boolean_prob)
+        # print(f"context_avg_attention: {context_avg_attention}")
+        contextwise_prob_values = torch.sigmoid(context_scores)
+        # print(f"contextwise_prob_values: {contextwise_prob_values}")
+
+        boolean_prob = torch.max(contextwise_prob_values)
+        return boolean_prob
+
+
 
     def bool_qent_qstr_wmens(self, qent: Qent, qstr: Qstr) -> Bool1:
         qent_att = qent._value * self.ques_mask
@@ -277,7 +470,7 @@ class HotpotQALanguageWOSideArgs(HotpotQALanguage):
             qent_mens_mask = (qent_mens[..., 0] >= 0).long()
 
             # Shape: (C, M, 2*D)
-            qent_men_repr = self._execution_parameters._span_extractor(self.contexts, qent_mens,
+            qent_men_repr = self._execution_parameters._span_extractor(self.contexts_encoded, qent_mens,
                                                                        self.contexts_mask,
                                                                        qent_mens_mask)
             q_repr_cat = torch.cat([qstr_repr, qstr_repr], 0)

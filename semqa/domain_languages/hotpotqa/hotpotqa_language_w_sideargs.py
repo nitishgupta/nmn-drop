@@ -225,7 +225,7 @@ class HotpotQALanguageWSideArgs(HotpotQALanguage):
             qent_mens_mask = (qent_mens[..., 0] >= 0).long()
 
             # Shape: (C, M, 2*D)
-            qent_men_repr = self._execution_parameters._span_extractor(self.contexts, qent_mens,
+            qent_men_repr = self._execution_parameters._span_extractor(self.contexts_encoded, qent_mens,
                                                                        self.contexts_mask,
                                                                        qent_mens_mask)
             q_repr_cat = torch.cat([qstr_repr, qstr_repr], 0)
