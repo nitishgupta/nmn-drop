@@ -15,3 +15,4 @@ allennlp predict --output-file ${OUTPUT_FILE} \
                  --batch-size 1 \
                  ${MODEL_TAR} ${TEST_FILE}
 
+# --overrides "{"model": {"decoder_beam_search": {"beam_size": 1}}}" \

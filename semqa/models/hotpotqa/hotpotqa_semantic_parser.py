@@ -448,7 +448,8 @@ class HotpotQASemanticParser(HotpotQAParserBase):
             denotation_loss = self._compute_loss(gold_ans_type=gold_ans_type,
                                                  ans_grounding_dict=ans_grounding_dict,
                                                  ans_grounding_mask=ans_grounding_mask,
-                                                 predicted_expected_denotations=predicted_expected_denotations)
+                                                 predicted_expected_denotations=predicted_expected_denotations,
+                                                 predicted_best_denotations=best_predicted_denotations)
             loss += denotation_loss
             outputs["denotation_loss"] = denotation_loss
 
@@ -466,6 +467,7 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         outputs["best_action_strings"] = batch_actionseqs
         outputs["batch_actionseq_sideargs"] = batch_actionseq_sideargs
         outputs["denotations"] = batch_denotations
+        outputs["best_denotations"] = best_predicted_denotations
         outputs["languages"] = languages
 
         return outputs
@@ -695,6 +697,7 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         """
 
         # Since the batch_action_probs is sorted, the first instance is the best predicted program
+        # These lists are of length = batch_size
         best_predicted_anstypes = [x[0] for x in batch_denotation_types]
         best_predicted_denotations = [x[0] for x in batch_denotations]
         best_predicted_actionprobs = [x[0] for x in batch_action_probs]
@@ -739,7 +742,8 @@ class HotpotQASemanticParser(HotpotQAParserBase):
     def _compute_loss(self, gold_ans_type: List[str],
                             ans_grounding_dict: Dict,
                             ans_grounding_mask: Dict,
-                            predicted_expected_denotations: List[torch.Tensor]):
+                            predicted_expected_denotations: List[torch.Tensor],
+                            predicted_best_denotations: List[torch.Tensor]):
         """ Compute the loss given the gold type, grounding, and predicted expected denotation of that type. """
 
         loss = 0.0
@@ -750,8 +754,10 @@ class HotpotQASemanticParser(HotpotQAParserBase):
             gold_type = gold_ans_type[ins_idx]
             gold_denotation = ans_grounding_dict[gold_type][ins_idx]
             expected_denotation = predicted_expected_denotations[ins_idx]
+            best_denotation = predicted_best_denotations[ins_idx]
             mask = ans_grounding_mask[gold_type][ins_idx]
             expected_denotation = expected_denotation * mask
+            best_denotation = best_denotation * mask
 
             if gold_type == hpcons.BOOL_TYPE:
                 # logger.info(f"Instance deno:\n{ins_denotations}")
@@ -763,7 +769,7 @@ class HotpotQASemanticParser(HotpotQAParserBase):
 
                 loss += instance_loss
 
-                bool_pred = (expected_denotation > 0.5).float()
+                bool_pred = (best_denotation > 0.5).float()
                 correct = 1.0 if (bool_pred == gold_denotation) else 0.0
                 self.average_metric(float(correct))
 
