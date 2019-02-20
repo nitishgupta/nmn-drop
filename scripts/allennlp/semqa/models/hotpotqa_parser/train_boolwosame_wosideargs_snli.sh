@@ -15,7 +15,7 @@ export W_SIDEARGS=false
 
 ### TRAINING MODEL CONFIG -- should be same across datasets for the same model
 CONFIGFILE=allenconfigs/semqa/train/hotpotqa_parser_wosideargs_snli.jsonnet
-export TOKENIDX="glove"
+export TOKENIDX="elmo"
 export VOCABDIR=./resources/semqa/vocabs/hotpotqa/bool_wosame/gold_contexts/wosideargs_${W_SIDEARGS}/tokens_${TOKENIDX}/vocabulary
 
 export DATASET_READER=hotpotqa_reader
@@ -33,7 +33,7 @@ export BIDAF_WORDEMB_FILE='./resources/embeddings/glove/glove.6B.100d.txt.gz'
 export BOOL_QSTRQENT_FUNC='snli'
 export QTK='encoded'
 export CTK='modeled'
-export GOLDACTIONS=false
+export GOLDACTIONS=true
 
 export BS=4
 export LR=0.001
@@ -42,7 +42,7 @@ export DROPOUT=0.2
 
 export BEAMSIZE=1
 export MAX_DECODE_STEP=12
-export EPOCHS=45
+export EPOCHS=35
 
 ####    SERIALIZATION DIR --- Check for checkpoint_root/task/dataset/model/parameters/
 CHECKPOINT_ROOT=./resources/semqa/checkpoints
@@ -50,7 +50,7 @@ SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/hotpotqa/bool_wosame
 MODEL_DIR=hotpotqa_parser
 PARAMETERS_DIR1=BS_${BS}/OPT_${OPT}/LR_${LR}/Drop_${DROPOUT}/TOKENS_${TOKENIDX}/FUNC_${BOOL_QSTRQENT_FUNC}
 PARAMETERS_DIR2=SIDEARG_${W_SIDEARGS}/GOLDAC_${GOLDACTIONS}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PARAMETERS_DIR1}/${PARAMETERS_DIR2}_scratchtrain
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PARAMETERS_DIR1}/${PARAMETERS_DIR2}_multand_wdatt
 
 #######################################################################################################################
 

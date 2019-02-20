@@ -54,11 +54,11 @@ class HotpotQAPredictor(Predictor):
         execution_vals = outputs['execution_vals']
         execution_vals = myutils.round_all(execution_vals, 4)
         denotations = myutils.round_all(outputs['denotations'], 4)
-        best_denotations = myutils.round_all(outputs['best_denotations'], 4)
+        best_denotation = myutils.round_all(outputs['best_denotations'], 4)
 
         out_str += f"Question: {question}\n"
         out_str += f"Answer: {answer}\n"
-        out_str += f"BestDenotation: {best_denotations}\n"
+        out_str += f"BestDenotation: {best_denotation}\n"
         if 'logical_forms' and 'denotations' in outputs:
             for lf, d, ex_vals in zip(logical_forms, denotations, execution_vals):
                 # Stripping the trailing new line
@@ -69,6 +69,12 @@ class HotpotQAPredictor(Predictor):
         for c in contexts:
             out_str += f"{c}\n"
         out_str += '\n'
+
+        gold_bool = 1.0 if answer == 'yes' else 0.0
+        pred_bool = 1.0 if best_denotation >= 0.5 else 0.0
+        correct = 1 if gold_bool == pred_bool else 0
+        if correct:
+            return ''
 
         # answer_num = 0.0
         # pred_num = 0.0

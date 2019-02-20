@@ -38,6 +38,10 @@ class DecompAtt(torch.nn.Module, Registrable):
         # Shape: (batch_size, premise_length, hypothesis_length)
         similarity_matrix = self._matrix_attention(projected_premise, projected_hypothesis)
 
+        # Shape: (batch_size, premise_length) -- measures the importance of each premise token
+        premise_importance_scores = (similarity_matrix*hypothesis_mask.unsqueeze(1)).sum(dim=2)
+        premise_importance_distribution = masked_softmax(premise_importance_scores, mask=premise_mask)
+
         # Shape: (batch_size, premise_length, hypothesis_length)
         p2h_attention = masked_softmax(similarity_matrix, hypothesis_mask)
         # Shape: (batch_size, premise_length, embedding_dim)
@@ -51,11 +55,14 @@ class DecompAtt(torch.nn.Module, Registrable):
         premise_compare_input = torch.cat([embedded_premise, attended_hypothesis], dim=-1)
         hypothesis_compare_input = torch.cat([embedded_hypothesis, attended_premise], dim=-1)
 
+        # Shape: (batch_size, premise_length, embedding_dim)
         compared_premise = self._compare_feedforward(premise_compare_input)
         compared_premise = compared_premise * premise_mask.unsqueeze(-1)
         # Shape: (batch_size, compare_dim)
-        compared_premise = compared_premise.sum(dim=1)
+        compared_premise = (compared_premise*premise_importance_distribution.unsqueeze(2)).sum(dim=1)
+        # compared_premise = compared_premise.sum(dim=1)
 
+        # Shape: (batch_size, hypothesis_length, embedding_dim)
         compared_hypothesis = self._compare_feedforward(hypothesis_compare_input)
         compared_hypothesis = compared_hypothesis * hypothesis_mask.unsqueeze(-1)
         # Shape: (batch_size, compare_dim)
