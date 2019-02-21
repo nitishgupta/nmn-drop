@@ -29,6 +29,7 @@ from semqa.data.datatypes import DateField, NumberField
 from semqa.state_machines.constrained_beam_search import ConstrainedBeamSearch
 from allennlp.training.metrics import Average
 from semqa.models.utils.bidaf_utils import PretrainedBidafModelUtils
+from semqa.models.utils import generic_utils as genutils
 
 import datasets.hotpotqa.utils.constants as hpcons
 
@@ -261,54 +262,28 @@ class HotpotQASemanticParser(HotpotQAParserBase):
              encoded_questions,
              encoded_contexts, modeled_contexts) = self._bidafutils.bidaf_reprs(question, contexts)
         elif self._qencoder is not None:
-            # Shape: (B, question_length, D)
-            embedded_questions_tensor = self._text_field_embedder(question)
-            # Shape: (B, num_contexts, context_length, D)
-            embedded_contexts_tensor = self._text_field_embedder(contexts)
-            # Shape: (B, question_length)
-            questions_mask_tensor = allenutil.get_text_field_mask(question).float()
-            # Shape: (B, num_contexts, context_length)
-            contexts_mask_tensor = allenutil.get_text_field_mask(contexts, num_wrapping_dims=1).float()
+            (embedded_questions, encoded_questions,
+             questions_mask, encoded_ques_tensor,
+             questions_mask_tensor, ques_encoded_final_state,
+             embedded_contexts, contexts_mask) = genutils.embed_and_encode_ques_contexts(
+                                                            text_field_embedder=self._text_field_embedder,
+                                                            qencoder=self._qencoder,
+                                                            batch_size=batch_size,
+                                                            question=question,
+                                                            contexts=contexts)
+            encoded_contexts, modeled_contexts = embedded_contexts, embedded_contexts
 
-            embedded_questions = [embedded_questions_tensor[i] for i in range(batch_size)]
-            questions_mask = [questions_mask_tensor[i] for i in range(batch_size)]
-            embedded_contexts = [embedded_contexts_tensor[i] for i in range(batch_size)]
-            contexts_mask = [contexts_mask_tensor[i] for i in range(batch_size)]
+        if gold_ans_type is not None:
+            (firststep_action_ids,
+             ans_grounding_dict,
+             ans_grounding_mask) = self._get_firstStepActionIdxs_GoldAnsDict(gold_ans_type, actions, languages,
+                                                                             **kwargs)
+        else:
+            (firststep_action_ids, ans_grounding_dict, ans_grounding_mask) = (None, None, None)
 
-            # Shape: (B, ques_len, D)
-            encoded_ques_tensor = self._qencoder(embedded_questions_tensor, questions_mask_tensor)
-            # Shape: (B, D)
-            ques_encoded_final_state = allenutil.get_final_encoder_states(encoded_ques_tensor,
-                                                                          questions_mask_tensor,
-                                                                          self._qencoder.is_bidirectional())
-            encoded_questions = [encoded_ques_tensor[i] for i in range(batch_size)]
-            encoded_contexts = embedded_contexts
-            modeled_contexts = encoded_contexts
-
-        # Gold truth dict of {type: grounding}
-        # The reader passes datatypes with name "ans_grounding_TYPE" where prefix needs to be cleaned.
-        ans_grounding_dict = None
-
-        # List[Set[int]] --- Ids of the actions allowable at the first time step if the ans-type supervision is given.
-        firststep_action_ids = None
-
-        (firststep_action_ids,
-         ans_grounding_dict,
-         ans_grounding_mask) = self._get_FirstSteps_GoldAnsDict_and_Masks(gold_ans_type, actions, languages,
-                                                                          **kwargs)
-
-        # Initial log-score list for the decoding, List of zeros.
+        # List[torch.Tensor(0.0)] -- Initial log-score list for the decoding
         initial_score_list = [next(iter(question.values())).new_zeros(1, dtype=torch.float)
                               for _ in range(batch_size)]
-
-        # All Question_Str_Action representations
-        # TODO(nitish): Matt gave 2 ideas to try:
-        # (1) Same embedding for all actions
-        # (2) Compose a QSTR_action embedding with span_embedding
-        # embedded_ques, ques_mask: (B, Qlen, W_d) and (B, Qlen) shaped tensors needed for execution
-        # quesstr_action_reprs: Shape: (B, A, A_d)
-        # quesstr_action_reprs = self._questionstr_action_embeddings(question=question,
-        #                                                            ques_str_action_spans=ques_str_action_spans)
 
         # For each instance, create a grammar statelet containing the valid_actions and their representations
         initial_grammar_statelets = []
@@ -597,11 +572,11 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         return span_mask
 
 
-    def _get_FirstSteps_GoldAnsDict_and_Masks(self,
-                                              gold_ans_type: List[str],
-                                              actions: List[List[ProductionRule]],
-                                              languages: List[HotpotQALanguageWSideArgs],
-                                              **kwargs):
+    def _get_firstStepActionIdxs_GoldAnsDict(self,
+                                             gold_ans_type: List[str],
+                                             actions: List[List[ProductionRule]],
+                                             languages: List[HotpotQALanguageWSideArgs],
+                                             **kwargs):
         """ If gold answer types are given, then make a dict of answers and equivalent masks based on type.
         Also give a list of possible first actions when decode to make programs of valid types only.
 

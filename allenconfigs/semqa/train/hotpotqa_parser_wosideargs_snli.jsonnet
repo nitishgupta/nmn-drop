@@ -21,12 +21,14 @@ local tokenidx = std.extVar("TOKENIDX");
 local attendff_inputdim =
   if tokenidx == "glove" then 100
   else if tokenidx == "bidaf" then 200
-  else if tokenidx == "elmo" then 1024;
+  else if tokenidx == "elmo" then 1024
+  else if tokenidx == "glovechar" then 200;
 
 local compareff_inputdim =
   if tokenidx == "glove" then 200
   else if tokenidx == "bidaf" then 400
-  else if tokenidx == "elmo" then 2048;
+  else if tokenidx == "elmo" then 2048
+  else if tokenidx == "glovechar" then 400;
 
 
 {
@@ -36,13 +38,15 @@ local compareff_inputdim =
     "wsideargs": false,
 
     "token_indexers":
-      if tokenidx == "glove" then {
+      if tokenidx == "glove" then
+      {
         "tokens": {
           "type": "single_id",
           "lowercase_tokens": true
         }
       }
-      else if tokenidx == "bidaf" then {
+      else if tokenidx == "bidaf" then
+      {
         "tokens": {
             "type": "single_id",
             "lowercase_tokens": true
@@ -65,9 +69,25 @@ local compareff_inputdim =
           }
         }
       }
-      else if tokenidx == "elmo" then {
+      else if tokenidx == "elmo" then
+      {
         "elmo": {
           "type": "elmo_characters"
+        }
+      }
+      else if tokenidx == "glovechar" then
+      {
+        "tokens": {
+            "type": "single_id",
+            "lowercase_tokens": true
+        },
+        "token_characters": {
+          "type": "characters",
+          "character_tokenizer": {
+              "byte_encoding": "utf-8",
+              "start_tokens": [259],
+              "end_tokens": [260, 0, 0, 0, 0,0]
+          }
         }
       }
     ,
@@ -106,6 +126,30 @@ local compareff_inputdim =
           "dropout": 0.5
         }
       }
+      else if tokenidx == 'glovechar' then {
+        "tokens": {
+          "type": "embedding",
+          "pretrained_file": std.extVar("BIDAF_WORDEMB_FILE"),
+          "embedding_dim": 100,
+          "trainable": false
+        },
+        "token_characters": {
+          "type": "character_encoding",
+          "embedding": {
+            "num_embeddings": 262,
+            "embedding_dim": 16
+          },
+          "encoder": {
+            "type": "cnn",
+            "embedding_dim": 16,
+            "num_filters": 100,
+            "ngram_filter_sizes": [
+                5
+            ]
+          },
+          "dropout": 0.2
+        }
+      }
     ,
     "wsideargs": false,
     "goldactions": parser.boolparser(std.extVar("GOLDACTIONS")),
@@ -126,6 +170,13 @@ local compareff_inputdim =
       } else if tokenidx == "elmo" then {
         "type": "lstm",
         "input_size": 1024,
+        "hidden_size": 100,
+        "num_layers": 1,
+        "bidirectional": true,
+      }
+      else if tokenidx == "glovechar" then {
+        "type": "lstm",
+        "input_size": 200,
         "hidden_size": 100,
         "num_layers": 1,
         "bidirectional": true,

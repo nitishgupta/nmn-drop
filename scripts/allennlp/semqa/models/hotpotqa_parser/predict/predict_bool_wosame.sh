@@ -10,7 +10,7 @@ PRED_FILENAME=devds_goldcontexts.txt
 # PACKAGE TO BE INCLUDED WHICH HOUSES ALL THE CODE
 INCLUDE_PACKAGE=semqa
 
-export TOKENIDX="elmo"
+export TOKENIDX="glovechar"
 export W_SIDEARGS=false
 
 # Check CONFIGFILE for environment variables to set

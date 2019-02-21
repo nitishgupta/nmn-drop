@@ -4,7 +4,7 @@ INCLUDE_PACKAGE=semqa
 
 # DATASET FILES
 DATASET_DIR=./resources/data/hotpotqa/processed/bool_wosame
-TRAINFILE=${DATASET_DIR}/train_resplit.jsonl
+TRAINFILE=${DATASET_DIR}/train_goldcontexts.jsonl
 
 # VOCAB DATASET_READER CONFIG
 CONFIGFILE=allenconfigs/semqa/vocab/hotpotqa_vocab.jsonnet
@@ -15,7 +15,7 @@ export DATASET_READER="hotpotqa_reader"
 export TRAINING_DATA_FILE=${TRAINFILE}
 
 ############  WARNING - Only one of the glove / bidaf / elmo blocks should be used #############################
-export TOKENIDX="glove"
+export TOKENIDX="glovechar"
 export WORD_EMBED_FILE='./resources/embeddings/glove/glove.6B.100d.txt.gz'
 
 #export TOKENIDX="bidaf"
@@ -26,11 +26,10 @@ export WORD_EMBED_FILE='./resources/embeddings/glove/glove.6B.100d.txt.gz'
 
 # These are used to extend an existing vocab. For eg. When using pretrained bidaf, this would be bidaf's vocabulary
 
-
 export W_SIDEARGS=false
 
 # OUTPUT DIR
-VOCABDIR=./resources/semqa/vocabs/hotpotqa/bool_wosame/gold_contexts/wosideargs_${W_SIDEARGS}/resplit/tokens_${TOKENIDX}
+VOCABDIR=./resources/semqa/vocabs/hotpotqa/bool_wosame/gold_contexts/wosideargs_${W_SIDEARGS}/tokens_${TOKENIDX}
 
 # Don't need since we're extending vocab from bidaf
 #export TOKEN_MIN_CNT=0

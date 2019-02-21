@@ -15,7 +15,7 @@ export W_SIDEARGS=false
 
 ### TRAINING MODEL CONFIG -- should be same across datasets for the same model
 CONFIGFILE=allenconfigs/semqa/train/hotpotqa_parser_wosideargs_snli.jsonnet
-export TOKENIDX="elmo"
+export TOKENIDX="glovechar"
 export VOCABDIR=./resources/semqa/vocabs/hotpotqa/bool_wosame/gold_contexts/wosideargs_${W_SIDEARGS}/tokens_${TOKENIDX}/vocabulary
 
 export DATASET_READER=hotpotqa_reader
@@ -50,7 +50,7 @@ SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/hotpotqa/bool_wosame
 MODEL_DIR=hotpotqa_parser
 PARAMETERS_DIR1=BS_${BS}/OPT_${OPT}/LR_${LR}/Drop_${DROPOUT}/TOKENS_${TOKENIDX}/FUNC_${BOOL_QSTRQENT_FUNC}
 PARAMETERS_DIR2=SIDEARG_${W_SIDEARGS}/GOLDAC_${GOLDACTIONS}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PARAMETERS_DIR1}/${PARAMETERS_DIR2}_multand_wdatt
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PARAMETERS_DIR1}/${PARAMETERS_DIR2}_minand_noproj
 
 #######################################################################################################################
 

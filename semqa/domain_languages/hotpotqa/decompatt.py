@@ -7,7 +7,8 @@ from allennlp.modules import Seq2SeqEncoder, SimilarityFunction, TextFieldEmbedd
 from allennlp.modules.matrix_attention.legacy_matrix_attention import LegacyMatrixAttention
 from allennlp.nn import InitializerApplicator, RegularizerApplicator
 from allennlp.modules.matrix_attention.matrix_attention import MatrixAttention
-from allennlp.nn.util import masked_softmax, weighted_sum
+from allennlp.nn.util import masked_softmax, weighted_sum, replace_masked_values
+import utils.util as myutils
 
 class DecompAtt(torch.nn.Module, Registrable):
     def __init__(self,
@@ -32,15 +33,54 @@ class DecompAtt(torch.nn.Module, Registrable):
         #                        "final output dimension", "number of labels")
 
 
-    def forward(self, embedded_premise, embedded_hypothesis, premise_mask, hypothesis_mask):
+    def forward(self, embedded_premise, embedded_hypothesis, premise_mask, hypothesis_mask,
+                debug=None, **kwargs):
+        weighted_premise = False
+        noprojection = True
+
         projected_premise = self._attend_feedforward(embedded_premise)
         projected_hypothesis = self._attend_feedforward(embedded_hypothesis)
         # Shape: (batch_size, premise_length, hypothesis_length)
-        similarity_matrix = self._matrix_attention(projected_premise, projected_hypothesis)
+        if noprojection:
+            similarity_matrix = self._matrix_attention(embedded_premise, embedded_hypothesis)
+        else:
+            similarity_matrix = self._matrix_attention(projected_premise, projected_hypothesis)
 
         # Shape: (batch_size, premise_length) -- measures the importance of each premise token
         premise_importance_scores = (similarity_matrix*hypothesis_mask.unsqueeze(1)).sum(dim=2)
         premise_importance_distribution = masked_softmax(premise_importance_scores, mask=premise_mask)
+
+        if debug:
+            tokenized_contexts = kwargs['tokenized_contexts']
+            tokenized_query = kwargs['tokenized_query']
+            closest_context = myutils.tocpuNPList(kwargs['closest_context'])
+            similarity_matrix_maked = replace_masked_values(similarity_matrix, premise_mask.unsqueeze(2), -1e7)
+            similarity_matrix_list = myutils.round_all(myutils.tocpuNPList(similarity_matrix_maked), 3)
+            # List of sum_qtoken_sim scores for (clostest) context tokens
+            premise_impsc_masked = replace_masked_values(premise_importance_scores, premise_mask, -1e7)
+            premise_impsc_list = myutils.round_all(myutils.tocpuNPList(premise_impsc_masked[closest_context]), 3)
+            premise_impdt_list = myutils.round_all(myutils.tocpuNPList(
+                    premise_importance_distribution[closest_context]), 3)
+
+            print()
+            print(' '.join(tokenized_query))
+            c_idx, context_text = closest_context, tokenized_contexts[closest_context]
+            print(' '.join(context_text))
+            for q_idx, qt in enumerate(tokenized_query):
+                print(f"Querytoken: {qt}")
+                sim_mat = [c2qsim[q_idx] for c2qsim in similarity_matrix_list[c_idx]]  # [:][q_idx]
+                topcidxs = myutils.topKindices(sim_mat, 10)
+                print([(context_text[ctidx], sim_mat[ctidx]) for ctidx in topcidxs])
+            print("Context importance:")
+            topcidxs = myutils.topKindices(premise_impsc_list, 10)
+            # print(topcidxs)
+            # print(len(context_text))
+            print([(context_text[ctidx], premise_impsc_list[ctidx], premise_impdt_list[ctidx]) for ctidx in topcidxs])
+
+            # print()
+            # print(premise_importance_distribution[0])
+            # print()
+            # print(premise_importance_distribution[1])
 
         # Shape: (batch_size, premise_length, hypothesis_length)
         p2h_attention = masked_softmax(similarity_matrix, hypothesis_mask)
@@ -59,8 +99,10 @@ class DecompAtt(torch.nn.Module, Registrable):
         compared_premise = self._compare_feedforward(premise_compare_input)
         compared_premise = compared_premise * premise_mask.unsqueeze(-1)
         # Shape: (batch_size, compare_dim)
-        compared_premise = (compared_premise*premise_importance_distribution.unsqueeze(2)).sum(dim=1)
-        # compared_premise = compared_premise.sum(dim=1)
+        if weighted_premise:
+            compared_premise = (compared_premise*premise_importance_distribution.unsqueeze(2)).sum(dim=1)
+        else:
+            compared_premise = compared_premise.sum(dim=1)
 
         # Shape: (batch_size, hypothesis_length, embedding_dim)
         compared_hypothesis = self._compare_feedforward(hypothesis_compare_input)
@@ -71,6 +113,10 @@ class DecompAtt(torch.nn.Module, Registrable):
         aggregate_input = torch.cat([compared_premise, compared_hypothesis], dim=-1)
         label_logits = self._aggregate_feedforward(aggregate_input)
         label_probs = torch.nn.functional.softmax(label_logits, dim=-1)
+
+        if debug:
+            print(f"AnsProb: {label_probs[kwargs['closest_context'], 0]}")
+            print()
 
         output_dict = {"label_logits": label_logits,
                        "label_probs": label_probs,

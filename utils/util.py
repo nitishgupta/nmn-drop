@@ -240,6 +240,11 @@ def normalizeDictbyK(dict1, constant):
     return d
 
 
+def topKindices(l: List, k=1):
+    """ Return the indices of the top-K values in the list """
+    return sorted(range(len(l)), key=lambda i: l[i])[::-1][0:k]
+
+
 def round_all(stuff, prec):
     """ Round all the number elems in nested stuff. """
     if isinstance(stuff, list):
@@ -290,6 +295,8 @@ def removeOverlappingSpans(spans):
 
     return final_spans
 
+def tocpuNPList(var):
+    return var.detach().cpu().numpy().tolist()
 
 def mergeSpansAndRemoveOverlap(orig_spans, new_spans, srt_idx, end_idx):
     ''' Merge a list of spans in another given list resulting in non-overlapping spans.

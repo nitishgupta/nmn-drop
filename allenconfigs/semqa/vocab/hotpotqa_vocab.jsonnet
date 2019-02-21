@@ -48,6 +48,21 @@ local tokenidx = std.extVar("TOKENIDX");
           "type": "elmo_characters"
         }
       }
+      else if tokenidx == "glovechar" then
+      {
+        "tokens": {
+            "type": "single_id",
+            "lowercase_tokens": true
+        },
+        "token_characters": {
+          "type": "characters",
+          "character_tokenizer": {
+              "byte_encoding": "utf-8",
+              "start_tokens": [259],
+              "end_tokens": [260, 0, 0, 0, 0,0]
+          }
+        }
+      }
     ,
   },
 
@@ -63,6 +78,12 @@ local tokenidx = std.extVar("TOKENIDX");
       "directory_path": std.extVar("EXISTING_VOCAB_DIR")
     }
     else if tokenidx == "elmo" then {
+    }
+    else if tokenidx == "glovechar" then {
+      "pretrained_files": {
+        "tokens": std.extVar("WORD_EMBED_FILE")
+      },
+      "only_include_pretrained_words": false,
     }
   ,
 

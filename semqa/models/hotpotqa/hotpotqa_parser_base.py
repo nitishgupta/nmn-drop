@@ -196,13 +196,12 @@ class HotpotQAParserBase(Model):
         ------------
         world: `SampleHotpotWorld` The world for this instance
         possible_actions: All possible actions, global and instance-specific
-        linked_rule2idx: Dict from action_rule to idx used for the next two members
+        linked_rule2idx: Dict from linked_action to idx used for the next two members
         action2ques_linkingscore: Linking score matrix of size (instance-specific_actions, num_ques_tokens)
             The indexing is based on the linked_rule2idx dict. The num_ques_tokens is to a padded length
+            The num_ques_tokens is to a padded length, because of which not using a dictionary but a tensor.
         quesspan_action_repr: Similarly, a (instance-specific_actions, action_embedding_dim) matrix.
-            The indexing is based on the linked_rule2idx dict. The num_ques_tokens is to a padded length
-
-
+            The indexing is based on the linked_rule2idx dict.
         """
         # ProductionRule: (rule, is_global_rule, rule_id, nonterminal)
         action2actionidx = {}
@@ -386,6 +385,15 @@ class HotpotQAParserBase(Model):
         best_action_strings = output_dict["best_action_strings"]
         batch_actionseq_sideargs = output_dict["batch_actionseq_sideargs"] if self._wsideargs else None
         languages = output_dict["languages"]
+        metadatas = output_dict["metadata"]
+
+        print()
+        for metadata in metadatas:
+            context_texts = metadata["contexts"]
+            for c in context_texts:
+                print(c)
+        print()
+
         # This currectly works because there aren't any instance-specific arguments to the language.
         # language = HotpotQALanguage(qstr_qent_spans=[]) # NlvrWorld([])
         logical_forms = []
@@ -395,6 +403,9 @@ class HotpotQAParserBase(Model):
         #                                                                   batch_actionseq_sideargs,
         #                                                                   languages):
             l: HotpotQALanguage = languages[insidx]
+            l.debug = True
+            l.metadata = metadatas[insidx]
+
             instance_action_sequences = best_action_strings[insidx]
             instance_action_sideargs = batch_actionseq_sideargs[insidx] if self._wsideargs else None
 

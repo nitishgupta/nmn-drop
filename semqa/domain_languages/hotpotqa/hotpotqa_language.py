@@ -106,6 +106,10 @@ class HotpotQALanguage(DomainLanguage):
         self.entidx2spanvecs = None
         self.entitymention_idxs_vec = None
 
+        # Used for debug printing while decoding in prediction mode
+        self.debug = None
+        self.metadata = None
+
     def typeobj_to_typename(self, obj):
         ''' For a object of a return-type of the language, return the name of type used in the dataset.
 
@@ -169,12 +173,11 @@ class HotpotQALanguage(DomainLanguage):
     @predicate
     def bool_and(self, bool1: Bool1, bool2: Bool1) -> Bool:
         """ AND operation between two booleans """
-        return_val = bool1._value * bool2._value
-        # print(return_val)
-        # return_val = torch.min(torch.cat([bool1._value.unsqueeze(0), bool2._value.unsqueeze(0)], 0))
-        # return_val = torch.sigmoid(10.0*bool1._value + 10.0*bool2._value - 15.0)
+        # return_val = bool1._value * bool2._value
+        return_val = torch.min(torch.cat([bool1._value.unsqueeze(0), bool2._value.unsqueeze(0)], 0))
         return Bool(value=return_val)
-        # return Bool(value=bool1._value * bool2._value)
+
+    # return_val = torch.sigmoid(10.0 * bool1._value + 10.0 * bool2._value - 15.0)
 
 
     def closest_context(self,
@@ -203,7 +206,7 @@ class HotpotQALanguage(DomainLanguage):
         cwise_maxquestoken_context_similarity, _ = torch.max(masked_ques_context_similarity, dim=2)
 
         # Shape: (C)
-        question_context_similarity =  cwise_maxquestoken_context_similarity.sum(1)
+        question_context_similarity = cwise_maxquestoken_context_similarity.sum(1)
 
         closest_context_idx = torch.argmax(question_context_similarity)
 

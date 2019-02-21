@@ -224,28 +224,35 @@ class HotpotQALanguageWOSideArgs(HotpotQALanguage):
         q_ent_str_repr = torch.cat([qent_embed, qstr_embed], dim=0)
         q_ent_str_mask = torch.cat([qent_mask, qstr_mask], dim=0)
 
+        contexts_embedded = self.contexts_embedded
         contexts_mask = self.contexts_mask
+
+        closest_context = self.closest_context(qent_embed, qent_mask, contexts_embedded, contexts_mask)
+
+        debug_kwargs = {}
+        if self.debug:
+            tokenized_query = qent[5:].split(hpcons.SPAN_DELIM)[:-2] + qstr[5:].split(hpcons.SPAN_DELIM)[:-2]
+            context_texts = self.metadata['contexts']
+            tokenized_contexts = [c.split(' ') for c in context_texts]
+            debug_kwargs['tokenized_query'] = tokenized_query
+            debug_kwargs['tokenized_contexts'] = tokenized_contexts
+            debug_kwargs['closest_context'] = closest_context
 
         num_contexts = contexts_mask.size()[0]
         # (C, Qlen, D)
         ques_token_repr_ex = q_ent_str_repr.unsqueeze(0).expand(num_contexts, *q_ent_str_repr.size())
         q_ent_str_mask_ex = q_ent_str_mask.unsqueeze(0).expand(num_contexts, *q_ent_str_mask.size())
 
-        # snli_output = self._execution_parameters._snli_model.forward_from_embeddings(
-        #         embedded_premise=self.snli_contexts, embedded_hypothesis=ques_token_repr_ex,
-        #         premise_mask=contexts_mask, hypothesis_mask=q_ent_str_mask_ex)
         snli_output = self._execution_parameters._decompatt.forward(
             embedded_premise=self.contexts_embedded, embedded_hypothesis=ques_token_repr_ex,
-            premise_mask=contexts_mask, hypothesis_mask=q_ent_str_mask_ex)
+            premise_mask=contexts_mask, hypothesis_mask=q_ent_str_mask_ex,
+            debug=self.debug, **debug_kwargs)
 
         # C, 3
         output_probs = snli_output['label_probs']
         # print(f"OutputProbs:{output_probs}")
         # C
         boolean_probs = output_probs[:, 0]
-
-        closest_context = self.closest_context(qent_embed, qent_mask, self.contexts_embedded, contexts_mask)
-        # print(f"Closest ContextIdx: {closest_context}")
 
         ans_prob = boolean_probs[closest_context]
 
