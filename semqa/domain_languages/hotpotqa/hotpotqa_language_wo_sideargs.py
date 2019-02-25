@@ -248,16 +248,13 @@ class HotpotQALanguageWOSideArgs(HotpotQALanguage):
             premise_mask=contexts_mask, hypothesis_mask=q_ent_str_mask_ex,
             debug=self.debug, **debug_kwargs)
 
-        # C, 3
+        # Shape: (C, 2)
         output_probs = snli_output['label_probs']
-        # print(f"OutputProbs:{output_probs}")
+
         # C
         boolean_probs = output_probs[:, 0]
 
         ans_prob = boolean_probs[closest_context]
-
-        # print(f"Ansprob: {ans_prob}")
-        # print()
 
         return Bool1(value=ans_prob)
 

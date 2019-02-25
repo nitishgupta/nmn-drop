@@ -215,7 +215,10 @@ local compareff_inputdim =
             "dropout": 0.2
         },
         "similarity_function": {
-            "type": "dot_product"
+          "type": "dot_product"
+//          "type": "bilinear",
+//          "tensor_1_dim": attendff_inputdim,
+//          "tensor_2_dim": attendff_inputdim
         },
         "compare_feedforward": {
             "input_dim": compareff_inputdim,
@@ -240,6 +243,17 @@ local compareff_inputdim =
                 0.0
             ]
         },
+//        "initializer": [
+//          [
+//            ".*linear_layers.*weight",
+//            {
+//                "type": "xavier_normal"
+//            }
+//          ],
+//        ],
+        "noproj": parser.boolparser(std.extVar("DA_NOPROJ")),
+        "wdatt": parser.boolparser(std.extVar("DA_WT")),
+        "normemb": parser.boolparser(std.extVar("DA_NORMEMB")),
       }
     },
 

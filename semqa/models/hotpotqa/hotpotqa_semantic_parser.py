@@ -731,7 +731,10 @@ class HotpotQASemanticParser(HotpotQAParserBase):
             expected_denotation = predicted_expected_denotations[ins_idx]
             best_denotation = predicted_best_denotations[ins_idx]
             mask = ans_grounding_mask[gold_type][ins_idx]
+            # print(mask)
+            # print(expected_denotation)
             expected_denotation = expected_denotation * mask
+            # print(expected_denotation)
             best_denotation = best_denotation * mask
 
             if gold_type == hpcons.BOOL_TYPE:

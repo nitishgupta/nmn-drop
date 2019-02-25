@@ -73,8 +73,8 @@ class HotpotQAPredictor(Predictor):
         gold_bool = 1.0 if answer == 'yes' else 0.0
         pred_bool = 1.0 if best_denotation >= 0.5 else 0.0
         correct = 1 if gold_bool == pred_bool else 0
-        # if correct:
-        #     return ''
+        if correct:
+            return ''
 
         # answer_num = 0.0
         # pred_num = 0.0
