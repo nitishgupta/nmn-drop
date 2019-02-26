@@ -8,7 +8,7 @@ import torch
 from allennlp.data.fields.production_rule_field import ProductionRule
 from allennlp.data.vocabulary import Vocabulary
 from allennlp.models.model import Model
-from allennlp.modules import TextFieldEmbedder, Seq2SeqEncoder, Embedding
+from allennlp.modules import TextFieldEmbedder, Seq2SeqEncoder, Embedding, FeedForward
 from allennlp.nn import util
 from allennlp.state_machines.states import GrammarBasedState, GrammarStatelet, RnnStatelet
 from allennlp.training.metrics import Average
@@ -60,8 +60,9 @@ class HotpotQAParserBase(Model):
                  wsideargs: bool,
                  text_field_embedder: TextFieldEmbedder = None,
                  qencoder: Seq2SeqEncoder = None,
-                 ques2action_encoder: Seq2SeqEncoder = None,
                  quesspan_extractor: SpanExtractor = None,
+                 quesspan2actionemb: FeedForward = None,
+                 use_quesspan_actionemb: bool = False,
                  dropout: float = 0.0,
                  rule_namespace: str = 'rule_labels',
                  debug: bool=False) -> None:
@@ -76,8 +77,9 @@ class HotpotQAParserBase(Model):
         # Don't need these now that we're using bidaf for reprs.
         self._text_field_embedder = text_field_embedder
         self._qencoder = qencoder
-        # self._ques2action_encoder = ques2action_encoder
-        # self._quesspan_extractor = quesspan_extractor
+        self._quesspan_extractor = quesspan_extractor
+        self._quesspan2actionemb = quesspan2actionemb
+        self._use_quesspan_actionemb = use_quesspan_actionemb
 
         # self._context_embedder = context_embedder
         # self._context_encoder = context_encoder
@@ -109,7 +111,17 @@ class HotpotQAParserBase(Model):
         self._first_action_embedding = torch.nn.Parameter(torch.FloatTensor(action_embedding_dim))
         torch.nn.init.normal_(self._first_action_embedding)
 
-        self._qspan_action_embedding = torch.nn.Parameter(torch.FloatTensor(action_embedding_dim))
+        if not self._use_quesspan_actionemb:
+            self._qspan_global_action_emb = torch.nn.Parameter(torch.FloatTensor(action_embedding_dim))
+            qspan_action_emb_dim = action_embedding_dim
+        else:
+            qspan_global_emb_dim = int(action_embedding_dim / 2)
+            self._qspan_global_action_emb = torch.nn.Parameter(torch.FloatTensor(qspan_global_emb_dim))
+            qspan_action_emb_dim = (action_embedding_dim / 2) + quesspan2actionemb.get_output_dim()
+
+        assert (qspan_action_emb_dim == action_embedding_dim), \
+            f"Action Embed Dim ({action_embedding_dim}) != Instance_specific action emb. ({qspan_action_emb_dim}) "
+
         torch.nn.init.normal_(self._first_action_embedding)
 
     @overrides
@@ -192,7 +204,7 @@ class HotpotQAParserBase(Model):
                                  possible_actions: List[ProductionRule],
                                  linked_rule2idx: Dict = None,
                                  action2ques_linkingscore: torch.FloatTensor = None,
-                                 quesspan_action_repr: torch.FloatTensor = None) -> GrammarStatelet:
+                                 quesspan_action_emb: torch.FloatTensor = None) -> GrammarStatelet:
         """ Make grammar state for a particular instance in the batch using the global and instance-specific actions.
         For each instance-specific action we have a linking_score vector (size:ques_tokens), and an action embedding
 
@@ -204,7 +216,7 @@ class HotpotQAParserBase(Model):
         action2ques_linkingscore: Linking score matrix of size (instance-specific_actions, num_ques_tokens)
             The indexing is based on the linked_rule2idx dict. The num_ques_tokens is to a padded length
             The num_ques_tokens is to a padded length, because of which not using a dictionary but a tensor.
-        quesspan_action_repr: Similarly, a (instance-specific_actions, action_embedding_dim) matrix.
+        quesspan_action_emb: Similarly, a (instance-specific_actions, action_embedding_dim) matrix.
             The indexing is based on the linked_rule2idx dict.
         """
         # ProductionRule: (rule, is_global_rule, rule_id, nonterminal)
@@ -258,21 +270,31 @@ class HotpotQAParserBase(Model):
             # Second: Get the representations of the linked actions
             if linked_actions:
                 linked_rules, linked_action_ids = zip(*linked_actions)
+                # Idxs into linkingscore and actionemb tensors
                 ques_spans_idxs = [linked_rule2idx[linked_rule] for linked_rule in linked_rules]
                 # Scores and embedding should not be batched and
                 # should be equal to the number of actions in this instance
                 # (num_linked_actions, num_question_tokens)
                 linked_action_scores = action2ques_linkingscore[ques_spans_idxs]
-                # (num_linked_actions, action_embedding_dim)
-                action_embedding_mat = self._qspan_action_embedding.unsqueeze(0).expand(len(linked_rules),
-                                                                                        self._action_embedding_dim)
+                if self._use_quesspan_actionemb:
+                    # Concatenating qspan end-point emb with global embedding for qspan actions
+                    # Shape: [A, d/2]
+                    quesspan_action_embeddings = quesspan_action_emb[ques_spans_idxs]
+                    qspan_global_emb_dim = self._qspan_global_action_emb.size()[0]
+                    # Shape: [A, d/2]
+                    quesspan_global_emb = self._qspan_global_action_emb.unsqueeze(0).expand(
+                            len(ques_spans_idxs), qspan_global_emb_dim)
+                    # Shape: [A, d]
+                    action_embedding_mat = torch.cat([quesspan_action_embeddings, quesspan_global_emb], dim=1)
+                else:
+                    # (num_linked_actions, action_embedding_dim)
+                    action_embedding_mat = self._qspan_global_action_emb.unsqueeze(0).expand(
+                            len(ques_spans_idxs), *self._qspan_global_action_emb.size())
                 linked_action_embeddings = action_embedding_mat   # quesspan_action_repr[ques_spans_idxs]
 
                 translated_valid_actions[key]['linked'] = (linked_action_scores,
                                                            linked_action_embeddings,
                                                            list(linked_action_ids))
-
-        # print(translated_valid_actions)
 
         return GrammarStatelet([START_SYMBOL],
                                translated_valid_actions,

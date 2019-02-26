@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from allennlp.data.fields.production_rule_field import ProductionRule
 from allennlp.data.vocabulary import Vocabulary
 from allennlp.models.model import Model
-from allennlp.modules import Attention, TextFieldEmbedder, Seq2SeqEncoder
+from allennlp.modules import Attention, TextFieldEmbedder, Seq2SeqEncoder, FeedForward
 from allennlp.nn import Activation
 from allennlp.state_machines import BeamSearch
 from allennlp.state_machines.states import GrammarBasedState
@@ -83,8 +83,9 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                  dropout: float = 0.0,
                  text_field_embedder: TextFieldEmbedder = None,
                  qencoder: Seq2SeqEncoder = None,
-                 ques2action_encoder: Seq2SeqEncoder = None,
                  quesspan_extractor: SpanExtractor = None,
+                 quesspan2actionemb: FeedForward = None,
+                 use_quesspan_actionemb: bool = False,
                  debug: bool=False) -> None:
 
         if bidafutils is not None:
@@ -102,8 +103,9 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                                                      executor_parameters=executor_parameters,
                                                      text_field_embedder=_text_field_embedder,
                                                      qencoder=qencoder,
-                                                     ques2action_encoder=ques2action_encoder,
                                                      quesspan_extractor=quesspan_extractor,
+                                                     quesspan2actionemb=quesspan2actionemb,
+                                                     use_quesspan_actionemb=use_quesspan_actionemb,
                                                      wsideargs=wsideargs,
                                                      dropout=dropout,
                                                      debug=debug)
@@ -288,13 +290,20 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         initial_score_list = [next(iter(question.values())).new_zeros(1, dtype=torch.float)
                               for _ in range(batch_size)]
 
+        if self._use_quesspan_actionemb:
+            qspan_action_embeddings = self._questionspan_action_embeddings(
+                encoded_question_tensor=encoded_ques_tensor, quesspanactions2spanfield=quesspanactions2spanfield)
+        else:
+            qspan_action_embeddings = None
+
         # For each instance, create a grammar statelet containing the valid_actions and their representations
         initial_grammar_statelets = []
         for i in range(batch_size):
             initial_grammar_statelets.append(self._create_grammar_statelet(languages[i],
                                                                            actions[i],
                                                                            linked_rule2idx[i],
-                                                                           quesspanaction2linkingscore[i]))
+                                                                           quesspanaction2linkingscore[i],
+                                                                           qspan_action_embeddings[i]))
 
         # Initial RNN state for the decoder
         initial_rnn_state = self._get_initial_rnn_state(ques_repr=encoded_ques_tensor,
@@ -634,11 +643,14 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         """
         # (B, A) -- A is the number of ques_span actions (includes QSTR and QENT actions)
         span_mask = (quesspanactions2spanfield[:, :, 0] >= 0).squeeze(-1).long()
-        # [B, A, action_dim]
+        # [B, A, 2 * encoded_dim]
         quesspan_actions_encoded = self._quesspan_extractor(sequence_tensor=encoded_question_tensor,
-                                                        span_indices=quesspanactions2spanfield,
-                                                        span_indices_mask=span_mask)
-        return quesspan_actions_encoded
+                                                            span_indices=quesspanactions2spanfield,
+                                                            span_indices_mask=span_mask)
+        # Shape: (B, A, Action_emb/2)
+        quesspan_action_embeddings = self._quesspan2actionemb(quesspan_actions_encoded)
+
+        return quesspan_action_embeddings
 
 
     def _expected_best_denotations(self,

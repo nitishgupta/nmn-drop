@@ -184,6 +184,19 @@ local compareff_inputdim =
     ,
     "action_embedding_dim": 100,
 
+    "quesspan_extractor": {
+      "type": "endpoint",
+      "input_dim": 200
+    },
+    "quesspan2actionemb": {
+      "input_dim": 400,
+      "num_layers": 1,
+      "hidden_dims": 50,
+      "activations": "linear",
+      "dropout": parse_number(std.extVar("DROPOUT"))
+    },
+    "use_quesspan_actionemb": parser.boolparser(std.extVar("USE_QSPANEMB")),
+
     "attention": {
       "type": "dot_product"
     },
