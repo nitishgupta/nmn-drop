@@ -84,7 +84,8 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                  text_field_embedder: TextFieldEmbedder = None,
                  qencoder: Seq2SeqEncoder = None,
                  ques2action_encoder: Seq2SeqEncoder = None,
-                 quesspan_extractor: SpanExtractor = None) -> None:
+                 quesspan_extractor: SpanExtractor = None,
+                 debug: bool=False) -> None:
 
         if bidafutils is not None:
             _text_field_embedder = bidafutils._bidaf_model._text_field_embedder
@@ -104,7 +105,8 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                                                      ques2action_encoder=ques2action_encoder,
                                                      quesspan_extractor=quesspan_extractor,
                                                      wsideargs=wsideargs,
-                                                     dropout=dropout)
+                                                     dropout=dropout,
+                                                     debug=debug)
 
         # Use the gold attention (for w sideargs) or gold actions (for wo sideargs)
         self._goldactions = goldactions
@@ -128,7 +130,11 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         self._decoder_beam_search = decoder_beam_search
         self._max_decoding_steps = max_decoding_steps
         self._action_padding_index = -1
-        self.average_metric = Average()
+        # This metrircs measure accuracy of
+        # (1) Top-predicted program, (2) ExpectedDenotation from the beam (3) Best accuracy from topK(5) programs
+        self.top1_acc_metric = Average()
+        self.expden_acc_metric = Average()
+        self.topk_acc_metric = Average()
 
         # This str decides which function to use for Bool_Qent_Qstr function during execution
         self._bool_qstrqent_func = bool_qstrqent_func
@@ -159,9 +165,6 @@ class HotpotQASemanticParser(HotpotQAParserBase):
     @overrides
     def forward(self,
                 question: Dict[str, torch.LongTensor],
-                quesspans2idx: List[Dict],
-                quesspans_spans: torch.LongTensor,
-                # q_nemens_grounding: torch.FloatTensor,
                 q_nemenspan2entidx: List[Dict],
                 contexts: Dict[str, torch.LongTensor],
                 ent_mens: torch.LongTensor,
@@ -175,8 +178,8 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                 languages: List[HotpotQALanguageWSideArgs],
                 actions: List[List[ProductionRule]],
                 linked_rule2idx: List[Dict],
-                action2ques_linkingscore: torch.FloatTensor,
-                ques_str_action_spans: torch.LongTensor,
+                quesspanaction2linkingscore: torch.FloatTensor,
+                quesspanactions2spanfield: torch.LongTensor,
                 gold_ans_type: List[str]=None,
                 snli_ques=None,
                 snli_contexts=None,
@@ -291,7 +294,7 @@ class HotpotQASemanticParser(HotpotQAParserBase):
             initial_grammar_statelets.append(self._create_grammar_statelet(languages[i],
                                                                            actions[i],
                                                                            linked_rule2idx[i],
-                                                                           action2ques_linkingscore[i]))
+                                                                           quesspanaction2linkingscore[i]))
 
         # Initial RNN state for the decoder
         initial_rnn_state = self._get_initial_rnn_state(ques_repr=encoded_ques_tensor,
@@ -380,13 +383,11 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                                        contexts_embedded=embedded_contexts[i],
                                        contexts_encoded=encoded_contexts[i],
                                        contexts_modeled=modeled_contexts[i],
-                                       contexts_vec=None, # context_vec_list[i],
+                                       contexts_vec=None,   # context_vec_list[i],
                                        contexts_mask=contexts_mask[i],
                                        ne_ent_mens=ent_mens[i],
                                        num_ent_mens=num_mens[i],
                                        date_ent_mens=date_mens[i],
-                                       quesspans2idx=quesspans2idx[i],
-                                       quesspans_spans=quesspans_spans[i],
                                        q_nemenspan2entidx=q_nemenspan2entidx[i],
                                        bool_qstr_qent_func=self._bool_qstrqent_func)
                                        # snli_ques=embedded_snliques[i],
@@ -411,12 +412,14 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         batch_denotations, batch_denotation_types = self._get_denotations(batch_actionseqs, languages,
                                                                           batch_actionseq_sideargs)
 
-        (best_predicted_anstypes, best_predicted_denotations, best_predicted_actionseq_probs,
-         predicted_expected_denotations) = self._expected_best_denotations(
-                batch_denotation_types=batch_denotation_types,
-                batch_action_probs=batch_actionseq_probs,
-                batch_denotations=batch_denotations,
-                gold_ans_type=gold_ans_type)
+        (best_predicted_anstypes,
+         best_predicted_denotations,
+         best_predicted_actionseq_probs,
+         predicted_expected_denotations,
+         topk_predicted_denotations) = self._expected_best_denotations(batch_denotation_types=batch_denotation_types,
+                                                                       batch_action_probs=batch_actionseq_probs,
+                                                                       batch_denotations=batch_denotations,
+                                                                       gold_ans_type=gold_ans_type)
 
         if ans_grounding_dict is not None:
             loss = 0.0
@@ -424,7 +427,8 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                                                  ans_grounding_dict=ans_grounding_dict,
                                                  ans_grounding_mask=ans_grounding_mask,
                                                  predicted_expected_denotations=predicted_expected_denotations,
-                                                 predicted_best_denotations=best_predicted_denotations)
+                                                 predicted_best_denotations=best_predicted_denotations,
+                                                 topk_predicted_denotations=topk_predicted_denotations)
             loss += denotation_loss
             outputs["denotation_loss"] = denotation_loss
 
@@ -616,36 +620,33 @@ class HotpotQASemanticParser(HotpotQAParserBase):
 
         return firststep_action_ids, ans_grounding_dict, ans_grounding_mask
 
-    def _questionstr_action_embeddings(self, question, ques_str_action_spans):
-        """ Get input_action_embeddings for question_str_span actions
+    def _questionspan_action_embeddings(self, encoded_question_tensor, quesspanactions2spanfield):
+        """ Get input_action_embeddings for question_span actions
 
-        The idea is to run a RNN over the question to get a hidden-state-repr.
-        Then for each question_span_action, get it's repr by extracting the end-point-reprs.
+        Encoded question is an encoding of the Question.
 
         Parameters:
         ------------
-        question: Input to the forward from the question TextField
-        action2span
+        encoded_question_tensor: ``torch.FloatTensor``  (B, ques_length, encoded_dim)
+            Encoded question whose final state is also used for InitialRNNStatelet
+        quesspanactions2spanfield: ``torch.LongTensor`` (B, A, 2)
+            Spans of linked rule question spans to SpanField
         """
-        # (B, Qlen, Q_wdim)
-        embedded_ques = self._dropout(self._text_field_embedder(question))
-        # Shape: (B, Qlen)
-        ques_mask = allenutil.get_text_field_mask(question).float()
-        # (B, Qlen, encoder_output_dim)
-        quesaction_encoder_outputs = self._dropout(self._ques2action_encoder(embedded_ques, ques_mask))
-        # (B, A) -- A is the number of ques_str actions
-        span_mask = (ques_str_action_spans[:, :, 0] >= 0).squeeze(-1).long()
+        # (B, A) -- A is the number of ques_span actions (includes QSTR and QENT actions)
+        span_mask = (quesspanactions2spanfield[:, :, 0] >= 0).squeeze(-1).long()
         # [B, A, action_dim]
-        quesstr_action_reprs = self._quesspan_extractor(sequence_tensor=quesaction_encoder_outputs,
-                                                        span_indices=ques_str_action_spans,
+        quesspan_actions_encoded = self._quesspan_extractor(sequence_tensor=encoded_question_tensor,
+                                                        span_indices=quesspanactions2spanfield,
                                                         span_indices_mask=span_mask)
-        return quesstr_action_reprs
+        return quesspan_actions_encoded
 
 
-    def _expected_best_denotations(self, batch_denotation_types: List[List[str]],
-                                         batch_action_probs: List[torch.FloatTensor],
-                                         batch_denotations: List[List[Any]],
-                                         gold_ans_type: List[str]=None):
+    def _expected_best_denotations(self,
+                                   batch_denotation_types: List[List[str]],
+                                   batch_action_probs: List[torch.FloatTensor],
+                                   batch_denotations: List[List[Any]],
+                                   gold_ans_type: List[str]=None,
+                                   top_k: int=5):
         """ Returns the best denotation and it's type. Also returns expected denotation if gold_ans_type is known.
         This is based on the assumption that all denotations are of the gold_type in this case.
 
@@ -662,14 +663,28 @@ class HotpotQASemanticParser(HotpotQAParserBase):
             instance result in the gold type.
         ans_grounding_dict: ``Dict[str, Tensor]``, optional
             Dictionary from ans_type to a Tensor of shape (B, *) denoting the gold denotation for each instance.
-            Since all instances don't belong to the same type, these tensors are padded.
+            Since all instances don't belong to the same type, these tensors are padded and masked
         ans_grounding_mask: ``Dict[str, Tensor]``, optional
             Dictionary from ans_type to a Tensor of shape (B, *) denoting the mask for each instance if
             it doesn't belong to the key's answer type
+        top_k: ``int`` * only if gold_ans_type* is given
+            Along with top-1 and expected, also return top_k denotations for analysis purposes
 
         Returns:
         --------
+        best_predicted_anstypes: List[str]
+            Ans-Type from the best predicted program
+        best_predicted_denotations: List[Any]
+            Denotation from the best predicted program
+        best_predicted_actionprobs: List[torch.FloatTensor]
+            Probability of the best predicted program
+        predicted_expected_denotations: ``List[Any]`` - * Only if gold_ans_type is provided *
+            Expected denotation of the programs decoded by the beam-search
+        topk_predicted_denotations: ``List[List[Any]]`` - * Only if gold_ans_type is provided *
+            Top K predicted denotations from the beam search
         """
+
+        all_predanstype_match = False
 
         # Since the batch_action_probs is sorted, the first instance is the best predicted program
         # These lists are of length = batch_size
@@ -678,6 +693,7 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         best_predicted_actionprobs = [x[0] for x in batch_action_probs]
 
         predicted_expected_denotations = None
+        topk_predicted_denotations = None
 
         if gold_ans_type is not None:
             predicted_expected_denotations = []
@@ -688,6 +704,8 @@ class HotpotQASemanticParser(HotpotQAParserBase):
             assert all(
                 type_check), f"Program types mismatch gold type. \n GoldTypes:\n{gold_ans_type}" \
                              f"PredictedTypes:\n{batch_denotation_types}"
+
+            topk_predicted_denotations = [x[0:top_k] for x in batch_denotations]
 
             for ins_idx in range(0, len(batch_denotations)):
                 instance_denotations = batch_denotations[ins_idx]
@@ -709,16 +727,15 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                 expected_denotation = (ins_denotations * instance_action_probs_ex).sum(0)
                 predicted_expected_denotations.append(expected_denotation)
         return (best_predicted_anstypes, best_predicted_denotations, best_predicted_actionprobs,
-                predicted_expected_denotations)
-
-
+                predicted_expected_denotations, topk_predicted_denotations)
 
 
     def _compute_loss(self, gold_ans_type: List[str],
                             ans_grounding_dict: Dict,
                             ans_grounding_mask: Dict,
                             predicted_expected_denotations: List[torch.Tensor],
-                            predicted_best_denotations: List[torch.Tensor]):
+                            predicted_best_denotations: List[torch.Tensor],
+                            topk_predicted_denotations: List[List[torch.Tensor]]=None):
         """ Compute the loss given the gold type, grounding, and predicted expected denotation of that type. """
 
         loss = 0.0
@@ -728,28 +745,42 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         for ins_idx in range(0, len(predicted_expected_denotations)):
             gold_type = gold_ans_type[ins_idx]
             gold_denotation = ans_grounding_dict[gold_type][ins_idx]
+            mask = ans_grounding_mask[gold_type][ins_idx]
             expected_denotation = predicted_expected_denotations[ins_idx]
             best_denotation = predicted_best_denotations[ins_idx]
-            mask = ans_grounding_mask[gold_type][ins_idx]
-            # print(mask)
-            # print(expected_denotation)
+            if topk_predicted_denotations is not None:
+                topk_denotations = topk_predicted_denotations[ins_idx]
+            else:
+                topk_denotations = None
+
+            gold_denotation = gold_denotation * mask
             expected_denotation = expected_denotation * mask
-            # print(expected_denotation)
             best_denotation = best_denotation * mask
+            if topk_denotations is not None:
+                topk_denotations = [d * mask for d in topk_denotations]
 
             if gold_type == hpcons.BOOL_TYPE:
-                # logger.info(f"Instance deno:\n{ins_denotations}")
-                # logger.info(f"Mask:\n{mask}")
-                # logger.info(f"Instance action probs:\n{instance_action_probs_ex}")
-                # logger.info(f"Gold annotation:\n{gold_denotation}")
-                # logger.info(f"Expected Deno:\n{expected_denotation}")
                 instance_loss = F.binary_cross_entropy(input=expected_denotation, target=gold_denotation)
-
                 loss += instance_loss
 
-                bool_pred = (best_denotation > 0.5).float()
+                # Top1 prediction
+                bool_pred = (best_denotation >= 0.5).float()
                 correct = 1.0 if (bool_pred == gold_denotation) else 0.0
-                self.average_metric(float(correct))
+                self.top1_acc_metric(float(correct))
+
+                # ExptecDenotation Acc
+                bool_pred = (expected_denotation >= 0.5).float()
+                correct = 1.0 if (bool_pred == gold_denotation) else 0.0
+                self.expden_acc_metric(float(correct))
+
+                if topk_denotations is not None:
+                    # List of torch.Tensor([0.0]) or torch.Tensor([1.0])
+                    topk_preds = [(d >= 0.5).float() for d in topk_denotations]
+                    pred_correctness = [1.0 if (x == gold_denotation) else 0.0 for x in topk_preds]
+                    correct = max(pred_correctness)
+                    self.topk_acc_metric(float(correct))
+                else:
+                    self.topk_acc_metric(0.0)
 
         return loss
 
@@ -822,5 +853,7 @@ class HotpotQASemanticParser(HotpotQAParserBase):
     @overrides
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
         return {
-                'accuracy': self.average_metric.get_metric(reset)
+                'accuracy': self.top1_acc_metric.get_metric(reset),
+                'expden_acc': self.expden_acc_metric.get_metric(reset),
+                'topk_acc': self.topk_acc_metric.get_metric(reset)
         }

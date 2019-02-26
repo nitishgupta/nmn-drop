@@ -63,7 +63,8 @@ class HotpotQAParserBase(Model):
                  ques2action_encoder: Seq2SeqEncoder = None,
                  quesspan_extractor: SpanExtractor = None,
                  dropout: float = 0.0,
-                 rule_namespace: str = 'rule_labels') -> None:
+                 rule_namespace: str = 'rule_labels',
+                 debug: bool=False) -> None:
         super(HotpotQAParserBase, self).__init__(vocab=vocab)
 
         # using langauge with or without sideargs
@@ -88,6 +89,9 @@ class HotpotQAParserBase(Model):
         else:
             self._dropout = lambda x: x
         self._rule_namespace = rule_namespace
+
+        # This flag turns on the debugging mode which prints a bunch of stuff in self.decode (inside functions as well)
+        self._debug = debug
 
         # ques2action_encoder_outdim = self._ques2action_encoder.get_output_dim()
         # ques2action_encoder_outdim = 2*ques2action_encoder_outdim if self._ques2action_encoder.is_bidirectional() \
@@ -387,12 +391,12 @@ class HotpotQAParserBase(Model):
         languages = output_dict["languages"]
         metadatas = output_dict["metadata"]
 
-        print()
-        for metadata in metadatas:
-            context_texts = metadata["contexts"]
-            for c in context_texts:
-                print(c)
-        print()
+        # print()
+        # for metadata in metadatas:
+        #     context_texts = metadata["contexts"]
+        #     for c in context_texts:
+        #         print(c)
+        # print()
 
         # This currectly works because there aren't any instance-specific arguments to the language.
         # language = HotpotQALanguage(qstr_qent_spans=[]) # NlvrWorld([])
@@ -403,7 +407,7 @@ class HotpotQAParserBase(Model):
         #                                                                   batch_actionseq_sideargs,
         #                                                                   languages):
             l: HotpotQALanguage = languages[insidx]
-            l.debug = True
+            l.debug = self._debug
             l.metadata = metadatas[insidx]
 
             instance_action_sequences = best_action_strings[insidx]
@@ -423,6 +427,9 @@ class HotpotQAParserBase(Model):
                 else:
                     instance_logical_forms.append('')
                     instance_execution_vals.append([])
+                if pidx >= 5:
+                    break
+
             logical_forms.append(instance_logical_forms)
             execution_vals.append(instance_execution_vals)
 

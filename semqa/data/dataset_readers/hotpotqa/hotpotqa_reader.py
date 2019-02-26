@@ -439,10 +439,6 @@ class HotpotQADatasetReader(DatasetReader):
             ques_spans=ques_spans, ques_spans2idx=ques_spans2idx,
             ques_spans_linking_score=ques_spans_linking_score, ques_spans_spanfields=ques_spans_spanfields)
 
-        # Deep copy since ques_spans2idx changes later on
-        ques_spans2idx_field = MetadataField(ques_spans2idx)
-        ques_spans_spanfield = ListField(ques_spans_spanidxs)
-
         # q_nemens_grounding_field = ArrayField(np.array(q_nemenspan_grounding), padding_value=-1)
         q_nemenspan2entidx_field = MetadataField(q_nemenspan2entidx)
 
@@ -476,10 +472,10 @@ class HotpotQADatasetReader(DatasetReader):
                 linked_rule2idx[production_rule] = ques_spans2idx[rule_right_side]
 
         action_field = ListField(production_rule_fields)
-        # Dict from linked_rule_string -> idx in 'action_to_ques_linking_scores'
-        linked_rule2idx_field = MetadataField(linked_rule2idx)
-        action_to_ques_linking_scores_field = ArrayField(np.array(action_to_ques_linking_scores), padding_value=0)
-        ques_span_actions_to_spanfield = ListField(ques_spans_spanidxs)
+        # Dict from linked_rule_string -> idx in 'action_to_ques_linking_scores' and 'ques_span_actions_to_spanfield'
+        linkedrule2idx_field = MetadataField(linked_rule2idx)
+        quesspanaction2linkingscore_field = ArrayField(np.array(action_to_ques_linking_scores), padding_value=0)
+        quesspanactions2spanfield = ListField(ques_spans_spanidxs)
 
         contexts_tokenized = []
         contexts_text = []
@@ -531,8 +527,6 @@ class HotpotQADatasetReader(DatasetReader):
                                                   ArrayField(np.array([len(context_eqent2datemens)])))
 
         fields: Dict[str, Field] = {"question": ques_tokenized_field,
-                                    "quesspans2idx": ques_spans2idx_field,
-                                    "quesspans_spans": ques_spans_spanfield,
                                     "q_nemenspan2entidx": q_nemenspan2entidx_field,
                                     "contexts": contexts_tokenized_field,
                                     "ent_mens": all_ent_mens_field,
@@ -545,9 +539,9 @@ class HotpotQADatasetReader(DatasetReader):
                                     "date_normval": all_datemens_normval_field,
                                     "languages": lang_field,
                                     "actions": action_field,
-                                    "linked_rule2idx": linked_rule2idx_field,
-                                    "action2ques_linkingscore": action_to_ques_linking_scores_field,
-                                    "ques_str_action_spans": ques_span_actions_to_spanfield,
+                                    "linked_rule2idx": linkedrule2idx_field,
+                                    "quesspanaction2linkingscore": quesspanaction2linkingscore_field,
+                                    "quesspanactions2spanfield": quesspanactions2spanfield,
                                     }
         # if snli_ques_field is not None:
         #     fields["snli_ques"] = snli_ques_field

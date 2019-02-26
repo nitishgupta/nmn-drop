@@ -85,10 +85,6 @@ class HotpotQALanguage(DomainLanguage):
         self.num_ent_mens = None
         # Shape: (E, C, M, 2)
         self.date_ent_mens = None
-        # Dict from QStr -> Idx into self.q_qstr_spans
-        self.quesspans2idx = None
-        # Shape: (Num_of_Qstr, 2)
-        self.quesspans_spans = None
         # Dict from Qent -> Idx into self.q_nemens_grounding -- TODO(nitish) -- not used, but keep around
         self.q_nemens2groundingidx = None
         # Dict from Q_NE_men idx to EntityIdx corresonding to self.ne_ent_mens
@@ -145,8 +141,6 @@ class HotpotQALanguage(DomainLanguage):
         self.ne_ent_mens = kwargs["ne_ent_mens"]
         self.num_ent_mens = kwargs["num_ent_mens"]
         self.date_ent_mens = kwargs["date_ent_mens"]
-        self.quesspans2idx= kwargs["quesspans2idx"]
-        self.quesspans_spans = kwargs["quesspans_spans"]
         self.q_nemenspan2entidx = kwargs["q_nemenspan2entidx"]
         self.device_id = allenutil.get_device_of(self.ques_encoded)
         self.bool_qstr_qent_func = kwargs["bool_qstr_qent_func"]

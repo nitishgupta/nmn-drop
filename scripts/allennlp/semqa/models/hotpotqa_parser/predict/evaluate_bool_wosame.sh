@@ -5,7 +5,7 @@ DATASET_DIR=./resources/data/hotpotqa/processed/bool_wosame
 VALFILE=${DATASET_DIR}/devds_goldcontexts.jsonl
 
 #*****************    PREDICTION FILENAME   *****************
-PRED_FILENAME=devds_goldcontexts.txt
+PRED_FILENAME=metrics_devds_goldcontexts.txt
 
 # PACKAGE TO BE INCLUDED WHICH HOUSES ALL THE CODE
 INCLUDE_PACKAGE=semqa
@@ -30,8 +30,7 @@ export DA_NORMEMB=false
 export DA_WT=true
 export DA_NOPROJ=true
 
-export DEBUG=false
-export BEAMSIZE=5
+export BEAMSIZE=16
 
 ####    SERIALIZATION DIR --- Check for checkpoint_root/task/dataset/model/parameters/
 CHECKPOINT_ROOT=./resources/semqa/checkpoints
@@ -49,18 +48,15 @@ mkdir ${PREDICT_OUTPUT_DIR}
 
 TESTFILE=${VALFILE}
 MODEL_TAR=${SERIALIZATION_DIR}/model.tar.gz
-PREDICTION_FILE=${PREDICT_OUTPUT_DIR}/${PRED_FILENAME}
-PREDICTOR=hotpotqa_predictor
+OUTPUT_FILE=${PREDICT_OUTPUT_DIR}/${PRED_FILENAME}
 
 #######################################################################################################################
 
-bash scripts/allennlp/base/predict.sh ${TESTFILE} \
-                                      ${MODEL_TAR} \
-                                      ${PREDICTION_FILE} \
-                                      ${PREDICTOR} \
-                                      ${GPU} \
-                                      ${INCLUDE_PACKAGE} \
-                                      ${DEBUG} \
-                                      ${BEAMSIZE}
+bash scripts/allennlp/base/evaluate.sh ${TESTFILE} \
+                                       ${MODEL_TAR} \
+                                       ${OUTPUT_FILE} \
+                                       ${GPU} \
+                                       ${INCLUDE_PACKAGE} \
+                                       ${BEAMSIZE}
 
-echo -e "Predictions file saved at: ${PREDICTION_FILE}"
+echo -e "Predictions file saved at: ${OUTPUT_FILE}"
