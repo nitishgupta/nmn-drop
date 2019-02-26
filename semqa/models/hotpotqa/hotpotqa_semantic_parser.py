@@ -254,6 +254,8 @@ class HotpotQASemanticParser(HotpotQAParserBase):
 
         # print()
         # for i in range(batch_size):
+        #     ques = metadata[i]['question']
+        #     print(ques)
         #     context_text = metadata[i]['contexts']
         #     for c in context_text:
         #         print(c)
@@ -353,7 +355,6 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                 if self._wsideargs:
                     instance_actionseq_sideargs = [final_state.debug_info[0] for final_state in best_final_states[i]]
                     instanceidx2actionseq_sideargs[i] = instance_actionseq_sideargs
-
 
         # batch_actionseqs: List[List[List[str]]]: All decoded action sequences for each instance in the batch
         # batch_actionseq_scores: List[List[torch.Tensor]]: Score for each program of each instance

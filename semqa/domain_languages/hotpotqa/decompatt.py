@@ -41,13 +41,14 @@ class DecompAtt(torch.nn.Module, Registrable):
 
 
     def forward(self, embedded_premise, embedded_hypothesis, premise_mask, hypothesis_mask,
-                debug=None, **kwargs):
+                debug=None, question_attention=None, **kwargs):
         """
         embedded_premise: (batch_size, premise_length, embedding_dim)
         embedded_hypothesis: (batch_size, hypothesis_length, embedding_dim)
         premise_mask: (batch_size, premise_length)
         hypothesis_mask: (batch_size, hypothesis_length)
         debug: Bool - Whether to print debugging info
+        question_attention - (batch_size, hypothesis_length)
         kwargs: debug_kwargs
         """
 
@@ -67,6 +68,9 @@ class DecompAtt(torch.nn.Module, Registrable):
         else:
             similarity_matrix = self._matrix_attention(projected_premise, projected_hypothesis)
 
+        if question_attention is not None:
+            similarity_matrix = similarity_matrix * question_attention.unsqueeze(1)
+
         # Shape: (batch_size, premise_length) -- measures the importance of each premise token
         premise_importance_scores = (similarity_matrix*hypothesis_mask.unsqueeze(1)).sum(dim=2)
         # premise_importance_scores = (replace_masked_values(similarity_matrix, mask=hypothesis_mask.unsqueeze(1),
@@ -75,6 +79,8 @@ class DecompAtt(torch.nn.Module, Registrable):
 
         # Shape: (batch_size, premise_length, hypothesis_length)
         p2h_attention = masked_softmax(similarity_matrix, hypothesis_mask)
+        if question_attention is not None:
+            p2h_attention = p2h_attention * question_attention.unsqueeze(1)
         # Shape: (batch_size, premise_length, embedding_dim)
         attended_hypothesis = weighted_sum(embedded_hypothesis, p2h_attention)
 
@@ -98,6 +104,8 @@ class DecompAtt(torch.nn.Module, Registrable):
         # Shape: (batch_size, hypothesis_length, embedding_dim)
         compared_hypothesis = self._compare_feedforward(hypothesis_compare_input)
         compared_hypothesis = compared_hypothesis * hypothesis_mask.unsqueeze(-1)
+        if question_attention is not None:
+            compared_hypothesis = compared_hypothesis * question_attention.unsqueeze(2)
         # Shape: (batch_size, compare_dim)
         compared_hypothesis = compared_hypothesis.sum(dim=1)
 

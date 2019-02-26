@@ -178,7 +178,32 @@ class HotpotQALanguage(DomainLanguage):
                         ques_token_repr,
                         ques_mask,
                         contexts_token_repr,
-                        contexts_mask):
+                        contexts_mask,
+                        question_attention=None):
+        """ Finds the context_idx for the context most similar to the question.
+            For each context, find the question_token to context_token dot-product similarity
+            For each question_token, find the maximum similarity and sum over question tokens.
+            Idx for the context with the maximum similarity is returned.
+
+            In the case of a
+                1) Language w/o sideargs: this is the usually the token_embeddings of the QEnt ques_span.
+                2) Language w sideargs: ques_token_repr is the complete embedded question with an additional
+                    argument, i.e. the question_attention, which is a normalized attention over question tokens.
+
+            Parameters:
+            -----------
+            ques_token_repr: ``torch.FloatTensor``
+                Shape: (ques_length, D)
+            ques_mask: ``torch.FloatTensor``
+                Shape: (ques_length)
+            context_token_repr: ``torch.FloatTensor``
+                Shape: (num_contexts, context_length, D)
+            contexts_mask: ``torch.FloatTensor``
+                Shape: (num_contexts, context_length)
+            question_attention: `Optional` ``torch.FloatTensor``
+                 Shape: (ques_length)
+        """
+
         num_contexts = contexts_mask.size()[0]
         # (C, Qlen, D)
         ques_token_repr_ex = ques_token_repr.unsqueeze(0).expand(num_contexts, *ques_token_repr.size())
@@ -198,6 +223,10 @@ class HotpotQALanguage(DomainLanguage):
                                                                          replace_with=-1e7)
         # (C, Qlen)
         cwise_maxquestoken_context_similarity, _ = torch.max(masked_ques_context_similarity, dim=2)
+
+        if question_attention is not None:
+            cwise_maxquestoken_context_similarity = cwise_maxquestoken_context_similarity * \
+                                                        question_attention.unsqueeze(0)
 
         # Shape: (C)
         question_context_similarity = cwise_maxquestoken_context_similarity.sum(1)

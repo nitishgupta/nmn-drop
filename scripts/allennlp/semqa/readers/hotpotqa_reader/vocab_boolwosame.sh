@@ -15,18 +15,18 @@ export DATASET_READER="hotpotqa_reader"
 export TRAINING_DATA_FILE=${TRAINFILE}
 
 ############  WARNING - Only one of the glove / bidaf / elmo blocks should be used #############################
-export TOKENIDX="glovechar"
-export WORD_EMBED_FILE='./resources/embeddings/glove/glove.6B.100d.txt.gz'
+#export TOKENIDX="glove"
+#export WORD_EMBED_FILE='./resources/embeddings/glove/glove.6B.100d.txt.gz'
 
 #export TOKENIDX="bidaf"
 #export EXTEND_VOCAB=true
 #export EXISTING_VOCAB_DIR=./resources/semqa/pretrained_bidaf/vocabulary
 
-# export TOKENIDX="elmo"
+export TOKENIDX="elmo"
 
 # These are used to extend an existing vocab. For eg. When using pretrained bidaf, this would be bidaf's vocabulary
 
-export W_SIDEARGS=false
+export W_SIDEARGS=true
 
 # OUTPUT DIR
 VOCABDIR=./resources/semqa/vocabs/hotpotqa/bool_wosame/gold_contexts/wosideargs_${W_SIDEARGS}/tokens_${TOKENIDX}

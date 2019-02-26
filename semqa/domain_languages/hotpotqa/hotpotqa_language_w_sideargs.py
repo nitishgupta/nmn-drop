@@ -136,14 +136,59 @@ class HotpotQALanguageWSideArgs(HotpotQALanguage):
 
     @predicate
     def bool_qent_qstr(self, qent: Qent, qstr: Qstr) -> Bool1:
+
         returnval = None
         if self.bool_qstr_qent_func == 'mentions':
             returnval = self.bool_qent_qstr_wmens(qent=qent, qstr=qstr)
         elif self.bool_qstr_qent_func == 'context':
             returnval = self.bool_qent_qstr_wcontext(qent=qent, qstr=qstr)
+        elif self.bool_qstr_qent_func == 'snli':
+            returnval = self.bool_qent_qstr_snli(qent=qent, qstr=qstr)
         else:
             raise NotImplementedError
         return returnval
+
+
+    def bool_qent_qstr_snli(self, qent: Qent, qstr: Qstr) -> Bool1:
+        qent_att = qent._value * self.ques_mask
+        qstr_att = qstr._value * self.ques_mask
+
+        # Shape: (ques_len, D)
+        ques_embedded = self.ques_embedded
+        ques_mask = self.ques_mask
+
+        # Shape: (num_contexts, context_len, D)
+        contexts_embedded = self.contexts_embedded
+        contexts_mask = self.contexts_mask
+
+        closest_context = self.closest_context(ques_embedded, ques_mask, contexts_embedded, contexts_mask,
+                                               question_attention=qent_att)
+
+        ques_att = qent_att + qstr_att
+
+        num_contexts = contexts_mask.size()[0]
+        # (C, Qlen, D)
+        ques_token_repr_ex = ques_embedded.unsqueeze(0).expand(num_contexts, *ques_embedded.size())
+        q_mask_ex = ques_mask.unsqueeze(0).expand(num_contexts, *ques_mask.size())
+        ques_att_ex = ques_att.unsqueeze(0).expand(num_contexts, *ques_att.size())
+
+        debug_kwargs = {}
+
+        snli_output = self._execution_parameters._decompatt.forward(
+            embedded_premise=contexts_embedded, embedded_hypothesis=ques_token_repr_ex,
+            premise_mask=contexts_mask, hypothesis_mask=q_mask_ex,
+            debug=self.debug, question_attention=ques_att_ex, **debug_kwargs)
+
+        # Shape: (C, 2)
+        output_probs = snli_output['label_probs']
+
+        # C
+        boolean_probs = output_probs[:, 0]
+
+        ans_prob = boolean_probs[closest_context]
+
+        return Bool1(value=ans_prob)
+
 
 
     def bool_qent_qstr_wcontext(self, qent: Qent, qstr: Qstr) -> Bool1:

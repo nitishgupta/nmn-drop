@@ -35,7 +35,7 @@ local compareff_inputdim =
   "dataset_reader": {
     "type": std.extVar("DATASET_READER"),
     "lazy": true,
-    "wsideargs": false,
+    "wsideargs": parser.boolparser(std.extVar("W_SIDEARGS")),
 
     "token_indexers":
       if tokenidx == "glove" then
@@ -151,7 +151,7 @@ local compareff_inputdim =
         }
       }
     ,
-    "wsideargs": false,
+    "wsideargs": parser.boolparser(std.extVar("W_SIDEARGS")),
     "goldactions": parser.boolparser(std.extVar("GOLDACTIONS")),
 
     "bidafutils":
