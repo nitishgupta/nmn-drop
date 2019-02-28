@@ -449,8 +449,6 @@ class HotpotQAParserBase(Model):
                 else:
                     instance_logical_forms.append('')
                     instance_execution_vals.append([])
-                if pidx >= 5:
-                    break
 
             logical_forms.append(instance_logical_forms)
             execution_vals.append(instance_execution_vals)

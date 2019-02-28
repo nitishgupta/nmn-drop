@@ -44,6 +44,8 @@ class HotpotQAPredictor(Predictor):
     def dump_line(self, outputs: JsonDict) -> str:  # pylint: disable=no-self-use
         # Use json.dumps(outputs) + "\n" to dump a dictionary
 
+        NUM_PROGS_TO_PRINT = 5
+
         out_str = ''
         metadata = outputs['metadata']
         question = metadata['question']
@@ -59,11 +61,15 @@ class HotpotQAPredictor(Predictor):
         out_str += f"Question: {question}\n"
         out_str += f"Answer: {answer}\n"
         out_str += f"BestDenotation: {best_denotation}\n"
+
         if 'logical_forms' and 'denotations' in outputs:
             for lf, d, ex_vals in zip(logical_forms, denotations, execution_vals):
                 # Stripping the trailing new line
                 ex_vals_str = self._print_ExecutionValTree(ex_vals, 0).strip()
                 out_str += f"LogicalForm: {lf}\nDenotation: {d}\nExecutionTree:\n{ex_vals_str}\n"
+                NUM_PROGS_TO_PRINT -= 1
+                if NUM_PROGS_TO_PRINT == 0:
+                    break
 
         out_str += "Contexts:\n"
         for c in contexts:
@@ -73,8 +79,9 @@ class HotpotQAPredictor(Predictor):
         gold_bool = 1.0 if answer == 'yes' else 0.0
         pred_bool = 1.0 if best_denotation >= 0.5 else 0.0
         correct = 1 if gold_bool == pred_bool else 0
-        if correct:
-            return ''
+
+        # if correct:
+        #     return ''
 
         # answer_num = 0.0
         # pred_num = 0.0

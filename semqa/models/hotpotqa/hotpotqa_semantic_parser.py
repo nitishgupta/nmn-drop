@@ -80,6 +80,7 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                  context_token_repr_key: str = 'embed',
                  bool_qstrqent_func: str = 'mentions',
                  entityspan_qatt_loss: bool = False,
+                 wsidearg_attn_loss: bool = True,
                  dropout: float = 0.0,
                  text_field_embedder: TextFieldEmbedder = None,
                  qencoder: Seq2SeqEncoder = None,
@@ -137,6 +138,7 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         self.top1_acc_metric = Average()
         self.expden_acc_metric = Average()
         self.topk_acc_metric = Average()
+        self.qatt_loss = Average()
 
         # This str decides which function to use for Bool_Qent_Qstr function during execution
         self._bool_qstrqent_func = bool_qstrqent_func
@@ -146,6 +148,7 @@ class HotpotQASemanticParser(HotpotQAParserBase):
 
         # Addition loss to enforce high ques attention on mention spans when predicting Qent -> find_Qent action
         self._entityspan_qatt_loss = entityspan_qatt_loss
+        self._wsidearg_attn_loss = wsidearg_attn_loss
 
         if bidafutils is not None:
             self.executor_parameters._bidafutils = bidafutils
@@ -158,7 +161,6 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         # snli_model_archive = load_archive('/srv/local/data/nitishg/semqa/pretrained_decompatt/decomposable-attention-elmo-2018.02.19.tar.gz')
         # self.snli_model: DecomposableAttention = snli_model_archive.model
         # self.executor_parameters._snli_model = self.snli_model
-
 
 
     def device_id(self):
@@ -279,6 +281,8 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                                                             question=question,
                                                             contexts=contexts)
             encoded_contexts, modeled_contexts = embedded_contexts, embedded_contexts
+        else:
+            raise NotImplementedError
 
         if gold_ans_type is not None:
             (firststep_action_ids,
@@ -372,9 +376,13 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         # The prob is normalized across the action_seqs in the beam
         batch_actionseq_probs = []
         for score_list in batch_actionseq_scores:
+            # print([x.cpu().numpy() for x in score_list])
             scores_astensor = allenutil.move_to_device(torch.cat([x.view(1) for x in score_list]), device_id)
             action_probs = allenutil.masked_softmax(scores_astensor, mask=None)
             batch_actionseq_probs.append(action_probs)
+            # print(action_probs)
+
+        # print(batch_actionseq_probs)
 
         # for ins in batch_actionseqs:
         #     print(f"{ins}\n")
@@ -406,10 +414,10 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                                        # snlicontexts_mask=snlicontexts_mask[i])
 
             languages[i].preprocess_arguments()
-            if self._goldactions:
+            # if self._goldactions:
                 # Works for both with and w/o sideargs
-                qent1, qent2, qstr = languages[i]._get_gold_actions()
-                batch_gold_actions.append((qent1, qent2, qstr))
+            qent1, qent2, qstr = languages[i]._get_gold_actions()
+            batch_gold_actions.append((qent1, qent2, qstr))
 
         if self._goldactions:
             if self._wsideargs:
@@ -446,8 +454,14 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                 entityspan_ques_att_loss = self._entity_attention_loss(languages=languages,
                                                                        batch_actionseqs=batch_actionseqs,
                                                                        batch_side_args=batch_actionseq_sideargs)
-                loss += entityspan_ques_att_loss
-                outputs["entityspan_ques_att_loss"] = entityspan_ques_att_loss
+            if self._wsidearg_attn_loss and self._wsideargs and (self._goldactions is False):
+                ques_att_loss = self._ques_attention_loss(languages=languages,
+                                                          batch_actionseqs=batch_actionseqs,
+                                                          batch_side_args=batch_actionseq_sideargs,
+                                                          batch_gold_ques_attns=batch_gold_actions)
+                loss += ques_att_loss
+                outputs["ques_att_loss"] = ques_att_loss
+                self.qatt_loss(ques_att_loss.detach().cpu().numpy().tolist())
 
             outputs["loss"] = loss
 
@@ -483,6 +497,48 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                         loss += torch.sum(question_attention * entity_span_vec_gold)
 
         return -1 * loss
+
+
+    def _ques_attention_loss(self,
+                             languages: List[HotpotQALanguageWSideArgs],
+                             batch_actionseqs: List[List[List[str]]],
+                             batch_side_args: List[List[List[Dict]]],
+                             batch_gold_ques_attns: List[Tuple[torch.FloatTensor,
+                                                               torch.FloatTensor,
+                                                               torch.FloatTensor]]):
+
+        # batch_gold_ques_attns contains gold (qent1, qent2, qstr) attention vectors for each instance
+        qent_action = 'Qent -> find_Qent'
+        qstr_action = 'Qstr -> find_Qstr'
+        batch_size = len(languages)
+        loss = 0.0
+        normalizer = 0
+        for i in range(0, batch_size):
+            # Shape: (Qlen)
+            instance_action_seqs: List[List[str]] = batch_actionseqs[i]
+            instance_sideargs: List[List[Dict]] = batch_side_args[i]
+            qent1, qent2, qstr = batch_gold_ques_attns[i]
+            first_qent = True
+
+            for program, side_args in zip(instance_action_seqs, instance_sideargs):
+                for action, side_arg in zip(program, side_args):
+                    question_attention = side_arg['question_attention']
+                    log_question_attention = torch.log(question_attention  + 1e-5)
+                    if action == qent_action:
+                        if first_qent:
+                            l = torch.sum(log_question_attention * qent1)
+                            loss += l
+                            normalizer += 1
+                            first_qent = False
+                        else:
+                            l = torch.sum(log_question_attention * qent2)
+                            loss += l
+                            normalizer += 1
+                    if action == qstr_action:
+                        l = torch.sum(log_question_attention * qstr)
+                        loss += l
+                        normalizer += 1
+        return -1 * (loss/normalizer)
 
     def _average_ques_repr(self, ques_reprs, ques_masks):
         """ Average question reprs from multiple runs of bidaf
@@ -868,5 +924,6 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         return {
                 'accuracy': self.top1_acc_metric.get_metric(reset),
                 'expden_acc': self.expden_acc_metric.get_metric(reset),
-                'topk_acc': self.topk_acc_metric.get_metric(reset)
+                'topk_acc': self.topk_acc_metric.get_metric(reset),
+                'qattloss': self.qatt_loss.get_metric(reset)
         }

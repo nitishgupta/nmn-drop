@@ -11,7 +11,7 @@ from allennlp.semparse.domain_languages.domain_language import PredicateType
 
 import datasets.hotpotqa.utils.constants as hpcons
 from semqa.domain_languages.hotpotqa.execution_params import ExecutorParameters
-from semqa.domain_languages.hotpotqa.hotpotqa_language import Qstr, Qent, Bool, Bool1, HotpotQALanguage
+from semqa.domain_languages.hotpotqa.hotpotqa_language import Qstr, Qent, Bool, Bool1, HotpotQALanguage, Qattn
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -134,6 +134,16 @@ class HotpotQALanguageWSideArgs(HotpotQALanguage):
         return Qent(value=question_attention)
 
 
+    # @predicate_with_side_args(['question_attention'])
+    # def find_Qattn(self, question_attention: torch.FloatTensor) -> Qattn:
+    #     return Qattn(value=question_attention)
+    #
+    # @predicate
+    # def bool_attn(self, qattn: Qattn) -> Bool1:
+    #     returnval = self.bool_qattn_snli(qattn=qattn)
+    #     return returnval
+
+
     @predicate
     def bool_qent_qstr(self, qent: Qent, qstr: Qstr) -> Bool1:
 
@@ -165,6 +175,45 @@ class HotpotQALanguageWSideArgs(HotpotQALanguage):
                                                question_attention=qent_att)
 
         ques_att = qent_att + qstr_att
+
+        num_contexts = contexts_mask.size()[0]
+        # (C, Qlen, D)
+        ques_token_repr_ex = ques_embedded.unsqueeze(0).expand(num_contexts, *ques_embedded.size())
+        q_mask_ex = ques_mask.unsqueeze(0).expand(num_contexts, *ques_mask.size())
+        ques_att_ex = ques_att.unsqueeze(0).expand(num_contexts, *ques_att.size())
+
+        debug_kwargs = {}
+
+        snli_output = self._execution_parameters._decompatt.forward(
+            embedded_premise=contexts_embedded, embedded_hypothesis=ques_token_repr_ex,
+            premise_mask=contexts_mask, hypothesis_mask=q_mask_ex,
+            debug=self.debug, question_attention=ques_att_ex, **debug_kwargs)
+
+        # Shape: (C, 2)
+        output_probs = snli_output['label_probs']
+
+        # C
+        boolean_probs = output_probs[:, 0]
+
+        ans_prob = boolean_probs[closest_context]
+
+        return Bool1(value=ans_prob)
+
+
+
+    def bool_qattn_snli(self, qattn: Qattn) -> Bool1:
+        ques_att = qattn._value * self.ques_mask
+
+        # Shape: (ques_len, D)
+        ques_embedded = self.ques_embedded
+        ques_mask = self.ques_mask
+
+        # Shape: (num_contexts, context_len, D)
+        contexts_embedded = self.contexts_embedded
+        contexts_mask = self.contexts_mask
+
+        closest_context = self.closest_context(ques_embedded, ques_mask, contexts_embedded, contexts_mask,
+                                               question_attention=ques_att)
 
         num_contexts = contexts_mask.size()[0]
         # (C, Qlen, D)

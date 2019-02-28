@@ -18,7 +18,7 @@ class DecompAtt(torch.nn.Module, Registrable):
                  aggregate_feedforward: FeedForward,
                  noproj: bool,
                  wdatt: bool,
-                 normemb: bool,
+                 normemb: bool=False,
                  initializer: InitializerApplicator = InitializerApplicator(),
                  regularizer: Optional[RegularizerApplicator] = None):
         super(DecompAtt, self).__init__()
@@ -31,8 +31,6 @@ class DecompAtt(torch.nn.Module, Registrable):
         self._noproj = noproj
         self._wdatt = wdatt
         self._normemb = normemb
-
-        self._num_labels = 1
 
         # check_dimensions_match(text_field_embedder.get_output_dim(), attend_feedforward.get_input_dim(),
         #                        "text field embedding dim", "attend feedforward input dim")
@@ -68,6 +66,7 @@ class DecompAtt(torch.nn.Module, Registrable):
         else:
             similarity_matrix = self._matrix_attention(projected_premise, projected_hypothesis)
 
+        # Scale similarities based on the question_attention
         if question_attention is not None:
             similarity_matrix = similarity_matrix * question_attention.unsqueeze(1)
 
@@ -104,6 +103,7 @@ class DecompAtt(torch.nn.Module, Registrable):
         # Shape: (batch_size, hypothesis_length, embedding_dim)
         compared_hypothesis = self._compare_feedforward(hypothesis_compare_input)
         compared_hypothesis = compared_hypothesis * hypothesis_mask.unsqueeze(-1)
+        # Scaling the vectors in compared_hypothesis based on the question attention
         if question_attention is not None:
             compared_hypothesis = compared_hypothesis * question_attention.unsqueeze(2)
         # Shape: (batch_size, compare_dim)

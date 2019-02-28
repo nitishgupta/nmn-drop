@@ -48,8 +48,7 @@ local tokenidx = std.extVar("TOKENIDX");
           "type": "elmo_characters"
         }
       }
-      else if tokenidx == "glovechar" then
-      {
+      else if tokenidx == "glovechar" then {
         "tokens": {
             "type": "single_id",
             "lowercase_tokens": true
@@ -59,8 +58,17 @@ local tokenidx = std.extVar("TOKENIDX");
           "character_tokenizer": {
               "byte_encoding": "utf-8",
               "start_tokens": [259],
-              "end_tokens": [260, 0, 0, 0, 0,0]
+              "end_tokens": [260, 0, 0, 0, 0, 0]
           }
+        }
+      }
+      else if tokenidx == "elmoglove" then {
+        "tokens": {
+            "type": "single_id",
+            "lowercase_tokens": true
+        },
+        "elmo": {
+          "type": "elmo_characters"
         }
       }
     ,
@@ -80,6 +88,12 @@ local tokenidx = std.extVar("TOKENIDX");
     else if tokenidx == "elmo" then {
     }
     else if tokenidx == "glovechar" then {
+      "pretrained_files": {
+        "tokens": std.extVar("WORD_EMBED_FILE")
+      },
+      "only_include_pretrained_words": false,
+    }
+    else if tokenidx == "elmoglove" then {
       "pretrained_files": {
         "tokens": std.extVar("WORD_EMBED_FILE")
       },

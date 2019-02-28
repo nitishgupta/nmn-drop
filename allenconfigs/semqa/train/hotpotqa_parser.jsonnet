@@ -22,13 +22,15 @@ local attendff_inputdim =
   if tokenidx == "glove" then 100
   else if tokenidx == "bidaf" then 200
   else if tokenidx == "elmo" then 1024
-  else if tokenidx == "glovechar" then 200;
+  else if tokenidx == "glovechar" then 200
+  else if tokenidx == "elmoglove" then 1124;
 
 local compareff_inputdim =
   if tokenidx == "glove" then 200
   else if tokenidx == "bidaf" then 400
   else if tokenidx == "elmo" then 2048
-  else if tokenidx == "glovechar" then 400;
+  else if tokenidx == "glovechar" then 400
+  else if tokenidx == "elmoglove" then 2248;
 
 
 {
@@ -38,15 +40,13 @@ local compareff_inputdim =
     "wsideargs": parser.boolparser(std.extVar("W_SIDEARGS")),
 
     "token_indexers":
-      if tokenidx == "glove" then
-      {
+      if tokenidx == "glove" then {
         "tokens": {
           "type": "single_id",
           "lowercase_tokens": true
         }
       }
-      else if tokenidx == "bidaf" then
-      {
+      else if tokenidx == "bidaf" then {
         "tokens": {
             "type": "single_id",
             "lowercase_tokens": true
@@ -69,14 +69,12 @@ local compareff_inputdim =
           }
         }
       }
-      else if tokenidx == "elmo" then
-      {
+      else if tokenidx == "elmo" then {
         "elmo": {
           "type": "elmo_characters"
         }
       }
-      else if tokenidx == "glovechar" then
-      {
+      else if tokenidx == "glovechar" then {
         "tokens": {
             "type": "single_id",
             "lowercase_tokens": true
@@ -88,6 +86,15 @@ local compareff_inputdim =
               "start_tokens": [259],
               "end_tokens": [260, 0, 0, 0, 0,0]
           }
+        }
+      }
+      else if tokenidx == "elmoglove" then {
+        "elmo": {
+          "type": "elmo_characters"
+        },
+        "tokens": {
+          "type": "single_id",
+          "lowercase_tokens": true
         }
       }
     ,
@@ -150,6 +157,21 @@ local compareff_inputdim =
           "dropout": 0.2
         }
       }
+      else if tokenidx == "elmoglove" then {
+        "elmo": {
+          "type": "elmo_token_embedder",
+          "options_file": "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_options.json",
+          "weight_file": "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5",
+          "do_layer_norm": false,
+          "dropout": 0.5
+        },
+        "tokens": {
+          "type": "embedding",
+          "pretrained_file": std.extVar("BIDAF_WORDEMB_FILE"),
+          "embedding_dim": 100,
+          "trainable": false
+        },
+      }
     ,
     "wsideargs": parser.boolparser(std.extVar("W_SIDEARGS")),
     "goldactions": parser.boolparser(std.extVar("GOLDACTIONS")),
@@ -181,6 +203,14 @@ local compareff_inputdim =
         "num_layers": 1,
         "bidirectional": true,
       }
+      else if tokenidx == "elmoglove" then {
+        "type": "lstm",
+        "input_size": 1124,
+        "hidden_size": 100,
+        "num_layers": 1,
+        "bidirectional": true,
+      }
+
     ,
     "action_embedding_dim": 100,
 

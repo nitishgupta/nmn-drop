@@ -42,6 +42,11 @@ class Qent():
         self._value = value
 
 
+class Qattn():
+    def __init__(self, value):
+        self._value = value
+
+
 class HotpotQALanguage(DomainLanguage):
     def __init__(self, start_types):
         super().__init__(start_types=start_types)
