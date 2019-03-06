@@ -210,7 +210,6 @@ local compareff_inputdim =
         "num_layers": 1,
         "bidirectional": true,
       }
-
     ,
     "action_embedding_dim": 100,
 
@@ -228,7 +227,8 @@ local compareff_inputdim =
     "use_quesspan_actionemb": parser.boolparser(std.extVar("USE_QSPANEMB")),
 
     "attention": {
-      "type": "dot_product"
+      "type": "dot_product",
+      "normalize": true
     },
 
     "decoder_beam_search": {
@@ -304,7 +304,9 @@ local compareff_inputdim =
     "dropout": parse_number(std.extVar("DROPOUT")),
     "bool_qstrqent_func": std.extVar("BOOL_QSTRQENT_FUNC"),
     "question_token_repr_key": std.extVar("QTK"),
-    "context_token_repr_key": std.extVar("CTK")
+    "context_token_repr_key": std.extVar("CTK"),
+    "aux_goldprog_loss": parser.boolparser(std.extVar("AUXLOSS")),
+    "entityspan_qatt_loss": parser.boolparser(std.extVar("QENTLOSS")),
   },
 
   "iterator": {

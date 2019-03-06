@@ -15,7 +15,7 @@ export W_SIDEARGS=true
 
 ### TRAINING MODEL CONFIG -- should be same across datasets for the same model
 CONFIGFILE=allenconfigs/semqa/train/hotpotqa_parser.jsonnet
-export TOKENIDX="elmoglove"
+export TOKENIDX="glove"
 export VOCABDIR=./resources/semqa/vocabs/hotpotqa/bool_wosame/gold_contexts/wosideargs_${W_SIDEARGS}/tokens_${TOKENIDX}/vocabulary
 
 export DATASET_READER=hotpotqa_reader
@@ -40,6 +40,8 @@ export DA_WT=true
 export DA_NOPROJ=true
 
 export USE_QSPANEMB=true
+export AUXLOSS=false
+export QENTLOSS=true
 
 export BS=4
 export LR=0.001
@@ -56,10 +58,21 @@ SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/hotpotqa/bool_wosame
 MODEL_DIR=hotpotqa_parser
 PARAMETERS_DIR1=BS_${BS}/OPT_${OPT}/LR_${LR}/Drop_${DROPOUT}/TOKENS_${TOKENIDX}/FUNC_${BOOL_QSTRQENT_FUNC}
 PARAMETERS_DIR2=SIDEARG_${W_SIDEARGS}/GOLDAC_${GOLDACTIONS}/DA_NOPROJ_${DA_NOPROJ}/DA_WT_${DA_WT}/QSPANEMB_${USE_QSPANEMB}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PARAMETERS_DIR1}/${PARAMETERS_DIR2}_wqattloss
+PARAMETERS_DIR3=AUXLOSS_${AUXLOSS}/QENTLOSS_${QENTLOSS}
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PARAMETERS_DIR1}/${PARAMETERS_DIR2}/${PARAMETERS_DIR3}_cdist_sigmatt
 
 #######################################################################################################################
 
 bash scripts/allennlp/base/train.sh ${CONFIGFILE} \
                                     ${INCLUDE_PACKAGE} \
                                     ${SERIALIZATION_DIR}
+
+
+#RESUME_SER_DIR=${SERIALIZATION_DIR}/Resume
+#
+#MODEL_TAR_GZ=${SERIALIZATION_DIR}/model.tar.gz
+#
+#bash scripts/allennlp/base/resume.sh ${CONFIGFILE} \
+#                                     ${INCLUDE_PACKAGE} \
+#                                     ${RESUME_SER_DIR} \
+#                                     ${MODEL_TAR_GZ}

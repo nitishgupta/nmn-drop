@@ -189,6 +189,7 @@ class HotpotQALanguage(DomainLanguage):
             For each context, find the question_token to context_token dot-product similarity
             For each question_token, find the maximum similarity and sum over question tokens.
             Idx for the context with the maximum similarity is returned.
+            Additionally return a similarity-distribution over contexts by softmax-ing the similarity scores
 
             In the case of a
                 1) Language w/o sideargs: this is the usually the token_embeddings of the QEnt ques_span.
@@ -235,10 +236,11 @@ class HotpotQALanguage(DomainLanguage):
 
         # Shape: (C)
         question_context_similarity = cwise_maxquestoken_context_similarity.sum(1)
-
+        context_similarity_dist = allenutil.masked_softmax(question_context_similarity, mask=None,
+                                                            memory_efficient=True)
         closest_context_idx = torch.argmax(question_context_similarity)
 
-        return closest_context_idx
+        return closest_context_idx, context_similarity_dist
 
 
     # @predicate

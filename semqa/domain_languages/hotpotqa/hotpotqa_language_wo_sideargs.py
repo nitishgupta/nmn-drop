@@ -447,52 +447,7 @@ class HotpotQALanguageWOSideArgs(HotpotQALanguage):
 
 
     def bool_qent_qstr_wmens(self, qent: Qent, qstr: Qstr) -> Bool1:
-        qent_att = qent._value * self.ques_mask
-        qstr_att = qstr._value * self.ques_mask
-
-        # Shape: (Q_d)
-        qstr_repr = (self.ques_encoded * qstr_att.unsqueeze(1)).sum(0)
-
-        # Computing score/distribution over all entities mentioned in the question based on the qent ques_attention
-        # Entity_prob is proportional to the sum of the attention values of the tokens in the entity's mention
-        entidx2prob = {}
-        entidx2score = {}
-        total_score = 0.0
-        for entidx, span_onehot_vecs in self.entidx2spanvecs.items():
-            entity_score = sum([(spanvec * qent_att).sum() for spanvec in span_onehot_vecs])
-            total_score += entity_score
-            entidx2score[entidx] = entity_score
-            # entidx2prob[entidx] = entity_score
-        for entidx, entity_score in entidx2score.items():
-            entidx2prob[entidx] = entity_score/total_score
-
-        # Find the answer prob based on each entity mentioned in the question, and compute the expection later ...
-        entidx2ansprob = {}
-        for entidx in entidx2prob.keys():
-            # Shape: (C, M, 2)
-            qent_mens = self.ne_ent_mens[entidx]
-            qent_mens_mask = (qent_mens[..., 0] >= 0).long()
-
-            # Shape: (C, M, 2*D)
-            qent_men_repr = self._execution_parameters._span_extractor(self.contexts_encoded, qent_mens,
-                                                                       self.contexts_mask,
-                                                                       qent_mens_mask)
-            q_repr_cat = torch.cat([qstr_repr, qstr_repr], 0)
-            qstr_repr_ex = q_repr_cat.unsqueeze(0).unsqueeze(1)
-            scores = torch.sum(qstr_repr_ex * qent_men_repr, 2)
-            probs = torch.sigmoid(scores) * qent_mens_mask.float()
-
-            boolean_prob = torch.max(probs)  # .unsqueeze(0)
-            entidx2ansprob[entidx] = boolean_prob
-
-        # Computing the expected boolean_answer based on the qent probs
-        expected_prob = 0.0
-        for entidx, ent_ans_prob in entidx2ansprob.items():
-            # ent_prob = entidx2prob[entidx]
-            ent_prob = entidx2score[entidx]
-            expected_prob += ent_prob * ent_ans_prob
-
-        return Bool1(value=expected_prob)
+       raise NotImplementedError
 
 
 if __name__=="__main__":

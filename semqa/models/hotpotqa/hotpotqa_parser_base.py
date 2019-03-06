@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, List, Tuple, Any
+from typing import Dict, List, Tuple, Any, TypeVar
 
 from overrides import overrides
 
@@ -10,10 +10,11 @@ from allennlp.data.vocabulary import Vocabulary
 from allennlp.models.model import Model
 from allennlp.modules import TextFieldEmbedder, Seq2SeqEncoder, Embedding, FeedForward
 from allennlp.nn import util
-from allennlp.state_machines.states import GrammarBasedState, GrammarStatelet, RnnStatelet
+from allennlp.state_machines.states import GrammarBasedState, GrammarStatelet, RnnStatelet, State
 from allennlp.training.metrics import Average
 from allennlp.modules.span_extractors.span_extractor import SpanExtractor
 import allennlp.common.util as alcommon_utils
+import allennlp.nn.util as allenutil
 
 import datasets.hotpotqa.utils.constants as hpcons
 from semqa.domain_languages.hotpotqa.hotpotqa_language import HotpotQALanguage
@@ -23,6 +24,8 @@ import semqa.domain_languages.domain_language_utils as dl_utils
 from allennlp.pretrained import PretrainedModel
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
+StateType = TypeVar('StateType', bound=State)
 
 SPAN_DELIM = hpcons.SPAN_DELIM
 START_SYMBOL = alcommon_utils.START_SYMBOL
@@ -292,7 +295,13 @@ class HotpotQAParserBase(Model):
                             len(ques_spans_idxs), *self._qspan_global_action_emb.size())
                 linked_action_embeddings = action_embedding_mat   # quesspan_action_repr[ques_spans_idxs]
 
-                translated_valid_actions[key]['linked'] = (linked_action_scores,
+                # # Using Linking_Scores
+                # translated_valid_actions[key]['linked'] = (linked_action_scores,
+                #                                            linked_action_embeddings,
+                #                                            list(linked_action_ids))
+
+                # Using QSpan embeddings to score actions
+                translated_valid_actions[key]['linked'] = (linked_action_embeddings,
                                                            linked_action_embeddings,
                                                            list(linked_action_ids))
 
@@ -313,6 +322,32 @@ class HotpotQAParserBase(Model):
                     continue
                 label_strings[-1].append(self.vocab.get_token_from_index(label_int, "denotations"))
         return label_strings
+
+
+    def _get_actionseq_idxs_and_scores(self,
+                                       best_final_states: Dict[int, List[StateType]],
+                                       batch_size: int,
+                                       wsideargs: bool):
+        instanceidx2actionseq_idxs = {}
+        instanceidx2actionseq_scores = {}
+        instanceidx2actionseq_sideargs = {} if wsideargs else None
+
+        for i in range(batch_size):
+            # Decoding may not have terminated with any completed logical forms, if `num_steps`
+            # isn't long enough (or if the model is not trained enough and gets into an
+            # infinite action loop).
+            if i in best_final_states:
+                # Since the group size for any state is 1, action_history[0] can be used.
+                instance_actionseq_idxs = [final_state.action_history[0] for final_state in best_final_states[i]]
+                instance_actionseq_scores = [final_state.score[0] for final_state in best_final_states[i]]
+                instanceidx2actionseq_idxs[i] = instance_actionseq_idxs
+                instanceidx2actionseq_scores[i] = instance_actionseq_scores
+                if wsideargs:
+                    instance_actionseq_sideargs = [final_state.debug_info[0] for final_state in best_final_states[i]]
+                    instanceidx2actionseq_sideargs[i] = instance_actionseq_sideargs
+
+        return (instanceidx2actionseq_idxs, instanceidx2actionseq_scores, instanceidx2actionseq_sideargs)
+
 
     @classmethod
     def _get_actionseq_strings(cls,
@@ -345,6 +380,19 @@ class HotpotQAParserBase(Model):
                 instance_debuginfos = b2debuginfos[i] if i in b2debuginfos else []
                 all_debuginfos.append(instance_debuginfos)
         return all_action_strings, all_action_scores, all_debuginfos
+
+    def _convert_actionscores_to_probs(self, batch_actionseq_scores: List[List[torch.Tensor]]):
+        # Convert batch_action_scores to a single tensor the size of number of actions for each batch
+        device_id = allenutil.get_device_of(batch_actionseq_scores[0][0])
+        # List[torch.Tensor] : Stores probs for each action_seq. Tensor length is same as the number of actions
+        # The prob is normalized across the action_seqs in the beam
+        batch_actionseq_probs = []
+        for score_list in batch_actionseq_scores:
+            scores_astensor = allenutil.move_to_device(torch.cat([x.view(1) for x in score_list]), device_id)
+            action_probs = allenutil.masked_softmax(scores_astensor, mask=None)
+            batch_actionseq_probs.append(action_probs)
+        return batch_actionseq_probs
+
 
     @staticmethod
     def _get_denotations(action_strings: List[List[List[str]]],
