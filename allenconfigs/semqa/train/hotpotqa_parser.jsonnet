@@ -1,19 +1,21 @@
-local parser = {
-//   boolparser(x): true if x == "true" else False,
-  boolparser(x):
-    if x == "true" then true
-    else false
-};
+//local parser = {
+////   boolparser(x): true if x == "true" else False,
+//  boolparser(x):
+//    if x == "true" then true
+//    else false
+//};
+//
+//local parse_number(x) =
+//  local a = std.split(x, ".");
+//  if std.length(a) == 1 then
+//    std.parseInt(a[0])
+//  else
+//    local denominator = std.pow(10, std.length(a[1]));
+//    local numerator = std.parseInt(a[0] + a[1]);
+//    local parsednumber = numerator / denominator;
+//    parsednumber;
 
-local parse_number(x) =
-  local a = std.split(x, ".");
-  if std.length(a) == 1 then
-    std.parseInt(a[0])
-  else
-    local denominator = std.pow(10, std.length(a[1]));
-    local numerator = std.parseInt(a[0] + a[1]);
-    local parsednumber = numerator / denominator;
-    parsednumber;
+local utils = import 'utils.libsonnet';
 
 // This can be either 1) glove 2) bidaf 3) elmo
 local tokenidx = std.extVar("TOKENIDX");
@@ -37,7 +39,7 @@ local compareff_inputdim =
   "dataset_reader": {
     "type": std.extVar("DATASET_READER"),
     "lazy": true,
-    "wsideargs": parser.boolparser(std.extVar("W_SIDEARGS")),
+    "wsideargs": utils.boolparser(std.extVar("W_SIDEARGS")),
 
     "token_indexers":
       if tokenidx == "glove" then {
@@ -173,8 +175,8 @@ local compareff_inputdim =
         },
       }
     ,
-    "wsideargs": parser.boolparser(std.extVar("W_SIDEARGS")),
-    "goldactions": parser.boolparser(std.extVar("GOLDACTIONS")),
+    "wsideargs": utils.boolparser(std.extVar("W_SIDEARGS")),
+    "goldactions": utils.boolparser(std.extVar("GOLDACTIONS")),
 
     "bidafutils":
       if tokenidx == "bidaf" then {
@@ -222,9 +224,9 @@ local compareff_inputdim =
       "num_layers": 1,
       "hidden_dims": 50,
       "activations": "linear",
-      "dropout": parse_number(std.extVar("DROPOUT"))
+      "dropout": utils.parse_number(std.extVar("DROPOUT"))
     },
-    "use_quesspan_actionemb": parser.boolparser(std.extVar("USE_QSPANEMB")),
+    "use_quesspan_actionemb": true,
 
     "attention": {
       "type": "dot_product",
@@ -232,7 +234,7 @@ local compareff_inputdim =
     },
 
     "decoder_beam_search": {
-      "beam_size": parse_number(std.extVar("BEAMSIZE")),
+      "beam_size": utils.parse_number(std.extVar("BEAMSIZE")),
     },
 
     "executor_parameters": {
@@ -247,7 +249,7 @@ local compareff_inputdim =
         "matrix_1_dim": 200,
         "matrix_2_dim": 200
       },
-      "dropout": parse_number(std.extVar("DROPOUT")),
+      "dropout": utils.parse_number(std.extVar("DROPOUT")),
 
       "decompatt": {
         "attend_feedforward": {
@@ -294,19 +296,31 @@ local compareff_inputdim =
 //            }
 //          ],
 //        ],
-        "noproj": parser.boolparser(std.extVar("DA_NOPROJ")),
-        "wdatt": parser.boolparser(std.extVar("DA_WT")),
-        "normemb": parser.boolparser(std.extVar("DA_NORMEMB")),
+        "noproj": utils.boolparser(std.extVar("DA_NOPROJ")),
+        "wdatt": utils.boolparser(std.extVar("DA_WT")),
       }
     },
 
-    "max_decoding_steps": parse_number(std.extVar("MAX_DECODE_STEP")),
-    "dropout": parse_number(std.extVar("DROPOUT")),
+    "max_decoding_steps": utils.parse_number(std.extVar("MAX_DECODE_STEP")),
+    "dropout": utils.parse_number(std.extVar("DROPOUT")),
     "bool_qstrqent_func": std.extVar("BOOL_QSTRQENT_FUNC"),
     "question_token_repr_key": std.extVar("QTK"),
     "context_token_repr_key": std.extVar("CTK"),
-    "aux_goldprog_loss": parser.boolparser(std.extVar("AUXLOSS")),
-    "entityspan_qatt_loss": parser.boolparser(std.extVar("QENTLOSS")),
+    "aux_goldprog_loss": utils.boolparser(std.extVar("AUXGPLOSS")),
+    "entityspan_qatt_loss": utils.boolparser(std.extVar("QENTLOSS")),
+    "qatt_coverage_loss": utils.boolparser(std.extVar("ATTCOVLOSS")),
+    "initializers":
+      if utils.boolparser(std.extVar("PTREX")) == true then
+      [
+          ["executor_parameters.*",
+             {
+                 "type": "pretrained",
+                 "weights_file_path": "./resources/semqa/checkpoints/hpqa/b_wsame/hpqa_parser/BS_4/OPT_adam/LR_0.001/Drop_0.2/TOKENS_glove/FUNC_snli/SIDEARG_true/GOLDAC_true/AUXGPLOSS_false/QENTLOSS_false/ATTCOV_false/best.th",
+             }
+          ]
+      ]
+      else
+      []
   },
 
   "iterator": {
@@ -316,13 +330,14 @@ local compareff_inputdim =
   },
 
   "trainer": {
+    "num_serialized_models_to_keep": -1,
     "grad_clipping": 10.0,
-    "cuda_device": parse_number(std.extVar("GPU")),
-    "num_epochs": parse_number(std.extVar("EPOCHS")),
+    "cuda_device": utils.parse_number(std.extVar("GPU")),
+    "num_epochs": utils.parse_number(std.extVar("EPOCHS")),
     "shuffle": false,
     "optimizer": {
       "type": std.extVar("OPT"),
-      "lr": parse_number(std.extVar("LR"))
+      "lr": utils.parse_number(std.extVar("LR"))
     },
     "summary_interval": 10,
     "validation_metric": "+accuracy"

@@ -52,14 +52,15 @@ class HotpotQALanguageWSideArgs(HotpotQALanguage):
             qent2 = torch.FloatTensor(qlen).fill_(0)
             qstr = torch.FloatTensor(qlen).fill_(0)
 
+        # List of (start,end) tuples
         ne_mens = []
         for span in self.q_nemenspan2entidx.keys():
             # span is tokens@DELIM@START@END
             split_tokens = span.split(hpcons.SPAN_DELIM)
             start, end = int(split_tokens[-2]), int(split_tokens[-1])
             ne_mens.append((start, end))
-        # Sort based on start token
-        sorted_ne_mens = sorted(ne_mens, key=lambda x: x[0])
+        # Sort based on start token - end is exclusive
+        sorted_ne_mens: List[Tuple[int, int]] = sorted(ne_mens, key=lambda x: x[0])
 
         # Assume that first mention is E1 and second is E2.
         if len(sorted_ne_mens) < 2:
@@ -69,9 +70,13 @@ class HotpotQALanguageWSideArgs(HotpotQALanguage):
             e1 = sorted_ne_mens[0]
             e2 = sorted_ne_mens[1]
 
-        qent1[e1[0]:e1[1] + 1] = 1.0
-        qent2[e2[0]:e2[1] + 1] = 1.0
-        qstr[e2[1] + 1:] = 1.0
+
+        qent1[e1[0]:e1[1] + 1] = 1.0/float(e1[1]-e1[0]+1)
+        qent2[e2[0]:e2[1] + 1] = 1.0/float(e2[1]-e2[0]+1)
+        # Doesn't take mask into account -- but maybe that's alright
+        qstr_len = torch.sum(self.ques_mask) - (e2[1] + 1)
+        qstr_len = 1.0 if qstr_len == 0 else qstr_len
+        qstr[e2[1] + 1:] = 1.0/float(qstr_len)
 
         qent1 = qent1 * self.ques_mask
         qent2 = qent2 * self.ques_mask
@@ -132,17 +137,6 @@ class HotpotQALanguageWSideArgs(HotpotQALanguage):
     @predicate_with_side_args(['question_attention'])
     def find_Qent(self, question_attention: torch.FloatTensor) -> Qent:
         return Qent(value=question_attention)
-
-
-    # @predicate_with_side_args(['question_attention'])
-    # def find_Qattn(self, question_attention: torch.FloatTensor) -> Qattn:
-    #     return Qattn(value=question_attention)
-    #
-    # @predicate
-    # def bool_attn(self, qattn: Qattn) -> Bool1:
-    #     returnval = self.bool_qattn_snli(qattn=qattn)
-    #     return returnval
-
 
     @predicate
     def bool_qent_qstr(self, qent: Qent, qstr: Qstr) -> Bool1:
@@ -207,54 +201,14 @@ class HotpotQALanguageWSideArgs(HotpotQALanguage):
             context_texts = self.metadata['contexts']
             for c in context_texts:
                 print(f"{c}")
+            print(f"QStr: {qstr_att}")
             print(f"QEnt: {qent_att}")
-            print(f"ContextDict: {context_similarity_dist}")
+            print(f"ContextSimDist: {context_similarity_dist}")
             print(f"BoolProbs :{boolean_probs}")
             print(f"AnsProb: {ans_prob}")
             print()
 
         return Bool1(value=ans_prob)
-
-
-
-    def bool_qattn_snli(self, qattn: Qattn) -> Bool1:
-        ques_att = qattn._value * self.ques_mask
-
-        # Shape: (ques_len, D)
-        ques_embedded = self.ques_embedded
-        ques_mask = self.ques_mask
-
-        # Shape: (num_contexts, context_len, D)
-        contexts_embedded = self.contexts_embedded
-        contexts_mask = self.contexts_mask
-
-        closest_context = self.closest_context(ques_embedded, ques_mask, contexts_embedded, contexts_mask,
-                                               question_attention=ques_att)
-
-        num_contexts = contexts_mask.size()[0]
-        # (C, Qlen, D)
-        ques_token_repr_ex = ques_embedded.unsqueeze(0).expand(num_contexts, *ques_embedded.size())
-        q_mask_ex = ques_mask.unsqueeze(0).expand(num_contexts, *ques_mask.size())
-        ques_att_ex = ques_att.unsqueeze(0).expand(num_contexts, *ques_att.size())
-
-        debug_kwargs = {}
-
-        snli_output = self._execution_parameters._decompatt.forward(
-            embedded_premise=contexts_embedded, embedded_hypothesis=ques_token_repr_ex,
-            premise_mask=contexts_mask, hypothesis_mask=q_mask_ex,
-            debug=self.debug, question_attention=ques_att_ex, **debug_kwargs)
-
-
-        # Shape: (C, 2)
-        output_probs = snli_output['label_probs']
-
-        # C
-        boolean_probs = output_probs[:, 0]
-
-        ans_prob = boolean_probs[closest_context]
-
-        return Bool1(value=ans_prob)
-
 
 
     def bool_qent_qstr_wcontext(self, qent: Qent, qstr: Qstr) -> Bool1:

@@ -33,15 +33,17 @@ export BIDAF_WORDEMB_FILE='./resources/embeddings/glove/glove.6B.100d.txt.gz'
 export BOOL_QSTRQENT_FUNC='snli'
 export QTK='encoded'
 export CTK='modeled'
-export GOLDACTIONS=false
 
-export DA_NORMEMB=false
 export DA_WT=true
 export DA_NOPROJ=true
 
-export USE_QSPANEMB=true
-export AUXLOSS=false
-export QENTLOSS=true
+export GOLDACTIONS=false
+export AUXGPLOSS=false
+export QENTLOSS=false
+export ATTCOVLOSS=false
+
+export PTREX=true
+export PTRWTS="./resources/semqa/checkpoints/hpqa/b_wsame/hpqa_parser/BS_4/OPT_adam/LR_0.001/Drop_0.2/TOKENS_glove/FUNC_snli/SIDEARG_true/GOLDAC_true/AUXGPLOSS_false/QENTLOSS_false/ATTCOV_false/PTREX_false/best.th"
 
 export BS=4
 export LR=0.001
@@ -54,12 +56,12 @@ export EPOCHS=30
 
 ####    SERIALIZATION DIR --- Check for checkpoint_root/task/dataset/model/parameters/
 CHECKPOINT_ROOT=./resources/semqa/checkpoints
-SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/hotpotqa/bool_wosame
-MODEL_DIR=hotpotqa_parser
+SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/hpqa/b_wsame
+MODEL_DIR=hpqa_parser
 PARAMETERS_DIR1=BS_${BS}/OPT_${OPT}/LR_${LR}/Drop_${DROPOUT}/TOKENS_${TOKENIDX}/FUNC_${BOOL_QSTRQENT_FUNC}
-PARAMETERS_DIR2=SIDEARG_${W_SIDEARGS}/GOLDAC_${GOLDACTIONS}/DA_NOPROJ_${DA_NOPROJ}/DA_WT_${DA_WT}/QSPANEMB_${USE_QSPANEMB}
-PARAMETERS_DIR3=AUXLOSS_${AUXLOSS}/QENTLOSS_${QENTLOSS}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PARAMETERS_DIR1}/${PARAMETERS_DIR2}/${PARAMETERS_DIR3}_cdist_sigmatt
+PARAMETERS_DIR2=SIDEARG_${W_SIDEARGS}/GOLDAC_${GOLDACTIONS}
+PARAMETERS_DIR3=AUXGPLOSS_${AUXGPLOSS}/QENTLOSS_${QENTLOSS}/ATTCOV_${ATTCOVLOSS}/PTREX_${PTREX}
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PARAMETERS_DIR1}/${PARAMETERS_DIR2}/${PARAMETERS_DIR3}_hyptest
 
 #######################################################################################################################
 

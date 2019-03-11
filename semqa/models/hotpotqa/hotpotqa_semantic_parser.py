@@ -20,6 +20,7 @@ import allennlp.nn.util as allenutil
 import allennlp.common.util as alcommon_util
 from allennlp.models.archival import load_archive
 from allennlp.models.decomposable_attention import DecomposableAttention
+from allennlp.nn import InitializerApplicator
 
 import semqa.type_declarations.semqa_type_declaration_wques as types
 from semqa.domain_languages.hotpotqa import HotpotQALanguage, HotpotQALanguageWSideArgs, HotpotQALanguageWOSideArgs
@@ -32,6 +33,7 @@ from semqa.state_machines.transition_functions.linking_transition_func_emb impor
 from allennlp.training.metrics import Average
 from semqa.models.utils.bidaf_utils import PretrainedBidafModelUtils
 from semqa.models.utils import generic_utils as genutils
+import utils.util as myutils
 
 import datasets.hotpotqa.utils.constants as hpcons
 
@@ -83,21 +85,23 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                  decoder_beam_search: ConstrainedBeamSearch,
                  executor_parameters: ExecutorParameters,
                  max_decoding_steps: int,
-                 aux_goldprog_loss: bool,
                  wsideargs: bool,
                  goldactions: bool,
                  question_token_repr_key: str,
                  context_token_repr_key: str,
                  bool_qstrqent_func: str,
+                 use_quesspan_actionemb: bool,
+                 quesspan2actionemb: FeedForward,
+                 aux_goldprog_loss: bool,
+                 qatt_coverage_loss: bool,
+                 entityspan_qatt_loss: bool,
                  bidafutils: PretrainedBidafModelUtils = None,
-                 entityspan_qatt_loss: bool = False,
                  dropout: float = 0.0,
                  text_field_embedder: TextFieldEmbedder = None,
                  qencoder: Seq2SeqEncoder = None,
                  quesspan_extractor: SpanExtractor = None,
-                 quesspan2actionemb: FeedForward = None,
-                 use_quesspan_actionemb: bool = False,
-                 debug: bool=False) -> None:
+                 debug: bool=False,
+                 initializers: InitializerApplicator = InitializerApplicator()) -> None:
 
         if bidafutils is not None:
             _text_field_embedder = bidafutils._bidaf_model._text_field_embedder
@@ -127,6 +131,8 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         # w/ sideargs: Loss for predicting correct qatt at the correct timesteps in decoding
         # w/o sideargs: MML Loss for predicting the correct action_seq
         self._aux_goldprog_loss = aux_goldprog_loss
+        # Auxiliary loss encouraging the program to attend to all tokens (on aggregate) when predicting find_* actions
+        self._qattn_coverage_loss = qatt_coverage_loss
 
         self._mml = None
         if self._wsideargs is False and self._aux_goldprog_loss is True:
@@ -175,6 +181,7 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         self.topk_acc_metric = Average()
         self.aux_goldparse_loss = Average()
         self.qent_loss = Average()
+        self.qattn_cov_loss_metric = Average()
 
         # This str decides which function to use for Bool_Qent_Qstr function during execution
         self._bool_qstrqent_func = bool_qstrqent_func
@@ -197,6 +204,11 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         # snli_model_archive = load_archive('/srv/local/data/nitishg/semqa/pretrained_decompatt/decomposable-attention-elmo-2018.02.19.tar.gz')
         # self.snli_model: DecomposableAttention = snli_model_archive.model
         # self.executor_parameters._snli_model = self.snli_model
+
+        # weights_dict = torch.load("./resources/semqa/checkpoints/hpqa/b_wsame/hpqa_parser/BS_4/OPT_adam/LR_0.001/Drop_0.2/TOKENS_glove/FUNC_snli/SIDEARG_true/GOLDAC_true/AUXGPLOSS_false/QENTLOSS_false/ATTCOV_false/best.th")
+        # print(weights_dict.keys())
+
+        initializers(self)
 
 
     def device_id(self):
@@ -465,17 +477,19 @@ class HotpotQASemanticParser(HotpotQAParserBase):
             loss += denotation_loss
             outputs["denotation_loss"] = denotation_loss
 
+            # Auxiliary loss encouraging that find_Qent action attends to one of the q_ent spans
+            # Since the attention is normalized, this leads to no-attention on non-entity tokens
             if self._entityspan_qatt_loss:
                 entityspan_ques_att_loss = self._entity_attention_loss(languages=languages,
                                                                        batch_actionseqs=batch_actionseqs,
                                                                        batch_side_args=batch_actionseq_sideargs)
 
-                entityspan_ques_att_loss = 0.1 * entityspan_ques_att_loss
+                # entityspan_ques_att_loss = 0.1 * entityspan_ques_att_loss
                 loss += entityspan_ques_att_loss
                 outputs["qent_loss"] = entityspan_ques_att_loss
                 self.qent_loss(entityspan_ques_att_loss.detach().cpu().numpy().tolist())
 
-
+            # Auxiliary loss against gold-actions (attentions for w/wideargs, or MML loss with gold parse for w/oside)
             if self._aux_goldprog_loss is True:
                 assert self._goldactions is False, "GoldActions cannot be true with auxiliary loss"
                 if self._wsideargs:
@@ -500,6 +514,15 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                     loss += mml_loss
                     outputs["aux_goldparse_loss"] = mml_loss
                     self.aux_goldparse_loss(mml_loss.detach().cpu().numpy().tolist())
+
+            # Auxiliary loss encouraging aggregate attention on all tokens for find_* actions
+            if self._qattn_coverage_loss is True:
+                attn_coverage_loss = self._attention_coverage_loss(ques_masks=questions_mask,
+                                                                   batch_actionseqs=batch_actionseqs,
+                                                                   batch_side_args=batch_actionseq_sideargs)
+                # attn_coverage_loss *= 0.01
+                loss += attn_coverage_loss
+                self.qattn_cov_loss_metric(myutils.tocpuNPList(attn_coverage_loss))
 
             outputs["loss"] = loss
 
@@ -772,14 +795,75 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         return loss
 
 
+    def _attention_coverage_loss(self,
+                                 ques_masks: List[torch.FloatTensor],
+                                 batch_actionseqs: List[List[List[str]]],
+                                 batch_side_args: List[List[List[Dict]]]):
+        """ Encourage the question_attentions in a program to attend to all tokens.
+            Every program attends to the question for terminal-find_Qent, find_Qstr, etc. functions.
+            We want that in aggregate all tokens are attended to.
+
+            For each token, We maximize the sum of token-attention from different relevant-actions
+        """
+        relevant_actions = ['Qent -> find_Qent', 'Qstr -> find_Qstr']
+        loss = 0.0
+        normalizer = 0
+        batch_size = len(batch_actionseqs)
+        for i in range(0, batch_size):
+            instance_action_seqs: List[List[str]] = batch_actionseqs[i]
+            instance_sideargs: List[List[Dict]] = batch_side_args[i]
+            ques_mask = ques_masks[i]
+            for program, side_args in zip(instance_action_seqs, instance_sideargs):
+                # List of (Qlen,) shaped attention vectors
+                relevant_ques_attns = []
+                for action, side_arg in zip(program, side_args):
+                    if action in relevant_actions:
+                        question_attention = side_arg['question_attention']
+                        relevant_ques_attns.append(question_attention)
+
+                # Concatenating ques_attns into (Qlen, R) - R is the num. of relevant actions
+                relevant_ques_attns = torch.cat([x.unsqueeze(1) for x in relevant_ques_attns], dim=1)
+
+                # Idea here is to minimize (1 - max(token_attn)) for every token
+                '''
+                # Making a single (Qlen,) tensor containing the token-wise max across all relevant attns
+                # Shape: (Qlen,)
+                max_ques_attn, _ = torch.max(relevant_ques_attns, dim=1)
+                # The idea is that all elements of this tensor should be low, meaning the token was attended to atleast
+                # by one question attention
+                negative_coverage = 1 - max_ques_attn
+                log_negative_coverage = torch.log(negative_coverage + 1e-45) * ques_mask
+                program_coverage_loss = torch.sum(log_negative_coverage)
+                '''
+                # Idea here is to maximize \prod_tokens (\sum att_i) - i.e. maximize the sum of attns for each token
+                # Shape = (Qlen,)
+                tokenwise_sum_attns = torch.sum(relevant_ques_attns, dim=1)
+                log_sum_attns = torch.log(tokenwise_sum_attns + 1e-45) * ques_mask
+                program_coverage_loss = -1 * torch.sum(log_sum_attns)
+                normalizer += 1
+                loss += program_coverage_loss
+
+        return loss/normalizer
+
+
     def _entity_attention_loss(self,
                                languages: List[HotpotQALanguageWSideArgs],
                                batch_actionseqs: List[List[List[str]]],
                                batch_side_args: List[List[List[Dict]]]):
+        ''' Auxiliary loss to encourage the model to attend to entity-spans when predicting 'Qent -> findQent' action
+            Compute a maximizing-objective, the sum of entity_probs (across q-ents) based on the attention.
+            The entity_prob can be computed in two ways (controlled by the variable sum
+                1. Sum of entity_token_prob - The model can choose to divide the attention assymetrically across tokens
+                2. Prob of entity_token_prob - Encourages the model to divide the attention uniformly across tokens
+        '''
+
         relevant_action = 'Qent -> find_Qent'
         batch_size = len(languages)
         loss = 0.0
         normalizer = 0
+
+        sum_entitytokenprob_bool = True
+        max_entitydist_entropy = True
 
         sigmoid_att = False if (self._transitionfunc_att._normalize is True) else True
 
@@ -800,35 +884,52 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                 for action, side_arg in zip(program, side_args):
                     if action == relevant_action:
                         question_attention = side_arg['question_attention']
-                        log_question_attention = torch.log(question_attention + 1e-5)
+                        log_question_attention = torch.log(question_attention + 1e-40)
+                        sum_sum_attn_probs = 0
                         sum_prod_attn_probs = 0
+                        entropy_ent_attns = 0
                         # sum_log_prod_attn_probs = 0
                         all_entity_vec = 0
                         for vec in all_ent_vecs:
                             all_entity_vec = all_entity_vec + vec
-                            # prod_attn_probs = exp(\sum log(attn_probs))
-                            prod_attn_probs = torch.exp(torch.sum(vec * log_question_attention))
-                            sum_prod_attn_probs = sum_prod_attn_probs + prod_attn_probs
+                            if not sum_entitytokenprob_bool:
+                                # prod_attn_probs = exp(\sum log(attn_probs))
+                                prod_attn_probs = torch.exp(torch.sum(vec * log_question_attention))
+                                # Sum of prod_attn_probs for different entities
+                                sum_prod_attn_probs = sum_prod_attn_probs + prod_attn_probs
+                            else:
+                                # sum_attn_probs = \sum attn_probs
+                                sum_attn_probs = torch.sum(vec * question_attention)
+                                # Sum of sum_attn_probs for different entities
+                                sum_sum_attn_probs = sum_sum_attn_probs + sum_attn_probs
 
-                            # log_prod_prob = torch.sum(vec * log_question_attention)
-                            # sum_log_prod_attn_probs = sum_log_prod_attn_probs + log_prod_prob
+                            if max_entitydist_entropy:
+                                # Computing entity dist entropy
+                                entity_probs = vec * question_attention
+                                sum_entity_probs = torch.sum(entity_probs) + 1e-20
+                                entity_prob_dist = (entity_probs/sum_entity_probs) * vec
+                                log_entity_prob_dist = torch.log(entity_prob_dist + 1e-40) * vec
+                                ent_entropy = -1 * torch.sum(vec * entity_prob_dist * log_entity_prob_dist)
+                                entropy_ent_attns += ent_entropy
 
                         if sigmoid_att is True:
                             # This is additionally used for sigmoid attention
                             non_entity_tokens = (all_entity_vec <= 0.0).float()
-                            log_one_minus_p = torch.log((non_entity_tokens - question_attention)*non_entity_tokens  + 1e-5) * non_entity_tokens
+                            log_one_minus_p = torch.log((non_entity_tokens - question_attention) \
+                                                        *non_entity_tokens  + 1e-5) * non_entity_tokens
                             sum_log_one_minus_p = torch.sum(log_one_minus_p)
                         else:
                             sum_log_one_minus_p = 0.0
 
-                        # print(f"nonentity tokens: {non_entity_tokens_mask}")
-                        # print("non_entity_tokens")
-                        # print(log_one_minus_p)
-                        # print(f"non entity tokenloss: {sum_log_one_minus_p}")
-                        # print(f"\nentity tokens loss: {torch.log(sum_prod_attn_probs)}\n\n")
-                        # exit()
+                        if sum_entitytokenprob_bool:
+                            loss += torch.log(sum_sum_attn_probs)
+                        else:
+                            loss += torch.log(sum_prod_attn_probs)
 
-                        loss += torch.log(sum_prod_attn_probs) + sum_log_one_minus_p
+                        # if max_entitydist_entropy:
+                        loss += entropy_ent_attns
+
+                        loss += sum_log_one_minus_p
                         normalizer += 1
 
         return -1 * (loss/normalizer)
@@ -959,6 +1060,7 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                 'accuracy': self.top1_acc_metric.get_metric(reset),
                 'expden_acc': self.expden_acc_metric.get_metric(reset),
                 'topk_acc': self.topk_acc_metric.get_metric(reset),
-                'aux_goldparse_loss': self.aux_goldparse_loss.get_metric(reset),
-                'qent_loss': self.qent_loss.get_metric(reset)
+                'aux_gp_l': self.aux_goldparse_loss.get_metric(reset),
+                'qent_l': self.qent_loss.get_metric(reset),
+                'attcov_l': self.qattn_cov_loss_metric.get_metric(reset)
         }

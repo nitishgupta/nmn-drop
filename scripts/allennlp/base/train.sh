@@ -10,7 +10,7 @@ echo "SERIALIZATION_DIR_ROOT: ${SERIALIZATION_DIR}"
 echo ""
 
 read -p "Continue (Y/N) " continue
-if [ "${continue}" != "Y" ]; then exit 1; else echo "Continuing ... "; fi
+if ! ( [ "${continue}" = "y" ] || [ "${continue}" = "Y" ] ); then exit 1; else echo "Continuing ... "; fi
 
 # Simple logic to make sure existing serialization dir is safely deleted
 if [ -d "${SERIALIZATION_DIR}" ]; then

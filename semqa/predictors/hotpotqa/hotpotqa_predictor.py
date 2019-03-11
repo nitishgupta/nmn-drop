@@ -58,8 +58,17 @@ class HotpotQAPredictor(Predictor):
         denotations = myutils.round_all(outputs['denotations'], 4)
         best_denotation = myutils.round_all(outputs['best_denotations'], 4)
 
+        gold_bool = 1.0 if answer == 'yes' else 0.0
+        pred_bool = 1.0 if best_denotation >= 0.5 else 0.0
+        correct = 1 if gold_bool == pred_bool else 0
+
         out_str += f"Question: {question}\n"
         out_str += f"Answer: {answer}\n"
+        out_str += f"BestDenotation: {best_denotation}\n"
+        if correct == 1 and answer == 'yes':
+            out_str += f"yes-correct\n"
+        elif correct == 1 and answer == 'no':
+            out_str += f"no-correct\n"
         out_str += f"BestDenotation: {best_denotation}\n"
 
         if 'logical_forms' and 'denotations' in outputs:
@@ -76,9 +85,7 @@ class HotpotQAPredictor(Predictor):
             out_str += f"{c}\n"
         out_str += '\n'
 
-        gold_bool = 1.0 if answer == 'yes' else 0.0
-        pred_bool = 1.0 if best_denotation >= 0.5 else 0.0
-        correct = 1 if gold_bool == pred_bool else 0
+
 
         # if correct:
         #     return ''
