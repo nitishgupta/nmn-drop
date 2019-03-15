@@ -16,7 +16,7 @@ export W_SIDEARGS=true
 ### TRAINING MODEL CONFIG -- should be same across datasets for the same model
 CONFIGFILE=allenconfigs/semqa/train/hotpotqa_parser.jsonnet
 export TOKENIDX="glove"
-export VOCABDIR=./resources/semqa/vocabs/hotpotqa/bool_wosame/gold_contexts/wosideargs_${W_SIDEARGS}/tokens_${TOKENIDX}/vocabulary
+export VOCABDIR=./resources/semqa/vocabs/hotpotqa/bool_wosame/gold_contexts/wosideargs_${W_SIDEARGS}/tokens_${TOKENIDX}_bool/vocabulary
 
 export DATASET_READER=hotpotqa_reader
 
@@ -50,7 +50,7 @@ export LR=0.001
 export OPT=adam
 export DROPOUT=0.2
 
-export BEAMSIZE=1
+export BEAMSIZE=4
 export MAX_DECODE_STEP=12
 export EPOCHS=30
 
@@ -61,7 +61,7 @@ MODEL_DIR=hpqa_parser
 PARAMETERS_DIR1=BS_${BS}/OPT_${OPT}/LR_${LR}/Drop_${DROPOUT}/TOKENS_${TOKENIDX}/FUNC_${BOOL_QSTRQENT_FUNC}
 PARAMETERS_DIR2=SIDEARG_${W_SIDEARGS}/GOLDAC_${GOLDACTIONS}
 PARAMETERS_DIR3=AUXGPLOSS_${AUXGPLOSS}/QENTLOSS_${QENTLOSS}/ATTCOV_${ATTCOVLOSS}/PTREX_${PTREX}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PARAMETERS_DIR1}/${PARAMETERS_DIR2}/${PARAMETERS_DIR3}_hyptest
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PARAMETERS_DIR1}/${PARAMETERS_DIR2}/${PARAMETERS_DIR3}_bool_m0.3sa_test
 
 #######################################################################################################################
 

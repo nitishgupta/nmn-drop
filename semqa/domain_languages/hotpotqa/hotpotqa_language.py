@@ -42,8 +42,11 @@ class Qent():
         self._value = value
 
 
-class Qattn():
+class Entity():
     def __init__(self, value):
+        ''' Value here is an entity_distribution
+            For info: Each entity contains a map to it's mentions and also a grounded string
+        '''
         self._value = value
 
 
@@ -170,7 +173,7 @@ class HotpotQALanguage(DomainLanguage):
         self._execution_parameters: ExecutorParameters = execution_parameters
 
     @predicate
-    def bool_and(self, bool1: Bool1, bool2: Bool1) -> Bool:
+    def bool_and(self, bool1: Bool, bool2: Bool) -> Bool:
         """ AND operation between two booleans """
         # return_val = bool1._value * bool2._value
         return_val = torch.min(torch.cat([bool1._value.unsqueeze(0), bool2._value.unsqueeze(0)], 0))

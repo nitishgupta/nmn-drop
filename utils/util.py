@@ -384,6 +384,24 @@ def _getLnrm(arg):
     return arg
 
 
+def getGlobalTokenOffset(sentences: List[List[str]]):
+    """For a tokenized doc, get mapping from sent_idx, within_tokenidx to global token idx
+
+    Returns:
+        Dict[(int, int): int]: (sent_idx, within_sent_tokenidx) ---> global token idx
+    """
+
+    sentIdxTokenIdx2GlobalTokenIdx = {}
+
+    globaltokidx = 0
+    for sentidx, sent in enumerate(sentences):
+        for tokenidx, _ in enumerate(sent):
+            sentIdxTokenIdx2GlobalTokenIdx[(sentidx, tokenidx)] = globaltokidx
+            globaltokidx += 1
+
+    return sentIdxTokenIdx2GlobalTokenIdx
+
+
 
 if __name__=='__main__':
     words = stopWords()
@@ -393,4 +411,3 @@ if __name__=='__main__':
     pattern = [1,2,1]
 
     print(getMatchingSubSpans(l, pattern))
-

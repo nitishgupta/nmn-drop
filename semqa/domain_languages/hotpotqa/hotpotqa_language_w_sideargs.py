@@ -11,7 +11,7 @@ from allennlp.semparse.domain_languages.domain_language import PredicateType
 
 import datasets.hotpotqa.utils.constants as hpcons
 from semqa.domain_languages.hotpotqa.execution_params import ExecutorParameters
-from semqa.domain_languages.hotpotqa.hotpotqa_language import Qstr, Qent, Bool, Bool1, HotpotQALanguage, Qattn
+from semqa.domain_languages.hotpotqa.hotpotqa_language import Qstr, Qent, Bool, Bool1, HotpotQALanguage
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -139,7 +139,7 @@ class HotpotQALanguageWSideArgs(HotpotQALanguage):
         return Qent(value=question_attention)
 
     @predicate
-    def bool_qent_qstr(self, qent: Qent, qstr: Qstr) -> Bool1:
+    def bool_qent_qstr(self, qent: Qent, qstr: Qstr) -> Bool:
 
         returnval = None
         if self.bool_qstr_qent_func == 'mentions':
@@ -153,7 +153,7 @@ class HotpotQALanguageWSideArgs(HotpotQALanguage):
         return returnval
 
 
-    def bool_qent_qstr_snli(self, qent: Qent, qstr: Qstr) -> Bool1:
+    def bool_qent_qstr_snli(self, qent: Qent, qstr: Qstr) -> Bool:
         qent_att = qent._value * self.ques_mask
         qstr_att = qstr._value * self.ques_mask
 
@@ -208,7 +208,7 @@ class HotpotQALanguageWSideArgs(HotpotQALanguage):
             print(f"AnsProb: {ans_prob}")
             print()
 
-        return Bool1(value=ans_prob)
+        return Bool(value=ans_prob)
 
 
     def bool_qent_qstr_wcontext(self, qent: Qent, qstr: Qstr) -> Bool1:

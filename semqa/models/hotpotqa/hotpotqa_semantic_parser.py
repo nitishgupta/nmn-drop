@@ -1,5 +1,6 @@
 import logging
 from typing import List, Dict, Any, Tuple
+import math
 
 from overrides import overrides
 
@@ -235,6 +236,7 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                 gold_ans_type: List[str]=None,
                 snli_ques=None,
                 snli_contexts=None,
+                epoch_num=None,
                 **kwargs) -> Dict[str, torch.Tensor]:
 
         """
@@ -301,6 +303,12 @@ class HotpotQASemanticParser(HotpotQAParserBase):
             metadata = kwargs['metadata']
         else:
             metadata = None
+
+        if epoch_num is not None:
+            # epoch_num in allennlp starts from 0
+            epoch = epoch_num[0] + 1
+        else:
+            epoch = None
 
         # print()
         # for i in range(batch_size):
@@ -413,6 +421,11 @@ class HotpotQASemanticParser(HotpotQAParserBase):
                                                                  instanceidx2actionseq_scores,
                                                                  instanceidx2actionseq_sideargs)
         batch_actionseq_probs = self._convert_actionscores_to_probs(batch_actionseq_scores)
+
+        beta = 0.5
+        epoch = float('inf') if epoch is None else epoch
+        beta = math.pow(beta, 1.0/epoch)
+        batch_actionseq_probs = self._meritocratic_program_prob(batch_actionseq_probs, beta)
 
         ''' THE PROGRAMS ARE EXECUTED HERE '''
         ''' First set the instance-spcific data (question, contexts, entity_mentions, etc.) to their 
@@ -529,6 +542,7 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         if metadata is not None:
             outputs["metadata"] = metadata
         outputs["best_action_strings"] = batch_actionseqs
+        outputs["batch_actionseq_probs"] = batch_actionseq_probs
         outputs["batch_actionseq_sideargs"] = batch_actionseq_sideargs
         outputs["denotations"] = batch_denotations
         outputs["best_denotations"] = best_predicted_denotations

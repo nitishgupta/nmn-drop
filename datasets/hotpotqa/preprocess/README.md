@@ -44,8 +44,10 @@ Each for Entity, Num, and Date
 
 Apart from now having three different NER lists, following fields are added.
 They contain dict from  string to normalized value
-1. ```constants.nums_normalized_field```
-2. ```constants.dates_normalized_field```
+1. ```constants.nums_normalized_field```:
+Dict from string to float num
+2. ```constants.dates_normalized_field```:
+Dict form string to number-tuple of [day, month, year]. -1 if invalid
 
 
 ## Flatten Contexts --- ```flatten_contexts```
@@ -71,14 +73,20 @@ Main function ```exactStringMatchCDCR``` and ```normalizableMensCDCR```
 
 Following fields are added:
 1. ```constants.context_eqent2entmens``` and equivalent versions for NUM and DATE.
-Stored as List[List] where outer is the list of entities and the inner are its mentions as (context_idx, mention_idx)   
-2. ```constants.context_entmens2entidx``` and equivalent versions for NUM and DATE.
-Stored as List[List], same as the list of mentions, only that these contain the entity_idx grounding.
+Stored as `List[List[(context_idx, mention_idx)]]` where outer is the list of entities and the inner are its mentions as (context_idx, mention_idx)   
+2. ```constants.context_{ne,num,date}mens2entidx```:
+Stored as `List[List[entity_idx]]`, same as the list of mentions, only that these contain the entity_idx grounding.
 entity_idx goes from ```[0  ... num_entities_of_type_T]```
+3. `constants.{ne, num, date}_entidx2{ne, num, date}val`:
+A list of normalized values of entities in order of entity_idx.
+For NE, Num, Date these are str, float, Tuple[day, month, year], resp.
 
-Question Entity_mentions are also grounded in ```q_entmens2entidx ```.
-A list the size of question's entity mention list containing entity_idx.
-*Note: If the mention cannot be grounded, -1 is stored as it's grounding* 
+
+Question NamedEntity mentions are not added to the entity list. They are only grounded in existing context entities
+(`q_entmens2entidx `) *Note: If the named_entity mention cannot be grounded, -1 is stored as it's grounding*
+
+NUM and DATE mens in questions are added to normalized dict and entities are made out of them.
+Hence all question NUM and DATE mentions can be grounded and are done so in `constants.q_{num,date}mens2entidx` 
 
 
 ## Answer Grounding and Typing --- ```ans_grounding```
@@ -98,9 +106,11 @@ For each mention that is in the best found mentions, it's corresponding entity i
 3. ```BOOL```: 1 (true) or 0 (false).
 
 To store the typing and grounding, the following fields are added:
-```constants.ans_type_field``` and ```constants.ans_grounding_field```
+`constants.ans_type_field` and `constants.ans_grounding_field`
 
-
+In addition, we also store the answer-span(s) in `constants.ans_spans`
+as a `List[(context_idx, (start, end_ex))]`.
+This is empty if the answer is BOOL or if the answer counldn't be grounded.
 
 
 

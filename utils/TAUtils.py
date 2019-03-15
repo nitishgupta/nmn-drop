@@ -153,23 +153,6 @@ def getAll_SentIdAndTokenOffset(ta: TextAnnotation) -> List[Tuple[int, int]]:
 
     return tokenIdxs
 
-def getGlobalTokenOffset(sentences: List[List[str]]):
-    """For a tokenized doc, get mapping from sent_idx, within_tokenidx to global token idx
-
-    Returns:
-        Dict[(int, int): int]: (sent_idx, within_sent_tokenidx) ---> global token idx
-    """
-
-    sentIdxTokenIdx2GlobalTokenIdx = {}
-
-    globaltokidx = 0
-    for sentidx, sent in enumerate(sentences):
-        for tokenidx, _ in enumerate(sent):
-            sentIdxTokenIdx2GlobalTokenIdx[(sentidx, tokenidx)] = globaltokidx
-            globaltokidx += 1
-
-    return sentIdxTokenIdx2GlobalTokenIdx
-
 
 def getSentIdAndTokenOffset(ta: TextAnnotation) -> List[Tuple[int, int]]:
     tokenIdxs = []

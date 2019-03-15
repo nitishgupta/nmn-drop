@@ -7,9 +7,8 @@ import argparse
 from typing import List, Tuple, Any
 
 import dateparser
-from dateparser.search import search_dates
 
-from utils import TAUtils, util, spacyutils
+from utils import util, spacyutils
 from datasets.hotpotqa.utils import constants
 import multiprocessing
 
@@ -470,6 +469,8 @@ def processJsonObj(input_jsonobj):
         date_onecontext_normalized_ners = []
 
         for sentence_ner in context:
+            # NUMBER_DICT: String to float num
+            # DATE_DICT: String to number-tuple of [day, month, year]. -1 if invalid
             (normalized_ner_spans, NUMBER_DICT, DATE_DICT) = cleanNERList(sentence_ner, NUMBER_DICT,
                                                                           DATE_DICT, dateparser_en)
             ent_mens, num_mens, date_mens = getNERSpansByType(normalized_ner_spans)

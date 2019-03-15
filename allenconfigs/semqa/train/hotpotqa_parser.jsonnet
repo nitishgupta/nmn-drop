@@ -325,6 +325,7 @@ local compareff_inputdim =
 
   "iterator": {
     "type": "basic",
+    "track_epoch": true,
     "batch_size": std.extVar("BS"),
     "max_instances_in_memory": std.extVar("BS") //
   },

@@ -382,16 +382,45 @@ class HotpotQAParserBase(Model):
         return all_action_strings, all_action_scores, all_debuginfos
 
     def _convert_actionscores_to_probs(self, batch_actionseq_scores: List[List[torch.Tensor]]):
-        # Convert batch_action_scores to a single tensor the size of number of actions for each batch
+        ''' Normalize program scores in a beam for an instance to get probabilities
+
+        Returns:
+        ---------
+        List[torch.FloatTensor]:
+            For each instance, a tensor the size of number of predicted programs
+            containing normalized probabilities
+        '''
+        # Convert batch_action_scores to a single tensor the size of number of programs for each instance
         device_id = allenutil.get_device_of(batch_actionseq_scores[0][0])
-        # List[torch.Tensor] : Stores probs for each action_seq. Tensor length is same as the number of actions
-        # The prob is normalized across the action_seqs in the beam
+        # Inside List[torch.Tensor] is a list of scalar-tensor with prob of each program for this instance
+        # The prob is normalized across the programs in the beam
         batch_actionseq_probs = []
         for score_list in batch_actionseq_scores:
             scores_astensor = allenutil.move_to_device(torch.cat([x.view(1) for x in score_list]), device_id)
             action_probs = allenutil.masked_softmax(scores_astensor, mask=None)
             batch_actionseq_probs.append(action_probs)
         return batch_actionseq_probs
+
+
+    def _meritocratic_program_prob(self,
+                                   batch_actionseq_probs: List[torch.FloatTensor],
+                                   beta: float):
+        ''' Smoothen program probabilities for an instance using the meritocratic update rule of Guu et al.
+
+        Parameters:
+        ----------
+        List[torch.FloatTensor]:
+            For each instance, a tensor the size of number of predicted programs
+            containing normalized probabilities
+        '''
+
+        meritocratic_probs = []
+        for prob_tensor in batch_actionseq_probs:
+            beta_tensor = torch.pow(prob_tensor, beta)
+            normalizer = torch.sum(beta_tensor)
+            beta_probs = beta_tensor/normalizer
+            meritocratic_probs.append(beta_probs)
+        return meritocratic_probs
 
 
     @staticmethod

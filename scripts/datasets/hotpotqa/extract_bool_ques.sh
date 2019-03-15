@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-INPUT_DIR=./resources/data/hotpotqa/processed
+INPUT_DIR=./resources/data/hotpotqa/processed/all
 
 filenames=( 'train.jsonl' 'devds.jsonl' 'devfw.jsonl' 'train_goldcontexts.jsonl' 'devds_goldcontexts.jsonl')
 

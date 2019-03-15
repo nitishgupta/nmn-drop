@@ -6,7 +6,7 @@ import json
 import argparse
 from typing import List, Tuple, Any, Dict
 
-from utils import TAUtils, util, spacyutils
+from utils import util
 from datasets.hotpotqa.utils import constants
 
 '''
@@ -152,7 +152,7 @@ def flattenContexts(input_jsonl: str, output_jsonl: str) -> None:
                 # Get (sentid, tokenidx) --> global token idx
                 # List[List[token]]
                 tokenized_context = [sent.strip().split(' ') for sent in sentences]
-                sentIdxTokenIdx2GlobalTokenIdx = TAUtils.getGlobalTokenOffset(tokenized_context)
+                sentIdxTokenIdx2GlobalTokenIdx = util.getGlobalTokenOffset(tokenized_context)
 
 
                 flattened_contexts_ent_ners.append(flattenMentionSpans(single_context_ent_ners,

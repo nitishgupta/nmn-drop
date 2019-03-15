@@ -57,6 +57,7 @@ class HotpotQAPredictor(Predictor):
         execution_vals = myutils.round_all(execution_vals, 4)
         denotations = myutils.round_all(outputs['denotations'], 4)
         best_denotation = myutils.round_all(outputs['best_denotations'], 4)
+        logicalform_probs = myutils.round_all(outputs['batch_actionseq_probs'], 4)
 
         gold_bool = 1.0 if answer == 'yes' else 0.0
         pred_bool = 1.0 if best_denotation >= 0.5 else 0.0
@@ -72,10 +73,14 @@ class HotpotQAPredictor(Predictor):
         out_str += f"BestDenotation: {best_denotation}\n"
 
         if 'logical_forms' and 'denotations' in outputs:
-            for lf, d, ex_vals in zip(logical_forms, denotations, execution_vals):
+            for lf, d, ex_vals, prog_prob in zip(logical_forms, denotations, execution_vals, logicalform_probs):
                 # Stripping the trailing new line
                 ex_vals_str = self._print_ExecutionValTree(ex_vals, 0).strip()
-                out_str += f"LogicalForm: {lf}\nDenotation: {d}\nExecutionTree:\n{ex_vals_str}\n"
+                out_str += f"LogicalForm: {lf}\n"
+                out_str += f"Prob: {prog_prob}\n"
+                out_str +=  f"Denotation: {d}\n"
+                out_str += f"ExecutionTree:\n{ex_vals_str}"
+                out_str += f"\n"
                 NUM_PROGS_TO_PRINT -= 1
                 if NUM_PROGS_TO_PRINT == 0:
                     break
@@ -129,7 +134,7 @@ class HotpotQAPredictor(Predictor):
         contexts_date_ners = jsonobj[hpconstants.context_date_ner_field]
 
         # Mention to entity mapping -- used to make the grounding vector
-        context_entmens2entidx = jsonobj[hpconstants.context_entmens2entidx]
+        context_entmens2entidx = jsonobj[hpconstants.context_nemens2entidx]
         context_nummens2entidx = jsonobj[hpconstants.context_nummens2entidx]
         context_datemens2entidx = jsonobj[hpconstants.context_datemens2entidx]
 

@@ -25,9 +25,6 @@ def writeQuesTxt(input_jsonl: str, outpath_txt: str) -> None:
         ques = jsonobj[constants.q_field]
         contexts = jsonobj[constants.context_field]
 
-
-
-
         outf.write(f"{ques}\t{ans}\n")
 
     outf.close()

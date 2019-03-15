@@ -5,14 +5,12 @@ import json
 import argparse
 from typing import List, Tuple
 
-from utils import TAUtils, util, spacyutils
+from utils import util, spacyutils
 from datasets.hotpotqa.utils import constants
 
 import multiprocessing
 
 spacy_nlp = spacyutils.getSpacyNLP()
-# ccg_nlp = TAUtils.getCCGNLPLocalPipeline()
-
 
 def grouper(n, iterable, padvalue=None):
     """grouper(3, 'abcdefg', 'x') -->
@@ -160,10 +158,6 @@ def titleMatchAndNER(spacydoc: spacyutils.Doc, tokenized_titles: List[List[str]]
         spacy_propns = spacyutils.getPropnSpans(spacydoc)
         # Remove overlaps if any, keep the first argument's spans (titles + ner) in case of overlap
         finalEntitySpans = util.mergeSpansAndRemoveOverlap(finalEntitySpans, spacy_propns, 1, 2)
-
-    # If using CCG NER
-    # ccg_ners = TAUtils.getOntonotesNER(tokens, ccg_nlp)
-    # titleMatch_and_NERs = util.mergeSpansAndRemoveOverlap(titleMatch_and_NERs, ccg_ners, 1, 2)
 
     # Adding merged GPE NEs where "Baltimore, Maryland" is also NE along with "Baltimore" and "Maryland"
     finalEntitySpans = addOverlappingGPEEntitySpans(spacydoc, finalEntitySpans)

@@ -72,7 +72,7 @@ class BidafDatasetReader(DatasetReader):
         contexts_date_ners = jsonobj[hpconstants.context_date_ner_field]
 
         # Mention to entity mapping -- used to make the grounding vector
-        context_entmens2entidx = jsonobj[hpconstants.context_entmens2entidx]
+        context_entmens2entidx = jsonobj[hpconstants.context_nemens2entidx]
         context_nummens2entidx = jsonobj[hpconstants.context_nummens2entidx]
         context_datemens2entidx = jsonobj[hpconstants.context_datemens2entidx]
 

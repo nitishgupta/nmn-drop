@@ -234,7 +234,7 @@ def assignAnsTypesAndGround(input_jsonl: str, output_jsonl: str, f1_threshold: f
             contexts_date_ners = new_doc[constants.context_date_ner_field]
 
             # Mention to entity mapping -- used to make the grounding vector
-            context_entmens2entidx = new_doc[constants.context_entmens2entidx]
+            context_entmens2entidx = new_doc[constants.context_nemens2entidx]
             context_nummens2entidx = new_doc[constants.context_nummens2entidx]
             context_datemens2entidx = new_doc[constants.context_datemens2entidx]
 
@@ -246,7 +246,14 @@ def assignAnsTypesAndGround(input_jsonl: str, output_jsonl: str, f1_threshold: f
             answer = new_doc[constants.ans_field]
             answer_tokenized = new_doc[constants.ans_tokenized_field]
 
-            # Answer typing based on the F1 schieved by the mentions of different type
+            # List of (context_idx, (start, end))
+            if answer in ['yes', 'no']:
+                answer_spans = []
+            else:
+                answer_spans = _findStringAnswerGroundingInContext(answer_tokenized, contexts)
+
+
+            # Answer typing based on the F1 achieved by the mentions of different type
             (answer_type, best_mentions) = ansTyping(ans_str=answer,
                                                      context_ent_ners=contexts_ent_ners,
                                                      context_num_ners=contexts_num_ners,
@@ -283,7 +290,9 @@ def assignAnsTypesAndGround(input_jsonl: str, output_jsonl: str, f1_threshold: f
 
             # Checking if the entity, num, or date type grounding is not empty
             if answer_type in [constants.ENTITY_TYPE, constants.NUM_TYPE, constants.DATE_TYPE]:
+                # If answer_type is an entity, grounding vec cannot be all zero.
                 if all(v == 0 for v in answer_grounding):
+                    print("###########   ERROR    #################")
                     print(answer_type)
                     print(answer_grounding)
                     print(best_mentions)
@@ -302,6 +311,7 @@ def assignAnsTypesAndGround(input_jsonl: str, output_jsonl: str, f1_threshold: f
 
             new_doc[constants.ans_type_field] = answer_type
             new_doc[constants.ans_grounding_field] = answer_grounding
+            new_doc[constants.ans_spans] = answer_spans
 
             outf.write(json.dumps(new_doc))
             outf.write("\n")

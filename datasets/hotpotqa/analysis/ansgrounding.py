@@ -133,7 +133,7 @@ def ansTypeAnalysis(input_jsonl: str, output_txt: str, skipeasy: bool) -> None:
             contexts_num_ners = jsonobj[constants.context_num_ner_field]
             contexts_date_ners = jsonobj[constants.context_date_ner_field]
 
-            context_entmens2entidx = jsonobj[constants.context_entmens2entidx]
+            context_entmens2entidx = jsonobj[constants.context_nemens2entidx]
             context_nummens2entidx = jsonobj[constants.context_nummens2entidx]
             context_datemens2entidx = jsonobj[constants.context_datemens2entidx]
 

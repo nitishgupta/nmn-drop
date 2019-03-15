@@ -4,8 +4,8 @@ ROOT_DIR=./resources/data/hotpotqa
 RAW_JSON_DIR=${ROOT_DIR}/raw
 
 
-TOKENIZED_DIR=${ROOT_DIR}/tokenized
-PROCESSED_DIR=${ROOT_DIR}/processed
+TOKENIZED_DIR=${ROOT_DIR}/processed/all_tokenized
+PROCESSED_DIR=${ROOT_DIR}/processed/all
 
 RAW_TRAIN_JSON=hotpot_train_v1.json
 RAW_DEVDS_JSON=hotpot_dev_distractor_v1.json

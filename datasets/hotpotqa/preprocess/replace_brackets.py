@@ -6,7 +6,7 @@ import json
 import argparse
 from typing import List, Tuple, Any, Dict
 
-from utils import TAUtils, util, spacyutils
+from utils import util
 from datasets.hotpotqa.utils import constants
 
 

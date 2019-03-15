@@ -26,6 +26,7 @@ context_whitespaces_field = "context_whitespaces"
 ans_tokenized_field = "answer_tokenized"
 ans_type_field = "answer_type"
 ans_grounding_field = "answer_grounding"
+ans_spans = "answer_spans"
 
 # TYPES
 NUM_TYPE = "NUM"
@@ -51,6 +52,13 @@ context_date_ner_field = context_field + "_ner_" + DATE_TYPE
 dates_normalized_field = "dates_normalized"
 nums_normalized_field = "nums_normalized"
 
+# Question NE, NUM and DATE mens to entity_idx
+# This entity_idx is indexing into {ne, num, date}_entidx2{ent, num, date}val
+q_entmens2entidx = "q_entmens2entidx"
+q_nummens2entidx = "q_nummens2entidx"
+q_datemens2entidx = "q_datemens2entidx"
+
+
 # These are like entities, for different types of mentions
 # Entity mentions that are coreferred, number mentions and date mentions that have the same denotation
 # List of list: Outer list size is the num of ents; inner list indexes into the corresponding context_TYPE_ner_field
@@ -59,13 +67,15 @@ context_eqent2nummens = "context_eqent2nummens"
 context_eqent2datemens = "context_eqent2datemens"
 
 # List mapping mentions to the corresponding entities in the CONTEXT_EQTYPE_TO_MENS
-context_entmens2entidx = "context_entmens2entidx"
+context_nemens2entidx = "context_nemens2entidx"
 context_nummens2entidx = "context_nummens2entidx"
 context_datemens2entidx = "context_datemens2entidx"
 
-# Grounding entity_type mens in the question to context entities.
-# List of size as q_ent_ner_field
-q_entmens2entidx = "q_entmens2entidx"
+# List of normalized entity values (for different entity types) in order of entity_idx
+ne_entidx2entstr = "ne_entidx2entstr"
+date_entidx2dateval = "date_entidx2dateval"
+num_entidx2numval = "num_entidx2numval"
+
 
 # To store the predicted answer
 pred_ans = "pred_ans"

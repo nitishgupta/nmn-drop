@@ -183,7 +183,7 @@ def mergeContextsForJsonl(input_jsonl: str, output_jsonl: str) -> None:
             # print()
 
             # Merging mention idx to entity idx lists
-            entmens2entidx = jsonobj[constants.context_entmens2entidx]
+            entmens2entidx = jsonobj[constants.context_nemens2entidx]
             nummens2entidx = jsonobj[constants.context_nummens2entidx]
             datemens2entidx = jsonobj[constants.context_datemens2entidx]
 
@@ -191,7 +191,7 @@ def mergeContextsForJsonl(input_jsonl: str, output_jsonl: str) -> None:
             merged_nummens2entidx = merge_mens2entidx(nummens2entidx)
             merged_datemens2entidx = merge_mens2entidx(datemens2entidx)
 
-            new_jsonobj[constants.context_entmens2entidx] = merged_entmens2entidx
+            new_jsonobj[constants.context_nemens2entidx] = merged_entmens2entidx
             new_jsonobj[constants.context_nummens2entidx] = merged_nummens2entidx
             new_jsonobj[constants.context_datemens2entidx] = merged_datemens2entidx
             # print(merged_entmens2entidx)
