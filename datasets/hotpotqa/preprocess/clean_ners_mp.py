@@ -12,9 +12,7 @@ from utils import util, spacyutils
 from datasets.hotpotqa.utils import constants
 import multiprocessing
 
-
 spacy_nlp = spacyutils.getSpacyNLP()
-# ccg_nlp = TAUtils.getCCGNLPLocalPipeline()
 
 
 string2num = {'zero': 0, 'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
