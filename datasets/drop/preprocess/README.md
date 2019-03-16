@@ -10,3 +10,6 @@ Script tokenize.py handles all preprocessing -
     1. q_{date, num}_mens - List of (str, (start, end), normalized_val) - num only has a token_idx instead of the start/end
     2. q_{date, num}_entidx  - List (same len as 1.) of date/num entity_idxs i.e. mens that resolve to equal normalized values 
     3. q_{date, num}_normalized_values - List of normalized values of num/date entities in the order of entity_idxs in 2.   
+    
+## Prune questions 
+Number and Date based pruning of questions - script prune_ques.py
