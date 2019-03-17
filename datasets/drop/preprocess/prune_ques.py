@@ -34,7 +34,10 @@ def number_comparison_filter(question: str):
 
 
 def processPassage(passage_info, keep_date: bool, keep_num: bool):
-    """ Keep relevant qa_pairs from the passage info. """
+    """ Keep relevant qa_pairs from the passage info.
+
+        NOTE: Only keeping qa that have span-based answers
+    """
 
     assert keep_date or keep_num, "Atleast one should be true"
 
@@ -51,6 +54,12 @@ def processPassage(passage_info, keep_date: bool, keep_num: bool):
         if number_comparison_filter(question) and keep_num:
             keep = True
 
+        if constants.answer_type in qa_pair:
+            if qa_pair[constants.answer_type] != constants.SPAN_TYPE:
+                keep = False
+        else:
+            keep = False
+
         # To avoid duplication
         if keep:
             relevant_qa_pairs.append(qa_pair)
@@ -65,20 +74,8 @@ def processPassage(passage_info, keep_date: bool, keep_num: bool):
 
 
 def pruneDataset(input_json: str, output_json: str, keep_date: bool, keep_num: bool) -> None:
-    """ Tokenize the question, answer and context in the HotPotQA Json.
-
-    Returns:
-    --------
-    Jsonl file with same datatypes as input with the modification/addition of:
-    Modifications:
-        q_field: The question is tokenized
-        context_field: Context sentences are now tokenized, but stored with white-space delimition
-
-    Additions:
-        ans_tokenized_field: tokenized answer if needed
-        q_ner_field: NER tags for question. Each NER tag is (spantext, start, end, label) with exclusive-end.
-        ans_ner_field: NER tags in answer
-        context_ner_field: NER tags in each of the context sentences
+    """ Prune dataset to only contain questions that qualify after certain tests.
+        Currently only keeping questions with a SpanType answer.
     """
 
     print("Reading input json: {}".format(input_json))
@@ -129,21 +126,3 @@ if __name__ == '__main__':
 
     # args.input_json --- is the raw json from the DROP dataset
     pruneDataset(input_json=args.input_json, output_json=args.output_json, keep_date=keep_date, keep_num=keep_num)
-
-    # with open(args.input_json, 'r') as f:
-    #     dataset = json.load(f)
-    #
-    # i = 2
-    # new_docs = {}
-    # for pid, pi in dataset.items():
-    #     new_docs.update({pid: pi})
-    #     i -= 1
-    #     if i < 0:
-    #         break
-    #
-    # with open(args.output_json, 'w') as outf:
-    #     json.dump(new_docs, outf, indent=4)
-
-
-
-

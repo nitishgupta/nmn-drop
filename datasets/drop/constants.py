@@ -6,6 +6,8 @@ qa_pairs = "qa_pairs"
 
 # Question
 question = "question"
+original_question = "original_question"
+question_charidxs = "question_charidxs"
 # Answer dict
 answer = "answer"
 # Number answer as a string
@@ -20,6 +22,8 @@ query_id = "query_id"
 
 # Passage text
 passage = "passage"
+original_passage = "original_passage"
+passage_charidxs = "passage_charidxs"
 
 # Answer string
 # Original and tokenized

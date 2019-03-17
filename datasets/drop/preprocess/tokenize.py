@@ -4,6 +4,7 @@ import copy
 import time
 import json
 import string
+import unicodedata
 import argparse
 from collections import defaultdict
 from typing import List, Tuple, Dict, Union
@@ -35,6 +36,12 @@ def grouper(n, iterable, padvalue=None):
 
     chunk_size = n
     return [iterable[i:i + chunk_size] for i in range(0, len(iterable), chunk_size)]
+
+
+def _check_validity_of_spans(spans: List[Tuple[int, int]], len_seq: int):
+    for span in spans:
+        assert span[0] >= 0
+        assert span[1] < len_seq
 
 def find_valid_spans(passage_tokens: List[str],
                      answer_texts: List[str]) -> List[Tuple[int, int]]:
@@ -93,7 +100,7 @@ def convert_answer(answer_annotation: Dict[str, Union[str, Dict, List]]) -> Tupl
 
     answer_texts = []
     if answer_type is None:  # No answer
-        pass
+        return None
     elif answer_type == "spans":
         # answer_content is a list of string in this case
         answer_texts = answer_content
@@ -114,15 +121,18 @@ def processPassage(input_args):
     passage_id, passage_info = input_args
     new_passage_info = {}
 
-    passage_text: str = passage_info[constants.passage].strip()
-    passage_text = split_on_hyphens(passage_text)
+    original_passage_text: str = passage_info[constants.passage].strip()
+    original_passage_text = unicodedata.normalize("NFKD", original_passage_text)
+    passage_text = split_on_hyphens(original_passage_text)
 
     passage_spacydoc = spacyutils.getSpacyDoc(passage_text, spacy_nlp)
-    passage_tokens = spacyutils.getTokens(passage_spacydoc)
+    passage_tokens = [token.text for token in passage_spacydoc]
+    passage_token_charidxs = [token.idx for token in passage_spacydoc]
     new_passage_info[constants.passage] = ' '.join(passage_tokens)
+    new_passage_info[constants.original_passage] = original_passage_text
+    new_passage_info[constants.passage_charidxs] = passage_token_charidxs
 
     passage_ners = spacyutils.getNER(passage_spacydoc)
-
 
     (parsed_dates, normalized_date_idxs,
      normalized_date_values, num_date_entities) = ner_process.parseDateNERS(passage_ners)
@@ -145,12 +155,16 @@ def processPassage(input_args):
         new_qa = {}
         query_id = qa[constants.query_id]
         new_qa[constants.query_id] = query_id
-        question: str = qa[constants.question].strip()
-        question = split_on_hyphens(question)
+        original_question: str = qa[constants.question].strip()
+        original_question = unicodedata.normalize("NFKD", original_question)
+        question = split_on_hyphens(original_question)
 
         q_spacydoc = spacyutils.getSpacyDoc(question, spacy_nlp)
-        question_tokens: List[str] = spacyutils.getTokens(q_spacydoc)
+        question_tokens: List[str] = [token.text for token in q_spacydoc]
+        question_token_charidxs = [token.idx for token in q_spacydoc]
         new_qa[constants.question] = ' '.join(question_tokens)
+        new_qa[constants.original_question] = original_question
+        new_qa[constants.question_charidxs] = question_token_charidxs
 
         q_ners = spacyutils.getNER(q_spacydoc)
         (parsed_dates, normalized_date_idxs,
@@ -169,10 +183,18 @@ def processPassage(input_args):
         answer = qa[constants.answer]
         new_qa[constants.answer] = answer
 
-        answer_type, answer_texts = convert_answer(answer)
+        answer_content = convert_answer(answer)
+        if answer_content is None:
+            # Some qa don't have any answer annotated
+            print(f"Couldn't resolve answer: {answer}")
+            continue
+
+        answer_type, answer_texts = answer_content
+
         # answer_texts_for_evaluation = [' '.join(answer_texts)]
         tokenized_answer_texts = []
         for answer_text in answer_texts:
+            answer_text = unicodedata.normalize("NFKD", answer_text)
             answer_text = split_on_hyphens(answer_text)
             answer_spacydoc = spacyutils.getSpacyDoc(answer_text, spacy_nlp)
             answer_tokens = spacyutils.getTokens(answer_spacydoc)
@@ -183,21 +205,26 @@ def processPassage(input_args):
         valid_question_spans = \
             find_valid_spans(question_tokens, tokenized_answer_texts) if tokenized_answer_texts else []
 
+        _check_validity_of_spans(valid_passage_spans, len(passage_tokens))
+        _check_validity_of_spans(valid_question_spans, len(question_tokens))
+
         new_qa[constants.answer_passage_spans] = valid_passage_spans
         new_qa[constants.answer_question_spans] = valid_question_spans
 
-        if valid_passage_spans or valid_question_spans:
-            new_qa[constants.answer_type] = constants.SPAN_TYPE
+        if answer_type == "spans":
+            if valid_passage_spans or valid_question_spans:
+                new_qa[constants.answer_type] = constants.SPAN_TYPE
+            else:
+                print(f"Answer span not found in passage. passageid: {passage_id}. queryid: {query_id}")
+                print(f"Answer Texts: {answer_texts}")
+                print(f"Tokenized_Answer Texts: {tokenized_answer_texts}")
+                print(new_passage_info[constants.passage])
+                print()
+                continue
         elif answer_type == "number":
             new_qa[constants.answer_type] = constants.NUM_TYPE
         elif answer_type == "date":
             new_qa[constants.answer_type] = constants.DATE_TYPE
-        else:
-            print(f"passageid: {passage_id}. queryid: {query_id}")
-            print(f"Answertype not found. AT: {answer_type}. Texts: {answer_texts}")
-            print(new_passage_info[constants.passage])
-            print(f"Tokenized_answer_texts: {tokenized_answer_texts}")
-            continue
 
         new_qa_pairs.append(new_qa)
     new_passage_info[constants.qa_pairs] = new_qa_pairs
@@ -281,20 +308,6 @@ if __name__ == '__main__':
 
     # args.input_json --- is the raw json from the DROP dataset
     tokenizeDocs(input_json=args.input_json, output_json=args.output_json, nump=args.nump)
-
-    # with open(args.input_json, 'r') as f:
-    #     dataset = json.load(f)
-    #
-    # i = 2
-    # new_docs = {}
-    # for pid, pi in dataset.items():
-    #     new_docs.update({pid: pi})
-    #     i -= 1
-    #     if i < 0:
-    #         break
-    #
-    # with open(args.output_json, 'w') as outf:
-    #     json.dump(new_docs, outf, indent=4)
 
 
 
