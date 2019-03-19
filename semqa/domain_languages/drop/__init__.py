@@ -1,1 +1,1 @@
-from semqa.domain_languages.drop.drop_language import DropLanguage
+from semqa.domain_languages.drop.drop_language import DropLanguage, QuestionSpanAnswer, PassageSpanAnswer

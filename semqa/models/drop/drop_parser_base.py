@@ -200,17 +200,10 @@ class DROPParserBase(Model):
                 # print(instance_action_strings)
                 if not action_sequence:
                     continue
-                # logical_form = instance_language.action_sequence_to_logical_form(action_sequence)
-                # print(logical_form)
-
-                print(action_sequence)
-                print(instance_language.action_sequence_to_logical_form(action_sequence))
                 actionseq_denotation = instance_language.execute_action_sequence(action_sequence, program_sideargs)
                 # instance_actionseq_denotation = instance_language.execute(logical_form)
                 instance_denotations.append(actionseq_denotation)
                 instance_actionseq_type = actionseq_denotation.__class__.__name__ # instance_language.typeobj_to_typename(actionseq_denotation)
-                print(instance_actionseq_type)
-                print()
                 instance_denotation_types.append(instance_actionseq_type)
 
             all_denotations.append(instance_denotations)

@@ -89,7 +89,7 @@ class DropLanguage(DomainLanguage):
                  passage_mask: Tensor,
                  parameters: ExecutorParameters,
                  max_samples=10) -> None:
-        super().__init__(start_types={QuestionAttention, PassageSpanAnswer, QuestionSpanAnswer})
+        super().__init__(start_types={QuestionSpanAnswer, PassageSpanAnswer})
         self.encoded_passage = encoded_passage
         self.encoded_question = encoded_question
         self.question_mask = question_mask
@@ -100,17 +100,14 @@ class DropLanguage(DomainLanguage):
 
     @predicate_with_side_args(['question_attention'])
     def find_QuestionAttention(self, question_attention: Tensor) -> QuestionAttention:
-        print("EXECUTING THIS!")
         return QuestionAttention(question_attention)
 
 
     @predicate
-    def find_PassageAttention(self, question_attention: QuestionAttention) -> PassageAttention:
-        print(question_attention)
-
+    def find_PassageAttention(self, question_attn: QuestionAttention) -> PassageAttention:
         # Shape: (1, D)
         attended_question = allenutil.weighted_sum(self.encoded_question.unsqueeze(0),
-                                                   question_attention._value.unsqueeze(0))
+                                                   question_attn._value.unsqueeze(0))
         # Shape: (passage_length)
         passage_attention = self.parameters.find_attention(attended_question,
                                                            self.encoded_passage.unsqueeze(0)).squeeze(0)
@@ -127,7 +124,7 @@ class DropLanguage(DomainLanguage):
                                                    question_attention.unsqueeze(0))
 
         # Shape: (encoding_dim, 1)
-        attended_passage = (passage_attention.unsqueeze(-1) * self.encoded_passage).sum(0)
+        attended_passage = (passage_attention._value.unsqueeze(-1) * self.encoded_passage).sum(0)
         linear1 = self.parameters.relocate_linear1
         linear2 = self.parameters.relocate_linear2
         linear3 = self.parameters.relocate_linear3
@@ -141,12 +138,12 @@ class DropLanguage(DomainLanguage):
     def find_passageSpanAnswer(self, passage_attention: PassageAttention) -> PassageSpanAnswer:
         # Shape: (1, D)
         attended_passage = allenutil.weighted_sum(self.encoded_passage.unsqueeze(0),
-                                                   passage_attention.unsqueeze(0))
+                                                   passage_attention._value.unsqueeze(0))
 
         # (passage_length, 2*encoding_dim)
         passage_for_span_start = torch.cat(
             [self.encoded_passage,
-             attended_passage.unsqueeze(0).repeat(self.encoded_passage.size(0), 1)],
+             attended_passage.repeat(self.encoded_passage.size(0), 1)],
             -1)
 
         # Shape: (passage_length)
@@ -163,11 +160,11 @@ class DropLanguage(DomainLanguage):
     def find_questionSpanAnswer(self, passage_attention: PassageAttention) -> QuestionSpanAnswer:
         # Shape: (1, D)
         attended_passage = allenutil.weighted_sum(self.encoded_passage.unsqueeze(0),
-                                                  passage_attention.unsqueeze(0))
+                                                  passage_attention._value.unsqueeze(0))
 
         # (question_length, 2*encoding_dim)
         question_for_span_start = torch.cat(
-            [self.encoded_question, attended_passage.unsqueeze(0).repeat(self.encoded_question.size(0), 1)],
+            [self.encoded_question, attended_passage.repeat(self.encoded_question.size(0), 1)],
             -1)
 
         # Shape: (question_length)
@@ -182,6 +179,8 @@ class DropLanguage(DomainLanguage):
         return QuestionSpanAnswer(question_span_start_log_probs=question_span_start_log_probs,
                                   question_span_end_log_probs=question_span_end_log_probs)
 
+
+    ''' NOT IMPLEMENTED AFTER THIS '''
 
     # @predicate_with_side_args(['attended_question'])
     # def find(self, attended_question: Tensor) -> AttentionTensor:

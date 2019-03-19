@@ -173,6 +173,7 @@ class LinkingTransitionFunctionEmbeddings(BasicTransitionFunction):
             # print(state.score[group_index])
             # print(current_log_probs)
             log_probs = state.score[group_index] + current_log_probs
+            # print(f"c: {current_log_probs} lp: {log_probs}")
             batch_results[state.batch_indices[group_index]].append((group_index,
                                                                     log_probs,
                                                                     current_log_probs,

@@ -24,7 +24,7 @@ from allennlp.models.archival import load_archive
 from allennlp.models.decomposable_attention import DecomposableAttention
 from allennlp.nn import InitializerApplicator
 
-from semqa.domain_languages.drop import DropLanguage
+from semqa.domain_languages.drop import DropLanguage, QuestionSpanAnswer, PassageSpanAnswer
 from semqa.models.drop.drop_parser_base import DROPParserBase
 from semqa.domain_languages.drop.execution_parameters import ExecutorParameters
 
@@ -168,11 +168,6 @@ class DROPSemanticParser(DROPParserBase):
         else:
             epoch = None
 
-        print(passage_number_indices.size())
-        print(passage_number_entidxs.size())
-        print(passage_date_spans.size())
-        print(passage_date_entidxs.size())
-
         question_mask = allenutil.get_text_field_mask(question).float()
         passage_mask = allenutil.get_text_field_mask(passage).float()
         embedded_question = self._dropout(self._text_field_embedder(question))
@@ -187,11 +182,6 @@ class DROPSemanticParser(DROPParserBase):
         encoded_question = self._dropout(self._phrase_layer(projected_embedded_question, question_mask))
         # Shape: (batch_size, passage_length, encoding_dim)
         encoded_passage = self._dropout(self._phrase_layer(projected_embedded_passage, passage_mask))
-
-        print(encoded_question.size())
-        print(encoded_passage.size())
-
-
 
         """ Parser setup """
         # Shape: (B, encoding_dim)
@@ -259,14 +249,96 @@ class DROPSemanticParser(DROPParserBase):
                                                                           languages,
                                                                           batch_actionseq_sideargs)
 
-        print(batch_denotation_types)
+
+        output_dict = {}
+        ''' Computing losses if gold answers are given '''
+        if answer_types is not None:
+            loss = 0
+            for i in range(batch_size):
+                if answer_types[i] == dropconstants.SPAN_TYPE:
+                    instance_prog_denotations, instance_prog_types = batch_denotations[i], batch_denotation_types[i]
+                    # Tensor with shape: (num_of_programs, )
+                    instance_prog_probs = batch_actionseq_probs[i]
+                    instance_progs_logprob_list = batch_actionseq_scores[i]
+                    instance_log_likelihood_list = []
+                    for progidx in range(len(instance_prog_denotations)):
+                        denotation = instance_prog_denotations[progidx]
+                        progtype = instance_prog_types[progidx]
+                        if progtype == "QuestionSpanAnswer":
+                            denotation: QuestionSpanAnswer = denotation
+                            log_likelihood = self._get_span_answer_log_prob(answer_as_spans=answer_as_question_spans[i],
+                                                                            span_log_probs=denotation._value)
+                        elif progtype == "PassageSpanAnswer":
+                            denotation: PassageSpanAnswer = denotation
+                            log_likelihood = self._get_span_answer_log_prob(answer_as_spans=answer_as_passage_spans[i],
+                                                                            span_log_probs=denotation._value)
+                        else:
+                            raise NotImplementedError
+
+                        instance_log_likelihood_list.append(log_likelihood)
+                    # Each is the shape of (number_of_progs,)
+                    instance_denotation_log_likelihoods = torch.stack(instance_log_likelihood_list, dim=-1)
+                    instance_progs_log_probs = torch.stack(instance_progs_logprob_list, dim=-1)
+
+                    allprogs_log_marginal_likelihoods = instance_denotation_log_likelihoods + instance_progs_log_probs
+                    instance_marginal_log_likelihood = allenutil.logsumexp(allprogs_log_marginal_likelihoods)
+                    loss += -1.0*instance_marginal_log_likelihood
+
+            loss = loss / batch_size
+
+            output_dict["loss"] = loss
+
+        return output_dict
 
 
-        for instance_progseqs in batch_actionseqs:
-            for progseq in instance_progseqs:
-                print(progseq)
 
-        raise NotImplementedError
+
+
+    @staticmethod
+    def _get_span_answer_log_prob(answer_as_spans: torch.LongTensor,
+                                  span_log_probs: Tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        """ Compute the log_prob for the answer spans
+
+        Parameters:
+        -----------
+        answer: ``torch.LongTensor`` Shape: (number_of_spans, 2)
+            These are the gold spans
+        span_log_probs: ``torch.FloatTensor``
+            2-Tuple with tensors of Shape: (length_of_sequence) for span_start/span_end log_probs
+        """
+        # Unsqueezing dim=1
+        answer_as_spans = answer_as_spans.unsqueeze(0)
+
+        span_start_log_probs, span_end_log_probs = span_log_probs
+        span_start_log_probs = span_start_log_probs.unsqueeze(0)
+        span_end_log_probs = span_end_log_probs.unsqueeze(0)
+
+        # (batch_size, number_of_ans_spans)
+        gold_passage_span_starts = answer_as_spans [:, :, 0]
+        gold_passage_span_ends = answer_as_spans[:, :, 1]
+        # Some spans are padded with index -1,
+        # so we clamp those paddings to 0 and then mask after `torch.gather()`.
+        gold_passage_span_mask = (gold_passage_span_starts != -1).long()
+        clamped_gold_passage_span_starts = \
+            allenutil.replace_masked_values(gold_passage_span_starts, gold_passage_span_mask, 0)
+        clamped_gold_passage_span_ends = \
+            allenutil.replace_masked_values(gold_passage_span_ends, gold_passage_span_mask, 0)
+        # Shape: (batch_size, # of answer spans)
+        log_likelihood_for_passage_span_starts = \
+            torch.gather(span_start_log_probs, 1, clamped_gold_passage_span_starts)
+        log_likelihood_for_passage_span_ends = \
+            torch.gather(span_end_log_probs, 1, clamped_gold_passage_span_ends)
+        # Shape: (batch_size, # of answer spans)
+        log_likelihood_for_passage_spans = \
+            log_likelihood_for_passage_span_starts + log_likelihood_for_passage_span_ends
+        # For those padded spans, we set their log probabilities to be very small negative value
+        log_likelihood_for_passage_spans = \
+            allenutil.replace_masked_values(log_likelihood_for_passage_spans, gold_passage_span_mask, -1e7)
+        # Shape: (batch_size, )
+        log_marginal_likelihood_for_passage_span = allenutil.logsumexp(log_likelihood_for_passage_spans)
+
+        return log_marginal_likelihood_for_passage_span
+
 
 
 

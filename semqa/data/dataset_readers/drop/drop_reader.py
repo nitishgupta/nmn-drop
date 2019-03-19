@@ -276,7 +276,7 @@ class DROPReader(DatasetReader):
         if answer_info:
             metadata["answer_texts"] = answer_info["answer_texts"]
 
-            fields["answer_types"]: MetadataField(answer_info["answer_type"])
+            fields["answer_types"] = MetadataField(answer_info["answer_type"])
 
             passage_span_fields = \
                 [SpanField(span[0], span[1], fields["passage"]) for span in answer_info["answer_passage_spans"]]
