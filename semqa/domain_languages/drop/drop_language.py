@@ -10,6 +10,7 @@ from allennlp.semparse.domain_languages.domain_language import (DomainLanguage, 
 
 from semqa.domain_languages.drop.execution_parameters import ExecutorParameters
 
+
 # # An Attention is a single tensor; we're giving this a type so that we can use it for constructing
 # # predicates.
 # class AttentionTensor(Tensor):
@@ -88,8 +89,13 @@ class DropLanguage(DomainLanguage):
                  question_mask: Tensor,
                  passage_mask: Tensor,
                  parameters: ExecutorParameters,
+                 start_types = None,
                  max_samples=10) -> None:
-        super().__init__(start_types={QuestionSpanAnswer, PassageSpanAnswer})
+
+        if start_types is None:
+            start_types = {PassageSpanAnswer, QuestionSpanAnswer}
+        super().__init__(start_types=start_types)
+
         self.encoded_passage = encoded_passage
         self.encoded_question = encoded_question
         self.question_mask = question_mask
@@ -174,7 +180,7 @@ class DropLanguage(DomainLanguage):
         question_span_start_log_probs = allenutil.masked_log_softmax(question_span_start_logits,
                                                                      self.question_mask)
         question_span_end_log_probs = allenutil.masked_log_softmax(question_span_end_logits,
-                                                                self.question_mask)
+                                                                   self.question_mask)
 
         return QuestionSpanAnswer(question_span_start_log_probs=question_span_start_log_probs,
                                   question_span_end_log_probs=question_span_end_log_probs)

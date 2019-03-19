@@ -210,7 +210,7 @@ class DROPReader(DatasetReader):
                                                 # "original_numbers": numbers_in_passage,
                                                 "passage_id": passage_id,
                                                 "question_id": question_id,
-                                                "answer_info": answer_info,
+                                                "answer_annotation": answer_annotation
                                                 # "candidate_additions": candidate_additions,
                                                 #"candidate_subtractions": candidate_subtractions
                                             })
@@ -265,15 +265,18 @@ class DROPReader(DatasetReader):
         # when we want to create a new empty field. That will lead to error.
         # fields["numbers_in_passage"] = TextField(number_tokens, token_indexers)
 
-        metadata = {"original_passage": passage_text,
-                    "passage_token_offsets": passage_offsets,
-                    "question_token_offsets": question_offsets,
-                    "question_tokens": [token.text for token in question_tokens],
-                    "passage_tokens": [token.text for token in passage_tokens],
-                    # "number_tokens": [token.text for token in number_tokens],
-                    # "number_indices": number_indices
-                    }
+        metadata = additional_metadata
+
+        metadata.update({"passage_token_offsets": passage_offsets,
+                         "question_token_offsets": question_offsets,
+                         "question_tokens": [token.text for token in question_tokens],
+                         "passage_tokens": [token.text for token in passage_tokens],
+                         # "number_tokens": [token.text for token in number_tokens],
+                         # "number_indices": number_indices
+                        })
+
         if answer_info:
+            metadata["answer_type"] = answer_info["answer_type"]
             metadata["answer_texts"] = answer_info["answer_texts"]
 
             fields["answer_types"] = MetadataField(answer_info["answer_type"])

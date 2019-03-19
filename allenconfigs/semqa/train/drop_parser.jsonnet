@@ -248,7 +248,7 @@ local compareff_inputdim =
       "lr": utils.parse_number(std.extVar("LR"))
     },
     "summary_interval": 10,
-    "validation_metric": "+accuracy"
+    "validation_metric": "+f1"
   },
 
   "random_seed": 100,
