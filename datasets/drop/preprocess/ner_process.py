@@ -43,6 +43,7 @@ def parseDateNERS(ner_spans) -> Tuple[List, List, List, int]:
         normalized_date_idxs.append(date2idx[value])
 
     num_date_entities = len(normalized_date_values)
+    assert len(parsed_dates) == len(normalized_date_idxs)
 
     return (parsed_dates, normalized_date_idxs, normalized_date_values, num_date_entities)
 
@@ -72,9 +73,10 @@ def parseNumNERS(ner_spans, tokens: List[str]) -> Tuple[List, List, List, int]:
         if value not in num2idx:
             num2idx[value] = len(num2idx)
             normalized_number_values.append(value)
-            normalized_num_idxs.append(num2idx[value])
+        normalized_num_idxs.append(num2idx[value])
 
     num_number_entities = len(normalized_number_values)
+    assert len(parsed_nums) == len(normalized_num_idxs)
 
     return (parsed_nums, normalized_num_idxs, normalized_number_values, num_number_entities)
 

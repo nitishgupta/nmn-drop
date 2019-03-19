@@ -58,7 +58,7 @@ class LinkingTransitionFunctionEmbeddings(BasicTransitionFunction):
                  encoder_output_dim: int,
                  action_embedding_dim: int,
                  input_attention: Attention,
-                 input_attention_activation: Activation,
+                 input_attention_activation: Activation = None,
                  activation: Activation = Activation.by_name('relu')(),
                  predict_start_type_separately: bool = True,
                  num_start_types: int = None,

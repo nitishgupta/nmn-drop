@@ -156,7 +156,7 @@ class HotpotQASemanticParser(HotpotQAParserBase):
         self._decoder_step = LinkingTransitionFunctionEmbeddings(encoder_output_dim=encoder_output_dim,
                                                                  action_embedding_dim=action_embedding_dim,
                                                                  input_attention=attention,
-                                                                 input_attention_activation=attention_activation,
+                                                                 input_attention_activation=None,
                                                                  num_start_types=1,
                                                                  activation=Activation.by_name('tanh')(),
                                                                  predict_start_type_separately=False,

@@ -34,7 +34,7 @@ WORD_NUMBER_MAP = {"zero": 0, "one": 1, "two": 2, "three": 3, "four": 4,
 @DatasetReader.register("drop_reader")
 class DROPReader(DatasetReader):
     def __init__(self,
-                 lazy: bool = False,
+                 lazy: bool = True,
                  tokenizer: Tokenizer = None,
                  token_indexers: Dict[str, TokenIndexer] = None,
                  relaxed_span_match: bool = True,
@@ -111,12 +111,16 @@ class DROPReader(DatasetReader):
                                                  max_passage_len,
                                                  max_question_len,
                                                  drop_invalid=is_train)
+
                 if instance is not None:
-                    instances.append(instance)
-                else:
-                    skip_count += 1
-        logger.info(f"Skipped {skip_count} questions, kept {len(instances)} questions.")
-        return instances
+                    yield instance
+
+        #         if instance is not None:
+        #             instances.append(instance)
+        #         else:
+        #             skip_count += 1
+        # logger.info(f"Skipped {skip_count} questions, kept {len(instances)} questions.")
+        # return instances
 
     @overrides
     def text_to_instance(self,  # type: ignore
@@ -142,13 +146,14 @@ class DROPReader(DatasetReader):
                          max_question_len: int = None,
                          drop_invalid: bool = False) -> Union[Instance, None]:
 
-        language = DropLanguage(None, None)
+        language = DropLanguage(None, None, None, None, None)
 
         production_rule_fields: List[Field] = []
         for production_rule in language.all_possible_productions():
             field = ProductionRuleField(production_rule, is_global_rule=True)
             production_rule_fields.append(field)
         action_field = ListField(production_rule_fields)
+        # language_field = MetadataField(language)
 
         # pylint: disable=arguments-differ
         passage_tokens = [Token(text=t, idx=t_charidx)
@@ -162,11 +167,15 @@ class DROPReader(DatasetReader):
             question_tokens = question_tokens[: max_question_len]
 
 
+        # print(f"Num: {p_num_mens}")
         passage_number_indices = [tokenidx for (_, tokenidx, _) in p_num_mens]
+        # print(f"NumEntIdxs: {p_num_entidxs}")
         passage_number_entidxs = p_num_entidxs
         passage_number_values = p_num_normvals
 
+        # print(f"Dates: {p_date_mens}")
         passage_date_spanidxs = [(x,y) for (_, (x,y), _) in p_date_mens]
+        # print(f"DateEntIdxs: {p_date_entidxs}")
         passage_date_entidxs = p_date_entidxs
         passage_date_values = p_date_normvals
 
@@ -174,9 +183,13 @@ class DROPReader(DatasetReader):
         answer_texts = answer_annotation["spans"]
         answer_texts_for_evaluation = [' '.join(answer_texts)]
 
-        answer_info = {"answer_texts": answer_texts_for_evaluation,
+        answer_info = {"answer_type": answer_type,
+                       "answer_texts": answer_texts_for_evaluation,
                        "answer_passage_spans": answer_passage_spans,
                        "answer_question_spans": answer_question_spans}
+
+        # print(f"AnsPassage: {answer_passage_spans}")
+        # print(f"AnsQues: {answer_question_spans}")
 
         return self.make_augmented_instance(question_tokens=question_tokens,
                                             passage_tokens=passage_tokens,
@@ -190,6 +203,7 @@ class DROPReader(DatasetReader):
                                             passage_text=original_passage_text,
                                             answer_info=answer_info,
                                             action_field=action_field,
+                                            # language_field=language_field,
                                             additional_metadata={
                                                 "original_passage": original_passage_text,
                                                 "original_question": original_ques_text,
@@ -214,6 +228,7 @@ class DROPReader(DatasetReader):
                                 passage_text: str,
                                 answer_info: Dict[str, Any] = None,
                                 action_field: ListField[ProductionRuleField] = None,
+                                # language_field: MetadataField = None,
                                 number_tokens: List[Token]=None,
                                 number_indices: List[int]=None,
                                 additional_metadata: Dict[str, Any] = None) -> Instance:
@@ -221,6 +236,7 @@ class DROPReader(DatasetReader):
         fields: Dict[str, Field] = {}
 
         fields["actions"] = action_field
+        # fields["languages"] = language_field
         passage_offsets = [(token.idx, token.idx + len(token.text)) for token in passage_tokens]
         question_offsets = [(token.idx, token.idx + len(token.text)) for token in question_tokens]
 
@@ -260,13 +276,10 @@ class DROPReader(DatasetReader):
         if answer_info:
             metadata["answer_texts"] = answer_info["answer_texts"]
 
-            try:
-                passage_span_fields = \
-                    [SpanField(span[0], span[1], fields["passage"]) for span in answer_info["answer_passage_spans"]]
-            except:
-                print(answer_info["answer_texts"])
-                print(answer_info["answer_passage_spans"])
-                print([(i, t) for i,t in enumerate(passage_tokens)])
+            fields["answer_types"]: MetadataField(answer_info["answer_type"])
+
+            passage_span_fields = \
+                [SpanField(span[0], span[1], fields["passage"]) for span in answer_info["answer_passage_spans"]]
             if not passage_span_fields:
                 passage_span_fields.append(SpanField(-1, -1, fields["passage"]))
             fields["answer_as_passage_spans"] = ListField(passage_span_fields)
