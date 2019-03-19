@@ -53,13 +53,13 @@ class QuestionSpanAnswer():
 
 
 class QuestionAttention():
-    def __init__(self, question_attention: torch.Tensor):
+    def __init__(self, question_attention):
         self._value = question_attention
 
 
 class PassageAttention():
-    def __init__(self, passage_attention: torch.Tensor):
-        self._value: torch.Tensor = passage_attention
+    def __init__(self, passage_attention):
+        self._value = passage_attention
 
 
 # A ``NumberAnswer`` is a distribution over the possible answers from addition and subtraction.
