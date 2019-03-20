@@ -14,7 +14,7 @@ from allennlp.data.tokenizers import Token, Tokenizer, WordTokenizer
 from allennlp.data.dataset_readers.reading_comprehension.util import IGNORED_TOKENS, STRIPPED_CHARACTERS
 from allennlp.data.fields import Field, TextField, MetadataField, LabelField, ListField, \
     SequenceLabelField, SpanField, IndexField, ProductionRuleField, ArrayField
-from semqa.domain_languages.drop.drop_language import DropLanguage
+from semqa.domain_languages.drop.drop_language import DropLanguage, Date
 
 from datasets.drop import constants
 
@@ -70,6 +70,7 @@ class DROPReader(DatasetReader):
             original_passage_text = passage_info[constants.original_passage]
             passage_text = passage_info[constants.passage]
             passage_charidxs = passage_info[constants.passage_charidxs]
+            passage_len = passage_info["num_tokens"]
             p_date_mens: List[Tuple[str, Tuple[int, int], Tuple[int, int, int]]] = \
                 passage_info[constants.passage_date_mens]
             p_date_entidxs: List[int] = passage_info[constants.passage_date_entidx]
@@ -77,7 +78,7 @@ class DROPReader(DatasetReader):
 
             p_num_mens: List[Tuple[str, int, int]] = passage_info[constants.passage_num_mens]
             p_num_entidxs: List[int] = passage_info[constants.passage_num_entidx]
-            p_num_normvals: List[int] = passage_info[constants.passage_date_normalized_values]
+            p_num_normvals: List[int] = passage_info[constants.passage_num_normalized_values]
 
 
             for question_answer in passage_info[constants.qa_pairs]:
@@ -85,6 +86,7 @@ class DROPReader(DatasetReader):
                 original_ques_text = question_answer[constants.original_question]
                 question_text = question_answer[constants.question]
                 question_charidxs = question_answer[constants.question_charidxs]
+                question_len = question_answer["num_tokens"]
 
                 answer_type = question_answer[constants.answer_type]
                 answer_passage_spans = question_answer[constants.answer_passage_spans]
@@ -93,9 +95,11 @@ class DROPReader(DatasetReader):
                 instance = self.text_to_instance(question_text,
                                                  original_ques_text,
                                                  question_charidxs,
+                                                 question_len,
                                                  passage_text,
                                                  original_passage_text,
                                                  passage_charidxs,
+                                                 passage_len,
                                                  p_date_mens,
                                                  p_date_entidxs,
                                                  p_date_normvals,
@@ -127,9 +131,11 @@ class DROPReader(DatasetReader):
                          question_text: str,
                          original_ques_text: str,
                          question_charidxs: List[int],
+                         question_len: int,
                          passage_text: str,
                          original_passage_text: str,
                          passage_charidxs: List[int],
+                         passage_len: int,
                          p_date_mens: List[Tuple[str, Tuple[int, int], Tuple[int, int, int]]],
                          p_date_entidxs: List[int],
                          p_date_normvals: List[Tuple[int, int, int]],
@@ -146,7 +152,7 @@ class DROPReader(DatasetReader):
                          max_question_len: int = None,
                          drop_invalid: bool = False) -> Union[Instance, None]:
 
-        language = DropLanguage(None, None, None, None, None)
+        language = DropLanguage(None, None, None, None, None, None, None)
 
         production_rule_fields: List[Field] = []
         for production_rule in language.all_possible_productions():
@@ -157,9 +163,10 @@ class DROPReader(DatasetReader):
 
         # pylint: disable=arguments-differ
         passage_tokens = [Token(text=t, idx=t_charidx)
-                          for t, t_charidx in zip(passage_text.split(), passage_charidxs)]
+                          for t, t_charidx in zip(passage_text.split(' '), passage_charidxs)]
+
         question_tokens = [Token(text=t, idx=t_charidx)
-                           for t, t_charidx in zip(question_text.split(), question_charidxs)]
+                           for t, t_charidx in zip(question_text.split(' '), question_charidxs)]
 
         if max_passage_len is not None:
             passage_tokens = passage_tokens[: max_passage_len]
@@ -167,15 +174,11 @@ class DROPReader(DatasetReader):
             question_tokens = question_tokens[: max_question_len]
 
 
-        # print(f"Num: {p_num_mens}")
         passage_number_indices = [tokenidx for (_, tokenidx, _) in p_num_mens]
-        # print(f"NumEntIdxs: {p_num_entidxs}")
         passage_number_entidxs = p_num_entidxs
         passage_number_values = p_num_normvals
 
-        # print(f"Dates: {p_date_mens}")
         passage_date_spanidxs = [(x,y) for (_, (x,y), _) in p_date_mens]
-        # print(f"DateEntIdxs: {p_date_entidxs}")
         passage_date_entidxs = p_date_entidxs
         passage_date_values = p_date_normvals
 
@@ -187,51 +190,50 @@ class DROPReader(DatasetReader):
                        "answer_texts": answer_texts_for_evaluation,
                        "answer_passage_spans": answer_passage_spans,
                        "answer_question_spans": answer_question_spans}
+        additional_metadata = {
+            "original_passage": original_passage_text,
+            "original_question": original_ques_text,
+            "question_num_tokens": question_len,
+            "passage_num_tokens": passage_len,
+            # "original_numbers": numbers_in_passage,
+            "passage_id": passage_id,
+            "question_id": question_id,
+            "answer_annotation": answer_annotation
+            # "candidate_additions": candidate_additions,
+            # "candidate_subtractions": candidate_subtractions
+        }
 
-        # print(f"AnsPassage: {answer_passage_spans}")
-        # print(f"AnsQues: {answer_question_spans}")
-
-        return self.make_augmented_instance(question_tokens=question_tokens,
-                                            passage_tokens=passage_tokens,
-                                            token_indexers=self._token_indexers,
-                                            passage_number_indices=passage_number_indices,
-                                            passage_number_entidxs=passage_number_entidxs,
-                                            passage_number_values=passage_number_values,
-                                            passage_date_spanidxs=passage_date_spanidxs,
-                                            passage_date_entidxs=passage_date_entidxs,
-                                            passage_date_values=passage_date_values,
-                                            passage_text=original_passage_text,
-                                            answer_info=answer_info,
-                                            action_field=action_field,
-                                            # language_field=language_field,
-                                            additional_metadata={
-                                                "original_passage": original_passage_text,
-                                                "original_question": original_ques_text,
-                                                # "original_numbers": numbers_in_passage,
-                                                "passage_id": passage_id,
-                                                "question_id": question_id,
-                                                "answer_annotation": answer_annotation
-                                                # "candidate_additions": candidate_additions,
-                                                #"candidate_subtractions": candidate_subtractions
-                                            })
-
-    @staticmethod
-    def make_augmented_instance(question_tokens: List[Token],
-                                passage_tokens: List[Token],
-                                token_indexers: Dict[str, TokenIndexer],
-                                passage_number_indices: List[int],
-                                passage_number_entidxs: List[int],
-                                passage_number_values: List[int],
-                                passage_date_spanidxs: List[Tuple[int, int]],
-                                passage_date_entidxs: List[int],
-                                passage_date_values: List[Tuple[int, int, int]],
-                                passage_text: str,
-                                answer_info: Dict[str, Any] = None,
-                                action_field: ListField[ProductionRuleField] = None,
-                                # language_field: MetadataField = None,
-                                number_tokens: List[Token]=None,
-                                number_indices: List[int]=None,
-                                additional_metadata: Dict[str, Any] = None) -> Instance:
+    #     return self.make_augmented_instance(question_tokens=question_tokens,
+    #                                         passage_tokens=passage_tokens,
+    #                                         token_indexers=self._token_indexers,
+    #                                         passage_number_indices=passage_number_indices,
+    #                                         passage_number_entidxs=passage_number_entidxs,
+    #                                         passage_number_values=passage_number_values,
+    #                                         passage_date_spanidxs=passage_date_spanidxs,
+    #                                         passage_date_entidxs=passage_date_entidxs,
+    #                                         passage_date_values=passage_date_values,
+    #                                         passage_text=original_passage_text,
+    #                                         answer_info=answer_info,
+    #                                         action_field=action_field,
+    #                                         additional_metadata=additional_metadata)
+    #
+    # @staticmethod
+    # def make_augmented_instance(question_tokens: List[Token],
+    #                             passage_tokens: List[Token],
+    #                             token_indexers: Dict[str, TokenIndexer],
+    #                             passage_number_indices: List[int],
+    #                             passage_number_entidxs: List[int],
+    #                             passage_number_values: List[int],
+    #                             passage_date_spanidxs: List[Tuple[int, int]],
+    #                             passage_date_entidxs: List[int],
+    #                             passage_date_values: List[Tuple[int, int, int]],
+    #                             passage_text: str,
+    #                             answer_info: Dict[str, Any] = None,
+    #                             action_field: ListField[ProductionRuleField] = None,
+    #                             # language_field: MetadataField = None,
+    #                             number_tokens: List[Token]=None,
+    #                             number_indices: List[int]=None,
+    #                             additional_metadata: Dict[str, Any] = None) -> Instance:
         additional_metadata = additional_metadata or {}
         fields: Dict[str, Field] = {}
 
@@ -241,23 +243,46 @@ class DROPReader(DatasetReader):
         question_offsets = [(token.idx, token.idx + len(token.text)) for token in question_tokens]
 
         # This is separate so we can reference it later with a known type.
-        fields["passage"] = TextField(passage_tokens, token_indexers)
-        fields["question"] = TextField(question_tokens, token_indexers)
+        fields["passage"] = TextField(passage_tokens, self._token_indexers)
+        fields["question"] = TextField(question_tokens, self._token_indexers)
 
 
-        passage_number_index_fields = [IndexField(index, fields["passage"]) for index in passage_number_indices]
-        if not passage_number_index_fields:
-            passage_number_index_fields = [IndexField(-1, fields["passage"])]
-        fields["passage_number_indices"] = ListField(passage_number_index_fields)
-        fields["passage_number_entidxs"] = ArrayField(np.array(passage_number_entidxs), padding_value=-1)
+        # List of passage_len containing number_entidx for each token (-1 otherwise)
+        passage_number_idx2entidx = [-1 for _ in range(len(passage_tokens))]
+        for passage_num_idx, number_idx in zip(passage_number_indices, passage_number_entidxs):
+            passage_number_idx2entidx[passage_num_idx] = number_idx
+
+        fields["passageidx2numberidx"] = ArrayField(np.array(passage_number_idx2entidx), padding_value=-1)
         fields["passage_number_values"] = MetadataField(passage_number_values)
 
-        passage_date_spanfields = [SpanField(s, e, fields["passage"]) for (s,e) in passage_date_spanidxs]
-        if not passage_date_spanfields:
-            passage_date_spanfields = [SpanField(-1, -1, fields["passage"])]
-        fields["passage_date_spans"] = ListField(passage_date_spanfields)
-        fields["passage_date_entidxs"] = ArrayField(np.array(passage_date_entidxs), padding_value=-1)
-        fields["passage_date_values"] = MetadataField(passage_date_values)
+
+        if len(passage_date_spanidxs) == 0:
+            print("SKIPPING")
+            # return None
+
+        passage_date_idx2dateidx = [-1 for _ in range(len(passage_tokens))]
+        for passage_date_span, date_idx in zip(passage_date_spanidxs, passage_date_entidxs):
+            (s, e) = passage_date_span
+            passage_date_idx2dateidx[s:e+1] = [date_idx] * (e + 1 - s)
+        fields["passageidx2dateidx"] = ArrayField(np.array(passage_date_idx2dateidx), padding_value=-1)
+        passage_date_objs = [Date(day=d, month=m, year=y) for (d, m, y) in passage_date_values]
+        if len(passage_date_objs) == 0:
+            passage_date_objs.append(Date(day=-1, month=-1, year=-1))
+        fields["passage_date_values"] = MetadataField(passage_date_objs)
+
+        # passage_number_index_fields = [IndexField(index, fields["passage"]) for index in passage_number_indices]
+        # if not passage_number_index_fields:
+        #     passage_number_index_fields = [IndexField(-1, fields["passage"])]
+        # fields["passage_number_indices"] = ListField(passage_number_index_fields)
+        # fields["passage_number_entidxs"] = ArrayField(np.array(passage_number_entidxs), padding_value=-1)
+        # fields["passage_number_values"] = MetadataField(passage_number_values)
+
+        # passage_date_spanfields = [SpanField(s, e, fields["passage"]) for (s, e) in passage_date_spanidxs]
+        # if not passage_date_spanfields:
+        #     passage_date_spanfields = [SpanField(-1, -1, fields["passage"])]
+        # fields["passage_date_spans"] = ListField(passage_date_spanfields)
+        # fields["passage_date_entidxs"] = ArrayField(np.array(passage_date_entidxs), padding_value=-1)
+        # fields["passage_date_values"] = MetadataField(passage_date_values)
 
         # This field is actually not required in the model,
         # it is used to create the `answer_as_plus_minus_combinations` field, which is a `SequenceLabelField`.

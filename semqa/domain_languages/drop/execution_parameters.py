@@ -12,7 +12,9 @@ from allennlp.models.reading_comprehension.bidaf import BidirectionalAttentionFl
 from allennlp.modules.matrix_attention.dot_product_matrix_attention import DotProductMatrixAttention
 from allennlp.modules.matrix_attention.legacy_matrix_attention import LegacyMatrixAttention
 from allennlp.nn import InitializerApplicator, RegularizerApplicator
-from allennlp.modules.matrix_attention.matrix_attention import MatrixAttention
+from allennlp.modules.attention import Attention, DotProductAttention
+from allennlp.modules.matrix_attention import MatrixAttention, BilinearMatrixAttention, DotProductMatrixAttention
+
 from allennlp.models.decomposable_attention import DecomposableAttention
 from allennlp.nn.util import masked_softmax, weighted_sum
 from semqa.domain_languages.hotpotqa.decompatt import DecompAtt
@@ -24,7 +26,7 @@ class ExecutorParameters(torch.nn.Module, Registrable):
     def __init__(self,
                  num_highway_layers: int,
                  phrase_layer: Seq2SeqEncoder,
-                 matrix_attention_layer: Seq2SeqEncoder,
+                 matrix_attention_layer: MatrixAttention,
                  modeling_layer: Seq2SeqEncoder,
                  hidden_dim: int):
         super().__init__()
@@ -35,11 +37,16 @@ class ExecutorParameters(torch.nn.Module, Registrable):
         self._matrix_attention: MatrixAttention = matrix_attention_layer
         self._modeling_layer: Seq2SeqEncoder = modeling_layer
 
-        from allennlp.modules.attention.dot_product_attention import DotProductAttention
-        self.find_attention = DotProductAttention()
-
         passage_encoding_dim = self._phrase_layer.get_output_dim()
         question_encoding_dim = self._phrase_layer.get_output_dim()
+
+
+        self.find_attention: Attention = DotProductAttention()
+
+        # This computes a passage_to_passage attention, hopefully, for each token, putting a weight on date tokens
+        # that are related to it.
+        self.passage_to_date_attention: MatrixAttention = BilinearMatrixAttention(matrix_1_dim=passage_encoding_dim,
+                                                                                  matrix_2_dim=passage_encoding_dim)
 
         self.relocate_linear1 = torch.nn.Linear(passage_encoding_dim, hidden_dim)
         self.relocate_linear2 = torch.nn.Linear(hidden_dim, 1)

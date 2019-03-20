@@ -1,5 +1,5 @@
 import logging
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 import math
 
 from overrides import overrides
@@ -14,18 +14,17 @@ from allennlp.nn import Activation
 from allennlp.modules.matrix_attention.matrix_attention import MatrixAttention
 from allennlp.state_machines.states import GrammarBasedState
 import allennlp.nn.util as allenutil
-from allennlp.nn import InitializerApplicator
+from allennlp.nn import InitializerApplicator, RegularizerApplicator
 from allennlp.models.reading_comprehension.util import get_best_span
-
-from semqa.domain_languages.drop import DropLanguage, QuestionSpanAnswer, PassageSpanAnswer
-from semqa.models.drop.drop_parser_base import DROPParserBase
-from semqa.domain_languages.drop.execution_parameters import ExecutorParameters
 
 from semqa.state_machines.constrained_beam_search import ConstrainedBeamSearch
 from semqa.state_machines.transition_functions.linking_transition_func_emb import LinkingTransitionFunctionEmbeddings
 from allennlp.training.metrics import Average, DropEmAndF1
 from semqa.models.utils.bidaf_utils import PretrainedBidafModelUtils
 from semqa.models.utils import semparse_utils
+
+from semqa.models.drop.drop_parser_base import DROPParserBase
+from semqa.domain_languages.drop import DropLanguage, Date, ExecutorParameters, QuestionSpanAnswer, PassageSpanAnswer
 
 import datasets.drop.constants as dropconstants
 
@@ -61,7 +60,8 @@ class DROPSemanticParser(DROPParserBase):
                  dropout: float = 0.0,
                  text_field_embedder: TextFieldEmbedder = None,
                  debug: bool = False,
-                 initializers: InitializerApplicator = InitializerApplicator()) -> None:
+                 initializers: InitializerApplicator = InitializerApplicator(),
+                 regularizer: Optional[RegularizerApplicator] = None) -> None:
 
         if bidafutils is not None:
             _text_field_embedder = bidafutils._bidaf_model._text_field_embedder
@@ -79,7 +79,8 @@ class DROPSemanticParser(DROPParserBase):
         super(DROPSemanticParser, self).__init__(vocab=vocab,
                                                  action_embedding_dim=action_embedding_dim,
                                                  dropout=dropout,
-                                                 debug=debug)
+                                                 debug=debug,
+                                                 regularizer=regularizer)
 
 
         question_encoding_dim = phrase_layer.get_output_dim()
@@ -138,12 +139,14 @@ class DROPSemanticParser(DROPParserBase):
     def forward(self,
                 question: Dict[str, torch.LongTensor],
                 passage: Dict[str, torch.LongTensor],
-                passage_number_indices: torch.LongTensor,
-                passage_number_entidxs: torch.LongTensor,
-                passage_number_values: List[List[int]],
-                passage_date_spans: torch.LongTensor,
-                passage_date_entidxs: torch.LongTensor,
-                passage_date_values: List[List[Tuple[int, int, int]]],
+                passageidx2numberidx: torch.LongTensor,
+                passage_number_values: List[int],
+                passageidx2dateidx: torch.LongTensor,
+                passage_date_values: List[List[Date]],
+                # passage_number_indices: torch.LongTensor,
+                # passage_number_entidxs: torch.LongTensor,
+                # passage_date_spans: torch.LongTensor,
+                # passage_date_entidxs: torch.LongTensor,
                 actions: List[List[ProductionRule]],
                 answer_types: List[str] = None,
                 answer_as_passage_spans: torch.LongTensor = None,
@@ -196,6 +199,8 @@ class DROPSemanticParser(DROPParserBase):
                                   encoded_passage=passage_encoded_aslist[i],
                                   question_mask=question_mask_aslist[i],
                                   passage_mask=passage_mask_aslist[i],
+                                  passage_tokenidx2dateidx=passageidx2dateidx[i],
+                                  passage_date_values=passage_date_values[i],
                                   parameters=self._executor_parameters,
                                   start_types=batch_start_types[i]) for i in range(batch_size)]
 
@@ -267,10 +272,20 @@ class DROPSemanticParser(DROPParserBase):
                             denotation: QuestionSpanAnswer = denotation
                             log_likelihood = self._get_span_answer_log_prob(answer_as_spans=answer_as_question_spans[i],
                                                                             span_log_probs=denotation._value)
+                            if torch.isnan(log_likelihood) == 1:
+                                print("\nQuestionSpan")
+                                print(denotation.start_logits)
+                                print(denotation.end_logits)
+                                print(denotation._value)
                         elif progtype == "PassageSpanAnswer":
                             denotation: PassageSpanAnswer = denotation
                             log_likelihood = self._get_span_answer_log_prob(answer_as_spans=answer_as_passage_spans[i],
                                                                             span_log_probs=denotation._value)
+                            if torch.isnan(log_likelihood) == 1:
+                                print("\nPassageSpan")
+                                print(denotation.start_logits)
+                                print(denotation.end_logits)
+                                print(denotation._value)
                         else:
                             raise NotImplementedError
 
@@ -297,12 +312,18 @@ class DROPSemanticParser(DROPParserBase):
             batch_passage_token_offsets = [metadata[i]["passage_token_offsets"] for i in range(batch_size)]
             batch_question_token_offsets = [metadata[i]["question_token_offsets"] for i in range(batch_size)]
             answer_annotations = [metadata[i]["answer_annotation"] for i in range(batch_size)]
+            question_num_tokens = [metadata[i]["question_num_tokens"] for i in range(batch_size)]
+            passage_num_tokens = [metadata[i]["passage_num_tokens"] for i in range(batch_size)]
             (batch_best_spans, batch_predicted_answers) = self._get_best_spans(batch_denotations,
                                                                                batch_denotation_types,
                                                                                batch_question_token_offsets,
                                                                                batch_question_strs,
                                                                                batch_passage_token_offsets,
-                                                                               batch_passage_strs)
+                                                                               batch_passage_strs,
+                                                                               question_num_tokens,
+                                                                               passage_num_tokens,
+                                                                               question_mask_aslist,
+                                                                               passage_mask_aslist)
             predicted_answers = [batch_predicted_answers[i][0] for i in range(batch_size)]
 
 
@@ -403,7 +424,7 @@ class DROPSemanticParser(DROPParserBase):
 
     @staticmethod
     def _get_best_spans(batch_denotations, batch_denotation_types,
-                        question_char_offsets, question_str, passage_char_offsets, passage_str):
+                        question_char_offsets, question_strs, passage_char_offsets, passage_strs, *args):
         """ For all SpanType denotations, get the best span
 
         Parameters:
@@ -411,6 +432,8 @@ class DROPSemanticParser(DROPParserBase):
         batch_denotations: List[List[Any]]
         batch_denotation_types: List[List[str]]
         """
+
+        (question_num_tokens, passage_num_tokens, question_mask_aslist, passage_mask_aslist) = args
 
         batch_best_spans = []
         batch_predicted_answers = []
@@ -426,7 +449,6 @@ class DROPSemanticParser(DROPParserBase):
                 # if progtype == "QuestionSpanAnswwer":
                 # Distinction between QuestionSpanAnswer and PassageSpanAnswer is not needed currently,
                 # since both classes store the start/end logits as a tuple
-                denotation: QuestionSpanAnswer = denotation
                 # Shape: (2, )
                 best_span = get_best_span(span_end_logits=denotation._value[0].unsqueeze(0),
                                           span_start_logits=denotation._value[1].unsqueeze(0)).squeeze(0)
@@ -437,21 +459,29 @@ class DROPSemanticParser(DROPParserBase):
                     try:
                         start_offset = question_char_offsets[instance_idx][predicted_span[0]][0]
                         end_offset = question_char_offsets[instance_idx][predicted_span[1]][1]
-                        predicted_answer = question_str[instance_idx][start_offset:end_offset]
+                        predicted_answer = question_strs[instance_idx][start_offset:end_offset]
                     except:
+                        print()
                         print(f"PredictedSpan: {predicted_span}")
-                        print(f"LenofOffsets: {question_char_offsets[instance_idx]}")
-                        print(f"QuesStrLen: {len(question_str[instance_idx])}")
+                        print(f"Question numtoksn: {question_num_tokens[instance_idx]}")
+                        print(f"QuesMaskLen: {question_mask_aslist[instance_idx].size()}")
+                        print(f"StartLogProbs:{denotation._value[0]}")
+                        print(f"EndLogProbs:{denotation._value[1]}")
+                        print(f"LenofOffsets: {len(question_char_offsets[instance_idx])}")
+                        print(f"QuesStrLen: {len(question_strs[instance_idx])}")
 
                 elif progtype == "PassageSpanAnswer":
                     try:
                         start_offset = passage_char_offsets[instance_idx][predicted_span[0]][0]
                         end_offset = passage_char_offsets[instance_idx][predicted_span[1]][1]
-                        predicted_answer = passage_str[instance_idx][start_offset:end_offset]
+                        predicted_answer = passage_strs[instance_idx][start_offset:end_offset]
                     except:
+                        print()
                         print(f"PredictedSpan: {predicted_span}")
-                        print(f"LenofOffsets: {passage_char_offsets[instance_idx]}")
-                        print(f"QuesStrLen: {len(passage_str[instance_idx])}")
+                        print(f"Passagenumtoksn: {passage_num_tokens[instance_idx]}")
+                        print(f"PassageMaskLen: {passage_mask_aslist[instance_idx].size()}")
+                        print(f"LenofOffsets: {len(passage_char_offsets[instance_idx])}")
+                        print(f"PassageStrLen: {len(passage_strs[instance_idx])}")
                 else:
                     raise NotImplementedError
 

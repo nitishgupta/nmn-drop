@@ -204,8 +204,6 @@ local compareff_inputdim =
     ,
     "action_embedding_dim": 100,
 
-
-
     "decoder_beam_search": {
       "beam_size": utils.parse_number(std.extVar("BEAMSIZE")),
     },
@@ -227,7 +225,16 @@ local compareff_inputdim =
           ]
       ]
       else
-      []
+      [],
+    "regularizer": [
+      [
+          ".*",
+          {
+              "type": "l2",
+              "alpha": 1e-04
+          }
+      ]
+    ],
   },
 
   "iterator": {

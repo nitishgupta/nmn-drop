@@ -9,6 +9,7 @@ import argparse
 from collections import defaultdict
 from typing import List, Tuple, Dict, Union
 
+from allennlp.data.tokenizers import Token
 from utils import util, spacyutils
 from datasets.drop import constants
 from datasets.drop.preprocess import ner_process
@@ -19,15 +20,55 @@ IGNORED_TOKENS = {'a', 'an', 'the'}
 STRIPPED_CHARACTERS = string.punctuation + ''.join([u"‘", u"’", u"´", u"`", "_"])
 
 spacy_nlp = spacyutils.getSpacyNLP()
+spacy_whitespacetokenizer = spacyutils.getWhiteTokenizerSpacyNLP()
 
 ANSWER_TYPE_NOT_FOUND = 0
+#
+# def split_on_hyphens(text: str):
+#     """ Adds spaces around hyphens in text. """
+#     text = util.pruneMultipleSpaces(" - ".join(text.split("-")))
+#     text = util.pruneMultipleSpaces(" – ".join(text.split("–")))
+#     text = util.pruneMultipleSpaces(" ~ ".join(text.split("~")))
+#     return text
 
-def split_on_hyphens(text: str):
-    """ Adds spaces around hyphens in text. """
-    text = util.pruneMultipleSpaces(" - ".join(text.split("-")))
-    text = util.pruneMultipleSpaces(" – ".join(text.split("–")))
-    text = util.pruneMultipleSpaces(" ~ ".join(text.split("~")))
-    return text
+
+def split_token_by_delimiter(token: Token, delimiter: str) -> List[Token]:
+    split_tokens = []
+    char_offset = token.idx
+    for sub_str in token.text.split(delimiter):
+        if sub_str:
+            split_tokens.append(Token(text=sub_str, idx=char_offset))
+            char_offset += len(sub_str)
+        split_tokens.append(Token(text=delimiter, idx=char_offset))
+        char_offset += len(delimiter)
+    if split_tokens:
+        split_tokens.pop(-1)
+        char_offset -= len(delimiter)
+        return split_tokens
+    else:
+        return [token]
+
+
+def split_tokens_by_hyphen(tokens: List[Token]) -> List[Token]:
+    hyphens = ["-", "–", "~"]
+    new_tokens: List[Token] = []
+
+    for token in tokens:
+        if any(hyphen in token.text for hyphen in hyphens):
+            unsplit_tokens = [token]
+            split_tokens: List[Token] = []
+            for hyphen in hyphens:
+                for unsplit_token in unsplit_tokens:
+                    if hyphen in token.text:
+                        split_tokens += split_token_by_delimiter(unsplit_token, hyphen)
+                    else:
+                        split_tokens.append(unsplit_token)
+                unsplit_tokens, split_tokens = split_tokens, []
+            new_tokens += unsplit_tokens
+        else:
+            new_tokens.append(token)
+
+    return new_tokens
 
 
 def grouper(n, iterable, padvalue=None):
@@ -39,6 +80,7 @@ def grouper(n, iterable, padvalue=None):
 
 
 def _check_validity_of_spans(spans: List[Tuple[int, int]], len_seq: int):
+    """All spans are inclusive start and end"""
     for span in spans:
         assert span[0] >= 0
         assert span[1] < len_seq
@@ -123,21 +165,34 @@ def processPassage(input_args):
 
     original_passage_text: str = passage_info[constants.passage].strip()
     original_passage_text = unicodedata.normalize("NFKD", original_passage_text)
-    passage_text = split_on_hyphens(original_passage_text)
+    original_passage_text = util.pruneMultipleSpaces(original_passage_text)
+    passage_spacydoc = spacyutils.getSpacyDoc(original_passage_text, spacy_nlp)
+    passage_tokens = [t for t in passage_spacydoc]
+    passage_tokens = split_tokens_by_hyphen(passage_tokens)
 
-    passage_spacydoc = spacyutils.getSpacyDoc(passage_text, spacy_nlp)
-    passage_tokens = [token.text for token in passage_spacydoc]
-    passage_token_charidxs = [token.idx for token in passage_spacydoc]
-    new_passage_info[constants.passage] = ' '.join(passage_tokens)
+    passage_token_charidxs = [token.idx for token in passage_tokens]
+    passage_token_texts = [t.text for t in passage_tokens]
+
+    new_passage_info[constants.passage] = ' '.join(passage_token_texts)
     new_passage_info[constants.original_passage] = original_passage_text
     new_passage_info[constants.passage_charidxs] = passage_token_charidxs
+    new_passage_info["num_tokens"] = len(passage_tokens)
 
-    passage_ners = spacyutils.getNER(passage_spacydoc)
+    # Remaking the doc for running NER on new tokenization
+    new_passage_doc = spacyutils.getSpacyDoc(' '.join(passage_token_texts), spacy_whitespacetokenizer)
+
+    assert len(passage_tokens) == len(' '.join(passage_token_texts).split(' '))
+    assert len(new_passage_doc) == len(passage_tokens)
+
+    passage_ners = spacyutils.getNER(new_passage_doc)
 
     (parsed_dates, normalized_date_idxs,
      normalized_date_values, num_date_entities) = ner_process.parseDateNERS(passage_ners)
+
+    _check_validity_of_spans(spans=[(s,e) for _, (s,e), _ in parsed_dates], len_seq=len(passage_tokens))
+
     (parsed_nums, normalized_num_idxs,
-     normalized_number_values, num_num_entities) = ner_process.parseNumNERS(passage_ners, passage_tokens)
+     normalized_number_values, num_num_entities) = ner_process.parseNumNERS(passage_ners, passage_token_texts)
 
     new_passage_info[constants.passage_date_mens] = parsed_dates
     new_passage_info[constants.passage_date_entidx] = normalized_date_idxs
@@ -157,20 +212,29 @@ def processPassage(input_args):
         new_qa[constants.query_id] = query_id
         original_question: str = qa[constants.question].strip()
         original_question = unicodedata.normalize("NFKD", original_question)
-        question = split_on_hyphens(original_question)
+        original_question = util.pruneMultipleSpaces(original_question)
 
-        q_spacydoc = spacyutils.getSpacyDoc(question, spacy_nlp)
-        question_tokens: List[str] = [token.text for token in q_spacydoc]
-        question_token_charidxs = [token.idx for token in q_spacydoc]
-        new_qa[constants.question] = ' '.join(question_tokens)
+        q_spacydoc = spacyutils.getSpacyDoc(original_question, spacy_nlp)
+        question_tokens = [t for t in q_spacydoc]
+        question_tokens = split_tokens_by_hyphen(question_tokens)
+        question_token_charidxs = [token.idx for token in question_tokens]
+        question_token_texts = [t.text for t in question_tokens]
+
+        new_qa[constants.question] = ' '.join(question_token_texts)
         new_qa[constants.original_question] = original_question
         new_qa[constants.question_charidxs] = question_token_charidxs
+        new_qa["num_tokens"] = len(question_tokens)
 
-        q_ners = spacyutils.getNER(q_spacydoc)
+        # Remaking the doc for running NER on new tokenization
+        new_question_doc = spacyutils.getSpacyDoc(' '.join(question_token_texts), spacy_whitespacetokenizer)
+        assert len(new_question_doc) == len(question_tokens)
+
+        q_ners = spacyutils.getNER(new_question_doc)
         (parsed_dates, normalized_date_idxs,
          normalized_date_values, num_date_entities) = ner_process.parseDateNERS(q_ners)
+        _check_validity_of_spans(spans=[(s, e) for _, (s, e), _ in parsed_dates], len_seq=len(question_tokens))
         (parsed_nums, normalized_num_idxs,
-         normalized_number_values, num_num_entities) = ner_process.parseNumNERS(q_ners, question_tokens)
+         normalized_number_values, num_num_entities) = ner_process.parseNumNERS(q_ners, question_token_texts)
 
         new_qa[constants.q_date_mens] = parsed_dates
         new_qa[constants.q_date_entidx] = normalized_date_idxs
@@ -195,17 +259,18 @@ def processPassage(input_args):
         tokenized_answer_texts = []
         for answer_text in answer_texts:
             answer_text = unicodedata.normalize("NFKD", answer_text)
-            answer_text = split_on_hyphens(answer_text)
+            answer_text = util.pruneMultipleSpaces(answer_text)
             answer_spacydoc = spacyutils.getSpacyDoc(answer_text, spacy_nlp)
-            answer_tokens = spacyutils.getTokens(answer_spacydoc)
-            tokenized_answer_texts.append(' '.join(answer_tokens))
+            answer_tokens = [t for t in answer_spacydoc]
+            answer_tokens = split_tokens_by_hyphen(answer_tokens)
+            answer_token_texts = [t.text for t in answer_tokens]
+            tokenized_answer_texts.append(' '.join(answer_token_texts))
 
         valid_passage_spans = \
-            find_valid_spans(passage_tokens, tokenized_answer_texts) if tokenized_answer_texts else []
+            find_valid_spans(passage_token_texts, tokenized_answer_texts) if tokenized_answer_texts else []
         valid_question_spans = \
-            find_valid_spans(question_tokens, tokenized_answer_texts) if tokenized_answer_texts else []
+            find_valid_spans(question_token_texts, tokenized_answer_texts) if tokenized_answer_texts else []
 
-        _check_validity_of_spans(valid_passage_spans, len(passage_tokens))
         _check_validity_of_spans(valid_question_spans, len(question_tokens))
 
         new_qa[constants.answer_passage_spans] = valid_passage_spans

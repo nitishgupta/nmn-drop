@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, List, Tuple, Any, TypeVar
+from typing import Dict, List, Tuple, Any, TypeVar, Optional
 
 from overrides import overrides
 
@@ -14,7 +14,7 @@ from allennlp.state_machines.states import GrammarBasedState, GrammarStatelet, R
 from allennlp.training.metrics import Average
 from allennlp.modules.span_extractors.span_extractor import SpanExtractor
 import allennlp.common.util as alcommon_utils
-import allennlp.nn.util as allenutil
+from allennlp.nn import InitializerApplicator, RegularizerApplicator
 
 import semqa.domain_languages.domain_language_utils as dl_utils
 from semqa.domain_languages.drop.execution_parameters import ExecutorParameters
@@ -34,8 +34,9 @@ class DROPParserBase(Model):
                  text_field_embedder: TextFieldEmbedder = None,
                  dropout: float = 0.0,
                  rule_namespace: str = 'rule_labels',
-                 debug: bool=False) -> None:
-        super(DROPParserBase, self).__init__(vocab=vocab)
+                 debug: bool=False,
+                 regularizer: Optional[RegularizerApplicator] = None) -> None:
+        super(DROPParserBase, self).__init__(vocab=vocab, regularizer=regularizer)
 
         self._denotation_accuracy = Average()
         self._consistency = Average()
