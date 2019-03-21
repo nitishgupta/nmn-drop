@@ -171,72 +171,62 @@ class DropLanguage(DomainLanguage):
     def find_QuestionAttention(self, question_attention: Tensor) -> QuestionAttention:
         return QuestionAttention(question_attention)
 
-
-    @predicate
-    def compare_date_greater_than(self, ques_attn1: QuestionAttention, ques_attn2: QuestionAttention) -> PassageAttention:
-        def get_passage_attention(find_attention_module, encoded_question, question_attention,
-                                  encoded_passage, passage_mask):
-            ''' For a given question attention compute the passage attention '''
-            attended_question = allenutil.weighted_sum(encoded_question.unsqueeze(0),
-                                                       question_attention.unsqueeze(0))
-
-            # Shape: (passage_length)
-            passage_attention = find_attention_module(attended_question, encoded_passage.unsqueeze(0),
-                                                      passage_mask.unsqueeze(0)).squeeze(0)
-
-            return passage_attention
-
-
-        def compute_date_scores(passage_passage_token2date_attention, passage_attention, num_passage_dates,
-                                passage_tokenidx2dateidx):
-
-            ''' Given a passage over passage token2date attention, and an additionalpassage attention for token
-                importance, compute a distribution over normalized dates in the passage.
-
-                Idea is to weigh the token distributions (for dates) according to the passage_attention, and then
-                use these values as scores for the dates they refer to. Since each date can be referred to in
-                multiple places, we use scatter_add_ to get the total_score. Softmax over these scores is the date dist.
-            '''
-
-            # Shape: (passage_length, ) -- indicating which tokens are dates
-            passage_tokenidx2dateidx_mask = (passage_tokenidx2dateidx > -1)
-
-            # Shape: (passage_length, passage_length) -- weighing each token2date distribution by the token attention
-            passage_passage_tokendate_attention = passage_passage_token2date_attention * \
-                                                    passage_attention.unsqueeze(1)
-
-            # Shape: (passage_length, ) -- weighted average of distributions in above step
-            # Attention value for each passage token to be a date associated to the query
-            passage_datetoken_attention = passage_passage_tokendate_attention.sum(0)
-
-            masked_passage_tokenidx2dateidx = passage_tokenidx2dateidx_mask.long() * passage_tokenidx2dateidx
-            masked_passage_datetoken_attn = passage_tokenidx2dateidx_mask.float() * passage_datetoken_attention
-
-            # Shape: (num_passage_dates, )
-            # These will store the total attention value from each passage token for each normalized_date
-            date_scores = passage_attention.new_zeros(num_passage_dates)
-
-            date_scores.scatter_add_(0, masked_passage_tokenidx2dateidx, masked_passage_datetoken_attn)
-
-            date_distribution = allenutil.masked_softmax(date_scores, mask=None)
-
-            return date_distribution, date_scores
-
-        qattn1 = ques_attn1._value * self.question_mask
-        qattn2 = ques_attn2._value * self.question_mask
+    @predicate_with_side_args(['question_attention'])
+    def get_passage_attention(self, question_attention: Tensor) -> PassageAttention:
+        ''' For a given question attention compute the passage attention '''
+        attended_question = allenutil.weighted_sum(self.encoded_question.unsqueeze(0),
+                                                   question_attention.unsqueeze(0))
 
         # Shape: (passage_length)
-        passage_attention_1 = get_passage_attention(self.parameters.find_attention,
-                                                    self.encoded_question,
-                                                    qattn1,
-                                                    self.encoded_passage,
-                                                    self.passage_mask)
+        passage_attention = self.parameters.find_attention(attended_question, self.encoded_passage.unsqueeze(0),
+                                                           self.passage_mask.unsqueeze(0)).squeeze(0)
 
-        passage_attention_2 = get_passage_attention(self.parameters.find_attention,
-                                                    self.encoded_question,
-                                                    qattn2,
-                                                    self.encoded_passage,
-                                                    self.passage_mask)
+        return PassageAttention(passage_attention)
+
+
+    @staticmethod
+    def compute_date_scores(passage_passage_token2date_attention, passage_attention, num_passage_dates,
+                            passage_tokenidx2dateidx):
+        ''' Given a passage over passage token2date attention (normalized), and an additional passage attention
+            for token importance, compute a distribution over (unique) dates in the passage.
+
+            Using the token_attention from the passage_attention, find the expected input_token2date_token
+            distribution - weigh each row in passage_passage_token2date_attention and sum
+            Use this date_token attention as scores for the dates they refer to. Since each date can be referred
+            to in multiple places, we use scatter_add_ to get the total_score.
+            Softmax over these scores is the date dist.
+        '''
+
+        # Shape: (passage_length, passage_length) - weighing each token2date distribution (row) by the token attn
+        passage_passage_tokendate_attention = passage_passage_token2date_attention * \
+                                              passage_attention.unsqueeze(1)
+
+        # Shape: (passage_length, ) -- weighted average of distributions in above step
+        # Attention value for each passage token to be a date associated to the query
+        passage_datetoken_attention = passage_passage_tokendate_attention.sum(0)
+
+        # Shape: (passage_length, ) -- indicating which tokens are dates
+        passage_tokenidx2dateidx_mask = (passage_tokenidx2dateidx > -1)
+
+        masked_passage_tokenidx2dateidx = passage_tokenidx2dateidx_mask.long() * passage_tokenidx2dateidx
+        masked_passage_datetoken_attn = passage_tokenidx2dateidx_mask.float() * passage_datetoken_attention
+
+        # Shape: (num_passage_dates, )
+        # These will store the total attention value from each passage token for each normalized_date
+        date_scores = passage_attention.new_zeros(num_passage_dates)
+
+        date_scores.scatter_add_(0, masked_passage_tokenidx2dateidx, masked_passage_datetoken_attn)
+
+        date_distribution = allenutil.masked_softmax(date_scores, mask=None)
+
+        return date_distribution, date_scores
+
+    @predicate
+    def compare_date_greater_than(self, passage_attn_1: PassageAttention, passage_attn_2: PassageAttention) -> PassageAttention:
+
+        # Shape: (passage_length)
+        passage_attention_1 = passage_attn_1._value * self.passage_mask
+        passage_attention_2 = passage_attn_2._value * self.passage_mask
 
         # Shape: (passage_length, passage_length) - for each token x in the row, weight given by it to each token y in
         # the column for y to be a date associated to x
@@ -249,15 +239,15 @@ class DropLanguage(DomainLanguage):
         passage_passage_token2date_attention = allenutil.masked_softmax(passage_passage_token2date_similarity,
                                                                         mask=self.passage_mask)
 
-        date_scores_1, date_distribution_1 = compute_date_scores(passage_passage_token2date_attention,
-                                                                 passage_attention_1,
-                                                                 self.num_passage_dates,
-                                                                 self.passage_tokenidx2dateidx)
+        date_scores_1, date_distribution_1 = self.compute_date_scores(passage_passage_token2date_attention,
+                                                                      passage_attention_1,
+                                                                      self.num_passage_dates,
+                                                                      self.passage_tokenidx2dateidx)
 
-        date_scores_2, date_distribution_2 = compute_date_scores(passage_passage_token2date_attention,
-                                                                 passage_attention_2,
-                                                                 self.num_passage_dates,
-                                                                 self.passage_tokenidx2dateidx)
+        date_scores_2, date_distribution_2 = self.compute_date_scores(passage_passage_token2date_attention,
+                                                                      passage_attention_2,
+                                                                      self.num_passage_dates,
+                                                                      self.passage_tokenidx2dateidx)
 
 
         # TODO(nitish): Not implemented after this
