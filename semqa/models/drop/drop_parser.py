@@ -299,16 +299,22 @@ class DROPSemanticParser(DROPParserBase):
                     instance_denotation_log_likelihoods = torch.stack(instance_log_likelihood_list, dim=-1)
                     instance_progs_log_probs = torch.stack(instance_progs_logprob_list, dim=-1)
 
+                    print()
+                    print(f"IsstanceDenoLogProb:{instance_log_likelihood_list}")
+                    print(f"InstanceProgLogProb:{instance_progs_log_probs}")
+
                     allprogs_log_marginal_likelihoods = instance_denotation_log_likelihoods + instance_progs_log_probs
                     instance_marginal_log_likelihood = allenutil.logsumexp(allprogs_log_marginal_likelihoods)
+                    print(f"InstanceMarginalLogLike:{instance_marginal_log_likelihood}")
 
                     loss += -1.0*instance_marginal_log_likelihood
                 else:
                     raise NotImplementedError
+            print(f"Loss: {loss}")
+            batch_loss = loss / batch_size
+            print(f"BatchLoss: {batch_loss}")
 
-            loss = loss / batch_size
-
-            output_dict["loss"] = loss
+            output_dict["loss"] = batch_loss
 
         if metadata is not None:
             batch_question_strs = [metadata[i]["original_question"] for i in range(batch_size)]

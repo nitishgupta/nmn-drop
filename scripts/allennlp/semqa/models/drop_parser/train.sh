@@ -35,12 +35,12 @@ export ATTCOVLOSS=false
 export PTREX=false
 # export PTRWTS="./resources/semqa/checkpoints/hpqa/b_wsame/hpqa_parser/BS_4/OPT_adam/LR_0.001/Drop_0.2/TOKENS_glove/FUNC_snli/SIDEARG_true/GOLDAC_true/AUXGPLOSS_false/QENTLOSS_false/ATTCOV_false/PTREX_false/best.th"
 
-export BS=1
+export BS=8
 export LR=0.001
 export OPT=adam
 export DROPOUT=0.2
 
-export BEAMSIZE=4
+export BEAMSIZE=10
 export MAX_DECODE_STEP=8
 export EPOCHS=30
 
@@ -50,7 +50,7 @@ SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/date_num
 MODEL_DIR=drop_parser
 PARAMETERS_DIR1=BS_${BS}/OPT_${OPT}/LR_${LR}/Drop_${DROPOUT}/TOKENS_${TOKENIDX}/GOLDAC_${GOLDACTIONS}
 PARAMETERS_DIR2=AUXGPLOSS_${AUXGPLOSS}/ATTCOV_${ATTCOVLOSS}/PTREX_${PTREX}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PARAMETERS_DIR1}/${PARAMETERS_DIR2}
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PARAMETERS_DIR1}/${PARAMETERS_DIR2}_tet
 
 #######################################################################################################################
 
