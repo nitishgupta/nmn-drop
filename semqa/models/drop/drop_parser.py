@@ -254,6 +254,10 @@ class DROPSemanticParser(DROPParserBase):
                                                                           languages,
                                                                           batch_actionseq_sideargs)
 
+        # for i in range(len(batch_actionseqs)):
+        #     for acseq in batch_actionseqs[i]:
+        #         print(languages[i].action_sequence_to_logical_form(acseq))
+
         output_dict = {}
         ''' Computing losses if gold answers are given '''
         if answer_types is not None:

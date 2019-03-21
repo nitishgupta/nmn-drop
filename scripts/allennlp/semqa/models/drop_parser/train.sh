@@ -41,7 +41,7 @@ export OPT=adam
 export DROPOUT=0.2
 
 export BEAMSIZE=4
-export MAX_DECODE_STEP=12
+export MAX_DECODE_STEP=8
 export EPOCHS=30
 
 ####    SERIALIZATION DIR --- Check for checkpoint_root/task/dataset/model/parameters/
