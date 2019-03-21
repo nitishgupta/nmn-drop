@@ -255,7 +255,6 @@ class DROPReader(DatasetReader):
         fields["passageidx2numberidx"] = ArrayField(np.array(passage_number_idx2entidx), padding_value=-1)
         fields["passage_number_values"] = MetadataField(passage_number_values)
 
-
         if len(passage_date_spanidxs) == 0:
             print("SKIPPING")
             # return None
@@ -310,12 +309,16 @@ class DROPReader(DatasetReader):
                 [SpanField(span[0], span[1], fields["passage"]) for span in answer_info["answer_passage_spans"]]
             if not passage_span_fields:
                 passage_span_fields.append(SpanField(-1, -1, fields["passage"]))
+                # TODO(nitish): Only using questions which have PassageSpan as answers
+                return None
+
             fields["answer_as_passage_spans"] = ListField(passage_span_fields)
 
             question_span_fields = \
                 [SpanField(span[0], span[1], fields["question"]) for span in answer_info["answer_question_spans"]]
             if not question_span_fields:
                 question_span_fields.append(SpanField(-1, -1, fields["question"]))
+
             fields["answer_as_question_spans"] = ListField(question_span_fields)
 
             ''' Not dealing with arithmetic at the moment '''

@@ -1,6 +1,7 @@
 import logging
-from typing import List, Dict, Any, Tuple, Optional
+from typing import List, Dict, Any, Tuple, Optional, Set
 import math
+import copy
 
 from overrides import overrides
 
@@ -27,6 +28,7 @@ from semqa.models.drop.drop_parser_base import DROPParserBase
 from semqa.domain_languages.drop import DropLanguage, Date, ExecutorParameters, QuestionSpanAnswer, PassageSpanAnswer
 
 import datasets.drop.constants as dropconstants
+import utils.util as myutils
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -129,8 +131,11 @@ class DROPSemanticParser(DROPParserBase):
                                                        modeling_layer=modeling_layer,
                                                        hidden_dim=200)
 
+        self.modelloss_metric = Average()
         self._drop_metrics = DropEmAndF1()
         initializers(self)
+
+        self.model_loss = None
 
     def device_id(self):
         allenutil.get_device_of()
@@ -189,9 +194,12 @@ class DROPSemanticParser(DROPParserBase):
 
         # Based on the gold answer - figure out possible start types for the instance_language
         if answer_as_passage_spans is not None:
-            batch_start_types = self.find_valid_start_states(answer_as_question_spans=answer_as_question_spans,
-                                                             answer_as_passage_spans=answer_as_passage_spans,
-                                                             batch_size=batch_size)
+            # batch_start_types = self.find_valid_start_states(answer_as_question_spans=answer_as_question_spans,
+            #                                                  answer_as_passage_spans=answer_as_passage_spans,
+            #                                                  batch_size=batch_size)
+
+            # TODO(nitish): Only making programs which have PassageSpan as answers
+            batch_start_types = [set([PassageSpanAnswer]) for _ in range(batch_size)]
         else:
             batch_start_types = [None for _ in range(batch_size)]
 
@@ -249,14 +257,17 @@ class DROPSemanticParser(DROPParserBase):
                                                                                     possible_actions=actions,
                                                                                     batch_size=batch_size)
 
+        # # For printing predicted - programs
+        # for idx, instance_progs in enumerate(batch_actionseqs):
+        #     print(f"InstanceIdx:{idx}")
+        #     for prog in instance_progs:
+        #         print(languages[idx].action_sequence_to_logical_form(prog))
+        #     print("\n")
+
         # List[List[Any]], List[List[str]]: Denotations and their types for all instances
         batch_denotations, batch_denotation_types = self._get_denotations(batch_actionseqs,
                                                                           languages,
                                                                           batch_actionseq_sideargs)
-
-        # for i in range(len(batch_actionseqs)):
-        #     for acseq in batch_actionseqs[i]:
-        #         print(languages[i].action_sequence_to_logical_form(acseq))
 
         output_dict = {}
         ''' Computing losses if gold answers are given '''
@@ -299,21 +310,15 @@ class DROPSemanticParser(DROPParserBase):
                     instance_denotation_log_likelihoods = torch.stack(instance_log_likelihood_list, dim=-1)
                     instance_progs_log_probs = torch.stack(instance_progs_logprob_list, dim=-1)
 
-                    print()
-                    print(f"IsstanceDenoLogProb:{instance_log_likelihood_list}")
-                    print(f"InstanceProgLogProb:{instance_progs_log_probs}")
-
                     allprogs_log_marginal_likelihoods = instance_denotation_log_likelihoods + instance_progs_log_probs
                     instance_marginal_log_likelihood = allenutil.logsumexp(allprogs_log_marginal_likelihoods)
-                    print(f"InstanceMarginalLogLike:{instance_marginal_log_likelihood}")
 
-                    loss += -1.0*instance_marginal_log_likelihood
+                    loss += -1.0 * instance_marginal_log_likelihood
                 else:
                     raise NotImplementedError
-            print(f"Loss: {loss}")
-            batch_loss = loss / batch_size
-            print(f"BatchLoss: {batch_loss}")
 
+            batch_loss = loss / batch_size
+            self.modelloss_metric(myutils.tocpuNPList(batch_loss)[0])
             output_dict["loss"] = batch_loss
 
         if metadata is not None:
@@ -345,8 +350,12 @@ class DROPSemanticParser(DROPParserBase):
 
 
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
+        metric_dict = {}
+        model_loss = self.modelloss_metric.get_metric(reset)
         exact_match, f1_score = self._drop_metrics.get_metric(reset)
-        return {'em': exact_match, 'f1': f1_score}
+        metric_dict.update({'em': exact_match, 'f1': f1_score, 'model_loss': model_loss})
+
+        return metric_dict
 
 
 
@@ -405,7 +414,7 @@ class DROPSemanticParser(DROPParserBase):
     @staticmethod
     def find_valid_start_states(answer_as_question_spans: torch.LongTensor,
                                 answer_as_passage_spans: torch.LongTensor,
-                                batch_size: int):
+                                batch_size: int) -> List[Set[Any]]:
         """ Firgure out valid start types based on gold answers
             If answer as question (passage) span exist, QuestionSpanAnswer (PassageSpanAnswer) are valid start types
 
