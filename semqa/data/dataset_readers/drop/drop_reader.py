@@ -255,8 +255,8 @@ class DROPReader(DatasetReader):
         fields["passageidx2numberidx"] = ArrayField(np.array(passage_number_idx2entidx), padding_value=-1)
         fields["passage_number_values"] = MetadataField(passage_number_values)
 
-        if len(passage_date_spanidxs) == 0:
-            print("SKIPPING")
+        # if len(passage_date_spanidxs) == 0:
+        #     print("SKIPPING")
             # return None
 
         passage_date_idx2dateidx = [-1 for _ in range(len(passage_tokens))]
@@ -309,8 +309,6 @@ class DROPReader(DatasetReader):
                 [SpanField(span[0], span[1], fields["passage"]) for span in answer_info["answer_passage_spans"]]
             if not passage_span_fields:
                 passage_span_fields.append(SpanField(-1, -1, fields["passage"]))
-                # TODO(nitish): Only using questions which have PassageSpan as answers
-                return None
 
             fields["answer_as_passage_spans"] = ListField(passage_span_fields)
 
@@ -336,7 +334,16 @@ class DROPReader(DatasetReader):
             #     count_fields.append(LabelField(-1, skip_indexing=True))
             # fields["answer_as_counts"] = ListField(count_fields)
 
-        metadata.update(additional_metadata)
+        # TODO(nitish): Only using questions which have PassageSpan as answers
+        if not answer_info["answer_passage_spans"]:
+            # print("Not dealing with empty passage answers")
+            return None
+
+        # TODO(nitish): Only using questions which have a single 'or'
+        if len(' '.join(metadata["question_tokens"]).split(' or ')) != 2:
+            print("Only date comparison with single OR")
+            return None
+
         fields["metadata"] = MetadataField(metadata)
         return Instance(fields)
 

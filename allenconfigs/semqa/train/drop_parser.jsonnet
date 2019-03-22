@@ -74,12 +74,8 @@ local compareff_inputdim =
             "lowercase_tokens": true
         },
         "token_characters": {
-          "type": "characters",
-          "character_tokenizer": {
-              "byte_encoding": "utf-8",
-              "start_tokens": [259],
-              "end_tokens": [260, 0, 0, 0, 0,0]
-          }
+            "type": "characters",
+            "min_padding_length": 5
         }
       }
       else if tokenidx == "elmoglove" then {
@@ -135,20 +131,18 @@ local compareff_inputdim =
           "trainable": false
         },
         "token_characters": {
-          "type": "character_encoding",
-          "embedding": {
-            "num_embeddings": 262,
-            "embedding_dim": 16
-          },
-          "encoder": {
-            "type": "cnn",
-            "embedding_dim": 16,
-            "num_filters": 100,
-            "ngram_filter_sizes": [
-                5
-            ]
-          },
-          "dropout": 0.2
+            "type": "character_encoding",
+            "embedding": {
+                "embedding_dim": 64
+            },
+            "encoder": {
+                "type": "cnn",
+                "embedding_dim": 64,
+                "num_filters": 100,
+                "ngram_filter_sizes": [
+                    5
+                ]
+            }
         }
       }
       else if tokenidx == "elmoglove" then {
@@ -174,11 +168,18 @@ local compareff_inputdim =
     },
     "num_highway_layers": 2,
     "phrase_layer": {
-        "type": "lstm",
-        "input_size": token_embed_dim,
-        "hidden_size": 100,
-        "num_layers": 1,
-        "bidirectional": true,
+        "type": "qanet_encoder",
+        "input_dim": 128,
+        "hidden_dim": 128,
+        "attention_projection_dim": 128,
+        "feedforward_hidden_dim": 128,
+        "num_blocks": 1,
+        "num_convs_per_block": 4,
+        "conv_kernel_size": 7,
+        "num_attention_heads": 8,
+        "dropout_prob": 0.1,
+        "layer_dropout_undecayed_prob": 0.1,
+        "attention_dropout_prob": 0
     },
     "matrix_attention_layer": {
         "type": "linear",
@@ -187,11 +188,18 @@ local compareff_inputdim =
         "combination": "x,y,x*y"
     },
     "modeling_layer": {
-        "type": "lstm",
-        "input_size": token_embed_dim,
-        "hidden_size": 100,
-        "num_layers": 1,
-        "bidirectional": true,
+        "type": "qanet_encoder",
+        "input_dim": 128,
+        "hidden_dim": 128,
+        "attention_projection_dim": 128,
+        "feedforward_hidden_dim": 128,
+        "num_blocks": 7,
+        "num_convs_per_block": 2,
+        "conv_kernel_size": 5,
+        "num_attention_heads": 8,
+        "dropout_prob": 0.1,
+        "layer_dropout_undecayed_prob": 0.1,
+        "attention_dropout_prob": 0
     },
 
     "goldactions": utils.boolparser(std.extVar("GOLDACTIONS")),
@@ -231,10 +239,12 @@ local compareff_inputdim =
           ".*",
           {
               "type": "l2",
-              "alpha": 1e-04
+              "alpha": 1e-07
           }
       ]
     ],
+
+    "debug": utils.boolparser(std.extVar("DEBUG"))
   },
 
   "iterator": {

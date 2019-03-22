@@ -110,14 +110,20 @@ class DROPSemanticParser(DROPParserBase):
         self._text_field_embedder = _text_field_embedder
 
         text_embed_dim = self._text_field_embedder.get_output_dim()
+
         encoding_in_dim = phrase_layer.get_input_dim()
+        encoding_out_dim = phrase_layer.get_output_dim()
+        modeling_in_dim = modeling_layer.get_input_dim()
+
         self._embedding_proj_layer = torch.nn.Linear(text_embed_dim, encoding_in_dim)
+        self._highway_layer = Highway(encoding_in_dim, num_highway_layers)
 
         self._encoding_proj_layer = torch.nn.Linear(encoding_in_dim, encoding_in_dim)
-
-        self._highway_layer = Highway(encoding_in_dim, num_highway_layers)
         self._phrase_layer = phrase_layer
+
         self._matrix_attention = matrix_attention_layer
+
+        self._modeling_proj_layer = torch.nn.Linear(encoding_out_dim * 4, modeling_in_dim)
         self._modeling_layer = modeling_layer
 
         if dropout > 0:
@@ -127,7 +133,6 @@ class DROPSemanticParser(DROPParserBase):
 
         self._executor_parameters = ExecutorParameters(num_highway_layers=num_highway_layers,
                                                        phrase_layer=phrase_layer,
-                                                       matrix_attention_layer=matrix_attention_layer,
                                                        modeling_layer=modeling_layer,
                                                        hidden_dim=200)
 
@@ -136,6 +141,8 @@ class DROPSemanticParser(DROPParserBase):
         initializers(self)
 
         self.model_loss = None
+
+
 
     def device_id(self):
         allenutil.get_device_of()
@@ -174,13 +181,48 @@ class DROPSemanticParser(DROPParserBase):
         embedded_question = self._highway_layer(self._embedding_proj_layer(embedded_question))
         embedded_passage = self._highway_layer(self._embedding_proj_layer(embedded_passage))
 
-        projected_embedded_question = self._encoding_proj_layer(embedded_question)
-        projected_embedded_passage = self._encoding_proj_layer(embedded_passage)
+        # projected_embedded_question = self._encoding_proj_layer(embedded_question)
+        # projected_embedded_passage = self._encoding_proj_layer(embedded_passage)
+
+        projected_embedded_question = embedded_question
+        projected_embedded_passage = embedded_passage
 
         # Shape: (batch_size, question_length, encoding_dim)
         encoded_question = self._dropout(self._phrase_layer(projected_embedded_question, question_mask))
         # Shape: (batch_size, passage_length, encoding_dim)
         encoded_passage = self._dropout(self._phrase_layer(projected_embedded_passage, passage_mask))
+
+        # Shape: (batch_size, passage_length, question_length)
+        passage_question_similarity = self._matrix_attention(encoded_passage, encoded_question)
+        # Shape: (batch_size, passage_length, question_length)
+        passage_question_attention = allenutil.masked_softmax(
+            passage_question_similarity,
+            question_mask,
+            memory_efficient=True)
+        # Shape: (batch_size, passage_length, encoding_dim)
+        passage_question_vectors = allenutil.weighted_sum(encoded_question, passage_question_attention)
+
+        # Shape: (batch_size, question_length, passage_length)
+        question_passage_attention = allenutil.masked_softmax(
+            passage_question_similarity.transpose(1, 2),
+            passage_mask,
+            memory_efficient=True)
+        # Shape: (batch_size, passage_length, passage_length)
+        attention_over_attention = torch.bmm(passage_question_attention, question_passage_attention)
+        # Shape: (batch_size, passage_length, encoding_dim)
+        passage_passage_vectors = allenutil.weighted_sum(encoded_passage, attention_over_attention)
+
+        # Shape: (batch_size, passage_length, encoding_dim * 4)
+        merged_passage_attention_vectors = self._dropout(
+            torch.cat([encoded_passage, passage_question_vectors,
+                       encoded_passage * passage_question_vectors,
+                       encoded_passage * passage_passage_vectors],
+                      dim=-1)
+        )
+
+        modeled_passage = self._modeling_proj_layer(merged_passage_attention_vectors)
+
+        modeled_passage_list = [modeled_passage]
 
         """ Parser setup """
         # Shape: (B, encoding_dim)
@@ -189,7 +231,7 @@ class DROPSemanticParser(DROPParserBase):
                                                                           self._phrase_layer.is_bidirectional())
         question_encoded_aslist = [encoded_question[i] for i in range(batch_size)]
         question_mask_aslist = [question_mask[i] for i in range(batch_size)]
-        passage_encoded_aslist = [encoded_passage[i] for i in range(batch_size)]
+        passage_encoded_aslist = [modeled_passage[i] for i in range(batch_size)]
         passage_mask_aslist = [passage_mask[i] for i in range(batch_size)]
 
         # Based on the gold answer - figure out possible start types for the instance_language
@@ -210,7 +252,9 @@ class DROPSemanticParser(DROPParserBase):
                                   passage_tokenidx2dateidx=passageidx2dateidx[i],
                                   passage_date_values=passage_date_values[i],
                                   parameters=self._executor_parameters,
-                                  start_types=batch_start_types[i]) for i in range(batch_size)]
+                                  start_types=batch_start_types[i],
+                                  debug=self._debug,
+                                  metadata=metadata) for i in range(batch_size)]
 
         # List[torch.Tensor(0.0)] -- Initial log-score list for the decoding
         initial_score_list = [next(iter(question.values())).new_zeros(1, dtype=torch.float)
@@ -263,6 +307,12 @@ class DROPSemanticParser(DROPParserBase):
         #     for prog in instance_progs:
         #         print(languages[idx].action_sequence_to_logical_form(prog))
         #     print("\n")
+
+        datecompare_gold_qattns = self.get_gold_quesattn_datecompare(metadata, encoded_question.size()[1])
+        self.datecompare_goldattn_to_sideargs(batch_actionseqs,
+                                              batch_actionseq_sideargs,
+                                              datecompare_gold_qattns)
+
 
         # List[List[Any]], List[List[str]]: Denotations and their types for all instances
         batch_denotations, batch_denotation_types = self._get_denotations(batch_actionseqs,
@@ -510,6 +560,109 @@ class DROPSemanticParser(DROPParserBase):
             batch_predicted_answers.append(instance_predicted_ans)
 
         return batch_best_spans, batch_predicted_answers
+
+
+    def datecompare_goldattn_to_sideargs(self,
+                                         batch_actionseqs: List[List[List[str]]],
+                                         batch_actionseq_sideargs: List[List[List[Dict]]],
+                                         batch_gold_attentions: List[Tuple[torch.Tensor, torch.Tensor]]):
+
+        for ins_idx in range(len(batch_actionseqs)):
+            instance_programs = batch_actionseqs[ins_idx]
+            instance_prog_sideargs = batch_actionseq_sideargs[ins_idx]
+            instance_gold_attentions = batch_gold_attentions[ins_idx]
+            for program, side_args in zip(instance_programs, instance_prog_sideargs):
+                first_qattn = True   # This tells model which qent attention to use
+                # print(side_args)
+                # print()
+                for action, sidearg_dict in zip(program, side_args):
+                    if action == 'PassageAttention -> find_PassageAttention':
+                        if first_qattn:
+                            sidearg_dict['question_attention'] = instance_gold_attentions[0]
+                            first_qattn = False
+                        else:
+                            sidearg_dict['question_attention'] = instance_gold_attentions[1]
+
+
+
+    def get_date_compare_ques_attns(self, qstr: str, masked_len: int) -> Tuple[torch.Tensor, torch.Tensor]:
+        """ Question only has one 'or'
+            Attn2 is after or until ?
+            Attn1 is after first ',' or ':' ('first', 'last', 'later') until the 'or'
+        """
+
+        or_split = qstr.split(' or ')
+        assert len(or_split) == 2
+
+        tokens = qstr.split(' ')
+
+        attn_1 = torch.cuda.FloatTensor(masked_len, device=0).fill_(0.0)
+        attn_2 = torch.cuda.FloatTensor(masked_len, device=0).fill_(0.0)
+
+        or_idx = tokens.index('or')
+        # Last token is ? which we don't want to attend to
+        attn_2[or_idx + 1: len(tokens) - 1] = 1.0
+        attn_2 = attn_2 / attn_2.sum()
+
+        # Gets first index of the item
+        try:
+            comma_idx = tokens.index(',')
+        except:
+            comma_idx = 100000
+        try:
+            colon_idx = tokens.index(':')
+        except:
+            colon_idx = 100000
+
+        try:
+            hyphen_idx = tokens.index('-')
+        except:
+            hyphen_idx = 100000
+
+        split_idx = min(comma_idx, colon_idx, hyphen_idx)
+
+        if split_idx == 100000 or (or_idx - split_idx <= 1):
+            # print(f"{qstr} first_split:{split_idx} or:{or_idx}")
+            if 'first' in tokens:
+                split_idx = tokens.index('first')
+            elif 'second' in tokens:
+                split_idx = tokens.index('second')
+            elif 'last' in tokens:
+                split_idx = tokens.index('last')
+            elif 'later' in tokens:
+                split_idx = tokens.index('later')
+            else:
+                split_idx = -1
+
+        assert split_idx != -1, f"{qstr} {split_idx} {or_idx}"
+
+        attn_1[split_idx + 1: or_idx] = 1.0
+        attn_1 = attn_1 / attn_1.sum()
+
+        return attn_1, attn_2
+
+
+    def get_gold_quesattn_datecompare(self, metadata, masked_len) -> List[Tuple[torch.Tensor, torch.Tensor]]:
+        batch_size = len(metadata)
+
+        gold_ques_attns = []
+
+        for i in range(batch_size):
+            question_tokens: List[str] = metadata[i]["question_tokens"]
+            qstr = ' '.join(question_tokens)
+            assert len(qstr.split(' ')) == len(question_tokens)
+
+            gold_ques_attns.append(self.get_date_compare_ques_attns(qstr, masked_len))
+
+        return gold_ques_attns
+
+
+
+
+
+
+
+
 
 
 

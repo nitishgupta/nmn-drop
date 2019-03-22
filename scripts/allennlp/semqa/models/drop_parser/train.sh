@@ -12,7 +12,7 @@ INCLUDE_PACKAGE=semqa
 
 ### TRAINING MODEL CONFIG -- should be same across datasets for the same model
 CONFIGFILE=allenconfigs/semqa/train/drop_parser.jsonnet
-export TOKENIDX="glove"
+export TOKENIDX="glovechar"
 export VOCABDIR=./resources/semqa/vocabs/drop/date_num/tokens_${TOKENIDX}/vocabulary
 
 export DATASET_READER=drop_reader
@@ -44,13 +44,15 @@ export BEAMSIZE=10
 export MAX_DECODE_STEP=8
 export EPOCHS=30
 
+export DEBUG=true
+
 ####    SERIALIZATION DIR --- Check for checkpoint_root/task/dataset/model/parameters/
 CHECKPOINT_ROOT=./resources/semqa/checkpoints
 SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/date_num
 MODEL_DIR=drop_parser
 PARAMETERS_DIR1=BS_${BS}/OPT_${OPT}/LR_${LR}/Drop_${DROPOUT}/TOKENS_${TOKENIDX}/GOLDAC_${GOLDACTIONS}
 PARAMETERS_DIR2=AUXGPLOSS_${AUXGPLOSS}/ATTCOV_${ATTCOVLOSS}/PTREX_${PTREX}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PARAMETERS_DIR1}/${PARAMETERS_DIR2}_tet
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PARAMETERS_DIR1}/${PARAMETERS_DIR2}_tetml
 
 #######################################################################################################################
 

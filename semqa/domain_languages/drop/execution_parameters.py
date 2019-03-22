@@ -26,7 +26,6 @@ class ExecutorParameters(torch.nn.Module, Registrable):
     def __init__(self,
                  num_highway_layers: int,
                  phrase_layer: Seq2SeqEncoder,
-                 matrix_attention_layer: MatrixAttention,
                  modeling_layer: Seq2SeqEncoder,
                  hidden_dim: int):
         super().__init__()
@@ -34,7 +33,6 @@ class ExecutorParameters(torch.nn.Module, Registrable):
         encoding_in_dim = phrase_layer.get_input_dim()
         self._highway_layer = Highway(encoding_in_dim, num_highway_layers)
         self._phrase_layer: Seq2SeqEncoder = phrase_layer
-        self._matrix_attention: MatrixAttention = matrix_attention_layer
         self._modeling_layer: Seq2SeqEncoder = modeling_layer
 
         passage_encoding_dim = self._phrase_layer.get_output_dim()

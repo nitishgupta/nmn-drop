@@ -152,7 +152,9 @@ class DropLanguage(DomainLanguage):
                  passage_date_values: List[Date],
                  parameters: ExecutorParameters,
                  start_types = None,
-                 max_samples=10) -> None:
+                 max_samples=10,
+                 metadata={},
+                 debug=False) -> None:
 
         if start_types is None:
             start_types = {PassageSpanAnswer, QuestionSpanAnswer}
@@ -204,6 +206,7 @@ class DropLanguage(DomainLanguage):
 
     @predicate_with_side_args(['question_attention'])
     def find_PassageAttention(self, question_attention: Tensor) -> PassageAttention:
+
         ''' For a given question attention compute the passage attention '''
         attended_question = allenutil.weighted_sum(self.encoded_question.unsqueeze(0),
                                                    question_attention.unsqueeze(0))
