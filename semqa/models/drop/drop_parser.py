@@ -12,7 +12,7 @@ from allennlp.data.vocabulary import Vocabulary
 from allennlp.models.model import Model
 from allennlp.modules import Highway, Attention, TextFieldEmbedder, Seq2SeqEncoder, FeedForward
 from allennlp.nn import Activation
-from allennlp.modules.matrix_attention.matrix_attention import MatrixAttention
+from allennlp.modules.matrix_attention import MatrixAttention, DotProductMatrixAttention
 from allennlp.state_machines.states import GrammarBasedState
 import allennlp.nn.util as allenutil
 from allennlp.nn import InitializerApplicator, RegularizerApplicator
@@ -51,6 +51,8 @@ class DROPSemanticParser(DROPParserBase):
                  phrase_layer: Seq2SeqEncoder,
                  matrix_attention_layer: MatrixAttention,
                  modeling_layer: Seq2SeqEncoder,
+                 passage_token_to_date: Seq2SeqEncoder,
+                 passage_attention_to_span: Seq2SeqEncoder,
                  decoder_beam_search: ConstrainedBeamSearch,
                  max_decoding_steps: int,
                  goldactions: bool = None,
@@ -126,6 +128,9 @@ class DROPSemanticParser(DROPParserBase):
         self._modeling_proj_layer = torch.nn.Linear(encoding_out_dim * 4, modeling_in_dim)
         self._modeling_layer = modeling_layer
 
+        self.passage_token_to_date = passage_token_to_date
+        self.dotprod_matrix_attn = DotProductMatrixAttention()
+
         if dropout > 0:
             self._dropout = torch.nn.Dropout(p=dropout)
         else:
@@ -133,15 +138,17 @@ class DROPSemanticParser(DROPParserBase):
 
         self._executor_parameters = ExecutorParameters(num_highway_layers=num_highway_layers,
                                                        phrase_layer=phrase_layer,
+                                                       modeling_proj_layer=self._modeling_proj_layer,
                                                        modeling_layer=modeling_layer,
-                                                       hidden_dim=200)
+                                                       passage_attention_to_span=passage_attention_to_span,
+                                                       hidden_dim=200,
+                                                       dropout=dropout)
 
         self.modelloss_metric = Average()
         self._drop_metrics = DropEmAndF1()
         initializers(self)
 
-        self.model_loss = None
-
+        self._goldactions = goldactions
 
 
     def device_id(self):
@@ -176,21 +183,34 @@ class DROPSemanticParser(DROPParserBase):
 
         question_mask = allenutil.get_text_field_mask(question).float()
         passage_mask = allenutil.get_text_field_mask(passage).float()
-        embedded_question = self._dropout(self._text_field_embedder(question))
-        embedded_passage = self._dropout(self._text_field_embedder(passage))
-        embedded_question = self._highway_layer(self._embedding_proj_layer(embedded_question))
-        embedded_passage = self._highway_layer(self._embedding_proj_layer(embedded_passage))
 
-        # projected_embedded_question = self._encoding_proj_layer(embedded_question)
-        # projected_embedded_passage = self._encoding_proj_layer(embedded_passage)
+        rawemb_question = self._dropout(self._text_field_embedder(question))
+        rawemb_passage = self._dropout(self._text_field_embedder(passage))
 
-        projected_embedded_question = embedded_question
-        projected_embedded_passage = embedded_passage
+        embedded_question = self._highway_layer(self._embedding_proj_layer(rawemb_question))
+        embedded_passage = self._highway_layer(self._embedding_proj_layer(rawemb_passage))
+
+        projected_embedded_question = self._encoding_proj_layer(embedded_question)
+        projected_embedded_passage = self._encoding_proj_layer(embedded_passage)
 
         # Shape: (batch_size, question_length, encoding_dim)
         encoded_question = self._dropout(self._phrase_layer(projected_embedded_question, question_mask))
         # Shape: (batch_size, passage_length, encoding_dim)
         encoded_passage = self._dropout(self._phrase_layer(projected_embedded_passage, passage_mask))
+
+        '''
+        passage_token2date_encoding = self.passage_token_to_date(encoded_passage, passage_mask)
+        scaled_dim = passage_token2date_encoding.size()[-1] ** 0.5
+        # Shape: (batch_size, passage_length, passage_length)
+        passage_token2datetoken_similarity = self.dotprod_matrix_attn(passage_token2date_encoding,
+                                                                      passage_token2date_encoding) / scaled_dim
+
+        passage_token2datetoken_similarity = allenutil.replace_masked_values(passage_token2datetoken_similarity,
+                                                                             passage_mask.unsqueeze(2), 0.0)
+
+        passage_token2datetoken_similarity = allenutil.replace_masked_values(passage_token2datetoken_similarity,
+                                                                             passage_mask.unsqueeze(1), 0.0)
+        '''
 
         # Shape: (batch_size, passage_length, question_length)
         passage_question_similarity = self._matrix_attention(encoded_passage, encoded_question)
@@ -220,19 +240,25 @@ class DROPSemanticParser(DROPParserBase):
                       dim=-1)
         )
 
-        modeled_passage = self._modeling_proj_layer(merged_passage_attention_vectors)
-
-        modeled_passage_list = [modeled_passage]
+        # Shape: (batch_size, passage_length, modeling_dim)
+        modeled_passage_input = self._modeling_proj_layer(merged_passage_attention_vectors)
+        modeled_passage = self._dropout(self._modeling_layer(modeled_passage_input, passage_mask))
 
         """ Parser setup """
         # Shape: (B, encoding_dim)
         question_encoded_final_state = allenutil.get_final_encoder_states(encoded_question,
                                                                           question_mask,
                                                                           self._phrase_layer.is_bidirectional())
+        question_rawemb_aslist = [rawemb_question[i] for i in range(batch_size)]
+        question_embedded_aslist = [projected_embedded_question[i] for i in range(batch_size)]
         question_encoded_aslist = [encoded_question[i] for i in range(batch_size)]
         question_mask_aslist = [question_mask[i] for i in range(batch_size)]
-        passage_encoded_aslist = [modeled_passage[i] for i in range(batch_size)]
+        passage_rawemb_aslist = [rawemb_passage[i] for i in range(batch_size)]
+        passage_embedded_aslist = [projected_embedded_passage[i] for i in range(batch_size)]
+        passage_encoded_aslist = [encoded_passage[i] for i in range(batch_size)]
+        passage_modeled_aslist = [modeled_passage[i] for i in range(batch_size)]
         passage_mask_aslist = [passage_mask[i] for i in range(batch_size)]
+        # passage_token2datetoken_sim_aslist = [passage_token2datetoken_similarity[i] for i in range(batch_size)]
 
         # Based on the gold answer - figure out possible start types for the instance_language
         if answer_as_passage_spans is not None:
@@ -245,16 +271,24 @@ class DROPSemanticParser(DROPParserBase):
         else:
             batch_start_types = [None for _ in range(batch_size)]
 
-        languages = [DropLanguage(encoded_question=question_encoded_aslist[i],
+        languages = [DropLanguage(rawemb_question=question_rawemb_aslist[i],
+                                  embedded_question=question_embedded_aslist[i],
+                                  encoded_question=question_encoded_aslist[i],
+                                  rawemb_passage=passage_rawemb_aslist[i],
+                                  embedded_passage=passage_embedded_aslist[i],
                                   encoded_passage=passage_encoded_aslist[i],
+                                  modeled_passage=passage_modeled_aslist[i],
+                                  # passage_token2datetoken_sim=None, #passage_token2datetoken_sim_aslist[i],
                                   question_mask=question_mask_aslist[i],
                                   passage_mask=passage_mask_aslist[i],
                                   passage_tokenidx2dateidx=passageidx2dateidx[i],
                                   passage_date_values=passage_date_values[i],
                                   parameters=self._executor_parameters,
                                   start_types=batch_start_types[i],
+                                  question_to_use='encoded',
+                                  passage_to_use='encoded',
                                   debug=self._debug,
-                                  metadata=metadata) for i in range(batch_size)]
+                                  metadata=metadata[i]) for i in range(batch_size)]
 
         # List[torch.Tensor(0.0)] -- Initial log-score list for the decoding
         initial_score_list = [next(iter(question.values())).new_zeros(1, dtype=torch.float)
@@ -300,19 +334,27 @@ class DROPSemanticParser(DROPParserBase):
          batch_actionseq_sideargs) = semparse_utils._convert_finalstates_to_actions(best_final_states=best_final_states,
                                                                                     possible_actions=actions,
                                                                                     batch_size=batch_size)
+        '''
+        # For printing predicted - programs
+        for idx, instance_progs in enumerate(batch_actionseqs):
+            print(f"InstanceIdx:{idx}")
+            for prog in instance_progs:
+                print(f"{languages[idx].action_sequence_to_logical_form(prog)} : {prog}")
+            print("\n")
+        '''
 
-        # # For printing predicted - programs
-        # for idx, instance_progs in enumerate(batch_actionseqs):
-        #     print(f"InstanceIdx:{idx}")
-        #     for prog in instance_progs:
-        #         print(languages[idx].action_sequence_to_logical_form(prog))
-        #     print("\n")
+        if self._goldactions:
+            datecompare_gold_qattns = self.get_gold_quesattn_datecompare(metadata, encoded_question.size()[1])
+            self.datecompare_goldattn_to_sideargs(batch_actionseqs,
+                                                  batch_actionseq_sideargs,
+                                                  datecompare_gold_qattns)
 
-        datecompare_gold_qattns = self.get_gold_quesattn_datecompare(metadata, encoded_question.size()[1])
-        self.datecompare_goldattn_to_sideargs(batch_actionseqs,
+            # List of [passage_attention]
+            goldpassageattention_aslist = self.passageAnsSpan_to_PassageAttention(answer_as_passage_spans,
+                                                                                  passage_mask)
+            self.passage_ans_attn_to_sideargs(batch_actionseqs,
                                               batch_actionseq_sideargs,
-                                              datecompare_gold_qattns)
-
+                                              goldpassageattention_aslist)
 
         # List[List[Any]], List[List[str]]: Denotations and their types for all instances
         batch_denotations, batch_denotation_types = self._get_denotations(batch_actionseqs,
@@ -391,6 +433,10 @@ class DROPSemanticParser(DROPParserBase):
                                                                                passage_mask_aslist)
             predicted_answers = [batch_predicted_answers[i][0] for i in range(batch_size)]
 
+            output_dict['metadata'] = metadata
+            output_dict['best_span_ans_str'] = predicted_answers
+            output_dict['answer_as_passage_spans'] = answer_as_passage_spans
+            output_dict['predicted_spans'] = batch_best_spans
 
             if answer_annotations:
                 for i in range(batch_size):
@@ -426,6 +472,7 @@ class DROPSemanticParser(DROPParserBase):
         Returns:
         log_marginal_likelihood_for_passage_span
         """
+
         # Unsqueezing dim=0 to make a batch_size of 1
         answer_as_spans = answer_as_spans.unsqueeze(0)
 
@@ -519,8 +566,8 @@ class DROPSemanticParser(DROPParserBase):
                 # Distinction between QuestionSpanAnswer and PassageSpanAnswer is not needed currently,
                 # since both classes store the start/end logits as a tuple
                 # Shape: (2, )
-                best_span = get_best_span(span_end_logits=denotation._value[0].unsqueeze(0),
-                                          span_start_logits=denotation._value[1].unsqueeze(0)).squeeze(0)
+                best_span = get_best_span(span_start_logits=denotation._value[0].unsqueeze(0),
+                                          span_end_logits=denotation._value[1].unsqueeze(0)).squeeze(0)
                 instance_best_spans.append(best_span)
 
                 predicted_span = tuple(best_span.detach().cpu().numpy())
@@ -585,9 +632,10 @@ class DROPSemanticParser(DROPParserBase):
 
 
 
-    def get_date_compare_ques_attns(self, qstr: str, masked_len: int) -> Tuple[torch.Tensor, torch.Tensor]:
-        """ Question only has one 'or'
-            Attn2 is after or until ?
+    def _gold_qattn_for_datecompare(self, qstr: str, masked_len: int) -> Tuple[torch.Tensor, torch.Tensor]:
+        """ Get gold question attention for date_compare questions
+            Question only has one 'or': Which happened first , event A or event B ?
+            Attn2 is after 'or' until '?'
             Attn1 is after first ',' or ':' ('first', 'last', 'later') until the 'or'
         """
 
@@ -652,21 +700,114 @@ class DROPSemanticParser(DROPParserBase):
             qstr = ' '.join(question_tokens)
             assert len(qstr.split(' ')) == len(question_tokens)
 
-            gold_ques_attns.append(self.get_date_compare_ques_attns(qstr, masked_len))
+            gold_ques_attns.append(self._gold_qattn_for_datecompare(qstr, masked_len))
 
         return gold_ques_attns
 
 
+    def passageAnsSpan_to_PassageAttention(self, answer_as_passage_spans, passage_mask):
+        """ Convert answers as passage span into passage attention for model introspection
+
+        Parameters:
+        ----------
+        answer_as_passage_spans: `torch.Tensor`
+            Tensor of shape (batch_size, number_of_ans_spans, 2) containing start / end positions
+        passage_mask: `torch.FloatTensor`
+            Tensor of shape (batch_size, passage_length)
+
+        Returns:
+        --------
+        attention: `torch.FloatTensor`
+            List of (passage_length, ) shaped tensor containing normalized attention for gold spans
+        """
+        # Shape: (batch_size, number_of_ans_spans, 2)
+        answer_as_spans = answer_as_passage_spans.long()
+
+        # TODO(nitish): ONLY USING FIRST CORRECT SPAN OUT OF MULTIPLE POSSIBLE
+        # answer_as_spans = answer_as_spans[:, 0, :].unsqueeze(1)
+
+        # Shape: (batch_size, number_of_ans_spans)
+        span_starts = answer_as_spans[:, :, 0]
+        span_ends = answer_as_spans[:, :, 1]
+        answers_mask = (span_starts >= 0).float()
+
+        # Shape: (batch_size, 1, number_of_ans_spans)
+        span_starts_ex = span_starts.unsqueeze(1)
+        span_ends_ex = span_ends.unsqueeze(1)
+
+        # Idea: Make a range vector from 0 <-> seq_len - 1 and convert into boolean with (val > start) and (val < end)
+        # Such items in the sequence are within the span range
+        # Shape: (passage_length, )
+        range_vector = allenutil.get_range_vector(passage_mask.size(1), allenutil.get_device_of(passage_mask))
+
+        # Shape: (1, passage_length, 1)
+        range_vector = range_vector.unsqueeze(0).unsqueeze(2)
+
+        # Shape: (batch_size, passage_length, number_of_ans_spans) - 1 as tokens in the span, 0 otherwise
+        span_range_mask = (range_vector >= span_starts_ex).float() * (range_vector <= span_ends_ex).float()
+        span_range_mask = span_range_mask * answers_mask.unsqueeze(1)
+
+        # Shape: (batch_size, passage_length)
+        unnormalized_attention = span_range_mask.sum(2)
+        normalized_attention = unnormalized_attention / unnormalized_attention.sum(1, keepdim=True)
+
+        attention_aslist = [normalized_attention[i, :] for i in range(normalized_attention.size(0))]
+
+        return attention_aslist
+
+    ''' TESTING
+    def passageAnsSpan_to_PassageAttention(self, answer_as_passage_spans, passage_mask):
+        final_attentions = []
+
+        for i in range(passage_mask.size(0)):
+            attn = passage_mask.new_zeros(passage_mask.size(1))
+            ans_spans = answer_as_passage_spans[i]
+            for span in ans_spans:
+                if span[0] > -1:
+                    attn[span[0]] = 1.0
+                    attn[span[1]] = 1.0
+
+            final_attentions.append(attn)
+
+        return final_attentions
+    '''
+
+    def passageattn_to_startendlogits(self, passage_attention, passage_mask):
+        span_start_logits = passage_attention.new_zeros(passage_attention.size())
+        span_end_logits = passage_attention.new_zeros(passage_attention.size())
+
+        nonzeroindcs = (passage_attention > 0).nonzero()
+
+        startidx = nonzeroindcs[0]
+        endidx = nonzeroindcs[-1]
+
+        print(f"{startidx} {endidx}")
+
+        span_start_logits[startidx] = 2.0
+        span_end_logits[endidx] = 2.0
+
+        span_start_logits = allenutil.replace_masked_values(span_start_logits, passage_mask, -1e32)
+        span_end_logits = allenutil.replace_masked_values(span_end_logits, passage_mask, -1e32)
+
+        span_start_logits += 1e-7
+        span_end_logits += 1e-7
+
+        return (span_start_logits, span_end_logits)
 
 
+    def passage_ans_attn_to_sideargs(self,
+                                     batch_actionseqs: List[List[List[str]]],
+                                     batch_actionseq_sideargs: List[List[List[Dict]]],
+                                     batch_gold_attentions: List[torch.Tensor]):
 
-
-
-
-
-
-
-
-
-
-
+        for ins_idx in range(len(batch_actionseqs)):
+            instance_programs = batch_actionseqs[ins_idx]
+            instance_prog_sideargs = batch_actionseq_sideargs[ins_idx]
+            instance_gold_attention = batch_gold_attentions[ins_idx]
+            for program, side_args in zip(instance_programs, instance_prog_sideargs):
+                first_qattn = True   # This tells model which qent attention to use
+                # print(side_args)
+                # print()
+                for action, sidearg_dict in zip(program, side_args):
+                    if action == 'PassageSpanAnswer -> find_passageSpanAnswer':
+                        sidearg_dict['passage_attention'] = instance_gold_attention

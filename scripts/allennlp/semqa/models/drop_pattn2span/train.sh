@@ -2,6 +2,13 @@
 
 export TMPDIR=/srv/local/data/nitishg/tmp
 
+DATASET_DIR=./resources/data/drop/date_subset
+TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
+VALFILE=${DATASET_DIR}/drop_dataset_dev.json
+
+export TRAINING_DATA_FILE=${TRAINFILE}
+export VAL_DATA_FILE=${VALFILE}
+
 # PACKAGE TO BE INCLUDED WHICH HOUSES ALL THE CODE
 INCLUDE_PACKAGE=semqa
 
@@ -17,18 +24,18 @@ export AVAL=1.0
 
 export TYPE=gru
 export ISIZE=4
-export HSIZE=10
-export NL=2
+export HSIZE=20
+export NL=3
 export SEED=10
 
-export NOISE=true
+export NOISE=false
 export SCALING=true
 
 export EPOCHS=20
 
-for SEED in 10 100 1000
+for SEED in 10
 do
-    for TYPE in gru lstm
+    for TYPE in gru
     do
         ####    SERIALIZATION DIR --- Check for checkpoint_root/task/dataset/model/parameters/
         CHECKPOINT_ROOT=./resources/semqa/checkpoints
@@ -39,7 +46,7 @@ do
 
         #######################################################################################################################
 
-        allennlp train ${CONFIGFILE} --include-package ${INCLUDE_PACKAGE} -s ${SERIALIZATION_DIR} &
+        allennlp train ${CONFIGFILE} --include-package ${INCLUDE_PACKAGE} -s ${SERIALIZATION_DIR}
 
 #        bash scripts/allennlp/base/train.sh ${CONFIGFILE} \
 #                                            ${INCLUDE_PACKAGE} \

@@ -1,6 +1,9 @@
 from typing import Callable, List, Dict, Tuple, Any, Type, Set
 
 import inspect
+import torch
+
+import utils.util as myutils
 
 from allennlp.semparse.domain_languages.domain_language import DomainLanguage, ExecutionError
 
@@ -119,4 +122,38 @@ def _execute_sequence(language,
 
 
         return execution_value, remaining_actions, remaining_side_args, execution_vals
+
+
+def listTokensVis(attention_vec: torch.FloatTensor, tokens: List[str]):
+    """ Visualize an attention vector for a list of tokens
+
+        Parameters:
+        ----------
+        attention_vec: Shape: (sequence_length, )
+            Padded vector containing attention over a sequence
+        question_tokens: List[str]
+            List of tokens in the sequence
+
+        Returns:
+        --------
+        strvis: String visualization of question attention
+    """
+
+    attention_aslist: List[float] = myutils.round_all(myutils.tocpuNPList(attention_vec), 3)
+    tokens_len = len(tokens)
+    # To remove padded elements
+    attention_aslist: List[float] = attention_aslist[:tokens_len]
+
+    strvis = ""
+    for token, attn in zip(tokens, attention_aslist):
+        strvis += f"{token}|{attn} "
+
+    # List[(token, attn)]
+    sorted_token_attn = sorted([(x, y)for x, y in zip(tokens, attention_aslist)], key=lambda x: x[1], reverse=True)
+    sorted_token_attn = sorted_token_attn[:10]
+    strvis += '\n'
+    strvis += f'Most Attended: {sorted_token_attn}'
+
+    return strvis.strip()
+
 

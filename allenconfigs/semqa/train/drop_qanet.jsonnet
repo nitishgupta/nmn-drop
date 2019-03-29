@@ -100,7 +100,7 @@ local compareff_inputdim =
 
 
   "model": {
-    "type": "drop_parser",
+    "type": "drop_qanet",
 
     "text_field_embedder":
       if tokenidx == "glove" then {
@@ -127,7 +127,7 @@ local compareff_inputdim =
         "tokens": {
           "type": "embedding",
           "pretrained_file": std.extVar("WORDEMB_FILE"),
-          "embedding_dim": 100,
+          "embedding_dim": 300,
           "trainable": false
         },
         "token_characters": {
@@ -162,11 +162,8 @@ local compareff_inputdim =
       }
     ,
 
-    "transitionfunc_attention": {
-      "type": "dot_product",
-      "normalize": true
-    },
     "num_highway_layers": 2,
+
     "phrase_layer": {
         "type": "qanet_encoder",
         "input_dim": 128,
@@ -202,62 +199,14 @@ local compareff_inputdim =
         "attention_dropout_prob": 0
     },
 
-    "passage_token_to_date": {
-        "type": "stacked_self_attention",
-        "input_dim": 128,
-        "hidden_dim": 128,
-        "projection_dim": 128,
-        "feedforward_hidden_dim": 256,
-        "num_layers": 3,
-        "num_attention_heads": 4,
-    },
-
-    "passage_attention_to_span": {
-        "type": "gru",
-        "input_size": 4,
-        "hidden_size": 20,
-        "num_layers": 3,
-        "bidirectional": true,
-    },
-
-    "goldactions": utils.boolparser(std.extVar("GOLDACTIONS")),
-
-    "bidafutils":
-        if tokenidx == "bidaf" then {
-            "bidaf_model_path": std.extVar("BIDAF_MODEL_TAR"),
-            "bidaf_wordemb_file": std.extVar("BIDAF_WORDEMB_FILE"),
-        }
-    ,
-    "action_embedding_dim": 100,
-
-    "decoder_beam_search": {
-      "beam_size": utils.parse_number(std.extVar("BEAMSIZE")),
-    },
-
-    "max_decoding_steps": utils.parse_number(std.extVar("MAX_DECODE_STEP")),
     "dropout": utils.parse_number(std.extVar("DROPOUT")),
-//    "question_token_repr_key": std.extVar("QTK"),
-//    "context_token_repr_key": std.extVar("CTK"),
-//    "aux_goldprog_loss": utils.boolparser(std.extVar("AUXGPLOSS")),
-//    "qatt_coverage_loss": utils.boolparser(std.extVar("ATTCOVLOSS")),
-//    "initializers":
-//      if utils.boolparser(std.extVar("PTREX")) == true then
-//      [
-//          ["executor_parameters.*",
-//             {
-//                 "type": "pretrained",
-//                 "weights_file_path": "./resources/semqa/checkpoints/hpqa/b_wsame/hpqa_parser/BS_4/OPT_adam/LR_0.001/Drop_0.2/TOKENS_glove/FUNC_snli/SIDEARG_true/GOLDAC_true/AUXGPLOSS_false/QENTLOSS_false/ATTCOV_false/best.th",
-//             }
-//          ]
-//      ]
-//      else
-//      [],
+
     "regularizer": [
       [
           ".*",
           {
               "type": "l2",
-              "alpha": 1e-42
+              "alpha": 1e-07
           }
       ]
     ],
@@ -266,11 +215,10 @@ local compareff_inputdim =
   },
 
   "iterator": {
-    "type": "basic",
-    "track_epoch": true,
-//    "shuffle": true,
-    "batch_size": std.extVar("BS"),
-    "max_instances_in_memory": std.extVar("BS")
+      "type": "basic",
+      "track_epoch": true,
+      "batch_size": std.extVar("BS"),
+      "max_instances_in_memory": std.extVar("BS") //
   },
 
   "trainer": {
@@ -288,7 +236,7 @@ local compareff_inputdim =
               0.999
           ],
           "eps": 1e-07
-        },
+      },
       "moving_average": {
           "type": "exponential",
           "decay": 0.9999
@@ -297,8 +245,8 @@ local compareff_inputdim =
       "validation_metric": "+f1"
   },
 
-  "random_seed": 10,
-  "numpy_seed": 10,
-  "pytorch_seed": 10
+  "random_seed": 100,
+  "numpy_seed": 100,
+  "pytorch_seed": 100
 
 }

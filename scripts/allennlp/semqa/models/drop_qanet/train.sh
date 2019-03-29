@@ -10,11 +10,11 @@ VALFILE=${DATASET_DIR}/drop_dataset_dev.json
 # PACKAGE TO BE INCLUDED WHICH HOUSES ALL THE CODE
 INCLUDE_PACKAGE=semqa
 
-### TRAINING MODEL CONFIG -- should be same across datasets for the same model
-CONFIGFILE=allenconfigs/semqa/train/drop_parser.jsonnet
 export TOKENIDX="qanet"
 
 export DATASET_READER=drop_reader
+
+export WORDEMB_FILE="./resources/embeddings/glove.840B.300d.lower.converted.zip"
 
 # Check CONFIGFILE for environment variables to set
 export GPU=0
@@ -22,35 +22,19 @@ export GPU=0
 export TRAINING_DATA_FILE=${TRAINFILE}
 export VAL_DATA_FILE=${VALFILE}
 
-export WORDEMB_FILE="./resources/embeddings/glove/glove.6B.100d.txt.gz"
-# "./resources/embeddings/glove.840B.300d.lower.converted.zip"
+export BS=16
+export DROPOUT=0.1
 
-export BIDAF_MODEL_TAR='https://s3-us-west-2.amazonaws.com/allennlp/models/bidaf-model-2017.09.15-charpad.tar.gz'
-export BIDAF_WORDEMB_FILE='./resources/embeddings/glove/glove.6B.100d.txt.gz'
-
-export GOLDACTIONS=true
-# export AUXGPLOSS=false
-# export ATTCOVLOSS=false
-
-# export PTREX=false
-# export PTRWTS="./resources/semqa/checkpoints/hpqa/b_wsame/hpqa_parser/BS_4/OPT_adam/LR_0.001/Drop_0.2/TOKENS_glove/FUNC_snli/SIDEARG_true/GOLDAC_true/AUXGPLOSS_false/QENTLOSS_false/ATTCOV_false/PTREX_false/best.th"
-
-export BS=8
-export DROPOUT=0.2
-
-export BEAMSIZE=10
-export MAX_DECODE_STEP=8
-export EPOCHS=5
+export EPOCHS=50
 
 export DEBUG=false
 
 ####    SERIALIZATION DIR --- Check for checkpoint_root/task/dataset/model/parameters/
 CHECKPOINT_ROOT=./resources/semqa/checkpoints
 SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/date_num
-MODEL_DIR=drop_parser
-PARAMETERS_DIR1=BS_${BS}/Drop_${DROPOUT}/TOKENS_${TOKENIDX}/GOLDAC_${GOLDACTIONS}
-# PARAMETERS_DIR2=AUXGPLOSS_${AUXGPLOSS}/ATTCOV_${ATTCOVLOSS}/PTREX_${PTREX}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PARAMETERS_DIR1} #/${PARAMETERS_DIR2}
+MODEL_DIR=drop_qanet
+PARAMETERS_DIR=BS_${BS}/Drop_${DROPOUT}/TOKENS_${TOKENIDX}
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PARAMETERS_DIR}
 
 #######################################################################################################################
 

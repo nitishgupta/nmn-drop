@@ -53,7 +53,7 @@ class DROPReader(DatasetReader):
         self._normalized = normalized
         self._attnval = attnval
         self._withnoise = withnoise
-
+    '''
     @overrides
     def _read(self, file_path: str):
         # pylint: disable=logging-fstring-interpolation
@@ -95,5 +95,58 @@ class DROPReader(DatasetReader):
             instances.append(Instance(fields))
 
             print("Making data")
+
+        return instances
+    '''
+
+    def _read(self, file_path: str):
+        # pylint: disable=logging-fstring-interpolation
+
+        instances: List[Instance] = []
+        with open(file_path) as dataset_file:
+            dataset = json.load(dataset_file)
+        logger.info(f"Reading the dataset from: {file_path}")
+
+        for passage_id, passage_info in dataset.items():
+            passage_text = passage_info[constants.passage]
+            passage_length = len(passage_text.split(' '))
+
+            for question_answer in passage_info[constants.qa_pairs]:
+                fields = {}
+
+                answer_passage_spans = question_answer[constants.answer_passage_spans]
+
+                if len(answer_passage_spans) == 0:
+                    print("NO PASSAGE SPAN AS ANS")
+                    continue
+
+                # TODO(nitish): Only using first span as answer
+                answer_span = answer_passage_spans[0]
+
+                start_position = answer_span[0]
+                end_position = answer_span[1]
+
+                span_length = end_position - start_position + 1
+
+                attention = [0.0 for _ in range(passage_length)]
+
+                attention[start_position:end_position + 1] = [1.0] * span_length
+
+                if self._withnoise:
+                    attention = [x + abs(random.gauss(0, 0.001)) for x in attention]
+
+                if self._normalized:
+                    attention_sum = sum(attention)
+                    attention = [float(x) / attention_sum for x in attention]
+
+                passage_span_fields = ArrayField(np.array([[start_position, end_position]]), padding_value=-1)
+
+                fields["passage_attention"] = ArrayField(np.array(attention), padding_value=0.0)
+
+                fields["passage_lengths"] = MetadataField(passage_length)
+
+                fields["answer_as_passage_spans"] = passage_span_fields
+
+                instances.append(Instance(fields))
 
         return instances

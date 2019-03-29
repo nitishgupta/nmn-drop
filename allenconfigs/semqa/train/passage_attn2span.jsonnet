@@ -13,8 +13,8 @@ local utils = import 'utils.libsonnet';
       "withnoise": utils.boolparser(std.extVar("NOISE")),
   },
 
-  "train_data_path": "",
-  "validation_data_path": "",
+  "train_data_path": std.extVar("TRAINING_DATA_FILE"),
+  "validation_data_path": std.extVar("VAL_DATA_FILE"),
 
   "model": {
       "type": "drop_pattn2span",

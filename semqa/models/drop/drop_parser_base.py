@@ -218,6 +218,10 @@ class DROPParserBase(Model):
         time, to finalize predictions. We only transform the action string sequences into logical
         forms here.
         """
+
+        return output_dict
+
+        '''
         best_action_strings = output_dict["best_action_strings"]
         batch_actionseq_sideargs = output_dict["batch_actionseq_sideargs"]
         languages = output_dict["languages"]
@@ -278,6 +282,8 @@ class DROPParserBase(Model):
         # print(output_dict)
 
         return output_dict
+        
+        '''
 
 
 

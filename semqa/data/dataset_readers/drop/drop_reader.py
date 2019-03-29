@@ -14,7 +14,8 @@ from allennlp.data.tokenizers import Token, Tokenizer, WordTokenizer
 from allennlp.data.dataset_readers.reading_comprehension.util import IGNORED_TOKENS, STRIPPED_CHARACTERS
 from allennlp.data.fields import Field, TextField, MetadataField, LabelField, ListField, \
     SequenceLabelField, SpanField, IndexField, ProductionRuleField, ArrayField
-from semqa.domain_languages.drop.drop_language import DropLanguage, Date
+
+from semqa.domain_languages.drop.drop_language import DropLanguage, Date, get_empty_language_object
 
 from datasets.drop import constants
 
@@ -152,7 +153,9 @@ class DROPReader(DatasetReader):
                          max_question_len: int = None,
                          drop_invalid: bool = False) -> Union[Instance, None]:
 
-        language = DropLanguage(None, None, None, None, None, None, None)
+        language = get_empty_language_object()
+
+        # DropLanguage(None, None, None, None, None, None, None)
 
         production_rule_fields: List[Field] = []
         for production_rule in language.all_possible_productions():
@@ -308,6 +311,7 @@ class DROPReader(DatasetReader):
             passage_span_fields = \
                 [SpanField(span[0], span[1], fields["passage"]) for span in answer_info["answer_passage_spans"]]
             if not passage_span_fields:
+                return None
                 passage_span_fields.append(SpanField(-1, -1, fields["passage"]))
 
             fields["answer_as_passage_spans"] = ListField(passage_span_fields)

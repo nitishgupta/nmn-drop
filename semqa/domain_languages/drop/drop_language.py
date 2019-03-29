@@ -9,6 +9,7 @@ from allennlp.semparse.domain_languages.domain_language import (DomainLanguage, 
                                                                 predicate_with_side_args, ExecutionError)
 
 from semqa.domain_languages.drop.execution_parameters import ExecutorParameters
+from semqa.domain_languages import domain_language_utils as dlutils
 
 
 class Date:
@@ -61,7 +62,7 @@ class Date:
         return self > other or self == other
 
     def __str__(self):
-        return f"{self.year}-{self.month}-{self.day}"
+        return f"{self.year}/{self.month}/{self.day}"
 
 
 class DateDistribution:
@@ -132,6 +133,25 @@ class NumberAnswer(Tensor):
 class CountAnswer(Tensor):
     pass
 
+
+def get_empty_language_object():
+    droplanguage = DropLanguage(rawemb_question=None,
+                                embedded_question=None,
+                                encoded_question=None,
+                                rawemb_passage=None,
+                                embedded_passage=None,
+                                encoded_passage=None,
+                                modeled_passage=None,
+                                # passage_token2datetoken_sim=None,
+                                question_mask=None,
+                                passage_mask=None,
+                                passage_tokenidx2dateidx=None,
+                                passage_date_values=None,
+                                parameters=None,
+                                start_types=None)
+    return droplanguage
+
+
 class DropLanguage(DomainLanguage):
     """
     DomainLanguage for the DROP dataset based on neural module networks. This language has a `learned execution model`,
@@ -143,16 +163,25 @@ class DropLanguage(DomainLanguage):
         The learnable parameters that we should use when executing functions in this language.
     """
 
+    #TODO(nitish): Defaulting all parameters to None since in the reader we create an
     def __init__(self,
+                 rawemb_question: Tensor,
+                 embedded_question: Tensor,
                  encoded_question: Tensor,
+                 rawemb_passage: Tensor,
+                 embedded_passage: Tensor,
                  encoded_passage: Tensor,
+                 modeled_passage: Tensor,
+                 # passage_token2datetoken_sim: Tensor,
                  question_mask: Tensor,
                  passage_mask: Tensor,
                  passage_tokenidx2dateidx: torch.LongTensor,
                  passage_date_values: List[Date],
                  parameters: ExecutorParameters,
-                 start_types = None,
+                 start_types,
                  max_samples=10,
+                 question_to_use: str = 'encoded',
+                 passage_to_use: str = 'encoded',
                  metadata={},
                  debug=False) -> None:
 
@@ -160,29 +189,49 @@ class DropLanguage(DomainLanguage):
             start_types = {PassageSpanAnswer, QuestionSpanAnswer}
         super().__init__(start_types=start_types)
 
-        if encoded_passage is None:
+        if embedded_question is None:
             return
 
-
-        self.encoded_passage = encoded_passage
+        self.rawemb_question = rawemb_question
+        self.embedded_question = embedded_question
         self.encoded_question = encoded_question
         self.question_mask = question_mask
+
+        self.rawemb_passage = rawemb_passage
+        self.embedded_passage = embedded_passage
+        self.encoded_passage = encoded_passage
+        self.modeled_passage = modeled_passage
+        # Shape: (passage_length, passage_length)
+        self.passage_token2datetoken_similarity = None # passage_token2datetoken_sim
         self.passage_mask = passage_mask
 
         # Shape: (passage_length, )
-        self.passage_tokenidx2dateidx = passage_tokenidx2dateidx.long() if passage_tokenidx2dateidx is not None else None
+        self.passage_tokenidx2dateidx = passage_tokenidx2dateidx.long()
         # List[Date] - number of unique dates in the passage
         self.passage_date_values: List[Date] = passage_date_values
-        self.num_passage_dates = len(self.passage_date_values) if self.passage_date_values is not None else 0
+        self.num_passage_dates = len(self.passage_date_values)
 
         self.parameters = parameters
         self.max_samples = max_samples
 
-        self.initialize()
+        self.metadata = metadata
+        self._debug = debug
 
-        # print(f"{[d.__str__() for d in self.passage_date_values]}")
-        # print(self.date_greater_than_mat)
-        # print()
+        if passage_to_use == 'embedded':
+            self.passage = self.embedded_passage
+        elif passage_to_use == 'encoded':
+            self.passage = self.encoded_passage
+        elif passage_to_use == 'modeled':
+            self.passage = self.modeled_passage
+        else:
+            raise NotImplementedError
+
+        if question_to_use == 'embedded':
+            self.question = self.embedded_question
+        elif question_to_use == 'encoded':
+            self.question = self.encoded_question
+
+        self.initialize()
 
 
     def initialize(self):
@@ -193,10 +242,9 @@ class DropLanguage(DomainLanguage):
                 date_greater_than_mat[i][j] = 1.0 if self.passage_date_values[i] > self.passage_date_values[j] else 0.0
                 date_greater_than_mat[j][i] = 1.0 - date_greater_than_mat[i][j]
         date_greater_than_mat = allenutil.move_to_device(torch.FloatTensor(date_greater_than_mat),
-                                                         allenutil.get_device_of(self.encoded_passage))
+                                                         allenutil.get_device_of(self.passage))
         # Shape: (num_passage_dates, num_passage_dates)
         self.date_greater_than_mat = date_greater_than_mat
-
 
 
     @predicate_with_side_args(['question_attention'])
@@ -206,14 +254,41 @@ class DropLanguage(DomainLanguage):
 
     @predicate_with_side_args(['question_attention'])
     def find_PassageAttention(self, question_attention: Tensor) -> PassageAttention:
+        question_attention = question_attention * self.question_mask
 
-        ''' For a given question attention compute the passage attention '''
-        attended_question = allenutil.weighted_sum(self.encoded_question.unsqueeze(0),
-                                                   question_attention.unsqueeze(0))
+        # Shape: (1, question_length, passage_length)
+        question_passage_similarity = self.parameters.dotprod_matrix_attn(self.rawemb_question.unsqueeze(0),
+                                                                          self.rawemb_passage.unsqueeze(0))
 
-        # Shape: (passage_length)
-        passage_attention = self.parameters.find_attention(attended_question, self.encoded_passage.unsqueeze(0),
-                                                           self.passage_mask.unsqueeze(0)).squeeze(0)
+        # Shape: (question_length, passage_length)
+        question_passage_attention = allenutil.masked_softmax(question_passage_similarity,
+                                                              self.passage_mask.unsqueeze(0),
+                                                              memory_efficient=True).squeeze(0)
+        # Shape: (question_length, passage_length)
+        question_passage_attention = question_passage_attention * (question_attention * self.question_mask).unsqueeze(1)
+
+        passage_attention = question_passage_attention.sum(0)
+
+        # ''' For a given question attention compute the passage attention '''
+        # attended_question = allenutil.weighted_sum(self.embedded_question.unsqueeze(0),
+        #                                            question_attention.unsqueeze(0))
+        # # attended_question = allenutil.weighted_sum(self.encoded_question.unsqueeze(0),
+        # #                                            question_attention.unsqueeze(0))
+        #
+        # # Shape: (passage_length)
+        # passage_attention = self.parameters.find_attention(attended_question, self.embedded_passage.unsqueeze(0),
+        #                                                    self.passage_mask.unsqueeze(0)).squeeze(0)
+        # # passage_attention = self.parameters.find_attention(attended_question, self.encoded_passage.unsqueeze(0),
+        # #                                                    self.passage_mask.unsqueeze(0)).squeeze(0)
+
+        if self._debug:
+            print("find_PassageAttention: \nQuestionAttention")
+            qattn_vis = dlutils.listTokensVis(question_attention, self.metadata["question_tokens"])
+            print(qattn_vis)
+            print("PassageAttention")
+            pattn_vis = dlutils.listTokensVis(passage_attention, self.metadata["passage_tokens"])
+            print(pattn_vis)
+            print()
 
         return PassageAttention(passage_attention)
 
@@ -229,13 +304,39 @@ class DropLanguage(DomainLanguage):
             Softmax over these scores is the date dist.
         '''
 
+
+        passage_passage_token2date_attention = allenutil.masked_softmax(passage_passage_token2date_attention,
+                                                                        self.passage_mask)
+
         # Shape: (passage_length, passage_length) - weighing each token2date distribution (row) by the token attn
         passage_passage_tokendate_attention = passage_passage_token2date_attention * \
-                                              passage_attention.unsqueeze(1)
+                                              passage_attention.unsqueeze(1) * self.passage_mask.unsqueeze(1)
+
+
+        '''
+        # TEST 2
+        passage_passage_token2date_sim = passage_passage_token2date_attention * \
+                                                    passage_attention.unsqueeze(1)
+
+        passage_passage_tokendate_attention = allenutil.masked_softmax(passage_passage_token2date_sim,
+                                                                       self.passage_mask.unsqueeze(0))
+
+        passage_passage_tokendate_attention_masked = passage_passage_tokendate_attention * self.passage_mask.unsqueeze(1)
+        
+        # Shape: (passage_length, ) -- weighted average of distributions in above step
+        # Attention value for each passage token to be a date associated to the query
+        passage_datetoken_attention = passage_passage_tokendate_attention_masked.sum(0)
+        
+        '''
 
         # Shape: (passage_length, ) -- weighted average of distributions in above step
         # Attention value for each passage token to be a date associated to the query
         passage_datetoken_attention = passage_passage_tokendate_attention.sum(0)
+
+        '''
+        # (passage_length, )
+        passage_token_date_scores = self.passage_token2datetoken_similarity.sum(0)
+        '''
 
         # Shape: (passage_length, ) -- indicating which tokens are dates
         passage_tokenidx2dateidx_mask = (self.passage_tokenidx2dateidx > -1)
@@ -249,7 +350,13 @@ class DropLanguage(DomainLanguage):
 
         date_scores.scatter_add_(0, masked_passage_tokenidx2dateidx, masked_passage_datetoken_attn)
 
+        # date_scores = date_scores/date_scores.sum()
+
         date_distribution = allenutil.masked_softmax(date_scores, mask=None)
+
+        # print()
+        # print(date_scores)
+        # print(date_distribution)
 
         return date_distribution, date_scores
 
@@ -266,6 +373,12 @@ class DropLanguage(DomainLanguage):
 
         prob_date_1_greater = (self.date_greater_than_mat * joint_dist).sum()
 
+        print(date_distribution_1)
+        print(date_distribution_2)
+        print(prob_date_1_greater)
+
+        print()
+
         return prob_date_1_greater
 
     @predicate
@@ -277,13 +390,14 @@ class DropLanguage(DomainLanguage):
         # Shape: (passage_length, passage_length) - for each token x in the row, weight given by it to each token y in
         # the column for y to be a date associated to x
         passage_passage_token2date_similarity = self.parameters.passage_to_date_attention(
-            self.encoded_passage.unsqueeze(0),
-            self.encoded_passage.unsqueeze(0)).squeeze(0)
+            self.passage.unsqueeze(0),
+            self.passage.unsqueeze(0)).squeeze(0)
 
         # Shape: (passage_length, passage_length) - above normalized across columns i.e. each row is normalized
         # distribution over tokens (likelihood of being a date token)
-        passage_passage_token2date_attention = allenutil.masked_softmax(passage_passage_token2date_similarity,
-                                                                        mask=self.passage_mask)
+        passage_passage_token2date_attention = passage_passage_token2date_similarity
+            # allenutil.masked_softmax(passage_passage_token2date_similarity,
+            #                                                             mask=self.passage_mask)
 
         # TODO(nitish): this is same as date_less_than -- can probably be merged
         # Shape: (passage_length)
@@ -315,8 +429,8 @@ class DropLanguage(DomainLanguage):
         # Shape: (passage_length, passage_length) - for each token x in the row, weight given by it to each token y in
         # the column for y to be a date associated to x
         passage_passage_token2date_similarity = self.parameters.passage_to_date_attention(
-            self.encoded_passage.unsqueeze(0),
-            self.encoded_passage.unsqueeze(0)).squeeze(0)
+            self.passage.unsqueeze(0),
+            self.passage.unsqueeze(0)).squeeze(0)
 
         # Shape: (passage_length, passage_length) - above normalized across columns i.e. each row is normalized
         # distribution over tokens (likelihood of being a date token)
@@ -361,35 +475,47 @@ class DropLanguage(DomainLanguage):
     #     return_passage_attention = linear2(linear1(self.encoded_passage) * linear3(attended_passage) * linear4(attended_question)).squeeze()
     #     return PassageAttention(return_passage_attention)
 
+    # @predicate
+    @predicate_with_side_args('passage_attention')
+    # def find_passageSpanAnswer(self, passage_attention: PassageAttention_answer) -> PassageSpanAnswer:
+    def find_passageSpanAnswer(self, passage_attention: Tensor) -> PassageSpanAnswer:
+        # passage_attn = passage_attention._value
 
-    @predicate
-    def find_passageSpanAnswer(self, passage_attention: PassageAttention_answer) -> PassageSpanAnswer:
-        # Shape: (1, D)
-        attended_passage = allenutil.weighted_sum(self.encoded_passage.unsqueeze(0),
-                                                   passage_attention._value.unsqueeze(0))
-
-        # (passage_length, 2*encoding_dim)
-        passage_for_span_start = torch.cat(
-            [self.encoded_passage,
-             attended_passage.repeat(self.encoded_passage.size(0), 1)],
-            -1)
+        passage_attn = passage_attention
 
         # Shape: (passage_length)
-        passage_span_start_logits = self.parameters.passage_span_start_predictor(passage_for_span_start).squeeze(1)
-        passage_span_end_logits = self.parameters.passage_span_end_predictor(passage_for_span_start).squeeze(1)
+        passage_attn = (passage_attn * self.passage_mask)
 
-        passage_span_start_log_probs = allenutil.masked_log_softmax(passage_span_start_logits, self.passage_mask)
-        passage_span_end_log_probs = allenutil.masked_log_softmax(passage_span_end_logits, self.passage_mask)
+        scaled_attentions = [passage_attn * sf for sf in self.parameters.passage_attention_scalingvals]
+        # Shape: (passage_lengths, num_scaling_factors)
+        scaled_passage_attentions = torch.stack(scaled_attentions, dim=1)
 
-        passage_span_start_log_probs = allenutil.replace_masked_values(passage_span_start_log_probs,
-                                                                       self.passage_mask, -1e7)
-        passage_span_end_log_probs = allenutil.replace_masked_values(passage_span_end_log_probs,
-                                                                     self.passage_mask, -1e7)
+        # Shape: (passage_lengths, hidden_dim)
+        passage_span_hidden_reprs = self.parameters.passage_attention_to_span(scaled_passage_attentions.unsqueeze(0),
+                                                                              self.passage_mask.unsqueeze(0)).squeeze(0)
 
-        return PassageSpanAnswer(passage_span_start_log_probs=passage_span_start_log_probs,
-                                 passage_span_end_log_probs=passage_span_end_log_probs,
-                                 start_logits=passage_span_start_logits,
-                                 end_logits=passage_span_end_logits)
+        # Shape: (passage_lengths, 2)
+        passage_span_logits = self.parameters.passage_startend_predictor(passage_span_hidden_reprs)
+
+        # Shape: (passage_length)
+        span_start_logits = passage_span_logits[:, 0]
+        span_end_logits = passage_span_logits[:, 1]
+
+        span_start_logits = allenutil.replace_masked_values(span_start_logits, self.passage_mask, -1e32)
+        span_end_logits = allenutil.replace_masked_values(span_end_logits, self.passage_mask, -1e32)
+
+        span_start_log_probs = allenutil.masked_log_softmax(span_start_logits, self.passage_mask)
+        span_end_log_probs = allenutil.masked_log_softmax(span_end_logits, self.passage_mask)
+
+        span_start_log_probs = allenutil.replace_masked_values(span_start_log_probs,
+                                                               self.passage_mask, -1e32)
+        span_end_log_probs = allenutil.replace_masked_values(span_end_log_probs,
+                                                             self.passage_mask, -1e32)
+
+        return PassageSpanAnswer(passage_span_start_log_probs=span_start_log_probs,
+                                 passage_span_end_log_probs=span_end_log_probs,
+                                 start_logits=span_start_logits,
+                                 end_logits=span_end_logits)
 
     '''
     @predicate
