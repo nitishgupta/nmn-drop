@@ -105,7 +105,7 @@ class DROPParserBase(Model):
 
     def _create_grammar_statelet(self,
                                  language: DropLanguage,
-                                 possible_actions: List[ProductionRule]) -> GrammarStatelet:
+                                 possible_actions: List[ProductionRule]) -> Tuple[GrammarStatelet, List[str]]:
                                  # linked_rule2idx: Dict = None,
                                  # action2ques_linkingscore: torch.FloatTensor = None,
                                  # quesspan_action_emb: torch.FloatTensor = None) -> GrammarStatelet:
@@ -126,11 +126,13 @@ class DROPParserBase(Model):
         """
         # ProductionRule: (rule, is_global_rule, rule_id, nonterminal)
         action2actionidx = {}
+        actionstr2actionidx: List[str] = []
         for action_index, action in enumerate(possible_actions):
             action_string = action[0]
             if action_string:
                 # print("{} {}".format(action_string, action))
                 action2actionidx[action_string] = action_index
+                actionstr2actionidx.append(action_string)
 
         valid_actions = language.get_nonterminal_productions()
         translated_valid_actions: Dict[str, Dict[str, Tuple[torch.Tensor, torch.Tensor, List[int]]]] = {}
@@ -166,9 +168,9 @@ class DROPParserBase(Model):
                                                            global_output_embeddings,
                                                            list(global_action_ids))
 
-        return GrammarStatelet([START_SYMBOL],
-                               translated_valid_actions,
-                               language.is_nonterminal)
+        return (GrammarStatelet([START_SYMBOL],
+                                translated_valid_actions,
+                                language.is_nonterminal), actionstr2actionidx)
 
     @staticmethod
     def _get_denotations(action_strings: List[List[List[str]]],
@@ -218,24 +220,18 @@ class DROPParserBase(Model):
         time, to finalize predictions. We only transform the action string sequences into logical
         forms here.
         """
-
+        if 'languages' in output_dict:
+            output_dict.pop('languages', None)
         return output_dict
 
         '''
-        best_action_strings = output_dict["best_action_strings"]
+        best_action_strings = output_dict["batch_action_seqs"]
         batch_actionseq_sideargs = output_dict["batch_actionseq_sideargs"]
         languages = output_dict["languages"]
         metadatas = output_dict["metadata"]
-
-        # print()
-        # for metadata in metadatas:
-        #     context_texts = metadata["contexts"]
-        #     for c in context_texts:
-        #         print(c)
-        # print()
+        predicted_anspans = output_dict["all_pred_ansspans"]
 
         # This currectly works because there aren't any instance-specific arguments to the language.
-        # language = HotpotQALanguage(qstr_qent_spans=[]) # NlvrWorld([])
         logical_forms = []
         execution_vals = []
         for insidx in range(len(languages)):
@@ -246,7 +242,7 @@ class DROPParserBase(Model):
             l.debug = self._debug
             l.metadata = metadatas[insidx]
 
-            instance_action_sequences = best_action_strings[insidx]
+            instance_action_sequences: List[List[str]] = best_action_strings[insidx]
             instance_action_sideargs = batch_actionseq_sideargs[insidx]
 
             instance_logical_forms = []
@@ -275,15 +271,7 @@ class DROPParserBase(Model):
         output_dict["logical_forms"] = logical_forms
         output_dict["execution_vals"] = execution_vals
         output_dict.pop('languages', None)
-        if not self._wsideargs:
-            output_dict.pop('batch_actionseq_sideargs', None)
-
-        # print('\n\n')
-        # print(output_dict)
+        output_dict.pop('batch_actionseq_sideargs', None)
 
         return output_dict
-        
         '''
-
-
-

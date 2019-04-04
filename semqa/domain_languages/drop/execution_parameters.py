@@ -15,7 +15,8 @@ from allennlp.modules.matrix_attention.dot_product_matrix_attention import DotPr
 from allennlp.modules.matrix_attention.legacy_matrix_attention import LegacyMatrixAttention
 from allennlp.nn import InitializerApplicator, RegularizerApplicator
 from allennlp.modules.attention import Attention, DotProductAttention
-from allennlp.modules.matrix_attention import MatrixAttention, BilinearMatrixAttention, DotProductMatrixAttention
+from allennlp.modules.matrix_attention import (MatrixAttention, BilinearMatrixAttention,
+                                               DotProductMatrixAttention, LinearMatrixAttention)
 
 from allennlp.models.decomposable_attention import DecomposableAttention
 from allennlp.nn.util import masked_softmax, weighted_sum
@@ -58,6 +59,10 @@ class ExecutorParameters(torch.nn.Module, Registrable):
         # that are related to it.
         self.passage_to_date_attention: MatrixAttention = BilinearMatrixAttention(matrix_1_dim=passage_encoding_dim,
                                                                                   matrix_2_dim=passage_encoding_dim)
+
+        # self.passage_to_date_attention: MatrixAttention = LinearMatrixAttention(tensor_1_dim=passage_encoding_dim,
+        #                                                                         tensor_2_dim=passage_encoding_dim,
+        #                                                                         combination="x,y,x*y")
 
         self.relocate_linear1 = torch.nn.Linear(passage_encoding_dim, hidden_dim)
         self.relocate_linear2 = torch.nn.Linear(hidden_dim, 1)

@@ -127,7 +127,7 @@ local compareff_inputdim =
         "tokens": {
           "type": "embedding",
           "pretrained_file": std.extVar("WORDEMB_FILE"),
-          "embedding_dim": 100,
+          "embedding_dim": utils.parse_number(std.extVar("WEMB_DIM")),
           "trainable": false
         },
         "token_characters": {
@@ -167,20 +167,31 @@ local compareff_inputdim =
       "normalize": true
     },
     "num_highway_layers": 2,
+
+//    "phrase_layer": {
+//        "type": "qanet_encoder",
+//        "input_dim": 128,
+//        "hidden_dim": 128,
+//        "attention_projection_dim": 128,
+//        "feedforward_hidden_dim": 128,
+//        "num_blocks": 1,
+//        "num_convs_per_block": 4,
+//        "conv_kernel_size": 7,
+//        "num_attention_heads": 8,
+//        "dropout_prob": 0.1,
+//        "layer_dropout_undecayed_prob": 0.1,
+//        "attention_dropout_prob": 0
+//    },
+
     "phrase_layer": {
-        "type": "qanet_encoder",
-        "input_dim": 128,
-        "hidden_dim": 128,
-        "attention_projection_dim": 128,
-        "feedforward_hidden_dim": 128,
-        "num_blocks": 1,
-        "num_convs_per_block": 4,
-        "conv_kernel_size": 7,
-        "num_attention_heads": 8,
-        "dropout_prob": 0.1,
-        "layer_dropout_undecayed_prob": 0.1,
-        "attention_dropout_prob": 0
+        "type": "gru",
+        "input_size": 300,
+        "hidden_size": 64,
+        "num_layers": 2,
+        "dropout": 0.2,
+        "bidirectional": true
     },
+
     "matrix_attention_layer": {
         "type": "linear",
         "tensor_1_dim": 128,
@@ -202,15 +213,15 @@ local compareff_inputdim =
         "attention_dropout_prob": 0
     },
 
-    "passage_token_to_date": {
-        "type": "stacked_self_attention",
-        "input_dim": 128,
-        "hidden_dim": 128,
-        "projection_dim": 128,
-        "feedforward_hidden_dim": 256,
-        "num_layers": 3,
-        "num_attention_heads": 4,
-    },
+//    "passage_token_to_date": {
+//        "type": "stacked_self_attention",
+//        "input_dim": 128,
+//        "hidden_dim": 128,
+//        "projection_dim": 128,
+//        "feedforward_hidden_dim": 256,
+//        "num_layers": 3,
+//        "num_attention_heads": 4,
+//    },
 
     "passage_attention_to_span": {
         "type": "gru",
@@ -257,7 +268,7 @@ local compareff_inputdim =
           ".*",
           {
               "type": "l2",
-              "alpha": 1e-42
+              "alpha": 1e-4,
           }
       ]
     ],
@@ -268,9 +279,8 @@ local compareff_inputdim =
   "iterator": {
     "type": "basic",
     "track_epoch": true,
-//    "shuffle": true,
     "batch_size": std.extVar("BS"),
-    "max_instances_in_memory": std.extVar("BS")
+    "max_instances_in_memory": 1024
   },
 
   "trainer": {
@@ -279,10 +289,10 @@ local compareff_inputdim =
       "patience": 10,
       "cuda_device": utils.parse_number(std.extVar("GPU")),
       "num_epochs": utils.parse_number(std.extVar("EPOCHS")),
-      "shuffle": false,
+      "shuffle": true,
       "optimizer": {
           "type": "adam",
-          "lr": 0.001,
+          "lr": utils.parse_number(std.extVar("LR")),
           "betas": [
               0.8,
               0.999
@@ -297,8 +307,8 @@ local compareff_inputdim =
       "validation_metric": "+f1"
   },
 
-  "random_seed": 10,
-  "numpy_seed": 10,
-  "pytorch_seed": 10
+  "random_seed": 13,
+  "numpy_seed": 13,
+  "pytorch_seed": 13
 
 }

@@ -17,6 +17,7 @@ from allennlp.state_machines.states import GrammarBasedState
 import allennlp.nn.util as allenutil
 from allennlp.nn import InitializerApplicator, RegularizerApplicator
 from allennlp.models.reading_comprehension.util import get_best_span
+from allennlp.state_machines.transition_functions import BasicTransitionFunction
 
 from semqa.state_machines.constrained_beam_search import ConstrainedBeamSearch
 from semqa.state_machines.transition_functions.linking_transition_func_emb import LinkingTransitionFunctionEmbeddings
@@ -35,10 +36,27 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 # In this three tuple, add "QENT:qent QSTR:qstr" in the twp gaps, and join with space to get the logical form
 GOLD_BOOL_LF = ("(bool_and (bool_qent_qstr ", ") (bool_qent_qstr", "))")
 
-def getGoldLF(qent1_action, qent2_action, qstr_action):
-    qent1, qent2, qstr = qent1_action.split(' -> ')[1], qent2_action.split(' -> ')[1], qstr_action.split(' -> ')[1]
-    # These qent1, qent2, and qstr are actions
-    return f"{GOLD_BOOL_LF[0]} {qent1} {qstr}{GOLD_BOOL_LF[1]} {qent2} {qstr}{GOLD_BOOL_LF[2]}"
+
+def getGoldLF(question_tokens: List[str]):
+    # "(find_passageSpanAnswer (compare_date_greater_than find_PassageAttention find_PassageAttention))"
+    lf1 = "(find_passageSpanAnswer ("
+    lf2 = " find_PassageAttention find_PassageAttention))"
+    greater_than = "compare_date_greater_than"
+    lesser_than = "compare_date_lesser_than"
+
+    # Correct if Attn1 is first event
+    lesser_tokens = ['first', 'earlier', 'forst', 'firts']
+    greater_tokens = ['later', 'last', 'second']
+
+    for t in lesser_tokens:
+        if t in question_tokens:
+            return f"{lf1}{lesser_than}{lf2}"
+
+    for t in greater_tokens:
+        if t in question_tokens:
+            return f"{lf1}{greater_than}{lf2}"
+
+    return f"{lf1}{greater_than}{lf2}"
 
 
 @Model.register("drop_parser")
@@ -51,7 +69,7 @@ class DROPSemanticParser(DROPParserBase):
                  phrase_layer: Seq2SeqEncoder,
                  matrix_attention_layer: MatrixAttention,
                  modeling_layer: Seq2SeqEncoder,
-                 passage_token_to_date: Seq2SeqEncoder,
+                 # passage_token_to_date: Seq2SeqEncoder,
                  passage_attention_to_span: Seq2SeqEncoder,
                  decoder_beam_search: ConstrainedBeamSearch,
                  max_decoding_steps: int,
@@ -88,6 +106,17 @@ class DROPSemanticParser(DROPParserBase):
 
 
         question_encoding_dim = phrase_layer.get_output_dim()
+
+        self._decoder_step = BasicTransitionFunction(encoder_output_dim=question_encoding_dim,
+                                                     action_embedding_dim=action_embedding_dim,
+                                                     input_attention=transitionfunc_attention,
+                                                     activation=Activation.by_name('tanh')(),
+                                                     predict_start_type_separately=False,
+                                                     num_start_types=1,
+                                                     add_action_bias=False,
+                                                     dropout=dropout)
+
+        '''
         self._decoder_step = LinkingTransitionFunctionEmbeddings(encoder_output_dim=question_encoding_dim,
                                                                  action_embedding_dim=action_embedding_dim,
                                                                  input_attention=transitionfunc_attention,
@@ -96,6 +125,7 @@ class DROPSemanticParser(DROPParserBase):
                                                                  predict_start_type_separately=False,
                                                                  add_action_bias=False,
                                                                  dropout=dropout)
+        '''
 
         self._decoder_beam_search = decoder_beam_search
         self._max_decoding_steps = max_decoding_steps
@@ -128,7 +158,7 @@ class DROPSemanticParser(DROPParserBase):
         self._modeling_proj_layer = torch.nn.Linear(encoding_out_dim * 4, modeling_in_dim)
         self._modeling_layer = modeling_layer
 
-        self.passage_token_to_date = passage_token_to_date
+        # self.passage_token_to_date = passage_token_to_date
         self.dotprod_matrix_attn = DotProductMatrixAttention()
 
         if dropout > 0:
@@ -145,14 +175,11 @@ class DROPSemanticParser(DROPParserBase):
                                                        dropout=dropout)
 
         self.modelloss_metric = Average()
+        self.execloss_metric = Average()
         self._drop_metrics = DropEmAndF1()
         initializers(self)
 
         self._goldactions = goldactions
-
-
-    def device_id(self):
-        allenutil.get_device_of()
 
     @overrides
     def forward(self,
@@ -174,6 +201,7 @@ class DROPSemanticParser(DROPParserBase):
                 metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
 
         batch_size = len(actions)
+        device_id = self._get_prediction_device()
 
         if epoch_num is not None:
             # epoch_num in allennlp starts from 0
@@ -181,22 +209,37 @@ class DROPSemanticParser(DROPParserBase):
         else:
             epoch = None
 
+
         question_mask = allenutil.get_text_field_mask(question).float()
         passage_mask = allenutil.get_text_field_mask(passage).float()
 
         rawemb_question = self._dropout(self._text_field_embedder(question))
         rawemb_passage = self._dropout(self._text_field_embedder(passage))
 
-        embedded_question = self._highway_layer(self._embedding_proj_layer(rawemb_question))
-        embedded_passage = self._highway_layer(self._embedding_proj_layer(rawemb_passage))
+        # embedded_question = self._highway_layer(self._embedding_proj_layer(rawemb_question))
+        # embedded_passage = self._highway_layer(self._embedding_proj_layer(rawemb_passage))
+        #
+        # projected_embedded_question = self._encoding_proj_layer(embedded_question)
+        # projected_embedded_passage = self._encoding_proj_layer(embedded_passage)
 
-        projected_embedded_question = self._encoding_proj_layer(embedded_question)
-        projected_embedded_passage = self._encoding_proj_layer(embedded_passage)
+        #srtip version
+        projected_embedded_question = rawemb_question
+        projected_embedded_passage = rawemb_passage
 
         # Shape: (batch_size, question_length, encoding_dim)
         encoded_question = self._dropout(self._phrase_layer(projected_embedded_question, question_mask))
         # Shape: (batch_size, passage_length, encoding_dim)
         encoded_passage = self._dropout(self._phrase_layer(projected_embedded_passage, passage_mask))
+
+        if self._debug:
+            rawemb_passage_norm = self.compute_avg_norm(rawemb_passage)
+            print(f"Raw embedded passage Norm: {rawemb_passage_norm}")
+
+            projected_embedded_passage_norm = self.compute_avg_norm(projected_embedded_passage)
+            print(f"Projected embedded passage Norm: {projected_embedded_passage_norm}")
+
+            encoded_passage_norm = self.compute_avg_norm(encoded_passage)
+            print(f"Encoded passage Norm: {encoded_passage_norm}")
 
         '''
         passage_token2date_encoding = self.passage_token_to_date(encoded_passage, passage_mask)
@@ -212,6 +255,7 @@ class DROPSemanticParser(DROPParserBase):
                                                                              passage_mask.unsqueeze(1), 0.0)
         '''
 
+        '''
         # Shape: (batch_size, passage_length, question_length)
         passage_question_similarity = self._matrix_attention(encoded_passage, encoded_question)
         # Shape: (batch_size, passage_length, question_length)
@@ -243,6 +287,7 @@ class DROPSemanticParser(DROPParserBase):
         # Shape: (batch_size, passage_length, modeling_dim)
         modeled_passage_input = self._modeling_proj_layer(merged_passage_attention_vectors)
         modeled_passage = self._dropout(self._modeling_layer(modeled_passage_input, passage_mask))
+        '''
 
         """ Parser setup """
         # Shape: (B, encoding_dim)
@@ -256,7 +301,7 @@ class DROPSemanticParser(DROPParserBase):
         passage_rawemb_aslist = [rawemb_passage[i] for i in range(batch_size)]
         passage_embedded_aslist = [projected_embedded_passage[i] for i in range(batch_size)]
         passage_encoded_aslist = [encoded_passage[i] for i in range(batch_size)]
-        passage_modeled_aslist = [modeled_passage[i] for i in range(batch_size)]
+        # passage_modeled_aslist = [modeled_passage[i] for i in range(batch_size)]
         passage_mask_aslist = [passage_mask[i] for i in range(batch_size)]
         # passage_token2datetoken_sim_aslist = [passage_token2datetoken_similarity[i] for i in range(batch_size)]
 
@@ -277,7 +322,7 @@ class DROPSemanticParser(DROPParserBase):
                                   rawemb_passage=passage_rawemb_aslist[i],
                                   embedded_passage=passage_embedded_aslist[i],
                                   encoded_passage=passage_encoded_aslist[i],
-                                  modeled_passage=passage_modeled_aslist[i],
+                                  # modeled_passage=passage_modeled_aslist[i],
                                   # passage_token2datetoken_sim=None, #passage_token2datetoken_sim_aslist[i],
                                   question_mask=question_mask_aslist[i],
                                   passage_mask=passage_mask_aslist[i],
@@ -285,6 +330,7 @@ class DROPSemanticParser(DROPParserBase):
                                   passage_date_values=passage_date_values[i],
                                   parameters=self._executor_parameters,
                                   start_types=batch_start_types[i],
+                                  device_id=device_id,
                                   question_to_use='encoded',
                                   passage_to_use='encoded',
                                   debug=self._debug,
@@ -294,7 +340,12 @@ class DROPSemanticParser(DROPParserBase):
         initial_score_list = [next(iter(question.values())).new_zeros(1, dtype=torch.float)
                               for _ in range(batch_size)]
 
-        initial_grammar_statelets = [self._create_grammar_statelet(languages[i], actions[i]) for i in range(batch_size)]
+        initial_grammar_statelets = []
+        batch_actionstr2actionidx = []
+        for i in range(batch_size):
+            (grammar_statelet, actionstr2actionidx) = self._create_grammar_statelet(languages[i], actions[i])
+            initial_grammar_statelets.append(grammar_statelet)
+            batch_actionstr2actionidx.append(actionstr2actionidx)
 
         initial_rnn_states = self._get_initial_rnn_state(question_encoded=encoded_question,
                                                          question_mask=question_mask,
@@ -311,6 +362,7 @@ class DROPSemanticParser(DROPParserBase):
                                           rnn_state=initial_rnn_states,
                                           grammar_state=initial_grammar_statelets,
                                           possible_actions=actions,
+                                          extras=batch_actionstr2actionidx,
                                           debug_info=initial_side_args)
 
         # Mapping[int, Sequence[StateType]]
@@ -334,17 +386,19 @@ class DROPSemanticParser(DROPParserBase):
          batch_actionseq_sideargs) = semparse_utils._convert_finalstates_to_actions(best_final_states=best_final_states,
                                                                                     possible_actions=actions,
                                                                                     batch_size=batch_size)
-        '''
-        # For printing predicted - programs
-        for idx, instance_progs in enumerate(batch_actionseqs):
-            print(f"InstanceIdx:{idx}")
-            for prog in instance_progs:
-                print(f"{languages[idx].action_sequence_to_logical_form(prog)} : {prog}")
-            print("\n")
-        '''
 
         if self._goldactions:
-            datecompare_gold_qattns = self.get_gold_quesattn_datecompare(metadata, encoded_question.size()[1])
+            gold_batch_actionseqs = []
+            for idx in range(batch_size):
+                question_tokens = metadata[idx]["question_tokens"]
+                gold_lf = getGoldLF(question_tokens)
+                gold_action_seq: List[str] = languages[idx].logical_form_to_action_sequence(gold_lf)
+                gold_batch_actionseqs.append([gold_action_seq])
+
+            batch_actionseqs = gold_batch_actionseqs
+
+            datecompare_gold_qattns = self.get_gold_quesattn_datecompare(metadata, encoded_question.size()[1],
+                                                                         device_id)
             self.datecompare_goldattn_to_sideargs(batch_actionseqs,
                                                   batch_actionseq_sideargs,
                                                   datecompare_gold_qattns)
@@ -356,6 +410,15 @@ class DROPSemanticParser(DROPParserBase):
                                               batch_actionseq_sideargs,
                                               goldpassageattention_aslist)
 
+        # # For printing predicted - programs
+        # for idx, instance_progs in enumerate(batch_actionseqs):
+        #     print(f"InstanceIdx:{idx}")
+        #     print(metadata[idx]["question_tokens"])
+        #     scores = batch_actionseq_scores[idx]
+        #     for prog, score in zip(instance_progs, scores):
+        #         print(f"{languages[idx].action_sequence_to_logical_form(prog)} : {score}")
+        #     print("\n")
+
         # List[List[Any]], List[List[str]]: Denotations and their types for all instances
         batch_denotations, batch_denotation_types = self._get_denotations(batch_actionseqs,
                                                                           languages,
@@ -364,6 +427,16 @@ class DROPSemanticParser(DROPParserBase):
         output_dict = {}
         ''' Computing losses if gold answers are given '''
         if answer_types is not None:
+            # Execution losses --
+            exec_loss = 0.0
+            execloss_normalizer = 0.0
+            for ins_dens in batch_denotations:
+                for den in ins_dens:
+                    execloss_normalizer += 1.0
+                    exec_loss += den.loss
+
+            exec_loss *= 1.0
+
             loss = 0
             for i in range(batch_size):
                 if answer_types[i] == dropconstants.SPAN_TYPE:
@@ -410,8 +483,11 @@ class DROPSemanticParser(DROPParserBase):
                     raise NotImplementedError
 
             batch_loss = loss / batch_size
+            batch_exec_loss = exec_loss / execloss_normalizer
+
             self.modelloss_metric(myutils.tocpuNPList(batch_loss)[0])
-            output_dict["loss"] = batch_loss
+            self.execloss_metric(myutils.tocpuNPList(batch_exec_loss))
+            output_dict["loss"] = batch_loss + batch_exec_loss
 
         if metadata is not None:
             batch_question_strs = [metadata[i]["original_question"] for i in range(batch_size)]
@@ -438,22 +514,35 @@ class DROPSemanticParser(DROPParserBase):
             output_dict['answer_as_passage_spans'] = answer_as_passage_spans
             output_dict['predicted_spans'] = batch_best_spans
 
+            output_dict["batch_action_seqs"] = batch_actionseqs
+            output_dict["batch_actionseq_sideargs"] = batch_actionseq_sideargs
+            output_dict["languages"] = languages
+            output_dict["all_pred_ansspans"] = batch_predicted_answers
+
             if answer_annotations:
                 for i in range(batch_size):
                     self._drop_metrics(predicted_answers[i], [answer_annotations[i]])
 
         return output_dict
 
+    def compute_avg_norm(self, tensor):
+        dim0_size = tensor.size()[0]
+        dim1_size = tensor.size()[1]
+
+        tensor_norm = tensor.norm(p=2, dim=2).sum() / (dim0_size * dim1_size)
+
+        return tensor_norm
 
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
         metric_dict = {}
         model_loss = self.modelloss_metric.get_metric(reset)
+        exec_loss = self.execloss_metric.get_metric(reset)
         exact_match, f1_score = self._drop_metrics.get_metric(reset)
-        metric_dict.update({'em': exact_match, 'f1': f1_score, 'model_loss': model_loss})
+        metric_dict.update({'em': exact_match, 'f1': f1_score,
+                            'model_loss': model_loss,
+                            'exloss': exec_loss})
 
         return metric_dict
-
-
 
     @staticmethod
     def _get_span_answer_log_prob(answer_as_spans: torch.LongTensor,
@@ -632,7 +721,8 @@ class DROPSemanticParser(DROPParserBase):
 
 
 
-    def _gold_qattn_for_datecompare(self, qstr: str, masked_len: int) -> Tuple[torch.Tensor, torch.Tensor]:
+    def _gold_qattn_for_datecompare(self, qstr: str, masked_len: int,
+                                    device_id: int) -> Tuple[torch.Tensor, torch.Tensor]:
         """ Get gold question attention for date_compare questions
             Question only has one 'or': Which happened first , event A or event B ?
             Attn2 is after 'or' until '?'
@@ -644,8 +734,14 @@ class DROPSemanticParser(DROPParserBase):
 
         tokens = qstr.split(' ')
 
-        attn_1 = torch.cuda.FloatTensor(masked_len, device=0).fill_(0.0)
-        attn_2 = torch.cuda.FloatTensor(masked_len, device=0).fill_(0.0)
+        # attn_1 = torch.cuda.FloatTensor(masked_len, device=0).fill_(0.0)
+        # attn_2 = torch.cuda.FloatTensor(masked_len, device=0).fill_(0.0)
+
+        attn_1 = torch.FloatTensor(masked_len).fill_(0.0)
+        attn_2 = torch.FloatTensor(masked_len).fill_(0.0)
+
+        attn_1 = allenutil.move_to_device(attn_1, device_id)
+        attn_2 = allenutil.move_to_device(attn_2, device_id)
 
         or_idx = tokens.index('or')
         # Last token is ? which we don't want to attend to
@@ -687,10 +783,14 @@ class DROPSemanticParser(DROPParserBase):
         attn_1[split_idx + 1: or_idx] = 1.0
         attn_1 = attn_1 / attn_1.sum()
 
+        # return attn_2, attn_1
         return attn_1, attn_2
 
 
-    def get_gold_quesattn_datecompare(self, metadata, masked_len) -> List[Tuple[torch.Tensor, torch.Tensor]]:
+    def get_gold_quesattn_datecompare(self,
+                                      metadata,
+                                      masked_len,
+                                      device_id) -> List[Tuple[torch.Tensor, torch.Tensor]]:
         batch_size = len(metadata)
 
         gold_ques_attns = []
@@ -700,7 +800,7 @@ class DROPSemanticParser(DROPParserBase):
             qstr = ' '.join(question_tokens)
             assert len(qstr.split(' ')) == len(question_tokens)
 
-            gold_ques_attns.append(self._gold_qattn_for_datecompare(qstr, masked_len))
+            gold_ques_attns.append(self._gold_qattn_for_datecompare(qstr, masked_len, device_id))
 
         return gold_ques_attns
 

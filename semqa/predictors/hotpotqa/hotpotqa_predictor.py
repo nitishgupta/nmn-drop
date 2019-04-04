@@ -29,7 +29,7 @@ class HotpotQAPredictor(Predictor):
         return sanitize(outputs)
 
 
-    def _print_ExecutionValTree(self, exval_tree, depth):
+    def _print_ExecutionValTree(self, exval_tree, depth=0):
         """
         exval_tree: [[root_func_name, value], [], [], []]
         """

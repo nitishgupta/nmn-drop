@@ -22,8 +22,9 @@ export GPU=0
 export TRAINING_DATA_FILE=${TRAINFILE}
 export VAL_DATA_FILE=${VALFILE}
 
+export WEMB_DIM=100
+# export WORDEMB_FILE="./resources/embeddings/glove.840B.300d.lower.converted.zip"
 export WORDEMB_FILE="./resources/embeddings/glove/glove.6B.100d.txt.gz"
-# "./resources/embeddings/glove.840B.300d.lower.converted.zip"
 
 export BIDAF_MODEL_TAR='https://s3-us-west-2.amazonaws.com/allennlp/models/bidaf-model-2017.09.15-charpad.tar.gz'
 export BIDAF_WORDEMB_FILE='./resources/embeddings/glove/glove.6B.100d.txt.gz'
@@ -38,9 +39,12 @@ export GOLDACTIONS=true
 export BS=8
 export DROPOUT=0.2
 
-export BEAMSIZE=10
+export LR=0.001
+export RG=1e-4
+
+export BEAMSIZE=1
 export MAX_DECODE_STEP=8
-export EPOCHS=5
+export EPOCHS=30
 
 export DEBUG=false
 
@@ -48,9 +52,9 @@ export DEBUG=false
 CHECKPOINT_ROOT=./resources/semqa/checkpoints
 SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/date_num
 MODEL_DIR=drop_parser
-PARAMETERS_DIR1=BS_${BS}/Drop_${DROPOUT}/TOKENS_${TOKENIDX}/GOLDAC_${GOLDACTIONS}
+PARAMETERS_DIR1=BS_${BS}/Drop_${DROPOUT}/TOKENS_${TOKENIDX}/GOLDAC_${GOLDACTIONS}/ED_${WEMB_DIM}/LR_${LR}/RG_${RG}
 # PARAMETERS_DIR2=AUXGPLOSS_${AUXGPLOSS}/ATTCOV_${ATTCOVLOSS}/PTREX_${PTREX}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PARAMETERS_DIR1} #/${PARAMETERS_DIR2}
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PARAMETERS_DIR1}/grustrip/NewDateComp_sf_notan_eloss #/${PARAMETERS_DIR2}
 
 #######################################################################################################################
 

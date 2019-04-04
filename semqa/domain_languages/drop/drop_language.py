@@ -3,6 +3,7 @@ from typing import Dict, List, Tuple
 import torch
 from torch import Tensor
 from torch.nn import LSTM
+import torch.nn.functional as F
 
 import allennlp.nn.util as allenutil
 from allennlp.semparse.domain_languages.domain_language import (DomainLanguage, predicate,
@@ -42,18 +43,32 @@ class Date:
             raise ExecutionError("Can only compare Dates with Dates")
         # We're doing an exclusive or below.
         if (self.year == -1) != (other.year == -1):
-            return False  # comparison undefined
+            # Penalize the underspecified date
+            if self.year == -1:
+                return False
+            else:
+                return True
+            # return False  # comparison undefined
         # If both years are -1, we proceed.
         if self.year != other.year:
             return self.year > other.year
         # The years are equal and not -1, or both are -1.
-        if self.month == -1 or other.month == -1:
+
+        if self.month == -1 and other.month == -1:
             return False
+        if self.month == -1:
+            return False
+        if other.month == -1:
+            return True
         if self.month != other.month:
             return self.month > other.month
         # The months and years are equal and not -1
-        if self.day == -1 or other.day == -1:
+        if self.day == -1 and other.day == -1:
             return False
+        if self.day == -1:
+            return False
+        if other.day == -1:
+            return True
         return self.day > other.day
 
     def __ge__(self, other) -> bool:
@@ -90,11 +105,13 @@ class PassageSpanAnswer():
                  passage_span_start_log_probs: Tensor,
                  passage_span_end_log_probs: Tensor,
                  start_logits,
-                 end_logits) -> None:
+                 end_logits,
+                 loss=0.0) -> None:
         """ Tuple of start_log_probs and end_log_probs tensor """
         self.start_logits = start_logits
         self.end_logits = end_logits
         self._value = (passage_span_start_log_probs, passage_span_end_log_probs)
+        self.loss = loss
 
 
 class QuestionSpanAnswer():
@@ -120,8 +137,9 @@ class PassageAttention():
 
 
 class PassageAttention_answer():
-    def __init__(self, passage_attention):
+    def __init__(self, passage_attention, loss=0.0):
         self._value = passage_attention
+        self.loss = loss
 
 
 # A ``NumberAnswer`` is a distribution over the possible answers from addition and subtraction.
@@ -141,7 +159,7 @@ def get_empty_language_object():
                                 rawemb_passage=None,
                                 embedded_passage=None,
                                 encoded_passage=None,
-                                modeled_passage=None,
+                                # modeled_passage=None,
                                 # passage_token2datetoken_sim=None,
                                 question_mask=None,
                                 passage_mask=None,
@@ -171,7 +189,7 @@ class DropLanguage(DomainLanguage):
                  rawemb_passage: Tensor,
                  embedded_passage: Tensor,
                  encoded_passage: Tensor,
-                 modeled_passage: Tensor,
+                 # modeled_passage: Tensor,
                  # passage_token2datetoken_sim: Tensor,
                  question_mask: Tensor,
                  passage_mask: Tensor,
@@ -179,6 +197,7 @@ class DropLanguage(DomainLanguage):
                  passage_date_values: List[Date],
                  parameters: ExecutorParameters,
                  start_types,
+                 device_id: int = -1,
                  max_samples=10,
                  question_to_use: str = 'encoded',
                  passage_to_use: str = 'encoded',
@@ -200,9 +219,7 @@ class DropLanguage(DomainLanguage):
         self.rawemb_passage = rawemb_passage
         self.embedded_passage = embedded_passage
         self.encoded_passage = encoded_passage
-        self.modeled_passage = modeled_passage
-        # Shape: (passage_length, passage_length)
-        self.passage_token2datetoken_similarity = None # passage_token2datetoken_sim
+        # self.modeled_passage = modeled_passage
         self.passage_mask = passage_mask
 
         # Shape: (passage_length, )
@@ -222,7 +239,8 @@ class DropLanguage(DomainLanguage):
         elif passage_to_use == 'encoded':
             self.passage = self.encoded_passage
         elif passage_to_use == 'modeled':
-            self.passage = self.modeled_passage
+            raise NotImplementedError
+            # self.passage = self.modeled_passage
         else:
             raise NotImplementedError
 
@@ -231,21 +249,78 @@ class DropLanguage(DomainLanguage):
         elif question_to_use == 'encoded':
             self.question = self.encoded_question
 
-        self.initialize()
+        self.device_id = device_id
 
+        initialization_returns = self.initialize()
+        self.question_passage_attention = initialization_returns["question_passage_attention"]
+        self.date_lt_mat = initialization_returns["date_lt_mat"]
+        self.date_gt_mat = initialization_returns["date_gt_mat"]
+        # Shape: (passage_length, passage_length)
+        self.passage_passage_token2date_similarity = initialization_returns["p2p_t2date_sim_mat"]
+
+        if self._debug:
+            siml1norm = self.passage_passage_token2date_similarity.norm(p=1)/(self.passage_mask.sum() ** 2)
+            sim_avgval = self.passage_passage_token2date_similarity.sum() / (self.passage_mask.sum() ** 2)
+            print(f"Passage Token2Date sim, Avg L1 Norm: {siml1norm}. Avg Val: {sim_avgval}")
 
     def initialize(self):
-        date_greater_than_mat = [[0 for _ in range(self.num_passage_dates)] for _ in range(self.num_passage_dates)]
-        # self.encoded_passage.new_zeros(self.num_passage_dates, self.num_passage_dates)
-        for i in range(self.num_passage_dates):
-            for j in range(i, self.num_passage_dates):
-                date_greater_than_mat[i][j] = 1.0 if self.passage_date_values[i] > self.passage_date_values[j] else 0.0
-                date_greater_than_mat[j][i] = 1.0 - date_greater_than_mat[i][j]
-        date_greater_than_mat = allenutil.move_to_device(torch.FloatTensor(date_greater_than_mat),
-                                                         allenutil.get_device_of(self.passage))
-        # Shape: (num_passage_dates, num_passage_dates)
-        self.date_greater_than_mat = date_greater_than_mat
+        date_gt_mat, date_lt_mat = self.compute_date_comparison_matrices(self.passage_date_values, self.device_id)
 
+        question_passage_attention = self.compute_question_passage_similarity()
+
+        passage_passage_token2date_similarity = self.compute_passage_token2date_similarity()
+
+        return {"question_passage_attention": question_passage_attention,
+                "date_gt_mat": date_gt_mat,
+                "date_lt_mat": date_lt_mat,
+                "p2p_t2date_sim_mat": passage_passage_token2date_similarity}
+
+
+    def compute_question_passage_similarity(self):
+        # Shape: (1, question_length, passage_length)
+        question_passage_similarity = self.parameters.dotprod_matrix_attn(self.rawemb_question.unsqueeze(0),
+                                                                          self.rawemb_passage.unsqueeze(0))
+        question_passage_similarity = self.parameters._dropout(question_passage_similarity)
+
+        # Shape: (question_length, passage_length)
+        question_passage_attention = allenutil.masked_softmax(question_passage_similarity,
+                                                              self.passage_mask.unsqueeze(0),
+                                                              memory_efficient=True).squeeze(0)
+
+        return question_passage_attention
+
+    def compute_passage_token2date_similarity(self):
+        # Shape: (passage_length, passage_length) - for each token x in the row, weight given by it to each token y in
+        # the column for y to be a date associated to x
+        passage_passage_token2date_similarity = self.parameters._dropout(self.parameters.passage_to_date_attention(
+            self.passage.unsqueeze(0),
+            self.passage.unsqueeze(0))).squeeze(0)
+
+        passage_passage_token2date_similarity = passage_passage_token2date_similarity * self.passage_mask.unsqueeze(0)
+        passage_passage_token2date_similarity = passage_passage_token2date_similarity * self.passage_mask.unsqueeze(1)
+
+        plen = self.passage_mask.size()[0]
+        passage_passage_token2date_similarity = passage_passage_token2date_similarity / plen
+
+        passage_passage_token2date_similarity = torch.tanh(passage_passage_token2date_similarity)
+
+        return passage_passage_token2date_similarity
+
+
+    @staticmethod
+    def compute_date_comparison_matrices(date_values: List[Date], device_id: int):
+        date_gt_mat = [[0 for _ in range(len(date_values))] for _ in range(len(date_values))]
+        date_lt_mat = [[0 for _ in range(len(date_values))] for _ in range(len(date_values))]
+        # self.encoded_passage.new_zeros(self.num_passage_dates, self.num_passage_dates)
+        for i in range(len(date_values)):
+            for j in range(len(date_values)):
+                date_gt_mat[i][j] = 1.0 if date_values[i] > date_values[j] else 0.0
+                date_lt_mat[i][j] = 1.0 if date_values[i] < date_values[j] else 0.0
+                # date_greater_than_mat[j][i] = 1.0 - date_greater_than_mat[i][j]
+        date_gt_mat = allenutil.move_to_device(torch.FloatTensor(date_gt_mat), device_id)
+        date_lt_mat = allenutil.move_to_device(torch.FloatTensor(date_lt_mat), device_id)
+
+        return date_gt_mat, date_lt_mat
 
     @predicate_with_side_args(['question_attention'])
     def find_QuestionAttention(self, question_attention: Tensor) -> QuestionAttention:
@@ -256,44 +331,24 @@ class DropLanguage(DomainLanguage):
     def find_PassageAttention(self, question_attention: Tensor) -> PassageAttention:
         question_attention = question_attention * self.question_mask
 
-        # Shape: (1, question_length, passage_length)
-        question_passage_similarity = self.parameters.dotprod_matrix_attn(self.rawemb_question.unsqueeze(0),
-                                                                          self.rawemb_passage.unsqueeze(0))
-
         # Shape: (question_length, passage_length)
-        question_passage_attention = allenutil.masked_softmax(question_passage_similarity,
-                                                              self.passage_mask.unsqueeze(0),
-                                                              memory_efficient=True).squeeze(0)
-        # Shape: (question_length, passage_length)
-        question_passage_attention = question_passage_attention * (question_attention * self.question_mask).unsqueeze(1)
+        question_passage_attention = self.question_passage_attention * question_attention.unsqueeze(1)
 
         passage_attention = question_passage_attention.sum(0)
 
-        # ''' For a given question attention compute the passage attention '''
-        # attended_question = allenutil.weighted_sum(self.embedded_question.unsqueeze(0),
-        #                                            question_attention.unsqueeze(0))
-        # # attended_question = allenutil.weighted_sum(self.encoded_question.unsqueeze(0),
-        # #                                            question_attention.unsqueeze(0))
-        #
-        # # Shape: (passage_length)
-        # passage_attention = self.parameters.find_attention(attended_question, self.embedded_passage.unsqueeze(0),
-        #                                                    self.passage_mask.unsqueeze(0)).squeeze(0)
-        # # passage_attention = self.parameters.find_attention(attended_question, self.encoded_passage.unsqueeze(0),
-        # #                                                    self.passage_mask.unsqueeze(0)).squeeze(0)
-
-        if self._debug:
-            print("find_PassageAttention: \nQuestionAttention")
-            qattn_vis = dlutils.listTokensVis(question_attention, self.metadata["question_tokens"])
-            print(qattn_vis)
-            print("PassageAttention")
-            pattn_vis = dlutils.listTokensVis(passage_attention, self.metadata["passage_tokens"])
-            print(pattn_vis)
-            print()
+        # if self._debug:
+        #     print("find_PassageAttention: \nQuestionAttention")
+        #     qattn_vis = dlutils.listTokensVis(question_attention, self.metadata["question_tokens"])
+        #     print(qattn_vis)
+        #     print("PassageAttention")
+        #     pattn_vis = dlutils.listTokensVis(passage_attention, self.metadata["passage_tokens"])
+        #     print(pattn_vis)
+        #     print()
 
         return PassageAttention(passage_attention)
 
 
-    def compute_date_scores(self, passage_passage_token2date_attention, passage_attention):
+    def compute_date_scores(self, passage_attention: Tensor):
         ''' Given a passage over passage token2date attention (normalized), and an additional passage attention
             for token importance, compute a distribution over (unique) dates in the passage.
 
@@ -304,63 +359,52 @@ class DropLanguage(DomainLanguage):
             Softmax over these scores is the date dist.
         '''
 
+        # (passage_length, passage_length)
+        # method 2
+        passage_passage_tokendate_attention = self.passage_passage_token2date_similarity * passage_attention.unsqueeze(1)
+        # end method 2
 
-        passage_passage_token2date_attention = allenutil.masked_softmax(passage_passage_token2date_attention,
-                                                                        self.passage_mask)
-
-        # Shape: (passage_length, passage_length) - weighing each token2date distribution (row) by the token attn
-        passage_passage_tokendate_attention = passage_passage_token2date_attention * \
-                                              passage_attention.unsqueeze(1) * self.passage_mask.unsqueeze(1)
-
-
-        '''
-        # TEST 2
-        passage_passage_token2date_sim = passage_passage_token2date_attention * \
-                                                    passage_attention.unsqueeze(1)
-
-        passage_passage_tokendate_attention = allenutil.masked_softmax(passage_passage_token2date_sim,
-                                                                       self.passage_mask.unsqueeze(0))
-
-        passage_passage_tokendate_attention_masked = passage_passage_tokendate_attention * self.passage_mask.unsqueeze(1)
-        
-        # Shape: (passage_length, ) -- weighted average of distributions in above step
-        # Attention value for each passage token to be a date associated to the query
-        passage_datetoken_attention = passage_passage_tokendate_attention_masked.sum(0)
-        
-        '''
+        # maxidx = torch.argmax(passage_attention)
+        # print(passage_attention[maxidx])
+        # print(self.passage_passage_token2date_similarity[maxidx])
+        # print(passage_passage_tokendate_attention[maxidx])
 
         # Shape: (passage_length, ) -- weighted average of distributions in above step
         # Attention value for each passage token to be a date associated to the query
         passage_datetoken_attention = passage_passage_tokendate_attention.sum(0)
 
-        '''
-        # (passage_length, )
-        passage_token_date_scores = self.passage_token2datetoken_similarity.sum(0)
-        '''
-
         # Shape: (passage_length, ) -- indicating which tokens are dates
         passage_tokenidx2dateidx_mask = (self.passage_tokenidx2dateidx > -1)
 
         masked_passage_tokenidx2dateidx = passage_tokenidx2dateidx_mask.long() * self.passage_tokenidx2dateidx
-        masked_passage_datetoken_attn = passage_tokenidx2dateidx_mask.float() * passage_datetoken_attention
+        masked_passage_datetoken_scores = passage_tokenidx2dateidx_mask.float() * passage_datetoken_attention
 
-        # Shape: (num_passage_dates, )
-        # These will store the total attention value from each passage token for each normalized_date
-        date_scores = passage_attention.new_zeros(self.num_passage_dates)
+        ''' We first softmax scores over tokens then aggregate probabilities for same dates
+            Another way could be to first aggregate scores, then compute softmx -- in that method if the scores are
+            large, longer dates will get an unfair advantage; hence we keep it this way.
+            For eg. [800, 800, 800] where first two point to same date, current method will get a dist of [0.66, 0.33],
+            where as first-score-agg. will get [1.0, 0.0].
+            Potential downside, if the scores are [500, 500, 1200] our method will get [small, ~1.0],
+            where as first-score-agg. might get something more uniform. 
+            I think the bottomline is to control the scaling of scores.
+        '''
+        masked_passage_datetoken_probs = allenutil.masked_softmax(passage_datetoken_attention,
+                                                                  mask=passage_tokenidx2dateidx_mask,
+                                                                  memory_efficient=True)
+        ''' normalized method with method 2 '''
+        date_distribution = passage_attention.new_zeros(self.num_passage_dates)
+        date_distribution.scatter_add_(0, masked_passage_tokenidx2dateidx, masked_passage_datetoken_probs)
+        date_scores = date_distribution
 
-        date_scores.scatter_add_(0, masked_passage_tokenidx2dateidx, masked_passage_datetoken_attn)
-
-        # date_scores = date_scores/date_scores.sum()
-
-        date_distribution = allenutil.masked_softmax(date_scores, mask=None)
-
-        # print()
-        # print(date_scores)
+        # print(passage_datetoken_attention)
+        # print(masked_passage_datetoken_scores)
         # print(date_distribution)
+        # print()
 
         return date_distribution, date_scores
 
-    def date_greater_than(self, date_distribution_1, date_distribution_2):
+
+    def expected_date_comparison(self, date_distribution_1, date_distribution_2, comparison):
         """ Compute the boolean probability that date_1 > date_2 given distributions over passage_dates for each
 
         Parameters:
@@ -371,91 +415,62 @@ class DropLanguage(DomainLanguage):
         # Shape: (num_passage_dates, num_passage_dates)
         joint_dist = torch.matmul(date_distribution_1.unsqueeze(1), date_distribution_2.unsqueeze(0))
 
-        prob_date_1_greater = (self.date_greater_than_mat * joint_dist).sum()
+        if comparison == "greater":
+            expected_bool = (self.date_gt_mat * joint_dist).sum()
+        elif comparison == "lesser":
+            expected_bool = (self.date_lt_mat * joint_dist).sum()
+        else:
+            raise NotImplementedError
 
-        print(date_distribution_1)
-        print(date_distribution_2)
-        print(prob_date_1_greater)
+        # print(date_distribution_1)
+        # print(date_distribution_2)
+        # print(prob_date_1_greater)
+        # print()
 
-        print()
-
-        return prob_date_1_greater
-
-    @predicate
-    def compare_date_lesser_than(self,
-                                 passage_attn_1: PassageAttention,
-                                 passage_attn_2: PassageAttention) -> PassageAttention_answer:
-
-        # TODO(nitish): This part can be moved to self.initialize()
-        # Shape: (passage_length, passage_length) - for each token x in the row, weight given by it to each token y in
-        # the column for y to be a date associated to x
-        passage_passage_token2date_similarity = self.parameters.passage_to_date_attention(
-            self.passage.unsqueeze(0),
-            self.passage.unsqueeze(0)).squeeze(0)
-
-        # Shape: (passage_length, passage_length) - above normalized across columns i.e. each row is normalized
-        # distribution over tokens (likelihood of being a date token)
-        passage_passage_token2date_attention = passage_passage_token2date_similarity
-            # allenutil.masked_softmax(passage_passage_token2date_similarity,
-            #                                                             mask=self.passage_mask)
-
-        # TODO(nitish): this is same as date_less_than -- can probably be merged
-        # Shape: (passage_length)
-        passage_attention_1 = passage_attn_1._value * self.passage_mask
-        passage_attention_2 = passage_attn_2._value * self.passage_mask
-
-        date_distribution_1, _ = self.compute_date_scores(passage_passage_token2date_attention,
-                                                          passage_attention_1)
-        date_distribution_2, _ = self.compute_date_scores(passage_passage_token2date_attention,
-                                                          passage_attention_2)
-
-        # Use these date distributions to get a boolean distribution for greater than -- using placeholder right now
-        prob_date1_greater = self.date_greater_than(date_distribution_1, date_distribution_2)
-
-        # TODO(nitish): Everything is same as compare_date_greater_than - using p(date1 < date2) = 1 - p(date1 > date2)
-        prob_date1_lesser = 1 - prob_date1_greater
-        average_passage_distribution = prob_date1_lesser * passage_attention_1 + \
-                                        (1 - prob_date1_lesser) * passage_attention_2
-
-        return PassageAttention_answer(average_passage_distribution)
-
+        return expected_bool
 
     @predicate
     def compare_date_greater_than(self,
                                   passage_attn_1: PassageAttention,
                                   passage_attn_2: PassageAttention) -> PassageAttention_answer:
+        ''' In short; outputs PA_1 if D1 > D2 i.e. is PA_1 occurred after PA_2
+        '''
 
-        # TODO(nitish): This part can be moved to self.initialize()
-        # Shape: (passage_length, passage_length) - for each token x in the row, weight given by it to each token y in
-        # the column for y to be a date associated to x
-        passage_passage_token2date_similarity = self.parameters.passage_to_date_attention(
-            self.passage.unsqueeze(0),
-            self.passage.unsqueeze(0)).squeeze(0)
-
-        # Shape: (passage_length, passage_length) - above normalized across columns i.e. each row is normalized
-        # distribution over tokens (likelihood of being a date token)
-        passage_passage_token2date_attention = allenutil.masked_softmax(passage_passage_token2date_similarity,
-                                                                        mask=self.passage_mask)
-
-        # TODO(nitish): this is same as date_less_than -- can probably be merged
-        # Shape: (passage_length)
         passage_attention_1 = passage_attn_1._value * self.passage_mask
         passage_attention_2 = passage_attn_2._value * self.passage_mask
 
-        date_distribution_1, _ = self.compute_date_scores(passage_passage_token2date_attention,
-                                                          passage_attention_1)
-        date_distribution_2, _ = self.compute_date_scores(passage_passage_token2date_attention,
-                                                          passage_attention_2)
+        date_distribution_1, _ = self.compute_date_scores(passage_attention_1)
+        date_distribution_2, _ = self.compute_date_scores(passage_attention_2)
+
+        kl_div_neg_1_2 = -1 * F.kl_div(date_distribution_1, date_distribution_2, reduction='mean')
+        kl_div_neg_2_1 = -1 * F.kl_div(date_distribution_2, date_distribution_1, reduction='mean')
+
+
+        dist1_entropy = -1 * torch.sum(date_distribution_1 * torch.log(date_distribution_1 + 1e-40))
+        dist2_entropy = -1 * torch.sum(date_distribution_2 * torch.log(date_distribution_2 + 1e-40))
+
 
         # Use these date distributions to get a boolean distribution for greater than -- using placeholder right now
-        prob_date1_greater = self.date_greater_than(date_distribution_1, date_distribution_2)
+        prob_date1_greater = self.expected_date_comparison(date_distribution_1, date_distribution_2,
+                                                           comparison="greater")
 
         average_passage_distribution = prob_date1_greater * passage_attention_1 + \
-                                       (1 - prob_date1_greater) * passage_attention_2
+                                           (1 - prob_date1_greater) * passage_attention_2
 
-        return PassageAttention_answer(average_passage_distribution)
+        loss = dist1_entropy + dist2_entropy + kl_div_neg_1_2 + kl_div_neg_2_1
 
+        # print(prob_date1_greater)
+        # pattn_vis = dlutils.listTokensVis(passage_attention_1, self.metadata["passage_tokens"])
+        # print(pattn_vis)
+        # print()
+        # pattn_vis = dlutils.listTokensVis(passage_attention_2, self.metadata["passage_tokens"])
+        # print(pattn_vis)
+        # print()
+        # pattn_vis = dlutils.listTokensVis(average_passage_distribution, self.metadata["passage_tokens"])
+        # print(pattn_vis)
+        # print()
 
+        return PassageAttention_answer(average_passage_distribution, loss=loss)
 
     # @predicate_with_side_args(['question_attention'])
     # def relocate_PassageAttention(self,
@@ -475,13 +490,43 @@ class DropLanguage(DomainLanguage):
     #     return_passage_attention = linear2(linear1(self.encoded_passage) * linear3(attended_passage) * linear4(attended_question)).squeeze()
     #     return PassageAttention(return_passage_attention)
 
-    # @predicate
-    @predicate_with_side_args('passage_attention')
-    # def find_passageSpanAnswer(self, passage_attention: PassageAttention_answer) -> PassageSpanAnswer:
-    def find_passageSpanAnswer(self, passage_attention: Tensor) -> PassageSpanAnswer:
-        # passage_attn = passage_attention._value
+    @predicate
+    def compare_date_lesser_than(self,
+                                 passage_attn_1: PassageAttention,
+                                 passage_attn_2: PassageAttention) -> PassageAttention_answer:
 
-        passage_attn = passage_attention
+        passage_attention_1 = passage_attn_1._value * self.passage_mask
+        passage_attention_2 = passage_attn_2._value * self.passage_mask
+
+        date_distribution_1, _ = self.compute_date_scores(passage_attention_1)
+        date_distribution_2, _ = self.compute_date_scores(passage_attention_2)
+
+        kl_div_neg_1_2 = -1 * F.kl_div(date_distribution_1, date_distribution_2, reduction='mean')
+        kl_div_neg_2_1 = -1 * F.kl_div(date_distribution_2, date_distribution_1, reduction='mean')
+
+        dist1_entropy = -1 * torch.sum(date_distribution_1 * torch.log(date_distribution_1 + 1e-40))
+        dist2_entropy = -1 * torch.sum(date_distribution_2 * torch.log(date_distribution_2 + 1e-40))
+
+        loss = dist1_entropy + dist2_entropy + kl_div_neg_1_2 + kl_div_neg_2_1
+
+        # Use these date distributions to get a boolean distribution for greater than -- using placeholder right now
+        prob_date1_greater = self.expected_date_comparison(date_distribution_1, date_distribution_2,
+                                                           comparison="lesser")
+
+        # TODO(nitish): Everything is same as compare_date_greater_than - using p(date1 < date2) = 1 - p(date1 > date2)
+        prob_date1_lesser = 1 - prob_date1_greater
+        average_passage_distribution = prob_date1_lesser * passage_attention_1 + \
+                                       (1 - prob_date1_lesser) * passage_attention_2
+
+        return PassageAttention_answer(average_passage_distribution, loss=loss)
+
+
+    # @predicate_with_side_args('passage_attention')
+    @predicate
+    def find_passageSpanAnswer(self, passage_attention: PassageAttention_answer) -> PassageSpanAnswer:
+    # def find_passageSpanAnswer(self, passage_attention: Tensor) -> PassageSpanAnswer:
+        passage_attn = passage_attention._value
+        # passage_attn = passage_attention
 
         # Shape: (passage_length)
         passage_attn = (passage_attn * self.passage_mask)
@@ -512,10 +557,13 @@ class DropLanguage(DomainLanguage):
         span_end_log_probs = allenutil.replace_masked_values(span_end_log_probs,
                                                              self.passage_mask, -1e32)
 
+        loss = passage_attention.loss
+
         return PassageSpanAnswer(passage_span_start_log_probs=span_start_log_probs,
                                  passage_span_end_log_probs=span_end_log_probs,
                                  start_logits=span_start_logits,
-                                 end_logits=span_end_logits)
+                                 end_logits=span_end_logits,
+                                 loss=loss)
 
     '''
     @predicate
@@ -622,6 +670,7 @@ class DropLanguage(DomainLanguage):
 
 
 if __name__=='__main__':
-    dl = DropLanguage(None, None, None, None, None, None, None)
+    dl = get_empty_language_object()
+    print(dl.get_nonterminal_productions())
 
     # print(spanans.__class__.__name__)

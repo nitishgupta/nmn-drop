@@ -55,6 +55,18 @@ class DropQANetPredictor(Predictor):
         return sanitize(outputs)
 
 
+    def _print_ExecutionValTree(self, exval_tree, depth=0):
+        """
+        exval_tree: [[root_func_name, value], [], [], []]
+        """
+        tabs = '\t' * depth
+        outstr = f"{tabs}{exval_tree[0][0]}  :  {exval_tree[0][1]}\n"
+        if len(exval_tree) > 1:
+            for child in exval_tree[1:]:
+                outstr += self._print_ExecutionValTree(child, depth+1)
+        return outstr
+
+
     @overrides
     def dump_line(self, outputs: JsonDict) -> str:  # pylint: disable=no-self-use
         # Use json.dumps(outputs) + "\n" to dump a dictionary
@@ -71,6 +83,10 @@ class DropQANetPredictor(Predictor):
         answer_annotation_dict = metadata['answer_annotation']
         (exact_match, f1_score) = f1metric(predicted_ans, [answer_annotation_dict])
 
+        # logical_forms = outputs["logical_forms"]
+        # execution_vals = outputs["execution_vals"]
+        # predicted_anspans = outputs["all_pred_ansspans"]
+
         out_str += question + '\n'
         out_str += passage + '\n'
 
@@ -80,6 +96,22 @@ class DropQANetPredictor(Predictor):
         out_str += f'GoldAnswer: {answer_annotation_dict}' + '\n'
         out_str += f'PredictedAnswer: {predicted_ans}' + '\n'
         out_str += f'F1:{f1_score} EM:{exact_match}' + '\n'
+
+        '''
+        if 'logical_forms':
+            for lf, d, ex_vals in zip(logical_forms, predicted_anspans, execution_vals):
+                ex_vals = myutils.round_all(ex_vals, 1)
+                # Stripping the trailing new line
+                ex_vals_str = self._print_ExecutionValTree(ex_vals, 0).strip()
+                out_str += f"LogicalForm: {lf}\n"
+                # out_str += f"Prob: {prog_prob}\n"
+                out_str +=  f"Denotation: {d}\n"
+                out_str += f"ExecutionTree:\n{ex_vals_str}"
+                out_str += f"\n"
+                # NUM_PROGS_TO_PRINT -= 1
+                # if NUM_PROGS_TO_PRINT == 0:
+                #     break
+        '''
 
         out_str += '\n'
 
