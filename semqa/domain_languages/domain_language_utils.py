@@ -60,7 +60,7 @@ def _execute_sequence(language,
                 # This was a zero-argument function / constant that was registered as a lambda
                 # function, for consistency of execution in `execute()`.
                 execution_value = function()
-                execution_vals.append([(function.__name__, execution_value._value)])
+                execution_vals.append([(function.__name__, execution_value.debug_value)])
             elif side_arguments:
                 kwargs = {}
                 non_kwargs = []
@@ -80,7 +80,7 @@ def _execute_sequence(language,
                     # This is a function that _only_ has side arguments - we just call the
                     # function and return a value.
                     execution_value = function(**kwargs)
-                    execution_vals.append([(function.__name__, execution_value._value)])
+                    execution_vals.append([(function.__name__, execution_value.debug_value)])
                 else:
                     # This is a function that has logical form arguments, but no side arguments
                     # that match what we were given - just return the function itself.
@@ -103,23 +103,20 @@ def _execute_sequence(language,
                                                                                              remaining_side_args,
                                                                                              execution_vals)
 
-        args_list = []
+        args_exval_list = []
         arguments = []
         for _ in right_side_parts[1:]:
-            argument, remaining_actions, remaining_side_args, args_list_i = _execute_sequence(language,
-                                                                                             remaining_actions,
-                                                                                             remaining_side_args,
-                                                                                             [])
+            argument, remaining_actions, remaining_side_args, args_exval_list_i = _execute_sequence(language,
+                                                                                                    remaining_actions,
+                                                                                                    remaining_side_args,
+                                                                                                    [])
             arguments.append(argument)
-            args_list.append(args_list_i[0])
-
-
+            args_exval_list.append(args_exval_list_i[0])
 
         execution_value = function(*arguments)
-        args_list.insert(0, (function.__name__, execution_value._value))
+        args_exval_list.insert(0, (function.__name__, execution_value.debug_value))
 
-        execution_vals.insert(0, args_list)
-
+        execution_vals.insert(0, args_exval_list)
 
         return execution_value, remaining_actions, remaining_side_args, execution_vals
 
@@ -136,7 +133,8 @@ def listTokensVis(attention_vec: torch.FloatTensor, tokens: List[str]):
 
         Returns:
         --------
-        strvis: String visualization of question attention
+        complete_attention_vis: str
+        most_attended_vis: String visualization of question attention
     """
 
     attention_aslist: List[float] = myutils.round_all(myutils.tocpuNPList(attention_vec), 3)
@@ -144,16 +142,17 @@ def listTokensVis(attention_vec: torch.FloatTensor, tokens: List[str]):
     # To remove padded elements
     attention_aslist: List[float] = attention_aslist[:tokens_len]
 
-    strvis = ""
+    complete_attention_vis = ""
     for token, attn in zip(tokens, attention_aslist):
-        strvis += f"{token}|{attn} "
+        complete_attention_vis += f"{token}|{attn} "
 
     # List[(token, attn)]
     sorted_token_attn = sorted([(x, y)for x, y in zip(tokens, attention_aslist)], key=lambda x: x[1], reverse=True)
-    sorted_token_attn = sorted_token_attn[:10]
-    strvis += '\n'
-    strvis += f'Most Attended: {sorted_token_attn}'
+    most_attended_token_attn = sorted_token_attn[:10]
+    most_attended_vis = "Most attended: "
+    for token, attn in most_attended_token_attn:
+        most_attended_vis += f"{token}|{attn} "
 
-    return strvis.strip()
+    return complete_attention_vis.strip(), most_attended_vis.strip()
 
 

@@ -2,11 +2,15 @@
 
 ROOT_DIR=./resources/data/drop
 
-PREPROCESS_DIR=${ROOT_DIR}/preprocess
+PREPROCESS_DIR=${ROOT_DIR}/preprocess_new
 
-DATE_DIR=${ROOT_DIR}/date_subset
-NUM_DIR=${ROOT_DIR}/num_subset
-DATE_NUM_DIR=${ROOT_DIR}/date_num_subset
+DATE_DIR=${ROOT_DIR}/date
+NUM_DIR=${ROOT_DIR}/num
+DATE_NUM_DIR=${ROOT_DIR}/date_num
+
+mkdir ${DATE_DIR}
+mkdir ${NUM_DIR}
+mkdir ${DATE_NUM_DIR}
 
 TRAIN_FILENAME=drop_dataset_train.json
 DEV_FILENAME=drop_dataset_dev.json

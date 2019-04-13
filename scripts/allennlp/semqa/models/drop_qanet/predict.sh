@@ -3,7 +3,7 @@
 export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
-DATASET_DIR=./resources/data/drop/date_subset
+DATASET_DIR=./resources/data/drop/date_subset_augment
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
 VALFILE=${DATASET_DIR}/drop_dataset_dev.json
 
@@ -23,7 +23,7 @@ export DEBUG=false
 
 ####    SERIALIZATION DIR --- Check for checkpoint_root/task/dataset/model/parameters/
 CHECKPOINT_ROOT=./resources/semqa/checkpoints
-SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/date_num
+SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/date_augment
 MODEL_DIR=drop_qanet
 PARAMETERS_DIR=BS_${BS}/Drop_${DROPOUT}/TOKENS_${TOKENIDX}
 SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PARAMETERS_DIR}

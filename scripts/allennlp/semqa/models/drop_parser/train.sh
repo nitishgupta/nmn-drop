@@ -3,7 +3,8 @@
 export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
-DATASET_DIR=./resources/data/drop/date_subset
+DATASET_NAME=date_prune_augment
+DATASET_DIR=./resources/data/drop/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
 VALFILE=${DATASET_DIR}/drop_dataset_dev.json
 
@@ -30,6 +31,7 @@ export BIDAF_MODEL_TAR='https://s3-us-west-2.amazonaws.com/allennlp/models/bidaf
 export BIDAF_WORDEMB_FILE='./resources/embeddings/glove/glove.6B.100d.txt.gz'
 
 export GOLDACTIONS=true
+export AUXLOSS=true
 # export AUXGPLOSS=false
 # export ATTCOVLOSS=false
 
@@ -42,19 +44,21 @@ export DROPOUT=0.2
 export LR=0.001
 export RG=1e-4
 
+export SEED=100
+
 export BEAMSIZE=1
 export MAX_DECODE_STEP=8
-export EPOCHS=30
+export EPOCHS=50
 
 export DEBUG=false
 
 ####    SERIALIZATION DIR --- Check for checkpoint_root/task/dataset/model/parameters/
 CHECKPOINT_ROOT=./resources/semqa/checkpoints
-SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/date_num
+SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/${DATASET_NAME}
 MODEL_DIR=drop_parser
-PARAMETERS_DIR1=BS_${BS}/Drop_${DROPOUT}/TOKENS_${TOKENIDX}/GOLDAC_${GOLDACTIONS}/ED_${WEMB_DIM}/LR_${LR}/RG_${RG}
-# PARAMETERS_DIR2=AUXGPLOSS_${AUXGPLOSS}/ATTCOV_${ATTCOVLOSS}/PTREX_${PTREX}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PARAMETERS_DIR1}/grustrip/NewDateComp_sf_notan_eloss #/${PARAMETERS_DIR2}
+PD_1=BS_${BS}/LR_${LR}/Drop_${DROPOUT}/TOKENS_${TOKENIDX}/GOLDAC_${GOLDACTIONS}/ED_${WEMB_DIM}/RG_${RG}
+PD_2=AUXLOSS_${AUXLOSS}
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/${PD_2}/S_${SEED}/qanet/GoldProg
 
 #######################################################################################################################
 

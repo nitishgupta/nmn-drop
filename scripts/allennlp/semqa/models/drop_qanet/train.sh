@@ -3,13 +3,15 @@
 export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
-DATASET_DIR=./resources/data/drop/date_subset
+DATASET_NAME=date_prune
+DATASET_DIR=./resources/data/drop/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
 VALFILE=${DATASET_DIR}/drop_dataset_dev.json
 
 # PACKAGE TO BE INCLUDED WHICH HOUSES ALL THE CODE
 INCLUDE_PACKAGE=semqa
 
+CONFIGFILE=allenconfigs/semqa/train/drop_qanet.jsonnet
 export TOKENIDX="qanet"
 
 export DATASET_READER=drop_reader
@@ -25,23 +27,24 @@ export VAL_DATA_FILE=${VALFILE}
 export BS=16
 export DROPOUT=0.1
 
+export SEED=13
+
 export EPOCHS=50
 
 export DEBUG=false
 
 ####    SERIALIZATION DIR --- Check for checkpoint_root/task/dataset/model/parameters/
 CHECKPOINT_ROOT=./resources/semqa/checkpoints
-SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/date_num
+SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/${DATASET_NAME}
 MODEL_DIR=drop_qanet
 PARAMETERS_DIR=BS_${BS}/Drop_${DROPOUT}/TOKENS_${TOKENIDX}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PARAMETERS_DIR}
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PARAMETERS_DIR}/S_${SEED}
 
 #######################################################################################################################
 
 bash scripts/allennlp/base/train.sh ${CONFIGFILE} \
                                     ${INCLUDE_PACKAGE} \
                                     ${SERIALIZATION_DIR}
-
 
 #RESUME_SER_DIR=${SERIALIZATION_DIR}/Resume
 #

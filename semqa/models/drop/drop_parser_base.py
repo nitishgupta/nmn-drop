@@ -220,11 +220,10 @@ class DROPParserBase(Model):
         time, to finalize predictions. We only transform the action string sequences into logical
         forms here.
         """
-        if 'languages' in output_dict:
-            output_dict.pop('languages', None)
-        return output_dict
+        # if 'languages' in output_dict:
+        #     output_dict.pop('languages', None)
+        # return output_dict
 
-        '''
         best_action_strings = output_dict["batch_action_seqs"]
         batch_actionseq_sideargs = output_dict["batch_actionseq_sideargs"]
         languages = output_dict["languages"]
@@ -274,4 +273,4 @@ class DROPParserBase(Model):
         output_dict.pop('batch_actionseq_sideargs', None)
 
         return output_dict
-        '''
+        # '''

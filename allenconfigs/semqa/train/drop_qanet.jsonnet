@@ -245,8 +245,8 @@ local compareff_inputdim =
       "validation_metric": "+f1"
   },
 
-  "random_seed": 100,
-  "numpy_seed": 100,
-  "pytorch_seed": 100
+  "random_seed": utils.parse_number(std.extVar("SEED")),
+  "numpy_seed": utils.parse_number(std.extVar("SEED")),
+  "pytorch_seed": utils.parse_number(std.extVar("SEED")),
 
 }

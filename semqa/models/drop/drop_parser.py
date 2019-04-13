@@ -10,7 +10,8 @@ import torch
 from allennlp.data.fields.production_rule_field import ProductionRule
 from allennlp.data.vocabulary import Vocabulary
 from allennlp.models.model import Model
-from allennlp.modules import Highway, Attention, TextFieldEmbedder, Seq2SeqEncoder, FeedForward
+from allennlp.modules import Highway, Attention, TextFieldEmbedder, Seq2SeqEncoder
+from allennlp.modules.text_field_embedders.basic_text_field_embedder import BasicTextFieldEmbedder
 from allennlp.nn import Activation
 from allennlp.modules.matrix_attention import MatrixAttention, DotProductMatrixAttention
 from allennlp.state_machines.states import GrammarBasedState
@@ -74,6 +75,7 @@ class DROPSemanticParser(DROPParserBase):
                  decoder_beam_search: ConstrainedBeamSearch,
                  max_decoding_steps: int,
                  goldactions: bool = None,
+                 aux_loss: bool = False,
                  aux_goldprog_loss: bool = None,
                  qatt_coverage_loss: bool = None,
                  question_token_repr_key: str = None,
@@ -97,6 +99,8 @@ class DROPSemanticParser(DROPParserBase):
         else:
             _text_field_embedder = None
             raise NotImplementedError
+
+        _text_field_embedder: BasicTextFieldEmbedder = _text_field_embedder
 
         super(DROPSemanticParser, self).__init__(vocab=vocab,
                                                  action_embedding_dim=action_embedding_dim,
@@ -130,6 +134,9 @@ class DROPSemanticParser(DROPParserBase):
         self._decoder_beam_search = decoder_beam_search
         self._max_decoding_steps = max_decoding_steps
         self._action_padding_index = -1
+
+        self.aux_loss = aux_loss
+
         # This metrircs measure accuracy of
         # (1) Top-predicted program, (2) ExpectedDenotation from the beam (3) Best accuracy from topK(5) programs
         self.top1_acc_metric = Average()
@@ -194,6 +201,7 @@ class DROPSemanticParser(DROPParserBase):
                 # passage_date_spans: torch.LongTensor,
                 # passage_date_entidxs: torch.LongTensor,
                 actions: List[List[ProductionRule]],
+                datecomp_ques_event_date_groundings: List[Tuple[List[int], List[int]]] = None,
                 answer_types: List[str] = None,
                 answer_as_passage_spans: torch.LongTensor = None,
                 answer_as_question_spans: torch.LongTensor = None,
@@ -209,22 +217,24 @@ class DROPSemanticParser(DROPParserBase):
         else:
             epoch = None
 
-
         question_mask = allenutil.get_text_field_mask(question).float()
         passage_mask = allenutil.get_text_field_mask(passage).float()
 
         rawemb_question = self._dropout(self._text_field_embedder(question))
         rawemb_passage = self._dropout(self._text_field_embedder(passage))
 
-        # embedded_question = self._highway_layer(self._embedding_proj_layer(rawemb_question))
-        # embedded_passage = self._highway_layer(self._embedding_proj_layer(rawemb_passage))
-        #
-        # projected_embedded_question = self._encoding_proj_layer(embedded_question)
-        # projected_embedded_passage = self._encoding_proj_layer(embedded_passage)
+        embedded_question = self._highway_layer(self._embedding_proj_layer(rawemb_question))
+        embedded_passage = self._highway_layer(self._embedding_proj_layer(rawemb_passage))
 
-        #srtip version
-        projected_embedded_question = rawemb_question
-        projected_embedded_passage = rawemb_passage
+        embedded_question = self._dropout(embedded_question)
+        embedded_passage = self._dropout(embedded_passage)
+
+        projected_embedded_question = self._encoding_proj_layer(embedded_question)
+        projected_embedded_passage = self._encoding_proj_layer(embedded_passage)
+
+        # # stripped version
+        # projected_embedded_question = rawemb_question
+        # projected_embedded_passage = rawemb_passage
 
         # Shape: (batch_size, question_length, encoding_dim)
         encoded_question = self._dropout(self._phrase_layer(projected_embedded_question, question_mask))
@@ -388,27 +398,37 @@ class DROPSemanticParser(DROPParserBase):
                                                                                     batch_size=batch_size)
 
         if self._goldactions:
+            ''' Gold programs '''
             gold_batch_actionseqs = []
             for idx in range(batch_size):
                 question_tokens = metadata[idx]["question_tokens"]
                 gold_lf = getGoldLF(question_tokens)
                 gold_action_seq: List[str] = languages[idx].logical_form_to_action_sequence(gold_lf)
                 gold_batch_actionseqs.append([gold_action_seq])
-
             batch_actionseqs = gold_batch_actionseqs
 
+            # List[Tuple[torch.Tensor, torch.Tensor]]
             datecompare_gold_qattns = self.get_gold_quesattn_datecompare(metadata, encoded_question.size()[1],
                                                                          device_id)
+
             self.datecompare_goldattn_to_sideargs(batch_actionseqs,
                                                   batch_actionseq_sideargs,
                                                   datecompare_gold_qattns)
 
-            # List of [passage_attention]
-            goldpassageattention_aslist = self.passageAnsSpan_to_PassageAttention(answer_as_passage_spans,
-                                                                                  passage_mask)
-            self.passage_ans_attn_to_sideargs(batch_actionseqs,
-                                              batch_actionseq_sideargs,
-                                              goldpassageattention_aslist)
+            # List[Tuple[torch.Tensor, torch.Tensor]]
+            q_event_date_groundings = self.get_gold_question_event_date_grounding(datecomp_ques_event_date_groundings,
+                                                                                  device_id)
+
+            self.datecompare_eventdategr_to_sideargs(batch_actionseqs,
+                                                     batch_actionseq_sideargs,
+                                                     q_event_date_groundings)
+
+            # # List of [passage_attention]
+            # goldpassageattention_aslist = self.passageAnsSpan_to_PassageAttention(answer_as_passage_spans,
+            #                                                                       passage_mask)
+            # self.passage_ans_attn_to_sideargs(batch_actionseqs,
+            #                                   batch_actionseq_sideargs,
+            #                                   goldpassageattention_aslist)
 
         # # For printing predicted - programs
         # for idx, instance_progs in enumerate(batch_actionseqs):
@@ -416,7 +436,8 @@ class DROPSemanticParser(DROPParserBase):
         #     print(metadata[idx]["question_tokens"])
         #     scores = batch_actionseq_scores[idx]
         #     for prog, score in zip(instance_progs, scores):
-        #         print(f"{languages[idx].action_sequence_to_logical_form(prog)} : {score}")
+        #         # print(f"{languages[idx].action_sequence_to_logical_form(prog)} : {score}")
+        #         print(f"{prog} : {score}")
         #     print("\n")
 
         # List[List[Any]], List[List[str]]: Denotations and their types for all instances
@@ -428,14 +449,16 @@ class DROPSemanticParser(DROPParserBase):
         ''' Computing losses if gold answers are given '''
         if answer_types is not None:
             # Execution losses --
-            exec_loss = 0.0
-            execloss_normalizer = 0.0
-            for ins_dens in batch_denotations:
-                for den in ins_dens:
-                    execloss_normalizer += 1.0
-                    exec_loss += den.loss
-
-            exec_loss *= 1.0
+            batch_exec_loss = 0.0
+            if self.aux_loss:
+                exec_loss = 0.0
+                execloss_normalizer = 0.0
+                for ins_dens in batch_denotations:
+                    for den in ins_dens:
+                        execloss_normalizer += 1.0
+                        exec_loss += den.loss
+                batch_exec_loss = exec_loss / execloss_normalizer
+                self.execloss_metric(myutils.tocpuNPList(batch_exec_loss))
 
             loss = 0
             for i in range(batch_size):
@@ -483,10 +506,8 @@ class DROPSemanticParser(DROPParserBase):
                     raise NotImplementedError
 
             batch_loss = loss / batch_size
-            batch_exec_loss = exec_loss / execloss_normalizer
 
             self.modelloss_metric(myutils.tocpuNPList(batch_loss)[0])
-            self.execloss_metric(myutils.tocpuNPList(batch_exec_loss))
             output_dict["loss"] = batch_loss + batch_exec_loss
 
         if metadata is not None:
@@ -515,6 +536,7 @@ class DROPSemanticParser(DROPParserBase):
             output_dict['predicted_spans'] = batch_best_spans
 
             output_dict["batch_action_seqs"] = batch_actionseqs
+            output_dict["batch_actionseq_scores"] = batch_actionseq_scores
             output_dict["batch_actionseq_sideargs"] = batch_actionseq_sideargs
             output_dict["languages"] = languages
             output_dict["all_pred_ansspans"] = batch_predicted_answers
@@ -719,7 +741,22 @@ class DROPSemanticParser(DROPParserBase):
                         else:
                             sidearg_dict['question_attention'] = instance_gold_attentions[1]
 
+    def get_gold_quesattn_datecompare(self,
+                                      metadata,
+                                      masked_len,
+                                      device_id) -> List[Tuple[torch.Tensor, torch.Tensor]]:
+        batch_size = len(metadata)
 
+        gold_ques_attns = []
+
+        for i in range(batch_size):
+            question_tokens: List[str] = metadata[i]["question_tokens"]
+            qstr = ' '.join(question_tokens)
+            assert len(qstr.split(' ')) == len(question_tokens)
+
+            gold_ques_attns.append(self._gold_qattn_for_datecompare(qstr, masked_len, device_id))
+
+        return gold_ques_attns
 
     def _gold_qattn_for_datecompare(self, qstr: str, masked_len: int,
                                     device_id: int) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -787,22 +824,39 @@ class DROPSemanticParser(DROPParserBase):
         return attn_1, attn_2
 
 
-    def get_gold_quesattn_datecompare(self,
-                                      metadata,
-                                      masked_len,
-                                      device_id) -> List[Tuple[torch.Tensor, torch.Tensor]]:
-        batch_size = len(metadata)
+    def datecompare_eventdategr_to_sideargs(self,
+                                            batch_actionseqs: List[List[List[str]]],
+                                            batch_actionseq_sideargs: List[List[List[Dict]]],
+                                            batch_event_date_groundings: List[Tuple[torch.Tensor, torch.Tensor]]):
+        """ batch_event_date_groundings: For each question, a two-tuple containing the correct date-grounding for the
+            two events mentioned in the question.
+            These are in order of the annotation (order of events in question) but later the question attention
+            might be predicted in reverse order and these will then be the wrong (reverse) annotations. Take care later.
+        """
+        relevant_action1 = '<PassageAttention,PassageAttention:PassageAttention_answer> -> compare_date_greater_than'
+        relevant_action2 = '<PassageAttention,PassageAttention:PassageAttention_answer> -> compare_date_lesser_than'
+        relevant_actions = [relevant_action1, relevant_action2]
 
-        gold_ques_attns = []
+        for ins_idx in range(len(batch_actionseqs)):
+            instance_programs = batch_actionseqs[ins_idx]
+            instance_prog_sideargs = batch_actionseq_sideargs[ins_idx]
+            event_date_groundings = batch_event_date_groundings[ins_idx]
+            for program, side_args in zip(instance_programs, instance_prog_sideargs):
+                for action, sidearg_dict in zip(program, side_args):
+                    if action in relevant_actions:
+                        sidearg_dict['event_date_groundings'] = event_date_groundings
 
-        for i in range(batch_size):
-            question_tokens: List[str] = metadata[i]["question_tokens"]
-            qstr = ' '.join(question_tokens)
-            assert len(qstr.split(' ')) == len(question_tokens)
 
-            gold_ques_attns.append(self._gold_qattn_for_datecompare(qstr, masked_len, device_id))
-
-        return gold_ques_attns
+    def get_gold_question_event_date_grounding(self,
+                                               question_event_date_groundings: List[Tuple[List[int], List[int]]],
+                                               device_id: int) -> List[Tuple[torch.Tensor, torch.Tensor]]:
+        """ Converts input event date groundings (date-comparison) to FloatTensors """
+        question_date_groundings = []
+        for grounding_1, grounding_2 in question_event_date_groundings:
+            g1 = allenutil.move_to_device(torch.FloatTensor(grounding_1), device_id)
+            g2 = allenutil.move_to_device(torch.FloatTensor(grounding_2), device_id)
+            question_date_groundings.append((g1, g2))
+        return question_date_groundings
 
 
     def passageAnsSpan_to_PassageAttention(self, answer_as_passage_spans, passage_mask):

@@ -60,7 +60,10 @@ class DropQANetPredictor(Predictor):
         exval_tree: [[root_func_name, value], [], [], []]
         """
         tabs = '\t' * depth
-        outstr = f"{tabs}{exval_tree[0][0]}  :  {exval_tree[0][1]}\n"
+        func_name = str(exval_tree[0][0])
+        debug_value = str(exval_tree[0][1])
+        debug_value = debug_value.replace("\n", '\n' + tabs)
+        outstr = f"{tabs}{func_name}  :\n {tabs}{debug_value}\n"
         if len(exval_tree) > 1:
             for child in exval_tree[1:]:
                 outstr += self._print_ExecutionValTree(child, depth+1)
@@ -81,39 +84,39 @@ class DropQANetPredictor(Predictor):
         question = metadata['original_question']
         passage = metadata['original_passage']
         answer_annotation_dict = metadata['answer_annotation']
+        passage_date_values = metadata['passage_date_values']
         (exact_match, f1_score) = f1metric(predicted_ans, [answer_annotation_dict])
-
-        # logical_forms = outputs["logical_forms"]
-        # execution_vals = outputs["execution_vals"]
-        # predicted_anspans = outputs["all_pred_ansspans"]
 
         out_str += question + '\n'
         out_str += passage + '\n'
 
-        out_str += f"GoldPassageSpans:{answer_as_passage_spans}" + '\n'
-        out_str += f"PredPassageSpans:{batch_best_spans}" + '\n'
-
         out_str += f'GoldAnswer: {answer_annotation_dict}' + '\n'
+        out_str += f"GoldPassageSpans:{answer_as_passage_spans}" + '\n'
+
+        out_str += f"PredPassageSpans:{batch_best_spans}" + '\n'
         out_str += f'PredictedAnswer: {predicted_ans}' + '\n'
         out_str += f'F1:{f1_score} EM:{exact_match}' + '\n'
+        out_str += f'Dates: {passage_date_values}' + '\n'
 
-        '''
+        logical_forms = outputs["logical_forms"]
+        execution_vals = outputs["execution_vals"]
+        actionseq_scores = outputs["batch_actionseq_scores"]
+        predicted_anspans = outputs["all_pred_ansspans"]
         if 'logical_forms':
-            for lf, d, ex_vals in zip(logical_forms, predicted_anspans, execution_vals):
+            for lf, d, ex_vals, progscore in zip(logical_forms, predicted_anspans, execution_vals, actionseq_scores):
                 ex_vals = myutils.round_all(ex_vals, 1)
                 # Stripping the trailing new line
                 ex_vals_str = self._print_ExecutionValTree(ex_vals, 0).strip()
                 out_str += f"LogicalForm: {lf}\n"
-                # out_str += f"Prob: {prog_prob}\n"
+                out_str += f"Score: {progscore}\n"
                 out_str +=  f"Denotation: {d}\n"
                 out_str += f"ExecutionTree:\n{ex_vals_str}"
                 out_str += f"\n"
                 # NUM_PROGS_TO_PRINT -= 1
                 # if NUM_PROGS_TO_PRINT == 0:
                 #     break
-        '''
 
-        out_str += '\n'
+        out_str += '--------------------------------------------------\n'
 
         return out_str
 

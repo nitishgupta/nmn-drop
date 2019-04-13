@@ -93,6 +93,12 @@ class DROPReader(DatasetReader):
                 answer_passage_spans = question_answer[constants.answer_passage_spans]
                 answer_question_spans = question_answer[constants.answer_question_spans]
                 answer_annotation = question_answer["answer"] if "answer" in question_answer else None
+
+                if constants.datecomp_ques_event_date_groundings in question_answer:
+                    datecomp_ques_event_date_groundings = question_answer[constants.datecomp_ques_event_date_groundings]
+                else:
+                    datecomp_ques_event_date_groundings = None
+
                 instance = self.text_to_instance(question_text,
                                                  original_ques_text,
                                                  question_charidxs,
@@ -110,6 +116,7 @@ class DROPReader(DatasetReader):
                                                  answer_type,
                                                  answer_passage_spans,
                                                  answer_question_spans,
+                                                 datecomp_ques_event_date_groundings,
                                                  question_id,
                                                  passage_id,
                                                  answer_annotation,
@@ -146,6 +153,7 @@ class DROPReader(DatasetReader):
                          answer_type: str,
                          answer_passage_spans: List[Tuple[int, int]],
                          answer_question_spans: List[Tuple[int, int]],
+                         datecomp_ques_event_date_groundings: Tuple[List[int], List[int]] = None,
                          question_id: str = None,
                          passage_id: str = None,
                          answer_annotation: Dict[str, Union[str, Dict, List]] = None,
@@ -271,6 +279,7 @@ class DROPReader(DatasetReader):
         if len(passage_date_objs) == 0:
             passage_date_objs.append(Date(day=-1, month=-1, year=-1))
         fields["passage_date_values"] = MetadataField(passage_date_objs)
+        passage_date_strvals = [str(d) for d in passage_date_objs]
 
         # passage_number_index_fields = [IndexField(index, fields["passage"]) for index in passage_number_indices]
         # if not passage_number_index_fields:
@@ -298,9 +307,14 @@ class DROPReader(DatasetReader):
                          "question_token_offsets": question_offsets,
                          "question_tokens": [token.text for token in question_tokens],
                          "passage_tokens": [token.text for token in passage_tokens],
+                         "passage_date_values": passage_date_strvals
                          # "number_tokens": [token.text for token in number_tokens],
                          # "number_indices": number_indices
                         })
+
+        if datecomp_ques_event_date_groundings:
+            fields["datecomp_ques_event_date_groundings"] = MetadataField(datecomp_ques_event_date_groundings)
+
 
         if answer_info:
             metadata["answer_type"] = answer_info["answer_type"]
