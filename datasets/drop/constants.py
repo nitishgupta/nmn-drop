@@ -60,6 +60,10 @@ passage_date_entidx = passage + "_" + DATE_TYPE + "_men2entidx"
 passage_num_normalized_values = passage + "_" + NUM_TYPE + "_normalized_values"
 passage_date_normalized_values = passage + "_" + DATE_TYPE + "_normalized_values"
 
+datecomp_ques_event_date_groundings = "question_event_date_groundings"
+datecomp_ques_event_date_values = "question_event_date_values"
+
+
 
 COMMA="@COMMA@"
 LRB="@LRB@"

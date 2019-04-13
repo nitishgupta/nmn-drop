@@ -14,3 +14,12 @@ Script tokenize.py handles all preprocessing -
     
 ## Prune questions 
 Number and Date based pruning of questions - script prune_ques.py
+
+## Prune Date Comparison Questions
+Many date comparison questions actually don't require date comparisons.
+In `prune_date_comparison.py` we heuristically remove such questions
+
+Additionally we also a field `passage_event_date_groundings`.
+This will contain a two-tuple of all-zero vector the size of `passage_date_normalized_values`
+This will later be hand annotated to contain the correct date grounding
+of the two events mentioned in the question

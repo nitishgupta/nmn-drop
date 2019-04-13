@@ -1,6 +1,7 @@
 from typing import List, Tuple
 import dateparser
 from datasets.drop import constants
+import utils.util as util
 
 dateparser_en = dateparser.date.DateDataParser(languages=['en'])
 
@@ -17,21 +18,25 @@ NUM_NER_TYPES = ["QUANTITY", "CARDINAL", "PERCENT", "MONEY"]
 
 dateStr2DateObj_cache = {}
 
-def parseDateNERS(ner_spans) -> Tuple[List, List, List, int]:
+def parseDateNERS(ner_spans, passage_tokens: List[str]) -> Tuple[List, List, List, int]:
     """ Returns (List1, List2, int)
-        1. List of (text, (start, end), normalized_value_tuple) tuples
+        1. List of (text, (start, end), normalized_value_tuple) tuples (end inclusive)
         2. List of date_ent_idxs for equivalent dates (same length as 1.)
         3. List of (normalized_date) values in order of idxs
         4. Number of date_entities
     """
 
-    parsed_dates: List[Tuple, Tuple] = []
+    parsed_dates: List[str, Tuple, Tuple] = []
     for ner in ner_spans:
         if ner[-1] == constants.DATE_TYPE:
             # List of (text, (start, end), normalized_value_tuple)
             normalized_dates = normalizeDATE(ner, dateparser_en)
             if normalized_dates is not None:
                 parsed_dates.extend(normalized_dates)
+
+    year_mentions: List[str, Tuple, Tuple] = extract_years_from_text(passage_tokens=passage_tokens)
+
+    parsed_dates = merge_datener_with_yearmentions(parsed_dates, year_mentions)
 
     date2idx = {}
     normalized_date_idxs = []
@@ -81,6 +86,44 @@ def parseNumNERS(ner_spans, tokens: List[str]) -> Tuple[List, List, List, int]:
     return (parsed_nums, normalized_num_idxs, normalized_number_values, num_number_entities)
 
 
+def merge_datener_with_yearmentions(date_mentions, year_mentions):
+    """ Year mentions are single token long. Using an expensive (O(n^2)) process here.
+        All mentions are (text, (start, end(inclusive)), normalized_value)
+    """
+    year_mentions_to_keep = []
+    for year_mention in year_mentions:
+        token_idx = year_mention[1][0]
+        keep = True
+        for datemen in date_mentions:
+            start, end = datemen[1][0], datemen[1][1]
+            if token_idx >= start and token_idx <= end:
+                keep = False
+        if keep:
+            year_mentions_to_keep.append(year_mention)
+
+    final_mentions = date_mentions
+    final_mentions.extend(year_mentions_to_keep)
+    final_mentions = sorted(final_mentions, key=lambda  x: x[1][0])
+
+    return final_mentions
+
+
+def extract_years_from_text(passage_tokens) -> List[Tuple[str, Tuple, Tuple]]:
+    """ Extract 4 digit year mentions.
+
+        Normalized date value: (day, month, year)
+    """
+    year_date_mentions = []
+    for idx, token in enumerate(passage_tokens):
+        if len(token) == 4:
+            try:
+                int_token = int(token)
+                year_date_mentions.append((token, (idx, idx), (-1, -1, int_token)))
+            except:
+                continue
+
+    return year_date_mentions
+
 
 def normalizeDATE(date_ner_span, dateparser_en):
     def parseDate(date_str, dateparser_en):
@@ -98,7 +141,7 @@ def normalizeDATE(date_ner_span, dateparser_en):
 
         Parse such into two dates, and return the two values.
 
-        Normalized date value: (date, month, year)
+        Normalized date value: (day, month, year)
     """
 
     (nertext, start, end, type) = date_ner_span
@@ -136,8 +179,8 @@ def normalizeDATE(date_ner_span, dateparser_en):
 
         normalized_val = (day, month, year)
 
-        # We need inclusive ends now
-        new_ner_span = (nertext, start, end - 1, constants.DATE_TYPE)
+        if year == 2019:
+            return None
 
         return [(nertext, (start, end-1), normalized_val)]
 
@@ -224,6 +267,9 @@ def normalizeDATE(date_ner_span, dateparser_en):
             # We need inclusive ends now
             new_ner_span_2 = (text2, start2, end2 - 1, constants.DATE_TYPE)
             normalized_val_2 = date2
+
+            if normalized_val_1[-1] == 2019 or normalized_val_2[-1] == 2019:
+                return None
 
             return [(text1, (start1, end1-1), normalized_val_1), (text2, (start2, end2-1), normalized_val_2)]
 

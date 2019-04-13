@@ -168,10 +168,10 @@ def processPassage(input_args):
     original_passage_text = util.pruneMultipleSpaces(original_passage_text)
     passage_spacydoc = spacyutils.getSpacyDoc(original_passage_text, spacy_nlp)
     passage_tokens = [t for t in passage_spacydoc]
-    passage_tokens = split_tokens_by_hyphen(passage_tokens)
+    passage_tokens: List[Token] = split_tokens_by_hyphen(passage_tokens)
 
     passage_token_charidxs = [token.idx for token in passage_tokens]
-    passage_token_texts = [t.text for t in passage_tokens]
+    passage_token_texts: List[str] = [t.text for t in passage_tokens]
 
     new_passage_info[constants.passage] = ' '.join(passage_token_texts)
     new_passage_info[constants.original_passage] = original_passage_text
@@ -187,7 +187,7 @@ def processPassage(input_args):
     passage_ners = spacyutils.getNER(new_passage_doc)
 
     (parsed_dates, normalized_date_idxs,
-     normalized_date_values, num_date_entities) = ner_process.parseDateNERS(passage_ners)
+     normalized_date_values, num_date_entities) = ner_process.parseDateNERS(passage_ners, passage_token_texts)
 
     _check_validity_of_spans(spans=[(s,e) for _, (s,e), _ in parsed_dates], len_seq=len(passage_tokens))
 
@@ -231,7 +231,7 @@ def processPassage(input_args):
 
         q_ners = spacyutils.getNER(new_question_doc)
         (parsed_dates, normalized_date_idxs,
-         normalized_date_values, num_date_entities) = ner_process.parseDateNERS(q_ners)
+         normalized_date_values, num_date_entities) = ner_process.parseDateNERS(q_ners, question_token_texts)
         _check_validity_of_spans(spans=[(s, e) for _, (s, e), _ in parsed_dates], len_seq=len(question_tokens))
         (parsed_nums, normalized_num_idxs,
          normalized_number_values, num_num_entities) = ner_process.parseNumNERS(q_ners, question_token_texts)
@@ -366,6 +366,7 @@ def tokenizeDocs(input_json: str, output_json: str, nump: int) -> None:
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    # This is the original drop json file
     parser.add_argument('--input_json', required=True)
     parser.add_argument('--output_json', default=True)
     parser.add_argument('--nump', type=int, default=10)

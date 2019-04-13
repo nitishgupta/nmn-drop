@@ -74,7 +74,7 @@ def readJsonlDocs(jsonlfp: str) -> List[Dict]:
     return docs
 
 
-def isSpanOverlap(s1, s2, srt_idx=0, end_idx=1):
+def isSpanOverlap(s1, s2, srt_idx=0, end_idx=1, exclusive=True):
     """ Returns True if the spans overlap. Works with exclusive end spans
 
     s1, s2 : Tuples containing span start and end (exclusive)
@@ -82,6 +82,10 @@ def isSpanOverlap(s1, s2, srt_idx=0, end_idx=1):
     """
     start1, end1 = s1[srt_idx], s1[end_idx]
     start2, end2 = s2[srt_idx], s2[end_idx]
+    if not exclusive:
+        end1 -= 1
+        end2 -= 1
+
     return max(start1, start2) <= (min(end1, end2) - 1)
 
 
@@ -298,7 +302,7 @@ def removeOverlappingSpans(spans):
 def tocpuNPList(var):
     return var.detach().cpu().numpy().tolist()
 
-def mergeSpansAndRemoveOverlap(orig_spans, new_spans, srt_idx, end_idx):
+def mergeSpansAndRemoveOverlap(orig_spans, new_spans, srt_idx, end_idx, exclusive=True):
     ''' Merge a list of spans in another given list resulting in non-overlapping spans.
     Assumes that both span lists are independently non-overlapping.
 
@@ -346,7 +350,7 @@ def mergeSpansAndRemoveOverlap(orig_spans, new_spans, srt_idx, end_idx):
             new_span = sorted_new_spans[new_span_idx]
 
             # Spans overlap, move head to the next new span
-            if isSpanOverlap(orig_span, new_span, srt_idx, end_idx):
+            if isSpanOverlap(orig_span, new_span, srt_idx, end_idx, exclusive=exclusive):
                 new_span_idx += 1
             else:
                 # If new span starts after the current original span's end, then move the current original span head
