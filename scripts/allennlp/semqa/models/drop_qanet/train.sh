@@ -25,7 +25,7 @@ export TRAINING_DATA_FILE=${TRAINFILE}
 export VAL_DATA_FILE=${VALFILE}
 
 export BS=16
-export DROPOUT=0.1
+export DROPOUT=0.2
 
 export SEED=13
 

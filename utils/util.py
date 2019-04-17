@@ -300,6 +300,8 @@ def removeOverlappingSpans(spans):
     return final_spans
 
 def tocpuNPList(var):
+    if isinstance(var, float):
+        return var
     return var.detach().cpu().numpy().tolist()
 
 def mergeSpansAndRemoveOverlap(orig_spans, new_spans, srt_idx, end_idx, exclusive=True):

@@ -1,6 +1,6 @@
 #!/usr/bin/env
 
-SERIALIZATION_DIR=/home/ngupta19/code/mhqa/pycode/resources/semqa/checkpoints/hotpotqa_bool_wosame/sample_parser/BS_4/LR_0.001/Drop_0.2/BeamSize_32/MaxDecodeStep_12/
+SERIALIZATION_DIR=./resources/semqa/checkpoints/drop/date_prune_augment_300/drop_parser/BS_8/LR_0.001/Drop_0.2/TOKENS_qanet/GOLDAC_true/ED_100/RG_1e-4/AUXLOSS_true/GOLDPROGS_false/SUPFIRST_true/SUPEPOCHS_10/S_100/mml/
 WEIGHTS_TH=best.th
 
 MODEL_ARCHIVE=${SERIALIZATION_DIR}/model.tar.gz

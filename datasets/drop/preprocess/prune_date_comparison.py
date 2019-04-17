@@ -194,15 +194,18 @@ def pruneDateQuestions(dataset, weakdate: bool = False):
         1. Find events in the question
         2. Find whether a nearby date exists or not; if yes, which date.
 
-        Additionally provides a weak-supervison for which dates are correct for the events. We don't keep all date
+        Additionally provides a weak-supervison for which date grounding of the ques-events. We don't keep all date
         supervision from previous step. Don't trust the annotation if:
         1. Dates for both events are the same.
-        2. Date annotation for the events don't match the question-answer. For example, if the questions asks the
-           earlier event, but according to our annotation the answer-event happened later, then the date annotation must
-           be wrong.
+        2. Our date prediction for the events don't match the question's answer. For example, if the questions asks for
+           the earlier event, but according to our annotation the answer-event happened later, then the date annotation
+           must be wrong.
 
-        In cases where we don't store the date annotation, the grounding vector is left to zeros, the model should use
-        this to figure out a mask in cases no annotation is provided.
+        This annotation is stored as:
+        1. constants.datecomp_ques_event_date_groundings -- a one hot-vector the size of num_passage_dates
+        2. constants.datecomp_ques_event_date_values -- A two-tuple, each containing (day, month, year)
+        In cases where we don't store the date annotation, the grounding vector is left to zeros, and date values to -1.
+        The model should use this fact to figure out a mask in case no annotation is provided
     """
 
     new_dataset = {}

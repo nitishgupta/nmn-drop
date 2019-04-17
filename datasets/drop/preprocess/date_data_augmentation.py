@@ -273,11 +273,83 @@ def getQuestionOperatorSwitchQA(question_answer,
     return new_question_answer
 
 
-def getFlippedQuestions(dataset):
+def addQuestionAttentionVectors(question_answer):
+    question_tokenized_text = question_answer[constants.question]
+    question_tokens = question_tokenized_text.split(' ')
+    qlen = len(question_tokens)
+    event_spans = quesEvents(question_answer[constants.question])
+    if event_spans:
+        # These span ends are exclusive
+        event1_span, event2_span = event_spans
+        event1_attention = [0.0] * qlen
+        event2_attention = [0.0] * qlen
+        for i in range(event1_span[0], event1_span[1]):
+            event1_attention[i] = 1.0
+        for i in range(event2_span[0], event2_span[1]):
+            event2_attention[i] = 1.0
+
+    else:
+        # Couldn't find the two events; add empty annotation
+        event1_attention = [0.0] * qlen
+        event2_attention = [0.0] * qlen
+
+    question_answer[constants.ques_attention_supervision] = (event1_attention, event2_attention)
+
+    return question_answer
+
+
+def strongSupervisionFlagAndQType(question_answer_pairs: List[Dict]):
+    num_strongly_supervised_qas = 0
+    for question_answer in question_answer_pairs:
+        (event1_date_grn, event2_date_grn) = question_answer[constants.datecomp_ques_event_date_groundings]
+        (qevent1_qattn, qevent2_qattn) = question_answer[constants.ques_attention_supervision]
+
+        if (sum(event1_date_grn) == 0 or
+            sum(event2_date_grn) == 0 or
+            sum(qevent1_qattn) == 0 or
+            sum(qevent2_qattn) == 0):
+
+            strongly_supervised = False
+        else:
+            strongly_supervised = True
+
+        num_strongly_supervised_qas += 1 if strongly_supervised is True else 0
+
+        question_answer[constants.strongly_supervised] = strongly_supervised
+        question_answer[constants.qtype] = constants.DATECOMP_QTYPE
+
+    return question_answer_pairs, num_strongly_supervised_qas
+
+
+
+def augmentDateComparisonData(dataset):
+    """ Given a dataset containing date-comparison questions, we augment the data in the following manner:
+        - Adding new questions. For eg: "What happened first, eventA or eventB ?"
+            1. QuesEvent switched questions: "What happened first, eventB or eventA" - with same answer. 100% success
+            2. QuesOperator switched question: "What happened second, eventA or eventB" -- for this we randomly sample
+               a token for the operator from the {FIRST, SECOND}_operator_tokens list. Heuristically find which event
+               in the question is the answer, and now try to ground the other event in the passage as the answer.
+               If grounding is not found then this augmentation fails. Hence <100% success rate for this step.
+            3. QuesOperator switched question for the QuesEvent switched question from step 1.
+
+        - QuestionEvent attention annotation -- Two 0/1 binary vectors marking the two events mentioned in the question
+          These will act as a supervision for question attention in the model.
+          Add a constants.question_attention field that contains a two-tuple for attention vectorss
+
+        - Strong supervision flag
+        Additionally, for each instance we also add a boolean-field constants.strongly_annotated that indicates whether
+        the question-answer has strong annotations or not.
+
+        - QuestionType
+        Add a strong-field constants.qtype to indicate that all these questions are date_comparison questions
+        The value is constants.DATECOMP_QTYPE
+    """
+
+
     new_dataset = {}
     original_operator_dist = defaultdict(float)
     augment_operator_dist = defaultdict(float)
-
+    total_strongly_supervised_qas = 0
     num_qa_original = 0
     num_qa_augment = 0
 
@@ -292,15 +364,17 @@ def getFlippedQuestions(dataset):
             ques_operator = getQuestionComparisonOperator(question_tokenized_text)
             original_operator_dist[ques_operator] += 1
 
+            question_answer = addQuestionAttentionVectors(question_answer)
             new_qa_pairs.append(question_answer)
             augment_operator_dist[ques_operator] += 1
 
             # "first A or B" --> "first B or A"
             event_switch_question_answer = getEventOrderSwitchQuestion(question_answer)
             if event_switch_question_answer is not None:
-                new_qa_pairs.append(event_switch_question_answer)
+                event_switch_question_answer = addQuestionAttentionVectors(event_switch_question_answer)
                 ques_operator = getQuestionComparisonOperator(event_switch_question_answer[constants.question])
                 augment_operator_dist[ques_operator] += 1
+                new_qa_pairs.append(event_switch_question_answer)
 
             # "first A or B" --> "second A or B"
             qoperator_switch_question_answer = getQuestionOperatorSwitchQA(question_answer,
@@ -309,6 +383,7 @@ def getFlippedQuestions(dataset):
                                                                            original_passage_text)
 
             if qoperator_switch_question_answer is not None:
+                qoperator_switch_question_answer = addQuestionAttentionVectors(qoperator_switch_question_answer)
                 ques_operator = getQuestionComparisonOperator(qoperator_switch_question_answer[constants.question])
                 augment_operator_dist[ques_operator] += 1
                 new_qa_pairs.append(qoperator_switch_question_answer)
@@ -319,30 +394,30 @@ def getFlippedQuestions(dataset):
                                                                                 passage_token_charidxs,
                                                                                 original_passage_text)
             if event_sw_qoperator_sw_question_answer is not None:
+                event_sw_qoperator_sw_question_answer = \
+                        addQuestionAttentionVectors(event_sw_qoperator_sw_question_answer)
                 ques_operator = getQuestionComparisonOperator(event_sw_qoperator_sw_question_answer[constants.question])
                 augment_operator_dist[ques_operator] += 1
-                new_qa_pairs.append(event_switch_question_answer)
+                new_qa_pairs.append(event_sw_qoperator_sw_question_answer)
+
+        new_qa_pairs, num_strong_supervised_qas = strongSupervisionFlagAndQType(new_qa_pairs)
+        total_strongly_supervised_qas += num_strong_supervised_qas
 
         num_qa_augment += len(new_qa_pairs)
         passage_info[constants.qa_pairs] = new_qa_pairs
         new_dataset[passage_id] = passage_info
+
     print()
     print(f"Num of original question: {num_qa_original}")
     print(original_operator_dist)
-    print(f"Num of original question: {num_qa_augment}")
+    print(f"Num of question after augmentation: {num_qa_augment}")
     print(augment_operator_dist)
+    print(f"Strongly Supervised Questions: {total_strongly_supervised_qas}")
 
     return new_dataset
 
 
 if __name__=='__main__':
-    # input_dir = "date_prune_weakdate"
-    # trnfp = f"/srv/local/data/nitishg/data/drop/{input_dir}/drop_dataset_train.json"
-    # devfp = f"/srv/local/data/nitishg/data/drop/{input_dir}/drop_dataset_dev.json"
-    #
-    # output_dir = "date_prune_weakdate_augment"
-    # out_trfp = f"/srv/local/data/nitishg/data/drop/{output_dir}/drop_dataset_train.json"
-    # out_devfp = f"/srv/local/data/nitishg/data/drop/{output_dir}/drop_dataset_dev.json"
     print("Running data augmentation")
 
     parser = argparse.ArgumentParser()
@@ -360,11 +435,20 @@ if __name__=='__main__':
     output_trnfp = args.output_trnfp
     output_devfp = args.output_devfp
 
+    input_dir = "date_prune"
+    input_trnfp = f"/srv/local/data/nitishg/data/drop/{input_dir}/drop_dataset_train.json"
+    input_devfp = f"/srv/local/data/nitishg/data/drop/{input_dir}/drop_dataset_dev.json"
+
+    output_dir = "date_prune_augment"
+    output_trnfp = f"/srv/local/data/nitishg/data/drop/{output_dir}/drop_dataset_train.json"
+    output_devfp = f"/srv/local/data/nitishg/data/drop/{output_dir}/drop_dataset_dev.json"
+
+
     train_dataset = readDataset(input_trnfp)
     dev_dataset = readDataset(input_devfp)
 
-    new_train_dataset = getFlippedQuestions(train_dataset)
-    new_dev_dataset = getFlippedQuestions(dev_dataset)
+    new_train_dataset = augmentDateComparisonData(train_dataset)
+    new_dev_dataset = augmentDateComparisonData(dev_dataset)
 
     with open(output_trnfp, 'w') as f:
         json.dump(new_train_dataset, f, indent=4)

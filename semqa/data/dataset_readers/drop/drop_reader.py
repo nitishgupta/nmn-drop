@@ -43,7 +43,8 @@ class DROPReader(DatasetReader):
                  passage_length_limit: int = None,
                  question_length_limit: int = None,
                  passage_length_limit_for_evaluation: int = None,
-                 question_length_limit_for_evaluation: int = None) -> None:
+                 question_length_limit_for_evaluation: int = None,
+                 only_strongly_supervised: bool = False) -> None:
         super().__init__(lazy)
         self._tokenizer = tokenizer
         self._token_indexers = token_indexers or {"tokens": SingleIdTokenIndexer()}
@@ -53,6 +54,7 @@ class DROPReader(DatasetReader):
         self.question_length_limit = question_length_limit
         self.passage_length_limit_for_eval = passage_length_limit_for_evaluation or passage_length_limit
         self.question_length_limit_for_eval = question_length_limit_for_evaluation or question_length_limit
+        self.only_strongly_supervised = only_strongly_supervised
 
     @overrides
     def _read(self, file_path: str):
@@ -99,6 +101,18 @@ class DROPReader(DatasetReader):
                 else:
                     datecomp_ques_event_date_groundings = None
 
+                strongly_supervised = False
+                if constants.strongly_supervised in question_answer:
+                    strongly_supervised = question_answer[constants.strongly_supervised]
+
+                ques_attn_supervision = []
+                if constants.ques_attention_supervision in question_answer:
+                    ques_attn_supervision = question_answer[constants.ques_attention_supervision]
+
+                qtype = "UNK"
+                if constants.qtype in question_answer:
+                    qtype = question_answer[constants.qtype]
+
                 instance = self.text_to_instance(question_text,
                                                  original_ques_text,
                                                  question_charidxs,
@@ -113,6 +127,9 @@ class DROPReader(DatasetReader):
                                                  p_num_mens,
                                                  p_num_entidxs,
                                                  p_num_normvals,
+                                                 strongly_supervised,
+                                                 qtype,
+                                                 ques_attn_supervision,
                                                  answer_type,
                                                  answer_passage_spans,
                                                  answer_question_spans,
@@ -123,6 +140,10 @@ class DROPReader(DatasetReader):
                                                  max_passage_len,
                                                  max_question_len,
                                                  drop_invalid=is_train)
+
+                if self.only_strongly_supervised:
+                    if not strongly_supervised:
+                        instance = None
 
                 if instance is not None:
                     yield instance
@@ -150,6 +171,9 @@ class DROPReader(DatasetReader):
                          p_num_mens: List[Tuple[str, int, int]],
                          p_num_entidxs: List[int],
                          p_num_normvals: List[int],
+                         strongly_supervised: bool,
+                         qtype: str,
+                         ques_attn_supervision: Tuple[List[float]],
                          answer_type: str,
                          answer_passage_spans: List[Tuple[int, int]],
                          answer_question_spans: List[Tuple[int, int]],
@@ -315,6 +339,9 @@ class DROPReader(DatasetReader):
         if datecomp_ques_event_date_groundings:
             fields["datecomp_ques_event_date_groundings"] = MetadataField(datecomp_ques_event_date_groundings)
 
+        fields["strongly_supervised"] = MetadataField(strongly_supervised)
+        fields["qtypes"] = MetadataField(qtype)
+        fields["qattn_supervision"] = ArrayField(np.array(ques_attn_supervision), padding_value=0)
 
         if answer_info:
             metadata["answer_type"] = answer_info["answer_type"]
@@ -325,7 +352,6 @@ class DROPReader(DatasetReader):
             passage_span_fields = \
                 [SpanField(span[0], span[1], fields["passage"]) for span in answer_info["answer_passage_spans"]]
             if not passage_span_fields:
-                return None
                 passage_span_fields.append(SpanField(-1, -1, fields["passage"]))
 
             fields["answer_as_passage_spans"] = ListField(passage_span_fields)

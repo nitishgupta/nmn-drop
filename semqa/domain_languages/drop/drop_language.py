@@ -172,6 +172,8 @@ def get_empty_language_object():
                                 passage_mask=None,
                                 passage_tokenidx2dateidx=None,
                                 passage_date_values=None,
+                                question_passage_attention=None,
+                                passage_token2date_similarity=None,
                                 parameters=None,
                                 start_types=None)
     return droplanguage
@@ -202,6 +204,8 @@ class DropLanguage(DomainLanguage):
                  passage_mask: Tensor,
                  passage_tokenidx2dateidx: torch.LongTensor,
                  passage_date_values: List[Date],
+                 question_passage_attention: Tensor,
+                 passage_token2date_similarity: Tensor,
                  parameters: ExecutorParameters,
                  start_types,
                  device_id: int = -1,
@@ -263,11 +267,11 @@ class DropLanguage(DomainLanguage):
         self.device_id = device_id
 
         initialization_returns = self.initialize()
-        self.question_passage_attention = initialization_returns["question_passage_attention"]
+        self.question_passage_attention = question_passage_attention # initialization_returns["question_passage_attention"]
         self.date_lt_mat = initialization_returns["date_lt_mat"]
         self.date_gt_mat = initialization_returns["date_gt_mat"]
         # Shape: (passage_length, passage_length)
-        self.passage_passage_token2date_similarity = initialization_returns["p2p_t2date_sim_mat"]
+        self.passage_passage_token2date_similarity = passage_token2date_similarity # initialization_returns["p2p_t2date_sim_mat"]
 
         if self._debug:
             num_date_tokens = self.passage_datetokens_mask_float.sum()
@@ -279,9 +283,9 @@ class DropLanguage(DomainLanguage):
     def initialize(self):
         date_gt_mat, date_lt_mat = self.compute_date_comparison_matrices(self.passage_date_values, self.device_id)
 
-        question_passage_attention = self.compute_question_passage_similarity()
+        question_passage_attention = None # self.compute_question_passage_similarity()
 
-        passage_passage_token2date_similarity = self.compute_passage_token2date_similarity()
+        passage_passage_token2date_similarity = None # self.compute_passage_token2date_similarity()
 
         return {"question_passage_attention": question_passage_attention,
                 "date_gt_mat": date_gt_mat,
@@ -498,53 +502,6 @@ class DropLanguage(DomainLanguage):
 
         return (date_distribution_1, date_distribution_2, bool1, bool2, average_passage_distribution, aux_loss)
 
-
-    # @predicate
-    @predicate_with_side_args(['event_date_groundings'])
-    def compare_date_greater_than(self,
-                                  passage_attn_1: PassageAttention,
-                                  passage_attn_2: PassageAttention,
-                                  event_date_groundings = None) -> PassageAttention_answer:
-        ''' In short; outputs PA_1 if D1 > D2 i.e. is PA_1 occurred after PA_2
-        '''
-
-        passage_attention_1 = passage_attn_1._value * self.passage_mask
-        passage_attention_2 = passage_attn_2._value * self.passage_mask
-
-        (date_distribution_1,
-         date_distribution_2,
-         prob_date1_greater, prob_date2_greater,
-         average_passage_distribution,
-         aux_loss) = self.date_comparison(passage_attention_1, passage_attention_2,
-                                          "greater", event_date_groundings)
-
-        debug_value = ""
-        if self._debug:
-            if event_date_groundings:
-                gold_date_1 = myutils.round_all(myutils.tocpuNPList(event_date_groundings[0]), 3)
-                gold_date_2 = myutils.round_all(myutils.tocpuNPList(event_date_groundings[1]), 3)
-            else:
-                gold_date_1, gold_date_2 = None, None
-            _, pattn_vis_most_1 = dlutils.listTokensVis(passage_attention_1,
-                                                        self.metadata["passage_tokens"])
-            _, pattn_vis_most_2 = dlutils.listTokensVis(passage_attention_2,
-                                                        self.metadata["passage_tokens"])
-
-            date1 = myutils.round_all(myutils.tocpuNPList(date_distribution_1), 3)
-            date2 = myutils.round_all(myutils.tocpuNPList(date_distribution_2), 3)
-            d1_gt_d2 = myutils.round_all(myutils.tocpuNPList(prob_date1_greater), 3)
-            d2_gt_d1 = myutils.round_all(myutils.tocpuNPList(prob_date2_greater), 3)
-
-            debug_value += f"Pattn1: {pattn_vis_most_1}\n Date1: {date1}" + \
-                           f"\nPattn2: {pattn_vis_most_2}\n Date2: {date2}" + \
-                           f"\nP(D1 > D2): {d1_gt_d2}  P(D2 > D1): {d2_gt_d1}"
-
-            if gold_date_1:
-                debug_value += f"\nGoldDates  Date1: {gold_date_1}  Date2: {gold_date_2}"
-
-
-        return PassageAttention_answer(average_passage_distribution, loss=aux_loss, debug_value=debug_value)
-
     # @predicate
     @predicate_with_side_args(['event_date_groundings'])
     def compare_date_lesser_than(self,
@@ -581,6 +538,51 @@ class DropLanguage(DomainLanguage):
             debug_value += f"Pattn1: {pattn_vis_most_1}\n Date1: {date1}" + \
                            f"\nPattn2: {pattn_vis_most_2}\n Date2: {date2}" + \
                            f"\nP(D1 < D2): {d1_lt_d2}  P(D2 < D1): {d2_lt_d1}"
+            if gold_date_1:
+                debug_value += f"\nGoldDates  Date1: {gold_date_1}  Date2: {gold_date_2}"
+
+        return PassageAttention_answer(average_passage_distribution, loss=aux_loss, debug_value=debug_value)
+
+    # @predicate
+    @predicate_with_side_args(['event_date_groundings'])
+    def compare_date_greater_than(self,
+                                  passage_attn_1: PassageAttention,
+                                  passage_attn_2: PassageAttention,
+                                  event_date_groundings=None) -> PassageAttention_answer:
+        ''' In short; outputs PA_1 if D1 > D2 i.e. is PA_1 occurred after PA_2
+        '''
+
+        passage_attention_1 = passage_attn_1._value * self.passage_mask
+        passage_attention_2 = passage_attn_2._value * self.passage_mask
+
+        (date_distribution_1,
+         date_distribution_2,
+         prob_date1_greater, prob_date2_greater,
+         average_passage_distribution,
+         aux_loss) = self.date_comparison(passage_attention_1, passage_attention_2,
+                                          "greater", event_date_groundings)
+
+        debug_value = ""
+        if self._debug:
+            if event_date_groundings:
+                gold_date_1 = myutils.round_all(myutils.tocpuNPList(event_date_groundings[0]), 3)
+                gold_date_2 = myutils.round_all(myutils.tocpuNPList(event_date_groundings[1]), 3)
+            else:
+                gold_date_1, gold_date_2 = None, None
+            _, pattn_vis_most_1 = dlutils.listTokensVis(passage_attention_1,
+                                                        self.metadata["passage_tokens"])
+            _, pattn_vis_most_2 = dlutils.listTokensVis(passage_attention_2,
+                                                        self.metadata["passage_tokens"])
+
+            date1 = myutils.round_all(myutils.tocpuNPList(date_distribution_1), 3)
+            date2 = myutils.round_all(myutils.tocpuNPList(date_distribution_2), 3)
+            d1_gt_d2 = myutils.round_all(myutils.tocpuNPList(prob_date1_greater), 3)
+            d2_gt_d1 = myutils.round_all(myutils.tocpuNPList(prob_date2_greater), 3)
+
+            debug_value += f"Pattn1: {pattn_vis_most_1}\n Date1: {date1}" + \
+                           f"\nPattn2: {pattn_vis_most_2}\n Date2: {date2}" + \
+                           f"\nP(D1 > D2): {d1_gt_d2}  P(D2 > D1): {d2_gt_d1}"
+
             if gold_date_1:
                 debug_value += f"\nGoldDates  Date1: {gold_date_1}  Date2: {gold_date_2}"
 

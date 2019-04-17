@@ -104,6 +104,7 @@ class QANet(Model):
                 # passage_date_spans: torch.LongTensor,
                 # passage_date_entidxs: torch.LongTensor,
                 actions: List[List[ProductionRule]],
+                datecomp_ques_event_date_groundings: List[Tuple[List[int], List[int]]] = None,
                 answer_types: List[str] = None,
                 answer_as_passage_spans: torch.LongTensor = None,
                 answer_as_question_spans: torch.LongTensor = None,

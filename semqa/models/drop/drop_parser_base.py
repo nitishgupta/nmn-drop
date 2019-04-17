@@ -105,7 +105,8 @@ class DROPParserBase(Model):
 
     def _create_grammar_statelet(self,
                                  language: DropLanguage,
-                                 possible_actions: List[ProductionRule]) -> Tuple[GrammarStatelet, List[str]]:
+                                 possible_actions: List[ProductionRule]) -> Tuple[GrammarStatelet, Dict[str, int],
+                                                                                  List[str]]:
                                  # linked_rule2idx: Dict = None,
                                  # action2ques_linkingscore: torch.FloatTensor = None,
                                  # quesspan_action_emb: torch.FloatTensor = None) -> GrammarStatelet:
@@ -126,13 +127,11 @@ class DROPParserBase(Model):
         """
         # ProductionRule: (rule, is_global_rule, rule_id, nonterminal)
         action2actionidx = {}
-        actionstr2actionidx: List[str] = []
+        actionidx2actionstr: List[str] = []
         for action_index, action in enumerate(possible_actions):
             action_string = action[0]
-            if action_string:
-                # print("{} {}".format(action_string, action))
-                action2actionidx[action_string] = action_index
-                actionstr2actionidx.append(action_string)
+            action2actionidx[action_string] = action_index
+            actionidx2actionstr.append(action_string)
 
         valid_actions = language.get_nonterminal_productions()
         translated_valid_actions: Dict[str, Dict[str, Tuple[torch.Tensor, torch.Tensor, List[int]]]] = {}
@@ -170,7 +169,7 @@ class DROPParserBase(Model):
 
         return (GrammarStatelet([START_SYMBOL],
                                 translated_valid_actions,
-                                language.is_nonterminal), actionstr2actionidx)
+                                language.is_nonterminal), action2actionidx, actionidx2actionstr)
 
     @staticmethod
     def _get_denotations(action_strings: List[List[List[str]]],

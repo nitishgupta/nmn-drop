@@ -233,9 +233,6 @@ local compareff_inputdim =
             "bidirectional": true,
         },
 
-        "goldactions": utils.boolparser(std.extVar("GOLDACTIONS")),
-        "aux_loss": utils.boolparser(std.extVar("AUXLOSS")),
-
         "bidafutils":
             if tokenidx == "bidaf" then {
                 "bidaf_model_path": std.extVar("BIDAF_MODEL_TAR"),
@@ -278,15 +275,30 @@ local compareff_inputdim =
           ]
         ],
 
+        "goldactions": utils.boolparser(std.extVar("GOLDACTIONS")),
+        "goldprogs": utils.boolparser(std.extVar("GOLDPROGS")),
+        "denotationloss": utils.boolparser(std.extVar("DENLOSS")),
+        "excloss": utils.boolparser(std.extVar("EXCLOSS")),
+        "qattloss": utils.boolparser(std.extVar("QATTLOSS")),
+        "mmlloss": utils.boolparser(std.extVar("MMLLOSS")),
         "debug": utils.boolparser(std.extVar("DEBUG"))
     },
 
     "iterator": {
-      "type": "basic",
-      "track_epoch": true,
-      "batch_size": std.extVar("BS"),
-      "max_instances_in_memory": 1024
+        "type": "filter",
+        "track_epoch": true,
+        "batch_size": std.extVar("BS"),
+//      "max_instances_in_memory":
+        "filter_instances": utils.boolparser(std.extVar("SUPFIRST")),
+        "filter_for_epochs": utils.parse_number(std.extVar("SUPEPOCHS")),
     },
+
+    "validation_iterator": {
+        "type": "basic",
+        "track_epoch": true,
+        "batch_size": std.extVar("BS")
+    },
+
 
     "trainer": {
         "num_serialized_models_to_keep": -1,
