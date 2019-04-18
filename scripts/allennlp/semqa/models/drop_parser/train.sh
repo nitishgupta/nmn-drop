@@ -3,7 +3,7 @@
 export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
-DATASET_NAME=date_prune_augment_100
+DATASET_NAME=date/date_prune_augment
 DATASET_DIR=./resources/data/drop/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
 VALFILE=${DATASET_DIR}/drop_dataset_dev.json
@@ -32,8 +32,8 @@ export BIDAF_WORDEMB_FILE='./resources/embeddings/glove/glove.6B.100d.txt.gz'
 
 export GOLDACTIONS=false
 export GOLDPROGS=false
-export DENLOSS=false
-export EXCLOSS=false
+export DENLOSS=true
+export EXCLOSS=true
 export QATTLOSS=true
 export MMLLOSS=true
 
@@ -47,14 +47,14 @@ export SUPEPOCHS=10
 export BS=8
 export DROPOUT=0.2
 
-export LR=0.0001
+export LR=0.001
 export RG=1e-4
 
 export SEED=100
 
 export BEAMSIZE=2
 export MAX_DECODE_STEP=8
-export EPOCHS=10
+export EPOCHS=50
 
 export DEBUG=false
 

@@ -1,6 +1,5 @@
 from typing import List, Dict, Tuple
 import json
-import nltk
 from nltk.corpus import stopwords
 import copy
 import torch
@@ -17,8 +16,8 @@ THRESHOLD = 20
 STOP_WORDS = set(stopwords.words('english'))
 STOP_WORDS.update(["'s", ","])
 
-FIRST="first"
-SECOND="second"
+FIRST = "first"
+SECOND = "second"
 
 
 def readDataset(input_json):

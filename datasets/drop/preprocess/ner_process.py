@@ -64,12 +64,18 @@ def parseNumNERS(ner_spans, tokens: List[str]) -> Tuple[List, List, List, int]:
     # List of (token_str, token_idx, normalized_value) -- if going by single token version
     # List of ((menstr, start, end, NUM), normalized_value) - if going by the mention route
     parsed_nums = []
-    for ner in ner_spans:
-        if ner[-1] in NUM_NER_TYPES:
-            # (token_str, token_idx, normalized_value)
-            normalized_num = normalizeNUM(ner, tokens)
-            if normalized_num is not None:
-                parsed_nums.append(normalized_num)
+    # for ner in ner_spans:
+    #     if ner[-1] in NUM_NER_TYPES:
+    #         # (token_str, token_idx, normalized_value)
+    #         normalized_num = normalizeNUM(ner, tokens)
+    #         if normalized_num is not None:
+    #             parsed_nums.append(normalized_num)
+
+    for token_idx, token in enumerate(tokens):
+        normalized_value = _str2float(token)
+        if normalized_value is not None:
+            parsed_nums.append((token, token_idx, normalized_value))
+
 
     num2idx = {}
     normalized_num_idxs = []
@@ -284,8 +290,8 @@ def _str2float(string_val):
         return int(WORD_NUMBER_MAP[no_comma_string.lower()])
 
     try:
-        int_val = int(no_comma_string)
-        return int_val
+        val = float(no_comma_string)
+        return val
     # If error in float parse, return None
     except:
         return None

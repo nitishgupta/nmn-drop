@@ -60,16 +60,24 @@ passage_date_entidx = passage + "_" + DATE_TYPE + "_men2entidx"
 passage_num_normalized_values = passage + "_" + NUM_TYPE + "_normalized_values"
 passage_date_normalized_values = passage + "_" + DATE_TYPE + "_normalized_values"
 
-datecomp_ques_event_date_groundings = "datecomp_ques_event_date_groundings"
-datecomp_ques_event_date_values = "datecomp_ques_event_date_values"
-ques_attention_supervision = "datecomp_ques_event_attentions"
 
+# STRONG SUPERVISION FIELDS
 # Boolean
 strongly_supervised = "strongly_supervised"
 # String
 qtype = "qtype"
-DATECOMP_QTYPE = "date_comparison"
+# n-tuple of question attention
+ques_attention_supervision = "ques_attention_supervision"
 
+# Date comparision question-type
+DATECOMP_QTYPE = "date_comparison"
+datecomp_ques_event_date_groundings = "datecomp_ques_event_date_groundings"
+datecomp_ques_event_date_values = "datecomp_ques_event_date_values"
+
+# Number comparision questions -- grounding should be a 2-tuple of grounding into passage_num_normalized_values
+NUMCOMP_QTYPE = "number_comparison"
+numcomp_qspan_num_groundings = "numcomp_qspan_num_groundings"
+numcomp_qspan_num_values = "numcomp_qspan_num_values"
 
 
 COMMA="@COMMA@"

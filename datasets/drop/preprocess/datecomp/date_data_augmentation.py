@@ -435,13 +435,13 @@ if __name__=='__main__':
     output_trnfp = args.output_trnfp
     output_devfp = args.output_devfp
 
-    input_dir = "date_prune"
-    input_trnfp = f"/srv/local/data/nitishg/data/drop/{input_dir}/drop_dataset_train.json"
-    input_devfp = f"/srv/local/data/nitishg/data/drop/{input_dir}/drop_dataset_dev.json"
-
-    output_dir = "date_prune_augment"
-    output_trnfp = f"/srv/local/data/nitishg/data/drop/{output_dir}/drop_dataset_train.json"
-    output_devfp = f"/srv/local/data/nitishg/data/drop/{output_dir}/drop_dataset_dev.json"
+    # input_dir = "date_prune"
+    # input_trnfp = f"/srv/local/data/nitishg/data/drop/{input_dir}/drop_dataset_train.json"
+    # input_devfp = f"/srv/local/data/nitishg/data/drop/{input_dir}/drop_dataset_dev.json"
+    #
+    # output_dir = "date_prune_augment"
+    # output_trnfp = f"/srv/local/data/nitishg/data/drop/{output_dir}/drop_dataset_train.json"
+    # output_devfp = f"/srv/local/data/nitishg/data/drop/{output_dir}/drop_dataset_dev.json"
 
 
     train_dataset = readDataset(input_trnfp)

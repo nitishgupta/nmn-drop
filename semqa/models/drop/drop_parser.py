@@ -388,6 +388,7 @@ class DROPSemanticParser(DROPParserBase):
                                   debug=self._debug,
                                   metadata=metadata[i]) for i in range(batch_size)]
 
+        '''
         # List[torch.Tensor(0.0)] -- Initial log-score list for the decoding
         initial_score_list = [next(iter(question.values())).new_zeros(1, dtype=torch.float)
                               for _ in range(batch_size)]
@@ -411,7 +412,8 @@ class DROPSemanticParser(DROPParserBase):
                                                          question_mask_aslist=question_mask_aslist)
 
         initial_side_args = [[] for _ in range(batch_size)]
-
+        
+        
         # Initial grammar state for the complete batch
         initial_state = GrammarBasedState(batch_indices=list(range(batch_size)),
                                           action_history=[[] for _ in range(batch_size)],
@@ -421,6 +423,15 @@ class DROPSemanticParser(DROPParserBase):
                                           possible_actions=actions,
                                           extras=batch_actionidx2actionstr,
                                           debug_info=initial_side_args)
+        '''
+
+        (initial_state,
+         batch_action2actionidx,
+         batch_actionidx2actionstr) = self.getInitialDecoderState(question, languages, actions, encoded_question,
+                                                                  question_mask, question_encoded_final_state,
+                                                                  question_encoded_aslist, question_mask_aslist,
+                                                                  batch_size)
+
 
         # Mapping[int, Sequence[StateType]]
         best_final_states = self._decoder_beam_search.search(self._max_decoding_steps,
@@ -535,13 +546,14 @@ class DROPSemanticParser(DROPParserBase):
                 mml_loss = self._mml.decode(initial_state=initial_state,
                                             transition_function=self._decoder_step,
                                             supervision=(gold_actionseq_idxs, gold_actionseq_mask))['loss']
+
                 if mml_loss != 0.0:
                     self.mmlloss_metric(mml_loss.item())
                 total_aux_loss += mml_loss
 
 
             denotation_loss = allenutil.move_to_device(torch.tensor(0.0), device_id)
-            if not self.denotation_loss:
+            if self.denotation_loss:
                 for i in range(batch_size):
                     if answer_types[i] == dropconstants.SPAN_TYPE:
                         instance_prog_denotations, instance_prog_types = batch_denotations[i], batch_denotation_types[i]
@@ -595,7 +607,6 @@ class DROPSemanticParser(DROPParserBase):
             self.modelloss_metric(batch_denotation_loss.item())
             output_dict["loss"] = batch_denotation_loss + total_aux_loss
 
-        '''
         if metadata is not None:
             batch_question_strs = [metadata[i]["original_question"] for i in range(batch_size)]
             batch_passage_strs = [metadata[i]["original_passage"] for i in range(batch_size)]
@@ -630,7 +641,6 @@ class DROPSemanticParser(DROPParserBase):
             if answer_annotations:
                 for i in range(batch_size):
                     self._drop_metrics(predicted_answers[i], [answer_annotations[i]])
-        '''
 
         batch_denotations = None
         batch_denotation_types = None
@@ -1184,3 +1194,45 @@ class DROPSemanticParser(DROPParserBase):
                 for action, sidearg_dict in zip(program, side_args):
                     if action == 'PassageSpanAnswer -> find_passageSpanAnswer':
                         sidearg_dict['passage_attention'] = instance_gold_attention
+
+
+    def getInitialDecoderState(self,
+                               question, languages, actions, encoded_question, question_mask,
+                               question_encoded_final_state, question_encoded_aslist, question_mask_aslist,
+                               batch_size):
+        # List[torch.Tensor(0.0)] -- Initial log-score list for the decoding
+        initial_score_list = [next(iter(question.values())).new_zeros(1, dtype=torch.float)
+                              for _ in range(batch_size)]
+
+        initial_grammar_statelets = []
+        batch_action2actionidx: List[Dict[str, int]] = []
+        # This is kind of useless, only needed for debugging in BasicTransitionFunction
+        batch_actionidx2actionstr: List[List[str]] = []
+        for i in range(batch_size):
+            (grammar_statelet,
+             action2actionidx,
+             actionidx2actionstr) = self._create_grammar_statelet(languages[i], actions[i])
+
+            initial_grammar_statelets.append(grammar_statelet)
+            batch_actionidx2actionstr.append(actionidx2actionstr)
+            batch_action2actionidx.append(action2actionidx)
+
+        initial_rnn_states = self._get_initial_rnn_state(question_encoded=encoded_question,
+                                                         question_mask=question_mask,
+                                                         question_encoded_finalstate=question_encoded_final_state,
+                                                         question_encoded_aslist=question_encoded_aslist,
+                                                         question_mask_aslist=question_mask_aslist)
+
+        initial_side_args = [[] for _ in range(batch_size)]
+
+        # Initial grammar state for the complete batch
+        initial_state = GrammarBasedState(batch_indices=list(range(batch_size)),
+                                          action_history=[[] for _ in range(batch_size)],
+                                          score=initial_score_list,
+                                          rnn_state=initial_rnn_states,
+                                          grammar_state=initial_grammar_statelets,
+                                          possible_actions=actions,
+                                          extras=batch_actionidx2actionstr,
+                                          debug_info=initial_side_args)
+
+        return (initial_state, batch_action2actionidx, batch_actionidx2actionstr)

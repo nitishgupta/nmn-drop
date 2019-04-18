@@ -12,13 +12,13 @@ local token_embed_dim =
   else if tokenidx == "elmoglove" then 1124;
 
 
-
 local attendff_inputdim =
   if tokenidx == "glove" then 100
   else if tokenidx == "bidaf" then 200
   else if tokenidx == "elmo" then 1024
   else if tokenidx == "glovechar" then 200
   else if tokenidx == "elmoglove" then 1124;
+
 
 local compareff_inputdim =
   if tokenidx == "glove" then 200

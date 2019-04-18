@@ -336,12 +336,18 @@ class DROPReader(DatasetReader):
                          # "number_indices": number_indices
                         })
 
+
+        # FIELDS FOR STRONG-SUPERVISION
+        fields["strongly_supervised"] = MetadataField(strongly_supervised)
+        fields["qtypes"] = MetadataField(qtype)   # String for strong supervision
+        # QAttn supervision, is a n-tuple of question attentions
+        fields["qattn_supervision"] = ArrayField(np.array(ques_attn_supervision), padding_value=0)
+        # For date comparison questions; these are a tuple of date_groundings
         if datecomp_ques_event_date_groundings:
             fields["datecomp_ques_event_date_groundings"] = MetadataField(datecomp_ques_event_date_groundings)
+        else:
+            fields["datecomp_ques_event_date_groundings"] = MetadataField(0)
 
-        fields["strongly_supervised"] = MetadataField(strongly_supervised)
-        fields["qtypes"] = MetadataField(qtype)
-        fields["qattn_supervision"] = ArrayField(np.array(ques_attn_supervision), padding_value=0)
 
         if answer_info:
             metadata["answer_type"] = answer_info["answer_type"]

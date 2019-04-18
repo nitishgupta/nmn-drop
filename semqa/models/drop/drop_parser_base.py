@@ -57,9 +57,7 @@ class DROPParserBase(Model):
         # This is what we pass as input in the first step of decoding, when we don't have a
         # previous action.
         self._first_action_embedding = torch.nn.Parameter(torch.FloatTensor(action_embedding_dim))
-        torch.nn.init.normal_(self._first_action_embedding)
-
-        torch.nn.init.normal_(self._first_action_embedding)
+        torch.nn.init.normal_(self._first_action_embedding, mean=0.0, std=0.001)
 
     @overrides
     def forward(self, **kwargs):  # type: ignore
