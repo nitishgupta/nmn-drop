@@ -237,7 +237,7 @@ def addSupervision(input_json: str, output_json: str, output_txt: str, THRESHOLD
     num_grounding_unsuccessful = 0
 
     for passage_id, passage_info in dataset.items():
-        passage = passage_info[constants.passage]
+        passage = passage_info[constants.tokenized_passage]
         passage_tokens = passage.split(' ')
         qa_pairs = passage_info[constants.qa_pairs]
         num_original_questions += len(qa_pairs)
@@ -250,7 +250,7 @@ def addSupervision(input_json: str, output_json: str, output_txt: str, THRESHOLD
 
         new_qa_pairs = []
         for qa_pair in qa_pairs:
-            question = qa_pair[constants.question]
+            question = qa_pair[constants.tokenized_question]
             question_tokens = question.split(' ')
             answer_span: str = qa_pair[constants.answer]["spans"][0]
             qlen = len(question_tokens)

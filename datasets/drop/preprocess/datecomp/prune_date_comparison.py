@@ -19,11 +19,22 @@ STOP_WORDS.update(["'s", ","])
 FIRST = "first"
 SECOND = "second"
 
+DATE_COMPARISON_TRIGRAMS = ["which happened", "which event", "what happened first", "what happened second",
+                            "what happened later", "what happened last", "what event happened", "what event came"]
+
 
 def readDataset(input_json):
     with open(input_json, 'r') as f:
         dataset = json.load(f)
     return dataset
+
+
+def date_comparison_filter(question: str):
+    question_lower = question.lower()
+    if any(span in question_lower for span in DATE_COMPARISON_TRIGRAMS):
+        return True
+    else:
+        return False
 
 
 def getQuestionComparisonOperator(question_tokens: List[str]) -> str:
@@ -215,7 +226,7 @@ def pruneDateQuestions(dataset, weakdate: bool = False):
     numexamaples_w_dates_annotated = 0
 
     for passage_id, passage_info in dataset.items():
-        passage = passage_info[constants.passage]
+        passage = passage_info[constants.tokenized_passage]
         passage_tokens: List[str] = passage.split(' ')
         p_date_mens: List[Tuple[str, Tuple[int, int], Tuple[int, int, int]]] = passage_info[constants.passage_date_mens]
         p_date_entidxs = passage_info[constants.passage_date_entidx]
@@ -225,8 +236,13 @@ def pruneDateQuestions(dataset, weakdate: bool = False):
 
         new_qa_pairs = []
         for question_answer in passage_info[constants.qa_pairs]:
+            if not date_comparison_filter(question_answer[constants.tokenized_question]):
+                continue
+            if question_answer[constants.answer_type] != constants.SPAN_TYPE:
+                continue
+
             total_ques += 1
-            question_tokenized_text = question_answer[constants.question]
+            question_tokenized_text = question_answer[constants.tokenized_question]
             question_tokens: List[str] = question_tokenized_text.split(' ')
             answer_annotation = question_answer[constants.answer]
             answer_span: str = answer_annotation["spans"][0]

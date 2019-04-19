@@ -46,7 +46,7 @@ def processPassage(passage_info, keep_date: bool, keep_num: bool):
 
     for qa_pair in qa_pairs:
         keep = False
-        question = qa_pair[constants.question].lower()
+        question = qa_pair[constants.tokenized_question].lower()
 
         if date_comparison_filter(question) and keep_date:
             keep = True

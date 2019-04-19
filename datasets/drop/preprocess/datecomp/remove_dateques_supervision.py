@@ -71,7 +71,7 @@ def removeDateCompPassageWeakAnnotations(dataset, annotation_for_numpassages):
 
         if passage_idx in choosen_passage_idxs:
             for qa in passage_info[constants.qa_pairs]:
-                question = qa[constants.question]
+                question = qa[constants.tokenized_question]
                 operator = getQuestionComparisonOperator(question)
                 strongly_supervised = qa[constants.strongly_supervised]
                 total_strongly_supervised_qas += 1 if strongly_supervised else 0
@@ -82,7 +82,7 @@ def removeDateCompPassageWeakAnnotations(dataset, annotation_for_numpassages):
         else:
             # Removing the strong annotations for all QAs in this passage
             for question_answer in passage_info[constants.qa_pairs]:
-                question = question_answer[constants.question]
+                question = question_answer[constants.tokenized_question]
                 operator = getQuestionComparisonOperator(question)
                 operator_dist_unannotated[operator] += 1
 
@@ -146,15 +146,6 @@ if __name__=='__main__':
     input_devfp = args.input_devfp
     output_trnfp = args.output_trnfp
     output_devfp = args.output_devfp
-
-
-    input_dir = "date_prune_augment"
-    input_trnfp = f"/srv/local/data/nitishg/data/drop/{input_dir}/drop_dataset_train.json"
-    input_devfp = f"/srv/local/data/nitishg/data/drop/{input_dir}/drop_dataset_dev.json"
-
-    output_dir = "date_prune_augment_500"
-    output_trnfp = f"/srv/local/data/nitishg/data/drop/{output_dir}/drop_dataset_train.json"
-    output_devfp = f"/srv/local/data/nitishg/data/drop/{output_dir}/drop_dataset_dev.json"
 
     train_dataset = readDataset(input_trnfp)
     dev_dataset = readDataset(input_devfp)

@@ -3,7 +3,8 @@
 export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
-DATASET_NAME=date_prune_augment_50
+DATASET_NAME=date/date_prune_augment
+# DATASET_NAME=num/num_prune_supervised
 DATASET_DIR=./resources/data/drop/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
 VALFILE=${DATASET_DIR}/drop_dataset_dev.json
@@ -17,27 +18,27 @@ export GPU=0
 # All parameters here are used to fetch the correct serialization_dir
 export TOKENIDX="qanet"
 
-export BS=8
+export BS=16
 export DROPOUT=0.2
-export LR=0.0005
+export LR=0.001
 
 export WEMB_DIM=100
 export RG=1e-4
 
 export GOLDACTIONS=false
 export GOLDPROGS=false
-export DENLOSS=false
-export EXCLOSS=false
+export DENLOSS=true
+export EXCLOSS=true
 export QATTLOSS=true
 export MMLLOSS=true
 
 # Whether strong supervison instances should be trained on first, if yes for how many epochs
 export SUPFIRST=true
-export SUPEPOCHS=20
+export SUPEPOCHS=10
 
 export SEED=100
 
-export BEAMSIZE=2
+export BEAMSIZE=4
 
 export DEBUG=true
 

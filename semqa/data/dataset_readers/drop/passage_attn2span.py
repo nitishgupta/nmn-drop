@@ -108,7 +108,7 @@ class DROPReader(DatasetReader):
         logger.info(f"Reading the dataset from: {file_path}")
 
         for passage_id, passage_info in dataset.items():
-            passage_text = passage_info[constants.passage]
+            passage_text = passage_info[constants.tokenized_passage]
             passage_length = len(passage_text.split(' '))
 
             for question_answer in passage_info[constants.qa_pairs]:

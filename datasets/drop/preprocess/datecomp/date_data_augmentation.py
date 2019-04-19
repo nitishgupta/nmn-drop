@@ -148,7 +148,7 @@ def quesEvents(qstr):
 
 
 def getEventOrderSwitchQuestion(question_answer):
-    question_tokenized_text = question_answer[constants.question]
+    question_tokenized_text = question_answer[constants.tokenized_question]
     event_spans = quesEvents(question_tokenized_text)
     if event_spans is None:
         return None
@@ -167,9 +167,11 @@ def getEventOrderSwitchQuestion(question_answer):
     new_question_tokens = pretext + event2_text + mid_text + event1_text + end_text
     new_question_text = ' '.join(new_question_tokens)
 
-    new_question_answer[constants.question] = new_question_text
+    new_question_answer[constants.tokenized_question] = new_question_text
     # Since we don't know the following, we will keep them blank
-    new_question_answer[constants.original_question] = new_question_text
+    new_question_answer[constants.cleaned_question] = new_question_text
+    new_question_answer[constants.question] = new_question_text
+
     new_question_answer[constants.answer_question_spans] = []
     # Reversing the order of the date groundings
     qevent_date_groundings = question_answer[constants.datecomp_ques_event_date_groundings]
@@ -180,6 +182,7 @@ def getEventOrderSwitchQuestion(question_answer):
     new_question_answer[constants.datecomp_ques_event_date_values] = new_qevent_date_values
 
     new_question_answer["augmented_data"] = True
+    new_question_answer[constants.query_id] = question_answer[constants.query_id] + '-dc-event-switch'
 
     return new_question_answer
 
@@ -191,9 +194,9 @@ def getQuestionOperatorSwitchQA(question_answer,
 
     new_question_answer = copy.deepcopy(question_answer)
 
-    question_tokenized_text = question_answer[constants.question]
+    question_tokenized_text = question_answer[constants.tokenized_question]
 
-    event_spans = quesEvents(question_answer[constants.question])
+    event_spans = quesEvents(question_answer[constants.tokenized_question])
     if event_spans is None:
         return None
     event1_span, event2_span = event_spans
@@ -265,19 +268,20 @@ def getQuestionOperatorSwitchQA(question_answer,
     if question_tokenized_text == new_question_text:
         return None
 
+    new_question_answer[constants.tokenized_question] = new_question_text
+    new_question_answer[constants.cleaned_question] = new_question_text
     new_question_answer[constants.question] = new_question_text
-    new_question_answer[constants.original_question] = new_question_text
 
     new_question_answer["augmented_data"] = True
-
+    new_question_answer[constants.query_id] = question_answer[constants.query_id] + '-dc-qop-switch'
     return new_question_answer
 
 
 def addQuestionAttentionVectors(question_answer):
-    question_tokenized_text = question_answer[constants.question]
+    question_tokenized_text = question_answer[constants.tokenized_question]
     question_tokens = question_tokenized_text.split(' ')
     qlen = len(question_tokens)
-    event_spans = quesEvents(question_answer[constants.question])
+    event_spans = quesEvents(question_answer[constants.tokenized_question])
     if event_spans:
         # These span ends are exclusive
         event1_span, event2_span = event_spans
@@ -321,7 +325,6 @@ def strongSupervisionFlagAndQType(question_answer_pairs: List[Dict]):
     return question_answer_pairs, num_strongly_supervised_qas
 
 
-
 def augmentDateComparisonData(dataset):
     """ Given a dataset containing date-comparison questions, we augment the data in the following manner:
         - Adding new questions. For eg: "What happened first, eventA or eventB ?"
@@ -345,7 +348,6 @@ def augmentDateComparisonData(dataset):
         The value is constants.DATECOMP_QTYPE
     """
 
-
     new_dataset = {}
     original_operator_dist = defaultdict(float)
     augment_operator_dist = defaultdict(float)
@@ -355,12 +357,12 @@ def augmentDateComparisonData(dataset):
 
     for passage_id, passage_info in dataset.items():
         new_qa_pairs = []
-        passage_tokenized_text = passage_info[constants.passage]
+        passage_tokenized_text = passage_info[constants.tokenized_passage]
         passage_token_charidxs = passage_info[constants.passage_charidxs]
-        original_passage_text = passage_info[constants.original_passage]
+        original_passage_text = passage_info[constants.cleaned_passage]
         num_qa_original += len(passage_info[constants.qa_pairs])
         for question_answer in passage_info[constants.qa_pairs]:
-            question_tokenized_text = question_answer[constants.question]
+            question_tokenized_text = question_answer[constants.tokenized_question]
             ques_operator = getQuestionComparisonOperator(question_tokenized_text)
             original_operator_dist[ques_operator] += 1
 
@@ -372,7 +374,7 @@ def augmentDateComparisonData(dataset):
             event_switch_question_answer = getEventOrderSwitchQuestion(question_answer)
             if event_switch_question_answer is not None:
                 event_switch_question_answer = addQuestionAttentionVectors(event_switch_question_answer)
-                ques_operator = getQuestionComparisonOperator(event_switch_question_answer[constants.question])
+                ques_operator = getQuestionComparisonOperator(event_switch_question_answer[constants.tokenized_question])
                 augment_operator_dist[ques_operator] += 1
                 new_qa_pairs.append(event_switch_question_answer)
 
@@ -384,7 +386,7 @@ def augmentDateComparisonData(dataset):
 
             if qoperator_switch_question_answer is not None:
                 qoperator_switch_question_answer = addQuestionAttentionVectors(qoperator_switch_question_answer)
-                ques_operator = getQuestionComparisonOperator(qoperator_switch_question_answer[constants.question])
+                ques_operator = getQuestionComparisonOperator(qoperator_switch_question_answer[constants.tokenized_question])
                 augment_operator_dist[ques_operator] += 1
                 new_qa_pairs.append(qoperator_switch_question_answer)
 
@@ -396,12 +398,15 @@ def augmentDateComparisonData(dataset):
             if event_sw_qoperator_sw_question_answer is not None:
                 event_sw_qoperator_sw_question_answer = \
                         addQuestionAttentionVectors(event_sw_qoperator_sw_question_answer)
-                ques_operator = getQuestionComparisonOperator(event_sw_qoperator_sw_question_answer[constants.question])
+                ques_operator = getQuestionComparisonOperator(event_sw_qoperator_sw_question_answer[constants.tokenized_question])
                 augment_operator_dist[ques_operator] += 1
                 new_qa_pairs.append(event_sw_qoperator_sw_question_answer)
 
         new_qa_pairs, num_strong_supervised_qas = strongSupervisionFlagAndQType(new_qa_pairs)
         total_strongly_supervised_qas += num_strong_supervised_qas
+
+        q_ids = set([qa[constants.query_id] for qa in new_qa_pairs])
+        assert len(q_ids) == len(new_qa_pairs)
 
         num_qa_augment += len(new_qa_pairs)
         passage_info[constants.qa_pairs] = new_qa_pairs

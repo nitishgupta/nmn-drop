@@ -60,6 +60,28 @@ def getGoldLF_datecomparison(question_tokens: List[str]):
     return f"{lf1}{greater_than}{lf2}", "greater"
 
 
+def getGoldLF_numcomparison(question_tokens: List[str]):
+    # "(find_passageSpanAnswer (compare_date_greater_than find_PassageAttention find_PassageAttention))"
+    lf1 = "(find_passageSpanAnswer ("
+    lf2 = " find_PassageAttention find_PassageAttention))"
+    greater_than = "compare_num_greater_than"
+    lesser_than = "compare_num_lesser_than"
+
+    # Correct if Attn1 is first event
+    greater_tokens = ['larger', 'more', 'largest', 'bigger', 'higher', 'highest', 'most', 'greater']
+    lesser_tokens = ['smaller', 'fewer', 'lowest', 'smallest', 'less', 'least', 'fewest', 'lower']
+
+    for t in lesser_tokens:
+        if t in question_tokens:
+            return f"{lf1}{lesser_than}{lf2}", "lesser"
+
+    for t in greater_tokens:
+        if t in question_tokens:
+            return f"{lf1}{greater_than}{lf2}", "greater"
+
+    return f"{lf1}{greater_than}{lf2}", "greater"
+
+
 @Model.register("drop_parser")
 class DROPSemanticParser(DROPParserBase):
     def __init__(self,
@@ -206,15 +228,12 @@ class DROPSemanticParser(DROPParserBase):
                 question: Dict[str, torch.LongTensor],
                 passage: Dict[str, torch.LongTensor],
                 passageidx2numberidx: torch.LongTensor,
-                passage_number_values: List[int],
+                passage_number_values: List[List[float]],
                 passageidx2dateidx: torch.LongTensor,
                 passage_date_values: List[List[Date]],
-                # passage_number_indices: torch.LongTensor,
-                # passage_number_entidxs: torch.LongTensor,
-                # passage_date_spans: torch.LongTensor,
-                # passage_date_entidxs: torch.LongTensor,
                 actions: List[List[ProductionRule]],
                 datecomp_ques_event_date_groundings: List[Tuple[List[int], List[int]]] = None,
+                numcomp_qspan_num_groundings: List[Tuple[List[int], List[int]]] = None,
                 strongly_supervised: List[bool] = None,
                 qtypes: List[str] = None,
                 qattn_supervision: torch.FloatTensor = None,
@@ -289,6 +308,20 @@ class DROPSemanticParser(DROPParserBase):
         passage_passage_token2date_similarity = (passage_passage_token2date_similarity *
                                                  passage_tokenidx2dateidx_mask.unsqueeze(1))
 
+        # Shape: (batch_size, passage_length, passage_length)
+        passage_passage_token2num_similarity = self._executor_parameters.passage_to_num_attention(
+            encoded_passage, encoded_passage)
+        passage_passage_token2num_similarity = self._dropout(passage_passage_token2num_similarity)
+        passage_passage_token2num_similarity = passage_passage_token2num_similarity * passage_mask.unsqueeze(1)
+        passage_passage_token2num_similarity = passage_passage_token2num_similarity * passage_mask.unsqueeze(2)
+
+        # Shape: (batch_size, passage_length)
+        passage_tokenidx2numidx_mask = (passageidx2numberidx > -1).float()
+        # Shape: (batch_size, passage_length, passage_length)
+        passage_passage_token2num_similarity = (passage_passage_token2num_similarity *
+                                                passage_tokenidx2numidx_mask.unsqueeze(1))
+
+
         '''
         passage_token2date_encoding = self.passage_token_to_date(encoded_passage, passage_mask)
         scaled_dim = passage_token2date_encoding.size()[-1] ** 0.5
@@ -353,6 +386,7 @@ class DROPSemanticParser(DROPParserBase):
         passage_mask_aslist = [passage_mask[i] for i in range(batch_size)]
         q2p_attention_aslist = [question_passage_attention[i] for i in range(batch_size)]
         p2pdate_similarity_aslist = [passage_passage_token2date_similarity[i] for i in range(batch_size)]
+        p2pnum_similarity_aslist = [passage_passage_token2num_similarity[i] for i in range(batch_size)]
         # passage_token2datetoken_sim_aslist = [passage_token2datetoken_similarity[i] for i in range(batch_size)]
 
         # Based on the gold answer - figure out possible start types for the instance_language
@@ -378,8 +412,11 @@ class DROPSemanticParser(DROPParserBase):
                                   passage_mask=passage_mask_aslist[i],
                                   passage_tokenidx2dateidx=passageidx2dateidx[i],
                                   passage_date_values=passage_date_values[i],
+                                  passage_tokenidx2numidx=passageidx2numberidx[i],
+                                  passage_num_values=passage_number_values[i],
                                   question_passage_attention=q2p_attention_aslist[i],
                                   passage_token2date_similarity=p2pdate_similarity_aslist[i],
+                                  passage_token2num_similarity=p2pnum_similarity_aslist[i],
                                   parameters=self._executor_parameters,
                                   start_types=batch_start_types[i],
                                   device_id=device_id,
@@ -454,22 +491,20 @@ class DROPSemanticParser(DROPParserBase):
          batch_actionseq_sideargs) = semparse_utils._convert_finalstates_to_actions(best_final_states=best_final_states,
                                                                                     possible_actions=actions,
                                                                                     batch_size=batch_size)
-        # List[Tuple[torch.Tensor, torch.Tensor]]
-        q_event_date_groundings = self.get_gold_question_event_date_grounding(datecomp_ques_event_date_groundings,
-                                                                              device_id)
 
-        self.datecompare_eventdategr_to_sideargs(batch_actionseqs,
-                                                 batch_actionseq_sideargs,
-                                                 q_event_date_groundings)
-
-        '''
         if self._goldactions:
             # Gold programs
             if self._goldprogs:
                 gold_batch_actionseqs = []
                 for idx in range(batch_size):
                     question_tokens = metadata[idx]["question_tokens"]
-                    gold_lf = getGoldLF_datecomparison(question_tokens)
+                    qtype = qtypes[idx]
+                    if qtype == dropconstants.DATECOMP_QTYPE:
+                        gold_lf, _ = getGoldLF_datecomparison(question_tokens)
+                    elif qtype == dropconstants.NUMCOMP_QTYPE:
+                        gold_lf, _ = getGoldLF_numcomparison(question_tokens)
+                    else:
+                        raise NotImplementedError
                     gold_action_seq: List[str] = languages[idx].logical_form_to_action_sequence(gold_lf)
                     gold_batch_actionseqs.append([gold_action_seq])
                 batch_actionseqs = gold_batch_actionseqs
@@ -480,9 +515,19 @@ class DROPSemanticParser(DROPParserBase):
             # self.datecompare_goldattn_to_sideargs(batch_actionseqs,
             #                                       batch_actionseq_sideargs,
             #                                       datecompare_gold_qattns)
-        '''
 
-        # # For printing predicted - programs
+        # Adding Date-Comparison supervised event groundings to relevant actions
+        self.datecompare_eventdategr_to_sideargs(batch_actionseqs,
+                                                 batch_actionseq_sideargs,
+                                                 datecomp_ques_event_date_groundings,
+                                                 device_id)
+
+        self.numcompare_eventnumgr_to_sideargs(batch_actionseqs,
+                                               batch_actionseq_sideargs,
+                                               numcomp_qspan_num_groundings,
+                                               device_id)
+
+        # For printing predicted - programs
         # for idx, instance_progs in enumerate(batch_actionseqs):
         #     print(f"InstanceIdx:{idx}")
         #     print(metadata[idx]["question_tokens"])
@@ -613,16 +658,12 @@ class DROPSemanticParser(DROPParserBase):
             batch_passage_token_offsets = [metadata[i]["passage_token_offsets"] for i in range(batch_size)]
             batch_question_token_offsets = [metadata[i]["question_token_offsets"] for i in range(batch_size)]
             answer_annotations = [metadata[i]["answer_annotation"] for i in range(batch_size)]
-            question_num_tokens = [metadata[i]["question_num_tokens"] for i in range(batch_size)]
-            passage_num_tokens = [metadata[i]["passage_num_tokens"] for i in range(batch_size)]
             (batch_best_spans, batch_predicted_answers) = self._get_best_spans(batch_denotations,
                                                                                batch_denotation_types,
                                                                                batch_question_token_offsets,
                                                                                batch_question_strs,
                                                                                batch_passage_token_offsets,
                                                                                batch_passage_strs,
-                                                                               question_num_tokens,
-                                                                               passage_num_tokens,
                                                                                question_mask_aslist,
                                                                                passage_mask_aslist)
             predicted_answers = [batch_predicted_answers[i][0] for i in range(batch_size)]
@@ -746,10 +787,13 @@ class DROPSemanticParser(DROPParserBase):
             NOTE: This loss is only computed for instances that are marked as strongly-annotated and hence we don't
             check if the qattns-supervision needs masking.
         """
-        qtypes_supported = [dropconstants.DATECOMP_QTYPE]
-
-        qtype2relevant_actions_list = {dropconstants.DATECOMP_QTYPE: ['PassageAttention -> find_PassageAttention',
-                                                                      'PassageAttention -> find_PassageAttention']}
+        qtype2relevant_actions_list = \
+               {
+                   dropconstants.DATECOMP_QTYPE: ['PassageAttention -> find_PassageAttention',
+                                                  'PassageAttention -> find_PassageAttention'],
+                   dropconstants.NUMCOMP_QTYPE: ['PassageAttention -> find_PassageAttention',
+                                                 'PassageAttention -> find_PassageAttention']
+               }
 
         loss = 0.0
         normalizer = 0
@@ -760,7 +804,7 @@ class DROPSemanticParser(DROPParserBase):
                 # no point even bothering
                 continue
             qtype = qtypes[ins_idx]
-            if qtype not in qtypes_supported:
+            if qtype not in qtype2relevant_actions_list:
                 continue
             instance_programs = batch_actionseqs[ins_idx]
             instance_prog_sideargs = batch_actionseq_sideargs[ins_idx]
@@ -806,7 +850,7 @@ class DROPSemanticParser(DROPParserBase):
                                device_id: int) -> Tuple[List[List[List[int]]],
                                                         List[List[List[int]]]]:
 
-        qtypes_supported = [dropconstants.DATECOMP_QTYPE]
+        qtypes_supported = [dropconstants.DATECOMP_QTYPE, dropconstants.NUMCOMP_QTYPE]
 
         gold_actionseq_idxs: List[List[List[int]]] = []
         gold_actionseq_mask: List[List[List[int]]] = []
@@ -825,13 +869,14 @@ class DROPSemanticParser(DROPParserBase):
             else:
                 if qtype == dropconstants.DATECOMP_QTYPE:
                     gold_logicalform, operator = getGoldLF_datecomparison(qtokens)
-                    #if operator == "greater":
                     gold_actions: List[str] = languages[idx].logical_form_to_action_sequence(gold_logicalform)
                     actionseq_idxs: List[int] = [action2actionidx[a] for a in gold_actions]
                     actionseq_mask: List[int] = [1 for _ in range(len(actionseq_idxs))]
-                    #else:
-                    #    actionseq_idxs: List[int] = [0]
-                    #    actionseq_mask: List[int] = [0]
+                elif qtype == dropconstants.NUMCOMP_QTYPE:
+                    gold_logicalform, operator = getGoldLF_numcomparison(qtokens)
+                    gold_actions: List[str] = languages[idx].logical_form_to_action_sequence(gold_logicalform)
+                    actionseq_idxs: List[int] = [action2actionidx[a] for a in gold_actions]
+                    actionseq_mask: List[int] = [1 for _ in range(len(actionseq_idxs))]
 
                 else:
                     actionseq_idxs: List[int] = [0]
@@ -889,7 +934,7 @@ class DROPSemanticParser(DROPParserBase):
         batch_denotation_types: List[List[str]]
         """
 
-        (question_num_tokens, passage_num_tokens, question_mask_aslist, passage_mask_aslist) = args
+        (question_mask_aslist, passage_mask_aslist) = args
 
         batch_best_spans = []
         batch_predicted_answers = []
@@ -919,7 +964,6 @@ class DROPSemanticParser(DROPParserBase):
                     except:
                         print()
                         print(f"PredictedSpan: {predicted_span}")
-                        print(f"Question numtoksn: {question_num_tokens[instance_idx]}")
                         print(f"QuesMaskLen: {question_mask_aslist[instance_idx].size()}")
                         print(f"StartLogProbs:{denotation._value[0]}")
                         print(f"EndLogProbs:{denotation._value[1]}")
@@ -934,7 +978,6 @@ class DROPSemanticParser(DROPParserBase):
                     except:
                         print()
                         print(f"PredictedSpan: {predicted_span}")
-                        print(f"Passagenumtoksn: {passage_num_tokens[instance_idx]}")
                         print(f"PassageMaskLen: {passage_mask_aslist[instance_idx].size()}")
                         print(f"LenofOffsets: {len(passage_char_offsets[instance_idx])}")
                         print(f"PassageStrLen: {len(passage_strs[instance_idx])}")
@@ -970,98 +1013,103 @@ class DROPSemanticParser(DROPParserBase):
                         else:
                             sidearg_dict['question_attention'] = instance_gold_attentions[1]
 
-    def get_gold_quesattn_datecompare(self,
-                                      metadata,
-                                      masked_len,
-                                      device_id) -> List[Tuple[torch.Tensor, torch.Tensor]]:
-        batch_size = len(metadata)
-
-        gold_ques_attns = []
-
-        for i in range(batch_size):
-            question_tokens: List[str] = metadata[i]["question_tokens"]
-            qstr = ' '.join(question_tokens)
-            assert len(qstr.split(' ')) == len(question_tokens)
-
-            gold_ques_attns.append(self._gold_qattn_for_datecompare(qstr, masked_len, device_id))
-
-        return gold_ques_attns
-
-    def _gold_qattn_for_datecompare(self, qstr: str, masked_len: int,
-                                    device_id: int) -> Tuple[torch.Tensor, torch.Tensor]:
-        """ Get gold question attention for date_compare questions
-            Question only has one 'or': Which happened first , event A or event B ?
-            Attn2 is after 'or' until '?'
-            Attn1 is after first ',' or ':' ('first', 'last', 'later') until the 'or'
-        """
-
-        or_split = qstr.split(' or ')
-        assert len(or_split) == 2
-
-        tokens = qstr.split(' ')
-
-        # attn_1 = torch.cuda.FloatTensor(masked_len, device=0).fill_(0.0)
-        # attn_2 = torch.cuda.FloatTensor(masked_len, device=0).fill_(0.0)
-
-        attn_1 = torch.FloatTensor(masked_len).fill_(0.0)
-        attn_2 = torch.FloatTensor(masked_len).fill_(0.0)
-
-        attn_1 = allenutil.move_to_device(attn_1, device_id)
-        attn_2 = allenutil.move_to_device(attn_2, device_id)
-
-        or_idx = tokens.index('or')
-        # Last token is ? which we don't want to attend to
-        attn_2[or_idx + 1: len(tokens) - 1] = 1.0
-        attn_2 = attn_2 / attn_2.sum()
-
-        # Gets first index of the item
-        try:
-            comma_idx = tokens.index(',')
-        except:
-            comma_idx = 100000
-        try:
-            colon_idx = tokens.index(':')
-        except:
-            colon_idx = 100000
-
-        try:
-            hyphen_idx = tokens.index('-')
-        except:
-            hyphen_idx = 100000
-
-        split_idx = min(comma_idx, colon_idx, hyphen_idx)
-
-        if split_idx == 100000 or (or_idx - split_idx <= 1):
-            # print(f"{qstr} first_split:{split_idx} or:{or_idx}")
-            if 'first' in tokens:
-                split_idx = tokens.index('first')
-            elif 'second' in tokens:
-                split_idx = tokens.index('second')
-            elif 'last' in tokens:
-                split_idx = tokens.index('last')
-            elif 'later' in tokens:
-                split_idx = tokens.index('later')
-            else:
-                split_idx = -1
-
-        assert split_idx != -1, f"{qstr} {split_idx} {or_idx}"
-
-        attn_1[split_idx + 1: or_idx] = 1.0
-        attn_1 = attn_1 / attn_1.sum()
-
-        # return attn_2, attn_1
-        return attn_1, attn_2
+    # def get_gold_quesattn_datecompare(self,
+    #                                   metadata,
+    #                                   masked_len,
+    #                                   device_id) -> List[Tuple[torch.Tensor, torch.Tensor]]:
+    #     batch_size = len(metadata)
+    #
+    #     gold_ques_attns = []
+    #
+    #     for i in range(batch_size):
+    #         question_tokens: List[str] = metadata[i]["question_tokens"]
+    #         qstr = ' '.join(question_tokens)
+    #         assert len(qstr.split(' ')) == len(question_tokens)
+    #
+    #         gold_ques_attns.append(self._gold_qattn_for_datecompare(qstr, masked_len, device_id))
+    #
+    #     return gold_ques_attns
+    #
+    # def _gold_qattn_for_datecompare(self, qstr: str, masked_len: int,
+    #                                 device_id: int) -> Tuple[torch.Tensor, torch.Tensor]:
+    #     """ Get gold question attention for date_compare questions
+    #         Question only has one 'or': Which happened first , event A or event B ?
+    #         Attn2 is after 'or' until '?'
+    #         Attn1 is after first ',' or ':' ('first', 'last', 'later') until the 'or'
+    #     """
+    #
+    #     or_split = qstr.split(' or ')
+    #     assert len(or_split) == 2
+    #
+    #     tokens = qstr.split(' ')
+    #
+    #     # attn_1 = torch.cuda.FloatTensor(masked_len, device=0).fill_(0.0)
+    #     # attn_2 = torch.cuda.FloatTensor(masked_len, device=0).fill_(0.0)
+    #
+    #     attn_1 = torch.FloatTensor(masked_len).fill_(0.0)
+    #     attn_2 = torch.FloatTensor(masked_len).fill_(0.0)
+    #
+    #     attn_1 = allenutil.move_to_device(attn_1, device_id)
+    #     attn_2 = allenutil.move_to_device(attn_2, device_id)
+    #
+    #     or_idx = tokens.index('or')
+    #     # Last token is ? which we don't want to attend to
+    #     attn_2[or_idx + 1: len(tokens) - 1] = 1.0
+    #     attn_2 = attn_2 / attn_2.sum()
+    #
+    #     # Gets first index of the item
+    #     try:
+    #         comma_idx = tokens.index(',')
+    #     except:
+    #         comma_idx = 100000
+    #     try:
+    #         colon_idx = tokens.index(':')
+    #     except:
+    #         colon_idx = 100000
+    #
+    #     try:
+    #         hyphen_idx = tokens.index('-')
+    #     except:
+    #         hyphen_idx = 100000
+    #
+    #     split_idx = min(comma_idx, colon_idx, hyphen_idx)
+    #
+    #     if split_idx == 100000 or (or_idx - split_idx <= 1):
+    #         # print(f"{qstr} first_split:{split_idx} or:{or_idx}")
+    #         if 'first' in tokens:
+    #             split_idx = tokens.index('first')
+    #         elif 'second' in tokens:
+    #             split_idx = tokens.index('second')
+    #         elif 'last' in tokens:
+    #             split_idx = tokens.index('last')
+    #         elif 'later' in tokens:
+    #             split_idx = tokens.index('later')
+    #         else:
+    #             split_idx = -1
+    #
+    #     assert split_idx != -1, f"{qstr} {split_idx} {or_idx}"
+    #
+    #     attn_1[split_idx + 1: or_idx] = 1.0
+    #     attn_1 = attn_1 / attn_1.sum()
+    #
+    #     # return attn_2, attn_1
+    #     return attn_1, attn_2
 
 
     def datecompare_eventdategr_to_sideargs(self,
                                             batch_actionseqs: List[List[List[str]]],
                                             batch_actionseq_sideargs: List[List[List[Dict]]],
-                                            batch_event_date_groundings: List[Tuple[torch.Tensor, torch.Tensor]]):
+                                            datecomp_ques_event_date_groundings: List[Tuple[List[float], List[float]]],
+                                            device_id):
         """ batch_event_date_groundings: For each question, a two-tuple containing the correct date-grounding for the
             two events mentioned in the question.
             These are in order of the annotation (order of events in question) but later the question attention
             might be predicted in reverse order and these will then be the wrong (reverse) annotations. Take care later.
         """
+        # List[Tuple[torch.Tensor, torch.Tensor]]
+        q_event_date_groundings = self.get_gold_question_event_date_grounding(datecomp_ques_event_date_groundings,
+                                                                              device_id)
+
         relevant_action1 = '<PassageAttention,PassageAttention:PassageAttention_answer> -> compare_date_greater_than'
         relevant_action2 = '<PassageAttention,PassageAttention:PassageAttention_answer> -> compare_date_lesser_than'
         relevant_actions = [relevant_action1, relevant_action2]
@@ -1069,11 +1117,40 @@ class DROPSemanticParser(DROPParserBase):
         for ins_idx in range(len(batch_actionseqs)):
             instance_programs = batch_actionseqs[ins_idx]
             instance_prog_sideargs = batch_actionseq_sideargs[ins_idx]
-            event_date_groundings = batch_event_date_groundings[ins_idx]
+            event_date_groundings = q_event_date_groundings[ins_idx]
             for program, side_args in zip(instance_programs, instance_prog_sideargs):
                 for action, sidearg_dict in zip(program, side_args):
                     if action in relevant_actions:
                         sidearg_dict['event_date_groundings'] = event_date_groundings
+
+
+    def numcompare_eventnumgr_to_sideargs(self,
+                                            batch_actionseqs: List[List[List[str]]],
+                                            batch_actionseq_sideargs: List[List[List[Dict]]],
+                                            numcomp_qspan_num_groundings: List[Tuple[List[float], List[float]]],
+                                            device_id):
+        """ batch_event_num_groundings: For each question, a two-tuple containing the correct num-grounding for the
+            two events mentioned in the question.
+            These are in order of the annotation (order of events in question) but later the question attention
+            might be predicted in reverse order and these will then be the wrong (reverse) annotations. Take care later.
+        """
+        # List[Tuple[torch.Tensor, torch.Tensor]]
+        # Resuing the function written for dates -- should work fine
+        q_event_num_groundings = self.get_gold_question_event_date_grounding(numcomp_qspan_num_groundings,
+                                                                             device_id)
+
+        relevant_action1 = '<PassageAttention,PassageAttention:PassageAttention_answer> -> compare_num_greater_than'
+        relevant_action2 = '<PassageAttention,PassageAttention:PassageAttention_answer> -> compare_num_lesser_than'
+        relevant_actions = [relevant_action1, relevant_action2]
+
+        for ins_idx in range(len(batch_actionseqs)):
+            instance_programs = batch_actionseqs[ins_idx]
+            instance_prog_sideargs = batch_actionseq_sideargs[ins_idx]
+            event_num_groundings = q_event_num_groundings[ins_idx]
+            for program, side_args in zip(instance_programs, instance_prog_sideargs):
+                for action, sidearg_dict in zip(program, side_args):
+                    if action in relevant_actions:
+                        sidearg_dict['event_num_groundings'] = event_num_groundings
 
 
     def get_gold_question_event_date_grounding(self,

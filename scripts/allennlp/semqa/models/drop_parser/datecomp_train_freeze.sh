@@ -3,10 +3,7 @@
 export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
-# DATASET_NAME=num/num_prune_supervised
-# DATASET_NAME=date/date_prune_augment
-DATASET_NAME=date_num
-
+DATASET_NAME=date/date_prune_augment
 DATASET_DIR=./resources/data/drop/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
 VALFILE=${DATASET_DIR}/drop_dataset_dev.json
@@ -50,7 +47,7 @@ export SUPEPOCHS=10
 export BS=8
 export DROPOUT=0.2
 
-export LR=0.0005
+export LR=0.001
 export RG=1e-4
 
 export SEED=100

@@ -60,37 +60,15 @@ class ExecutorParameters(torch.nn.Module, Registrable):
         self.passage_to_date_attention: MatrixAttention = BilinearMatrixAttention(matrix_1_dim=passage_encoding_dim,
                                                                                   matrix_2_dim=passage_encoding_dim)
 
-        # self.passage_to_date_attention: MatrixAttention = LinearMatrixAttention(tensor_1_dim=passage_encoding_dim,
-        #                                                                         tensor_2_dim=passage_encoding_dim,
-        #                                                                         combination="x,y,x*y")
+        # This computes a passage_to_passage attention, hopefully, for each token, putting a weight on date tokens
+        # that are related to it.
+        self.passage_to_num_attention: MatrixAttention = BilinearMatrixAttention(matrix_1_dim=passage_encoding_dim,
+                                                                                 matrix_2_dim=passage_encoding_dim)
 
         self.relocate_linear1 = torch.nn.Linear(passage_encoding_dim, hidden_dim)
         self.relocate_linear2 = torch.nn.Linear(hidden_dim, 1)
         self.relocate_linear3 = torch.nn.Linear(passage_encoding_dim, 1)
         self.relocate_linear4 = torch.nn.Linear(question_encoding_dim, hidden_dim)
-
-
-        # self.passage_span_start_predictor = FeedForward(modeling_out_dim * 2,
-        #                                                 activations=[Activation.by_name('relu')(),
-        #                                                              Activation.by_name('linear')()],
-        #                                                 hidden_dims=[passage_encoding_dim, 1],
-        #                                                 num_layers=2)
-        #
-        # self.passage_span_end_predictor = FeedForward(modeling_out_dim * 2,
-        #                                               activations=[Activation.by_name('relu')(),
-        #                                                            Activation.by_name('linear')()],
-        #                                               hidden_dims=[passage_encoding_dim, 1],
-        #                                               num_layers=2)
-        # self.question_span_start_predictor = FeedForward(modeling_out_dim * 2,
-        #                                                  activations=[Activation.by_name('relu')(),
-        #                                                               Activation.by_name('linear')()],
-        #                                                  hidden_dims=[passage_encoding_dim, 1],
-        #                                                  num_layers=2)
-        # self.question_span_end_predictor = FeedForward(modeling_out_dim * 2,
-        #                                                activations=[Activation.by_name('relu')(),
-        #                                                             Activation.by_name('linear')()],
-        #                                                hidden_dims=[passage_encoding_dim, 1],
-        #                                                num_layers=2)
 
         if dropout > 0:
             self._dropout = torch.nn.Dropout(p=dropout)

@@ -79,12 +79,14 @@ class DropQANetPredictor(Predictor):
         predicted_ans = outputs['best_span_ans_str']
 
         answer_as_passage_spans = outputs['answer_as_passage_spans']
-        batch_best_spans = outputs['predicted_spans']
+        instance_spans_for_all_progs = outputs['predicted_spans']
+        best_span = instance_spans_for_all_progs[0]
 
         question = metadata['original_question']
         passage = metadata['original_passage']
         answer_annotation_dict = metadata['answer_annotation']
         passage_date_values = metadata['passage_date_values']
+        passage_num_values = metadata['passage_number_values']
         (exact_match, f1_score) = f1metric(predicted_ans, [answer_annotation_dict])
 
         out_str += question + '\n'
@@ -93,10 +95,11 @@ class DropQANetPredictor(Predictor):
         out_str += f'GoldAnswer: {answer_annotation_dict}' + '\n'
         out_str += f"GoldPassageSpans:{answer_as_passage_spans}" + '\n'
 
-        out_str += f"PredPassageSpans:{batch_best_spans}" + '\n'
+        out_str += f"PredPassageSpan: {best_span}" + '\n'
         out_str += f'PredictedAnswer: {predicted_ans}' + '\n'
         out_str += f'F1:{f1_score} EM:{exact_match}' + '\n'
         out_str += f'Dates: {passage_date_values}' + '\n'
+        out_str += f'Nums: {passage_num_values}' + '\n'
 
         logical_forms = outputs["logical_forms"]
         execution_vals = outputs["execution_vals"]

@@ -21,19 +21,20 @@ NUMBER_COMPARISON = ["were there more", "were there fewer", "which age group", "
 
 
 def number_comparison_filter(question: str):
+    question_lower = question.lower()
     football_ques_spans = ['first half', 'second half', 'quarter', 'touchdown', 'field goals']
     relevant = True
-    if any(span in question for span in NUMBER_COMPARISON):
-        or_split = question.split(' or ')
+    if any(span in question_lower for span in NUMBER_COMPARISON):
+        or_split = question_lower.split(' or ')
         if len(or_split) != 2:
             relevant = False
 
-        comma_split = question.split(',')
+        comma_split = question_lower.split(',')
         if len(comma_split) > 2:
             relevant = False
 
         # were there more / fewer -- remove these difficult football questions
-        if any(span in question for span in football_ques_spans):
+        if any(span in question_lower for span in football_ques_spans):
             relevant = False
     else:
         relevant = False
@@ -67,30 +68,28 @@ def pruneDataset(input_json: str, output_json: str, output_txt: str) -> None:
         relevant_qa_pairs = []
 
         for qa_pair in qa_pairs:
-            keep = False
-            question = qa_pair[constants.question].lower()
+            keep = True
+            question = qa_pair[constants.tokenized_question]
 
             # Number Comparison questions we care about
-            if number_comparison_filter(question):
-                keep = True
+            if not number_comparison_filter(question):
+                keep = False
+                continue
 
             # Only SPAN type questions
             if constants.answer_type in qa_pair:
                 if qa_pair[constants.answer_type] != constants.SPAN_TYPE:
                     keep = False
+                    continue
             else:
                 keep = False
-
-            # Only questions with a single passage span answer
-            pspan_ans = qa_pair[constants.answer_passage_spans]
-            if len(pspan_ans) > 1:
-                keep = False
+                continue
 
             # To avoid duplication
             if keep:
                 relevant_qa_pairs.append(qa_pair)
-                question = qa_pair[constants.question]
-                passage = passage_info[constants.passage]
+                question = qa_pair[constants.tokenized_question]
+                passage = passage_info[constants.tokenized_passage]
                 ans = qa_pair[constants.answer]
                 txtfile.write(f"{question}\n")
                 # txtfile.write(f"{passage}\n{ans}\n\n")
