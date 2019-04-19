@@ -296,7 +296,19 @@ class DropLanguage(DomainLanguage):
             plen = self.passage_mask.sum()
             siml1norm = self.passage_passage_token2date_similarity.norm(p=1)/(num_date_tokens * plen)
             sim_avgval = self.passage_passage_token2date_similarity.sum() / (num_date_tokens * plen)
+            if torch.isnan(sim_avgval):
+                print("Date fault")
+                print(f"{self.num_passage_dates} : {num_date_tokens}")
+                print(self.passage_passage_token2date_similarity)
             print(f"Passage Token2Date sim, Avg L1 Norm: {siml1norm}. Avg Val: {sim_avgval}")
+            num_numb_tokens = self.passage_numtokens_mask_float.sum()
+            plen = self.passage_mask.sum()
+            siml1norm = self.passage_passage_token2num_similarity.norm(p=1) / (num_numb_tokens * plen)
+            sim_avgval = self.passage_passage_token2num_similarity.sum() / (num_numb_tokens * plen)
+            if torch.isnan(sim_avgval):
+                print("Num fault")
+                print(self.passage_passage_token2num_similarity)
+            print(f"Passage Token2Num sim, Avg L1 Norm: {siml1norm}. Avg Val: {sim_avgval}")
 
     def initialize(self):
         date_gt_mat, date_lt_mat = self.compute_date_comparison_matrices(self.passage_date_values, self.device_id)

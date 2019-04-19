@@ -207,15 +207,6 @@ class DROPReader(DatasetReader):
         if max_question_len is not None:
             question_tokens = question_tokens[: max_question_len]
 
-
-        passage_number_indices = [tokenidx for (_, tokenidx, _) in p_num_mens]
-        passage_number_entidxs = p_num_entidxs
-        passage_number_values = p_num_normvals
-
-        passage_date_spanidxs = [(x,y) for (_, (x,y), _) in p_date_mens]
-        passage_date_entidxs = p_date_entidxs
-        passage_date_values = p_date_normvals
-
         # TODO(nitish): Only span answer supported. Extend to other types
         answer_texts = answer_annotation["spans"]
         answer_texts_for_evaluation = [' '.join(answer_texts)]
@@ -247,26 +238,34 @@ class DROPReader(DatasetReader):
         fields["passage"] = TextField(passage_tokens, self._token_indexers)
         fields["question"] = TextField(question_tokens, self._token_indexers)
 
-
+        passage_number_entidxs = p_num_entidxs
+        passage_number_values = p_num_normvals
+        passage_number_indices = [tokenidx for (_, tokenidx, _) in p_num_mens]
         # List of passage_len containing number_entidx for each token (-1 otherwise)
         passage_number_idx2entidx = [-1 for _ in range(len(passage_tokens))]
-        for passage_num_idx, number_idx in zip(passage_number_indices, passage_number_entidxs):
-            passage_number_idx2entidx[passage_num_idx] = number_idx
-
+        if passage_number_entidxs:
+            for passage_num_idx, number_idx in zip(passage_number_indices, passage_number_entidxs):
+                passage_number_idx2entidx[passage_num_idx] = number_idx
+        else:
+            # No numbers found in the passage - making a fake number at the 0th token
+            passage_number_idx2entidx[0] = 0
+            passage_number_values = [0]
         fields["passageidx2numberidx"] = ArrayField(np.array(passage_number_idx2entidx), padding_value=-1)
         fields["passage_number_values"] = MetadataField(passage_number_values)
-        # if len(passage_date_spanidxs) == 0:
-        #     print("SKIPPING")
-            # return None
 
+        passage_date_entidxs = p_date_entidxs
+        passage_date_values = p_date_normvals
+        passage_date_spanidxs = [(x, y) for (_, (x, y), _) in p_date_mens]
         passage_date_idx2dateidx = [-1 for _ in range(len(passage_tokens))]
-        for passage_date_span, date_idx in zip(passage_date_spanidxs, passage_date_entidxs):
-            (s, e) = passage_date_span
-            passage_date_idx2dateidx[s:e+1] = [date_idx] * (e + 1 - s)
+        if passage_date_values:
+            for passage_date_span, date_idx in zip(passage_date_spanidxs, passage_date_entidxs):
+                (s, e) = passage_date_span
+                passage_date_idx2dateidx[s:e+1] = [date_idx] * (e + 1 - s)
+            passage_date_objs = [Date(day=d, month=m, year=y) for (d, m, y) in passage_date_values]
+        else:
+            passage_date_idx2dateidx[0] = 0
+            passage_date_objs = [Date(day=-1, month=-1, year=-1)]
         fields["passageidx2dateidx"] = ArrayField(np.array(passage_date_idx2dateidx), padding_value=-1)
-        passage_date_objs = [Date(day=d, month=m, year=y) for (d, m, y) in passage_date_values]
-        if len(passage_date_objs) == 0:
-            passage_date_objs.append(Date(day=-1, month=-1, year=-1))
         fields["passage_date_values"] = MetadataField(passage_date_objs)
         passage_date_strvals = [str(d) for d in passage_date_objs]
 
@@ -289,13 +288,13 @@ class DROPReader(DatasetReader):
         # QAttn supervision, is a n-tuple of question attentions
         fields["qattn_supervision"] = ArrayField(np.array(ques_attn_supervision), padding_value=0)
         # For date comparison questions; these are a tuple of date_groundings
-        if datecomp_ques_event_date_groundings:
+        if datecomp_ques_event_date_groundings and strongly_supervised:
             fields["datecomp_ques_event_date_groundings"] = MetadataField(datecomp_ques_event_date_groundings)
         else:
             fields["datecomp_ques_event_date_groundings"] = MetadataField(([0.0 for _ in range(len(passage_date_objs))],
                                                                            [0.0 for _ in range(len(passage_date_objs))]))
 
-        if numcomp_qspan_num_groundings:
+        if numcomp_qspan_num_groundings and strongly_supervised:
             fields["numcomp_qspan_num_groundings"] = MetadataField(numcomp_qspan_num_groundings)
         else:
             fields["numcomp_qspan_num_groundings"] = MetadataField(([0.0 for _ in range(len(passage_number_values))],

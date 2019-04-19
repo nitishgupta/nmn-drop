@@ -3,7 +3,7 @@
 export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
-DATASET_NAME=date/date_prune_augment
+DATASET_NAME=date_num_200
 # DATASET_NAME=num/num_prune_supervised
 DATASET_DIR=./resources/data/drop/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
@@ -18,7 +18,7 @@ export GPU=0
 # All parameters here are used to fetch the correct serialization_dir
 export TOKENIDX="qanet"
 
-export BS=16
+export BS=8
 export DROPOUT=0.2
 export LR=0.001
 
@@ -38,7 +38,7 @@ export SUPEPOCHS=10
 
 export SEED=100
 
-export BEAMSIZE=4
+export BEAMSIZE=2
 
 export DEBUG=true
 
@@ -56,32 +56,34 @@ mkdir ${PREDICT_OUTPUT_DIR}
 
 #*****************    PREDICTION FILENAME   *****************
 PRED_FILENAME=dev_predictions.txt
+EVAL_FILENAME=dev_eval.txt
 TESTFILE=${VALFILE}
 #PRED_FILENAME=train_predictions.txt
 #TESTFILE=${TRAINFILE}
 MODEL_TAR=${SERIALIZATION_DIR}/model.tar.gz
 PREDICTION_FILE=${PREDICT_OUTPUT_DIR}/${PRED_FILENAME}
+EVALUATION_FILE=${PREDICT_OUTPUT_DIR}/${EVAL_FILENAME}
 PREDICTOR=drop_parser_predictor
 
 #######################################################################################################################
 
 
-allennlp predict --output-file ${PREDICTION_FILE} \
-                 --predictor ${PREDICTOR} \
-                 --cuda-device ${GPU} \
-                 --include-package ${INCLUDE_PACKAGE} \
-                 --silent \
-                 --batch-size 1 \
-                 --use-dataset-reader \
-                 --overrides "{"model": {"decoder_beam_search": {"beam_size": ${BEAMSIZE}}, "debug": ${DEBUG}}}" \
-                 ${MODEL_TAR} ${TESTFILE}
+#allennlp predict --output-file ${PREDICTION_FILE} \
+#                 --predictor ${PREDICTOR} \
+#                 --cuda-device ${GPU} \
+#                 --include-package ${INCLUDE_PACKAGE} \
+#                 --silent \
+#                 --batch-size 1 \
+#                 --use-dataset-reader \
+#                 --overrides "{"model": {"decoder_beam_search": {"beam_size": ${BEAMSIZE}}, "debug": ${DEBUG}}}" \
+#                 ${MODEL_TAR} ${TESTFILE}
 
 # --weights-file ${SERIALIZATION_DIR}/model_state_epoch_9.th \
 
-#allennlp evaluate --output-file ${PREDICTION_FILE} \
-#                  --cuda-device ${GPU} \
-#                  --include-package ${INCLUDE_PACKAGE} \
-#                  ${MODEL_TAR} ${TESTFILE}
+allennlp evaluate --output-file ${EVALUATION_FILE} \
+                  --cuda-device ${GPU} \
+                  --include-package ${INCLUDE_PACKAGE} \
+                  ${MODEL_TAR} ${TESTFILE}
 
 
 
