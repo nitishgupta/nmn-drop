@@ -31,7 +31,7 @@ export WEMB_DIM=100
 export WORDEMB_FILE="./resources/embeddings/glove/glove.6B.100d.txt.gz"
 
 export BIDAF_MODEL_TAR='https://s3-us-west-2.amazonaws.com/allennlp/models/bidaf-model-2017.09.15-charpad.tar.gz'
-export BIDAF_WORDEMB_FILE='./resources/embeddings/glove/glove.6B.100d.txt.gz'
+export BIDAF_WORDEMB_FILE="https://s3-us-west-2.amazonaws.com/allennlp/datasets/glove/glove.6B.100d.txt.gz"
 
 export GOLDACTIONS=false
 export GOLDPROGS=false
