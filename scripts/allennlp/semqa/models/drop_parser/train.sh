@@ -4,8 +4,8 @@ export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
 # DATASET_NAME=num/num_prune_supervised
-# DATASET_NAME=date/date_prune_augment_100
-DATASET_NAME=date_num/date_num_200
+DATASET_NAME=date/date_prune_augment_100
+# DATASET_NAME=date_num/date_num_100
 
 DATASET_DIR=./resources/data/drop/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
@@ -33,8 +33,8 @@ export WORDEMB_FILE="https://s3-us-west-2.amazonaws.com/allennlp/datasets/glove/
 export BIDAF_MODEL_TAR='https://s3-us-west-2.amazonaws.com/allennlp/models/bidaf-model-2017.09.15-charpad.tar.gz'
 export BIDAF_WORDEMB_FILE="https://s3-us-west-2.amazonaws.com/allennlp/datasets/glove/glove.6B.100d.txt.gz"
 
-# Which kind of similarity to use in Ques-Passage attention
-export QP_SIM_KEY="encoded"
+# Which kind of similarity to use in Ques-Passage attention - raw / encoded / raw-enc
+export QP_SIM_KEY="raw"
 
 export GOLDACTIONS=false
 export GOLDPROGS=false
@@ -53,7 +53,7 @@ export SUPEPOCHS=10
 export BS=8
 export DROPOUT=0.2
 
-export LR=0.001
+export LR=0.0005
 export RG=1e-4
 
 export SEED=100

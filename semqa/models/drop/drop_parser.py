@@ -954,7 +954,7 @@ class DROPSemanticParser(DROPParserBase):
 
         return batch_best_spans, batch_predicted_answers
 
-
+    '''
     def datecompare_goldattn_to_sideargs(self,
                                          batch_actionseqs: List[List[List[str]]],
                                          batch_actionseq_sideargs: List[List[List[Dict]]],
@@ -975,7 +975,7 @@ class DROPSemanticParser(DROPParserBase):
                             first_qattn = False
                         else:
                             sidearg_dict['question_attention'] = instance_gold_attentions[1]
-
+    '''
     # def get_gold_quesattn_datecompare(self,
     #                                   metadata,
     #                                   masked_len,
