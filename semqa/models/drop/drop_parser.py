@@ -96,16 +96,13 @@ class DROPSemanticParser(DROPParserBase):
                  passage_attention_to_span: Seq2SeqEncoder,
                  decoder_beam_search: ConstrainedBeamSearch,
                  max_decoding_steps: int,
+                 qp_sim_key: str,
                  goldactions: bool = None,
                  goldprogs: bool = False,
                  denotationloss: bool = True,
                  excloss: bool = False,
                  qattloss: bool = False,
                  mmlloss: bool = False,
-                 aux_goldprog_loss: bool = None,
-                 qatt_coverage_loss: bool = None,
-                 question_token_repr_key: str = None,
-                 context_token_repr_key: str = None,
                  bidafutils: PretrainedBidafModelUtils = None,
                  dropout: float = 0.0,
                  text_field_embedder: TextFieldEmbedder = None,
@@ -205,6 +202,9 @@ class DROPSemanticParser(DROPParserBase):
                                                        hidden_dim=200,
                                                        dropout=dropout)
 
+        assert qp_sim_key in ['raw', 'encoded', 'raw-enc']
+        self.qp_sim_key = qp_sim_key
+
         self.modelloss_metric = Average()
         self.excloss_metric = Average()
         self.qattloss_metric = Average()
@@ -286,9 +286,23 @@ class DROPSemanticParser(DROPParserBase):
             encoded_passage_norm = self.compute_avg_norm(encoded_passage)
             print(f"Encoded passage Norm: {encoded_passage_norm}")
 
+        if self.qp_sim_key == 'raw':
+            question_sim_repr = rawemb_question
+            passage_sim_repr = rawemb_passage
+        elif self.qp_sim_key == 'encoded':
+            question_sim_repr = encoded_question
+            passage_sim_repr = encoded_passage
+        elif self.qp_sim_key == 'raw-enc':
+            question_sim_repr = torch.cat([rawemb_question, encoded_question], dim=2)
+            passage_sim_repr = torch.cat([rawemb_passage, encoded_passage], dim=2)
+        else:
+            raise NotImplementedError
+
+
+
         # Shape: (batch_size, question_length, passage_length)
-        question_passage_similarity = self._executor_parameters.dotprod_matrix_attn(rawemb_question,
-                                                                                    rawemb_passage)
+        question_passage_similarity = self._executor_parameters.dotprod_matrix_attn(question_sim_repr,
+                                                                                    passage_sim_repr)
         question_passage_similarity = self._dropout(question_passage_similarity)
         # Shape: (batch_size, question_length, passage_length)
         question_passage_attention = allenutil.masked_softmax(question_passage_similarity,
@@ -320,55 +334,6 @@ class DROPSemanticParser(DROPParserBase):
         # Shape: (batch_size, passage_length, passage_length)
         passage_passage_token2num_similarity = (passage_passage_token2num_similarity *
                                                 passage_tokenidx2numidx_mask.unsqueeze(1))
-
-
-        '''
-        passage_token2date_encoding = self.passage_token_to_date(encoded_passage, passage_mask)
-        scaled_dim = passage_token2date_encoding.size()[-1] ** 0.5
-        # Shape: (batch_size, passage_length, passage_length)
-        passage_token2datetoken_similarity = self.dotprod_matrix_attn(passage_token2date_encoding,
-                                                                      passage_token2date_encoding) / scaled_dim
-
-        passage_token2datetoken_similarity = allenutil.replace_masked_values(passage_token2datetoken_similarity,
-                                                                             passage_mask.unsqueeze(2), 0.0)
-
-        passage_token2datetoken_similarity = allenutil.replace_masked_values(passage_token2datetoken_similarity,
-                                                                             passage_mask.unsqueeze(1), 0.0)
-        '''
-
-        '''
-        # Shape: (batch_size, passage_length, question_length)
-        passage_question_similarity = self._matrix_attention(encoded_passage, encoded_question)
-        # Shape: (batch_size, passage_length, question_length)
-        passage_question_attention = allenutil.masked_softmax(
-            passage_question_similarity,
-            question_mask,
-            memory_efficient=True)
-        # Shape: (batch_size, passage_length, encoding_dim)
-        passage_question_vectors = allenutil.weighted_sum(encoded_question, passage_question_attention)
-
-        # Shape: (batch_size, question_length, passage_length)
-        question_passage_attention = allenutil.masked_softmax(
-            passage_question_similarity.transpose(1, 2),
-            passage_mask,
-            memory_efficient=True)
-        # Shape: (batch_size, passage_length, passage_length)
-        attention_over_attention = torch.bmm(passage_question_attention, question_passage_attention)
-        # Shape: (batch_size, passage_length, encoding_dim)
-        passage_passage_vectors = allenutil.weighted_sum(encoded_passage, attention_over_attention)
-
-        # Shape: (batch_size, passage_length, encoding_dim * 4)
-        merged_passage_attention_vectors = self._dropout(
-            torch.cat([encoded_passage, passage_question_vectors,
-                       encoded_passage * passage_question_vectors,
-                       encoded_passage * passage_passage_vectors],
-                      dim=-1)
-        )
-
-        # Shape: (batch_size, passage_length, modeling_dim)
-        modeled_passage_input = self._modeling_proj_layer(merged_passage_attention_vectors)
-        modeled_passage = self._dropout(self._modeling_layer(modeled_passage_input, passage_mask))
-        '''
 
         """ Parser setup """
         # Shape: (B, encoding_dim)
@@ -420,8 +385,6 @@ class DROPSemanticParser(DROPParserBase):
                                   parameters=self._executor_parameters,
                                   start_types=batch_start_types[i],
                                   device_id=device_id,
-                                  question_to_use='encoded',
-                                  passage_to_use='encoded',
                                   debug=self._debug,
                                   metadata=metadata[i]) for i in range(batch_size)]
 

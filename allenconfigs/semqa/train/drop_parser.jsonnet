@@ -245,25 +245,10 @@ local compareff_inputdim =
           "beam_size": utils.parse_number(std.extVar("BEAMSIZE")),
         },
 
+        "qp_sim_key": std.extVar("QP_SIM_KEY"),
+
         "max_decoding_steps": utils.parse_number(std.extVar("MAX_DECODE_STEP")),
         "dropout": utils.parse_number(std.extVar("DROPOUT")),
-
-//        "question_token_repr_key": std.extVar("QTK"),
-//        "context_token_repr_key": std.extVar("CTK"),
-//        "aux_goldprog_loss": utils.boolparser(std.extVar("AUXGPLOSS")),
-//        "qatt_coverage_loss": utils.boolparser(std.extVar("ATTCOVLOSS")),
-//        "initializers":
-//          if utils.boolparser(std.extVar("PTREX")) == true then
-//          [
-//              ["executor_parameters.*",
-//                 {
-//                     "type": "pretrained",
-//                     "weights_file_path": std.extVar("PTRWTS"),
-//                 }
-//              ]
-//          ]
-//          else
-//          [],
 
         "regularizer": [
           [

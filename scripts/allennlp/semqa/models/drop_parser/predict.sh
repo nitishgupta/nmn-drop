@@ -3,7 +3,7 @@
 export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
-DATASET_NAME=date_num_200
+DATASET_NAME=date_num_50
 # DATASET_NAME=num/num_prune_supervised
 DATASET_DIR=./resources/data/drop/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
@@ -68,22 +68,22 @@ PREDICTOR=drop_parser_predictor
 #######################################################################################################################
 
 
-#allennlp predict --output-file ${PREDICTION_FILE} \
-#                 --predictor ${PREDICTOR} \
-#                 --cuda-device ${GPU} \
-#                 --include-package ${INCLUDE_PACKAGE} \
-#                 --silent \
-#                 --batch-size 1 \
-#                 --use-dataset-reader \
-#                 --overrides "{"model": {"decoder_beam_search": {"beam_size": ${BEAMSIZE}}, "debug": ${DEBUG}}}" \
-#                 ${MODEL_TAR} ${TESTFILE}
+allennlp predict --output-file ${PREDICTION_FILE} \
+                 --predictor ${PREDICTOR} \
+                 --cuda-device ${GPU} \
+                 --include-package ${INCLUDE_PACKAGE} \
+                 --silent \
+                 --batch-size 1 \
+                 --use-dataset-reader \
+                 --overrides "{"model": {"decoder_beam_search": {"beam_size": ${BEAMSIZE}}, "debug": ${DEBUG}}}" \
+                 ${MODEL_TAR} ${TESTFILE}
 
 # --weights-file ${SERIALIZATION_DIR}/model_state_epoch_9.th \
 
-allennlp evaluate --output-file ${EVALUATION_FILE} \
-                  --cuda-device ${GPU} \
-                  --include-package ${INCLUDE_PACKAGE} \
-                  ${MODEL_TAR} ${TESTFILE}
+#allennlp evaluate --output-file ${EVALUATION_FILE} \
+#                  --cuda-device ${GPU} \
+#                  --include-package ${INCLUDE_PACKAGE} \
+#                  ${MODEL_TAR} ${TESTFILE}
 
 
 

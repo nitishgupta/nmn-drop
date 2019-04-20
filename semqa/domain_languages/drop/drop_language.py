@@ -166,8 +166,6 @@ def get_empty_language_object():
                                 rawemb_passage=None,
                                 embedded_passage=None,
                                 encoded_passage=None,
-                                # modeled_passage=None,
-                                # passage_token2datetoken_sim=None,
                                 question_mask=None,
                                 passage_mask=None,
                                 passage_tokenidx2dateidx=None,
@@ -216,8 +214,6 @@ class DropLanguage(DomainLanguage):
                  start_types,
                  device_id: int = -1,
                  max_samples=10,
-                 question_to_use: str = 'encoded',
-                 passage_to_use: str = 'encoded',
                  metadata={},
                  debug=False) -> None:
 
@@ -262,21 +258,6 @@ class DropLanguage(DomainLanguage):
 
         self.metadata = metadata
         self._debug = debug
-
-        if passage_to_use == 'embedded':
-            self.passage = self.embedded_passage
-        elif passage_to_use == 'encoded':
-            self.passage = self.encoded_passage
-        elif passage_to_use == 'modeled':
-            raise NotImplementedError
-            # self.passage = self.modeled_passage
-        else:
-            raise NotImplementedError
-
-        if question_to_use == 'embedded':
-            self.question = self.embedded_question
-        elif question_to_use == 'encoded':
-            self.question = self.encoded_question
 
         self.device_id = device_id
 

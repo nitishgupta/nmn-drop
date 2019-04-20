@@ -4,8 +4,8 @@ export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
 # DATASET_NAME=num/num_prune_supervised
-# DATASET_NAME=date/date_prune_augment
-DATASET_NAME=date_num_200
+# DATASET_NAME=date/date_prune_augment_100
+DATASET_NAME=date_num/date_num_200
 
 DATASET_DIR=./resources/data/drop/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
@@ -28,10 +28,13 @@ export VAL_DATA_FILE=${VALFILE}
 
 export WEMB_DIM=100
 # export WORDEMB_FILE="./resources/embeddings/glove.840B.300d.lower.converted.zip"
-export WORDEMB_FILE="./resources/embeddings/glove/glove.6B.100d.txt.gz"
+export WORDEMB_FILE="https://s3-us-west-2.amazonaws.com/allennlp/datasets/glove/glove.6B.100d.txt.gz"
 
 export BIDAF_MODEL_TAR='https://s3-us-west-2.amazonaws.com/allennlp/models/bidaf-model-2017.09.15-charpad.tar.gz'
 export BIDAF_WORDEMB_FILE="https://s3-us-west-2.amazonaws.com/allennlp/datasets/glove/glove.6B.100d.txt.gz"
+
+# Which kind of similarity to use in Ques-Passage attention
+export QP_SIM_KEY="encoded"
 
 export GOLDACTIONS=false
 export GOLDPROGS=false
@@ -66,7 +69,7 @@ CHECKPOINT_ROOT=./resources/semqa/checkpoints
 SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/${DATASET_NAME}
 MODEL_DIR=drop_parser
 PD_1=BS_${BS}/LR_${LR}/Drop_${DROPOUT}/TOKENS_${TOKENIDX}/ED_${WEMB_DIM}/RG_${RG}/GACT_${GOLDACTIONS}/GPROGS_${GOLDPROGS}
-PD_2=QAL_${DENLOSS}/EXL_${EXCLOSS}/QATL_${QATTLOSS}/MML_${MMLLOSS}/SUPFIRST_${SUPFIRST}/SUPEPOCHS_${SUPEPOCHS}
+PD_2=QPSIMKEY_${QP_SIM_KEY}/QAL_${DENLOSS}/EXL_${EXCLOSS}/QATL_${QATTLOSS}/MML_${MMLLOSS}/SUPFIRST_${SUPFIRST}/SUPEPOCHS_${SUPEPOCHS}
 SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/${PD_2}/S_${SEED}/test
 
 #######################################################################################################################
