@@ -4,7 +4,7 @@ export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
 # DATASET_NAME=num/num_prune_supervised
-DATASET_NAME=date/date_prune_augment_100
+DATASET_NAME=date/date_prune_augment_200
 # DATASET_NAME=date_num/date_num_100
 
 DATASET_DIR=./resources/data/drop/${DATASET_NAME}
@@ -53,7 +53,7 @@ export SUPEPOCHS=10
 export BS=8
 export DROPOUT=0.2
 
-export LR=0.0005
+export LR=0.001
 export RG=1e-4
 
 export SEED=100
@@ -80,10 +80,5 @@ bash scripts/allennlp/base/train.sh ${CONFIGFILE} \
 
 
 #RESUME_SER_DIR=${SERIALIZATION_DIR}/Resume
-#
 #MODEL_TAR_GZ=${SERIALIZATION_DIR}/model.tar.gz
-#
-#bash scripts/allennlp/base/resume.sh ${CONFIGFILE} \
-#                                     ${INCLUDE_PACKAGE} \
-#                                     ${RESUME_SER_DIR} \
-#                                     ${MODEL_TAR_GZ}
+#allennlp fine-tune -c ${CONFIGFILE} --include-package ${INCLUDE_PACKAGE} -s ${RESUME_SER_DIR} -m ${MODEL_TAR_GZ}

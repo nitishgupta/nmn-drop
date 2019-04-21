@@ -4,8 +4,8 @@ ROOT_DIR=./resources/data/drop
 
 ANNOTATION_FOR_PARAS=200
 
-INPUT_DIR=${ROOT_DIR}/date_num
-OUTPUT_DIR=${ROOT_DIR}/date_num_${ANNOTATION_FOR_PARAS}
+INPUT_DIR=${ROOT_DIR}/date/date_prune_augment
+OUTPUT_DIR=${ROOT_DIR}/date/date_prune_augment_${ANNOTATION_FOR_PARAS}
 
 mkdir ${OUTPUT_DIR}
 

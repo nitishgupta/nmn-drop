@@ -577,10 +577,12 @@ class DROPSemanticParser(DROPParserBase):
                                 log_likelihood = self._get_span_answer_log_prob(answer_as_spans=answer_as_passage_spans[i],
                                                                                 span_log_probs=denotation._value)
                                 if torch.isnan(log_likelihood) == 1:
-                                    print("\nPassageSpan")
+                                    print(f"Batch index: {i}")
+                                    print(f"AnsAsPassageSpans:{answer_as_passage_spans[i]}")
+                                    print("\nPassageSpan Start and End logits")
                                     print(denotation.start_logits)
                                     print(denotation.end_logits)
-                                    print(denotation._value)
+
                             else:
                                 raise NotImplementedError
                             '''
@@ -953,111 +955,6 @@ class DROPSemanticParser(DROPParserBase):
             batch_predicted_answers.append(instance_predicted_ans)
 
         return batch_best_spans, batch_predicted_answers
-
-    '''
-    def datecompare_goldattn_to_sideargs(self,
-                                         batch_actionseqs: List[List[List[str]]],
-                                         batch_actionseq_sideargs: List[List[List[Dict]]],
-                                         batch_gold_attentions: List[Tuple[torch.Tensor, torch.Tensor]]):
-
-        for ins_idx in range(len(batch_actionseqs)):
-            instance_programs = batch_actionseqs[ins_idx]
-            instance_prog_sideargs = batch_actionseq_sideargs[ins_idx]
-            instance_gold_attentions = batch_gold_attentions[ins_idx]
-            for program, side_args in zip(instance_programs, instance_prog_sideargs):
-                first_qattn = True   # This tells model which qent attention to use
-                # print(side_args)
-                # print()
-                for action, sidearg_dict in zip(program, side_args):
-                    if action == 'PassageAttention -> find_PassageAttention':
-                        if first_qattn:
-                            sidearg_dict['question_attention'] = instance_gold_attentions[0]
-                            first_qattn = False
-                        else:
-                            sidearg_dict['question_attention'] = instance_gold_attentions[1]
-    '''
-    # def get_gold_quesattn_datecompare(self,
-    #                                   metadata,
-    #                                   masked_len,
-    #                                   device_id) -> List[Tuple[torch.Tensor, torch.Tensor]]:
-    #     batch_size = len(metadata)
-    #
-    #     gold_ques_attns = []
-    #
-    #     for i in range(batch_size):
-    #         question_tokens: List[str] = metadata[i]["question_tokens"]
-    #         qstr = ' '.join(question_tokens)
-    #         assert len(qstr.split(' ')) == len(question_tokens)
-    #
-    #         gold_ques_attns.append(self._gold_qattn_for_datecompare(qstr, masked_len, device_id))
-    #
-    #     return gold_ques_attns
-    #
-    # def _gold_qattn_for_datecompare(self, qstr: str, masked_len: int,
-    #                                 device_id: int) -> Tuple[torch.Tensor, torch.Tensor]:
-    #     """ Get gold question attention for date_compare questions
-    #         Question only has one 'or': Which happened first , event A or event B ?
-    #         Attn2 is after 'or' until '?'
-    #         Attn1 is after first ',' or ':' ('first', 'last', 'later') until the 'or'
-    #     """
-    #
-    #     or_split = qstr.split(' or ')
-    #     assert len(or_split) == 2
-    #
-    #     tokens = qstr.split(' ')
-    #
-    #     # attn_1 = torch.cuda.FloatTensor(masked_len, device=0).fill_(0.0)
-    #     # attn_2 = torch.cuda.FloatTensor(masked_len, device=0).fill_(0.0)
-    #
-    #     attn_1 = torch.FloatTensor(masked_len).fill_(0.0)
-    #     attn_2 = torch.FloatTensor(masked_len).fill_(0.0)
-    #
-    #     attn_1 = allenutil.move_to_device(attn_1, device_id)
-    #     attn_2 = allenutil.move_to_device(attn_2, device_id)
-    #
-    #     or_idx = tokens.index('or')
-    #     # Last token is ? which we don't want to attend to
-    #     attn_2[or_idx + 1: len(tokens) - 1] = 1.0
-    #     attn_2 = attn_2 / attn_2.sum()
-    #
-    #     # Gets first index of the item
-    #     try:
-    #         comma_idx = tokens.index(',')
-    #     except:
-    #         comma_idx = 100000
-    #     try:
-    #         colon_idx = tokens.index(':')
-    #     except:
-    #         colon_idx = 100000
-    #
-    #     try:
-    #         hyphen_idx = tokens.index('-')
-    #     except:
-    #         hyphen_idx = 100000
-    #
-    #     split_idx = min(comma_idx, colon_idx, hyphen_idx)
-    #
-    #     if split_idx == 100000 or (or_idx - split_idx <= 1):
-    #         # print(f"{qstr} first_split:{split_idx} or:{or_idx}")
-    #         if 'first' in tokens:
-    #             split_idx = tokens.index('first')
-    #         elif 'second' in tokens:
-    #             split_idx = tokens.index('second')
-    #         elif 'last' in tokens:
-    #             split_idx = tokens.index('last')
-    #         elif 'later' in tokens:
-    #             split_idx = tokens.index('later')
-    #         else:
-    #             split_idx = -1
-    #
-    #     assert split_idx != -1, f"{qstr} {split_idx} {or_idx}"
-    #
-    #     attn_1[split_idx + 1: or_idx] = 1.0
-    #     attn_1 = attn_1 / attn_1.sum()
-    #
-    #     # return attn_2, attn_1
-    #     return attn_1, attn_2
-
 
     def datecompare_eventdategr_to_sideargs(self,
                                             batch_actionseqs: List[List[List[str]]],

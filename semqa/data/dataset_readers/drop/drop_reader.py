@@ -98,13 +98,13 @@ class DROPReader(DatasetReader):
                 if constants.strongly_supervised in question_answer:
                     strongly_supervised = question_answer[constants.strongly_supervised]
 
-                ques_attn_supervision = []
-                if constants.ques_attention_supervision in question_answer:
-                    ques_attn_supervision = question_answer[constants.ques_attention_supervision]
-
                 qtype = "UNK"
                 if constants.qtype in question_answer:
                     qtype = question_answer[constants.qtype]
+
+                ques_attn_supervision = None
+                if constants.ques_attention_supervision in question_answer:
+                    ques_attn_supervision = question_answer[constants.ques_attention_supervision]
 
                 datecomp_ques_event_date_groundings = None
                 if constants.datecomp_ques_event_date_groundings in question_answer:
@@ -285,20 +285,32 @@ class DROPReader(DatasetReader):
         # FIELDS FOR STRONG-SUPERVISION
         fields["strongly_supervised"] = MetadataField(strongly_supervised)
         fields["qtypes"] = MetadataField(qtype)   # String for strong supervision
-        # QAttn supervision, is a n-tuple of question attentions
-        fields["qattn_supervision"] = ArrayField(np.array(ques_attn_supervision), padding_value=0)
-        # For date comparison questions; these are a tuple of date_groundings
-        if datecomp_ques_event_date_groundings and strongly_supervised:
-            fields["datecomp_ques_event_date_groundings"] = MetadataField(datecomp_ques_event_date_groundings)
-        else:
-            fields["datecomp_ques_event_date_groundings"] = MetadataField(([0.0 for _ in range(len(passage_date_objs))],
-                                                                           [0.0 for _ in range(len(passage_date_objs))]))
 
-        if numcomp_qspan_num_groundings and strongly_supervised:
+        # Question Attention Supervision
+        if strongly_supervised and ques_attn_supervision:
+            # QAttn supervision, is a n-tuple of question attentions
+            fields["qattn_supervision"] = ArrayField(np.array(ques_attn_supervision), padding_value=0)
+        else:
+            qlen = len(question_tokens)
+            empty_question_attention = [0.0] * qlen
+            empty_question_attention_tuple = [empty_question_attention]
+            fields["qattn_supervision"] = ArrayField(np.array(empty_question_attention_tuple), padding_value=0)
+
+        # Date-comparison - Date Grounding Supervision
+        if strongly_supervised and datecomp_ques_event_date_groundings:
+                fields["datecomp_ques_event_date_groundings"] = MetadataField(datecomp_ques_event_date_groundings)
+        else:
+            empty_date_grounding = [0.0] * len(passage_date_objs)
+            empty_date_grounding_tuple = (empty_date_grounding, empty_date_grounding)
+            fields["datecomp_ques_event_date_groundings"] = MetadataField(empty_date_grounding_tuple)
+
+        # Number Comparison - Passage Number Grounding Supervision
+        if strongly_supervised and numcomp_qspan_num_groundings:
             fields["numcomp_qspan_num_groundings"] = MetadataField(numcomp_qspan_num_groundings)
         else:
-            fields["numcomp_qspan_num_groundings"] = MetadataField(([0.0 for _ in range(len(passage_number_values))],
-                                                                    [0.0 for _ in range(len(passage_number_values))]))
+            empty_passagenum_grounding = [0.0] * len(passage_number_values)
+            empty_passagenum_grounding_tuple = (empty_passagenum_grounding, empty_passagenum_grounding)
+            fields["numcomp_qspan_num_groundings"] = MetadataField(empty_passagenum_grounding_tuple)
 
 
         if answer_info:

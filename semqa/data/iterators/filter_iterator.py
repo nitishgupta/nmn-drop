@@ -51,7 +51,7 @@ class DataFilterIterator(DataIterator):
             # exit()
 
             instances_w_epoch_num = 0
-            for instance  in instances:
+            for instance in instances:
                 if 'epoch_num' in instance.fields:
                     instances_w_epoch_num += 1
 
