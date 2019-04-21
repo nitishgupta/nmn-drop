@@ -388,43 +388,6 @@ class DROPSemanticParser(DROPParserBase):
                                   debug=self._debug,
                                   metadata=metadata[i]) for i in range(batch_size)]
 
-        '''
-        # List[torch.Tensor(0.0)] -- Initial log-score list for the decoding
-        initial_score_list = [next(iter(question.values())).new_zeros(1, dtype=torch.float)
-                              for _ in range(batch_size)]
-
-        initial_grammar_statelets = []
-        batch_action2actionidx: List[Dict[str, int]] = []
-        # This is kind of useless, only needed for debugging in BasicTransitionFunction
-        batch_actionidx2actionstr: List[List[str]] = []
-        for i in range(batch_size):
-            (grammar_statelet,
-             action2actionidx,
-             actionidx2actionstr) = self._create_grammar_statelet(languages[i], actions[i])
-            initial_grammar_statelets.append(grammar_statelet)
-            batch_actionidx2actionstr.append(actionidx2actionstr)
-            batch_action2actionidx.append(action2actionidx)
-
-        initial_rnn_states = self._get_initial_rnn_state(question_encoded=encoded_question,
-                                                         question_mask=question_mask,
-                                                         question_encoded_finalstate=question_encoded_final_state,
-                                                         question_encoded_aslist=question_encoded_aslist,
-                                                         question_mask_aslist=question_mask_aslist)
-
-        initial_side_args = [[] for _ in range(batch_size)]
-        
-        
-        # Initial grammar state for the complete batch
-        initial_state = GrammarBasedState(batch_indices=list(range(batch_size)),
-                                          action_history=[[] for _ in range(batch_size)],
-                                          score=initial_score_list,
-                                          rnn_state=initial_rnn_states,
-                                          grammar_state=initial_grammar_statelets,
-                                          possible_actions=actions,
-                                          extras=batch_actionidx2actionstr,
-                                          debug_info=initial_side_args)
-        '''
-
         (initial_state,
          batch_action2actionidx,
          batch_actionidx2actionstr) = self.getInitialDecoderState(question, languages, actions, encoded_question,
@@ -783,6 +746,8 @@ class DROPSemanticParser(DROPParserBase):
                 relevant_action_idx = 0
                 relevant_action = relevant_actions[relevant_action_idx]
                 gold_qattn = instance_qattn_supervision[relevant_action_idx]
+                if torch.sum(gold_qattn) == 0.0:
+                    print(f"Gold attention sum == 0.0. StronglySupervised: {strongly_supervised_instance}")
                 for action, side_arg in zip(program, side_args):
                     if action == relevant_action:
                         question_attention = side_arg['question_attention']

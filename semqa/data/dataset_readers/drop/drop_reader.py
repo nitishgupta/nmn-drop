@@ -338,11 +338,6 @@ class DROPReader(DatasetReader):
             # print("Not dealing with empty passage answers")
             return None
 
-        # # TODO(nitish): Only using questions which have a single 'or'
-        # if len(' '.join(metadata["question_tokens"]).split(' or ')) != 2:
-        #     print("Only date comparison with single OR")
-        #     return None
-
         fields["metadata"] = MetadataField(metadata)
         return Instance(fields)
 

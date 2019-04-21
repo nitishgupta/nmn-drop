@@ -4,7 +4,7 @@ export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
 # DATASET_NAME=num/num_prune_supervised
-DATASET_NAME=date/date_prune_augment_200
+DATASET_NAME=date/date_prune_augment_100
 # DATASET_NAME=date_num/date_num_100
 
 DATASET_DIR=./resources/data/drop/${DATASET_NAME}
@@ -45,7 +45,7 @@ export MMLLOSS=true
 
 # Whether strong supervison instances should be trained on first, if yes for how many epochs
 export SUPFIRST=true
-export SUPEPOCHS=10
+export SUPEPOCHS=15
 
 # export PTREX=false
 # export PTRWTS="./resources/semqa/checkpoints/hpqa/b_wsame/hpqa_parser/BS_4/OPT_adam/LR_0.001/Drop_0.2/TOKENS_glove/FUNC_snli/SIDEARG_true/GOLDAC_true/AUXGPLOSS_false/QENTLOSS_false/ATTCOV_false/PTREX_false/best.th"
@@ -53,7 +53,7 @@ export SUPEPOCHS=10
 export BS=8
 export DROPOUT=0.2
 
-export LR=0.001
+export LR=0.005
 export RG=1e-4
 
 export SEED=100
