@@ -225,7 +225,6 @@ class DROPParserBase(Model):
         batch_actionseq_sideargs = output_dict["batch_actionseq_sideargs"]
         languages = output_dict["languages"]
         metadatas = output_dict["metadata"]
-        predicted_anspans = output_dict["all_pred_ansspans"]
 
         # This currectly works because there aren't any instance-specific arguments to the language.
         logical_forms = []

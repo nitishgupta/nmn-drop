@@ -1,5 +1,5 @@
 from typing import Dict, List, Tuple, Any
-
+import numpy as np
 import torch
 from torch import Tensor
 from torch.nn import LSTM
@@ -80,6 +80,25 @@ class Date:
     def __str__(self):
         return f"{self.year}/{self.month}/{self.day}"
 
+    def year_diff(self, other):
+        """ Returns the difference in years between two dates.
+            1. Either of the years is not defined, return -1
+            ~ ~ ~ ~ 2. The difference in self - other is negative ~ ~ ~ ~
+        """
+        assert isinstance(other, Date), "Given object is not a date instance"
+        other: Date = other
+        year1, year2 = self.year, other.year
+        if year1 == -1 or year2 == -1:
+            return -1
+        else:
+            year_diff = year1 - year2
+            return year_diff
+            # if year_diff > 0:
+            #     return year_diff
+            # else:
+            #     return 0
+
+
 
 # class DateDistribution:
 #     def __init__(self,
@@ -149,6 +168,20 @@ class PassageAttention_answer():
         self.debug_value = debug_value
 
 
+class YearDifference():
+    def __init__(self, year_difference_dist, loss=0.0, debug_value=""):
+        self._value = year_difference_dist
+        self.loss = loss
+        self.debug_value = debug_value
+
+
+class PassageNumber():
+    def __init__(self, passage_number_dist, loss=0.0, debug_value=""):
+        self._value = passage_number_dist
+        self.loss = loss
+        self.debug_value = debug_value
+
+
 # A ``NumberAnswer`` is a distribution over the possible answers from addition and subtraction.
 class NumberAnswer(Tensor):
     pass
@@ -172,6 +205,8 @@ def get_empty_language_object():
                                 passage_date_values=None,
                                 passage_tokenidx2numidx=None,
                                 passage_num_values=None,
+                                year_differences=None,
+                                year_differences_mat=None,
                                 question_passage_attention=None,
                                 passage_token2date_similarity=None,
                                 passage_token2num_similarity=None,
@@ -207,6 +242,8 @@ class DropLanguage(DomainLanguage):
                  passage_date_values: List[Date],
                  passage_tokenidx2numidx: torch.LongTensor,
                  passage_num_values: List[float],
+                 year_differences: List[int],
+                 year_differences_mat: np.array,
                  question_passage_attention: Tensor,
                  passage_token2date_similarity: Tensor,
                  passage_token2num_similarity: Tensor,
@@ -218,7 +255,8 @@ class DropLanguage(DomainLanguage):
                  debug=False) -> None:
 
         if start_types is None:
-            start_types = {PassageSpanAnswer, QuestionSpanAnswer}
+            start_types = {PassageSpanAnswer, YearDifference} # , PassageNumber}
+
         super().__init__(start_types=start_types)
 
         if embedded_question is None:
@@ -271,6 +309,10 @@ class DropLanguage(DomainLanguage):
         self.date_gt_mat = initialization_returns["date_gt_mat"]
         self.num_lt_mat = initialization_returns["num_lt_mat"]
         self.num_gt_mat = initialization_returns["num_gt_mat"]
+
+        # Shape: (num_passage_dates, num_passage_dates, num_of_year_differences)
+        self.year_differences_mat = allenutil.move_to_device(torch.FloatTensor(year_differences_mat),
+                                                             cuda_device=self.device_id)
 
         if self._debug:
             num_date_tokens = self.passage_datetokens_mask_float.sum()
@@ -494,6 +536,25 @@ class DropLanguage(DomainLanguage):
         return num_distribution, num_distribution
 
 
+    def expected_date_year_difference(self,
+                                      date_distribution_1: torch.FloatTensor,
+                                      date_distribution_2: torch.FloatTensor):
+        """ Compute a distribution over possible year-differences by marginalizing over the year_differnces_mat.
+
+            Parameters:
+            -----------
+            date_distribution_1: ``torch.FloatTensor`` Shape: (self.num_passage_dates, )
+            date_distribution_2: ``torch.FloatTensor`` Shape: (self.num_passage_dates, )
+        """
+        # Shape: (num_passage_dates, num_passage_dates)
+        joint_dist = torch.matmul(date_distribution_1.unsqueeze(1), date_distribution_2.unsqueeze(0))
+
+        # Shape: (number_year_differences, )
+        year_differences_dist = torch.sum(self.year_differences_mat * joint_dist.unsqueeze(2), dim=(0, 1))
+
+        return year_differences_dist
+
+
     def expected_date_comparison(self, date_distribution_1, date_distribution_2, comparison):
         """ Compute the boolean probability that date_1 > date_2 given distributions over passage_dates for each
 
@@ -679,8 +740,7 @@ class DropLanguage(DomainLanguage):
                                   passage_attn_1: PassageAttention,
                                   passage_attn_2: PassageAttention,
                                   event_date_groundings=None) -> PassageAttention_answer:
-        ''' In short; outputs PA_1 if D1 > D2 i.e. is PA_1 occurred after PA_2
-        '''
+        ''' In short; outputs PA_1 if D1 > D2 i.e. is PA_1 occurred after PA_2 '''
 
         passage_attention_1 = passage_attn_1._value * self.passage_mask
         passage_attention_2 = passage_attn_2._value * self.passage_mask
@@ -802,6 +862,38 @@ class DropLanguage(DomainLanguage):
 
         return PassageAttention_answer(average_passage_distribution, loss=aux_loss, debug_value=debug_value)
 
+
+    @predicate
+    def year_difference(self,
+                        passage_attn_1: PassageAttention,
+                        passage_attn_2: PassageAttention) -> YearDifference:
+        ''' Given two passage spans, ground them to dates, and then return the difference between their years '''
+
+        passage_attention_1 = passage_attn_1._value * self.passage_mask
+        passage_attention_2 = passage_attn_2._value * self.passage_mask
+
+        date_distribution_1, _ = self.compute_date_scores(passage_attention_1)
+        date_distribution_2, _ = self.compute_date_scores(passage_attention_2)
+
+        # Shape: (number_of_year_differences, )
+        year_difference_dist = self.expected_date_year_difference(date_distribution_1, date_distribution_2)
+
+        debug_value = ""
+        if self._debug:
+            _, pattn_vis_most_1 = dlutils.listTokensVis(passage_attention_1,
+                                                        self.metadata["passage_tokens"])
+            _, pattn_vis_most_2 = dlutils.listTokensVis(passage_attention_2,
+                                                        self.metadata["passage_tokens"])
+
+            date1 = myutils.round_all(myutils.tocpuNPList(date_distribution_1), 3)
+            date2 = myutils.round_all(myutils.tocpuNPList(date_distribution_2), 3)
+            year_diff_dist = myutils.round_all(myutils.tocpuNPList(year_difference_dist), 3)
+
+            debug_value += f"Pattn1: {pattn_vis_most_1}\n Date1: {date1}" + \
+                           f"\nPattn2: {pattn_vis_most_2}\n Date2: {date2}" + \
+                           f"\nYearDiffDist: {year_diff_dist}"
+
+        return YearDifference(year_difference_dist=year_difference_dist, loss=0.0, debug_value=debug_value)
 
 
     @predicate

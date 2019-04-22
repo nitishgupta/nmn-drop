@@ -76,6 +76,7 @@ class DataFilterIterator(DataIterator):
                 filtered_instance_list = instance_list
 
             print(f"Filtered Instances: {len(filtered_instance_list)}")
+
             if shuffle:
                 random.shuffle(filtered_instance_list)
             iterator = iter(filtered_instance_list)

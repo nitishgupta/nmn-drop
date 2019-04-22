@@ -1,7 +1,6 @@
 import logging
-from typing import List, Dict, Any, Tuple, Optional, Set
-import math
-import copy
+from typing import List, Dict, Any, Tuple, Optional, Set, Union
+import numpy as np
 
 from overrides import overrides
 
@@ -27,7 +26,8 @@ from semqa.models.utils.bidaf_utils import PretrainedBidafModelUtils
 from semqa.models.utils import semparse_utils
 
 from semqa.models.drop.drop_parser_base import DROPParserBase
-from semqa.domain_languages.drop import DropLanguage, Date, ExecutorParameters, QuestionSpanAnswer, PassageSpanAnswer
+from semqa.domain_languages.drop import (DropLanguage, Date, ExecutorParameters,
+                                         QuestionSpanAnswer, PassageSpanAnswer, YearDifference, PassageNumber)
 
 import datasets.drop.constants as dropconstants
 import utils.util as myutils
@@ -232,14 +232,18 @@ class DROPSemanticParser(DROPParserBase):
                 passageidx2dateidx: torch.LongTensor,
                 passage_date_values: List[List[Date]],
                 actions: List[List[ProductionRule]],
+                year_differences: List[List[int]],
+                year_differences_mat: List[np.array],
+                answer_program_start_types: List[Union[List[str], None]] = None,
+                answer_as_passage_spans: torch.LongTensor = None,
+                answer_as_question_spans: torch.LongTensor = None,
+                answer_as_passage_number: List[List[int]] = None,
+                answer_as_year_difference: List[List[int]] = None,
                 datecomp_ques_event_date_groundings: List[Tuple[List[int], List[int]]] = None,
                 numcomp_qspan_num_groundings: List[Tuple[List[int], List[int]]] = None,
                 strongly_supervised: List[bool] = None,
                 qtypes: List[str] = None,
                 qattn_supervision: torch.FloatTensor = None,
-                answer_types: List[str] = None,
-                answer_as_passage_spans: torch.LongTensor = None,
-                answer_as_question_spans: torch.LongTensor = None,
                 epoch_num: List[int] = None,
                 metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
 
@@ -355,15 +359,10 @@ class DROPSemanticParser(DROPParserBase):
         # passage_token2datetoken_sim_aslist = [passage_token2datetoken_similarity[i] for i in range(batch_size)]
 
         # Based on the gold answer - figure out possible start types for the instance_language
-        if answer_as_passage_spans is not None:
-            # batch_start_types = self.find_valid_start_states(answer_as_question_spans=answer_as_question_spans,
-            #                                                  answer_as_passage_spans=answer_as_passage_spans,
-            #                                                  batch_size=batch_size)
-
-            # TODO(nitish): Only making programs which have PassageSpan as answers
-            batch_start_types = [set([PassageSpanAnswer]) for _ in range(batch_size)]
-        else:
-            batch_start_types = [None for _ in range(batch_size)]
+        # if answer_as_passage_spans:
+        batch_start_types: List[Union[Set, None]] = self.find_valid_start_states(
+                                                        answer_program_start_types=answer_program_start_types,
+                                                        batch_size=batch_size)
 
         languages = [DropLanguage(rawemb_question=question_rawemb_aslist[i],
                                   embedded_question=question_embedded_aslist[i],
@@ -379,6 +378,8 @@ class DROPSemanticParser(DROPParserBase):
                                   passage_date_values=passage_date_values[i],
                                   passage_tokenidx2numidx=passageidx2numberidx[i],
                                   passage_num_values=passage_number_values[i],
+                                  year_differences=year_differences[i],
+                                  year_differences_mat=year_differences_mat[i],
                                   question_passage_attention=q2p_attention_aslist[i],
                                   passage_token2date_similarity=p2pdate_similarity_aslist[i],
                                   passage_token2num_similarity=p2pnum_similarity_aslist[i],
@@ -470,7 +471,7 @@ class DROPSemanticParser(DROPParserBase):
 
         output_dict = {}
         ''' Computing losses if gold answers are given '''
-        if answer_types is not None:
+        if answer_program_start_types is not None:
             # Execution losses --
             total_aux_loss = allenutil.move_to_device(torch.tensor(0.0), device_id)
             if self.excloss:
@@ -501,22 +502,24 @@ class DROPSemanticParser(DROPParserBase):
 
             if self.mmlloss:
                 (gold_actionseq_idxs,
-                 gold_actionseq_mask) = self._gold_actionseq_forMML(qtypes=qtypes,
-                                                                    strongly_supervised=strongly_supervised,
-                                                                    question_tokens=[metadata[idx]["question_tokens"]
-                                                                                     for idx in range(batch_size)],
-                                                                    languages=languages,
-                                                                    batch_action2actionidx=batch_action2actionidx,
-                                                                    device_id=device_id)
+                 gold_actionseq_mask,
+                 zero_gold_seqs) = self._gold_actionseq_forMML(qtypes=qtypes,
+                                                               strongly_supervised=strongly_supervised,
+                                                               question_tokens=[metadata[idx]["question_tokens"]
+                                                                                for idx in range(batch_size)],
+                                                               languages=languages,
+                                                               batch_action2actionidx=batch_action2actionidx,
+                                                               device_id=device_id)
                 # for i in range(batch_size):
                 #     print(metadata[i]["question_tokens"])
                 #     actionstr_seq = [batch_actionidx2actionstr[i][ii] for ii in gold_actionseq_idxs[i][0]]
                 #     lf = languages[i].action_sequence_to_logical_form(actionstr_seq)
                 #     print(lf)
-
-                mml_loss = self._mml.decode(initial_state=initial_state,
-                                            transition_function=self._decoder_step,
-                                            supervision=(gold_actionseq_idxs, gold_actionseq_mask))['loss']
+                mml_loss = 0.0
+                if not zero_gold_seqs:
+                    mml_loss = self._mml.decode(initial_state=initial_state,
+                                                transition_function=self._decoder_step,
+                                                supervision=(gold_actionseq_idxs, gold_actionseq_mask))['loss']
 
                 if mml_loss != 0.0:
                     self.mmlloss_metric(mml_loss.item())
@@ -524,95 +527,156 @@ class DROPSemanticParser(DROPParserBase):
 
 
             denotation_loss = allenutil.move_to_device(torch.tensor(0.0), device_id)
+            batch_denotation_loss = allenutil.move_to_device(torch.tensor(0.0), device_id)
             if self.denotation_loss:
                 for i in range(batch_size):
-                    if answer_types[i] == dropconstants.SPAN_TYPE:
-                        instance_prog_denotations, instance_prog_types = batch_denotations[i], batch_denotation_types[i]
-                        # Tensor with shape: (num_of_programs, )
-                        instance_prog_probs = batch_actionseq_probs[i]
-                        instance_progs_logprob_list = batch_actionseq_scores[i]
-                        instance_log_likelihood_list = []
-                        for progidx in range(len(instance_prog_denotations)):
-                            denotation = instance_prog_denotations[progidx]
-                            progtype = instance_prog_types[progidx]
-                            if progtype == "PassageSpanAnswer":
-                                denotation: PassageSpanAnswer = denotation
-                                log_likelihood = self._get_span_answer_log_prob(answer_as_spans=answer_as_passage_spans[i],
-                                                                                span_log_probs=denotation._value)
-                                if torch.isnan(log_likelihood) == 1:
-                                    print(f"Batch index: {i}")
-                                    print(f"AnsAsPassageSpans:{answer_as_passage_spans[i]}")
-                                    print("\nPassageSpan Start and End logits")
-                                    print(denotation.start_logits)
-                                    print(denotation.end_logits)
+                    # Programs for an instance can be of multiple types;
+                    # For each program, based on it's return type, we compute the log-likelihood
+                    # against the appropriate gold-answer and add it to the instance_log_likelihood_list
+                    # This is then weighed by the program-log-likelihood and added to the batch_loss
 
-                            else:
-                                raise NotImplementedError
-                            '''
-                            elif progtype == "QuestionSpanAnswer":
-                                denotation: QuestionSpanAnswer = denotation
-                                log_likelihood = self._get_span_answer_log_prob(
-                                    answer_as_spans=answer_as_question_spans[i],
-                                    span_log_probs=denotation._value)
-                                if torch.isnan(log_likelihood) == 1:
-                                    print("\nQuestionSpan")
-                                    print(denotation.start_logits)
-                                    print(denotation.end_logits)
-                                    print(denotation._value)
-                            '''
+                    instance_prog_denotations, instance_prog_types = batch_denotations[i], batch_denotation_types[i]
+                    instance_progs_logprob_list = batch_actionseq_scores[i]
 
-                            instance_log_likelihood_list.append(log_likelihood)
+                    instance_log_likelihood_list = []
+                    for progidx in range(len(instance_prog_denotations)):
+                        denotation = instance_prog_denotations[progidx]
+                        progtype = instance_prog_types[progidx]
+                        if progtype == "PassageSpanAnswer":
+                            # Tuple of start, end log_probs
+                            denotation: PassageSpanAnswer = denotation
+                            log_likelihood = self._get_span_answer_log_prob(answer_as_spans=answer_as_passage_spans[i],
+                                                                            span_log_probs=denotation._value)
+                            if torch.isnan(log_likelihood) == 1:
+                                print(f"Batch index: {i}")
+                                print(f"AnsAsPassageSpans:{answer_as_passage_spans[i]}")
+                                print("\nPassageSpan Start and End logits")
+                                print(denotation.start_logits)
+                                print(denotation.end_logits)
 
-                        # Each is the shape of (number_of_progs,)
-                        instance_denotation_log_likelihoods = torch.stack(instance_log_likelihood_list, dim=-1)
-                        instance_progs_log_probs = torch.stack(instance_progs_logprob_list, dim=-1)
+                        elif progtype == "YearDifference":
+                            # Distribution over year_differences
+                            denotation: YearDifference = denotation
+                            pred_year_difference_dist = denotation._value
+                            pred_year_diff_log_probs = torch.log(pred_year_difference_dist + 1e-40)
+                            gold_year_difference_dist = allenutil.move_to_device(
+                                                                    torch.FloatTensor(answer_as_year_difference[i]),
+                                                                    cuda_device=device_id)
 
-                        allprogs_log_marginal_likelihoods = instance_denotation_log_likelihoods + instance_progs_log_probs
-                        instance_marginal_log_likelihood = allenutil.logsumexp(allprogs_log_marginal_likelihoods)
-                        # Added sum to remove empty-dim
-                        instance_marginal_log_likelihood = torch.sum(instance_marginal_log_likelihood)
-                        denotation_loss += -1.0 * instance_marginal_log_likelihood
-                    else:
-                        raise NotImplementedError
+                            log_likelihood = torch.sum(pred_year_diff_log_probs * gold_year_difference_dist)
+                            # print(pred_year_difference_dist)
+                            # print(gold_year_difference_dist)
+                            # print(log_likelihood)
 
-            batch_denotation_loss = denotation_loss / batch_size
+                        # Here implement losses for other program-return-types in else-ifs
+                        else:
+                            raise NotImplementedError
+                        '''
+                        elif progtype == "QuestionSpanAnswer":
+                            denotation: QuestionSpanAnswer = denotation
+                            log_likelihood = self._get_span_answer_log_prob(
+                                answer_as_spans=answer_as_question_spans[i],answer_texts
+                                span_log_probs=denotation._value)
+                            if torch.isnan(log_likelihood) == 1:
+                                print("\nQuestionSpan")
+                                print(denotation.start_logits)
+                                print(denotation.end_logits)
+                                print(denotation._value)
+                        '''
+
+                        instance_log_likelihood_list.append(log_likelihood)
+
+                    # Each is the shape of (number_of_progs,)
+                    instance_denotation_log_likelihoods = torch.stack(instance_log_likelihood_list, dim=-1)
+                    instance_progs_log_probs = torch.stack(instance_progs_logprob_list, dim=-1)
+
+                    allprogs_log_marginal_likelihoods = instance_denotation_log_likelihoods + instance_progs_log_probs
+                    instance_marginal_log_likelihood = allenutil.logsumexp(allprogs_log_marginal_likelihoods)
+                    # Added sum to remove empty-dim
+                    instance_marginal_log_likelihood = torch.sum(instance_marginal_log_likelihood)
+                    denotation_loss += -1.0 * instance_marginal_log_likelihood
+
+                batch_denotation_loss = denotation_loss / batch_size
 
             self.modelloss_metric(batch_denotation_loss.item())
             output_dict["loss"] = batch_denotation_loss + total_aux_loss
 
+        # Get the predicted answers irrespective of loss computation.
+        # For each program, given it's return type compute the predicted answer string
         if metadata is not None:
-            batch_question_strs = [metadata[i]["original_question"] for i in range(batch_size)]
-            batch_passage_strs = [metadata[i]["original_passage"] for i in range(batch_size)]
-            batch_passage_token_offsets = [metadata[i]["passage_token_offsets"] for i in range(batch_size)]
-            batch_question_token_offsets = [metadata[i]["question_token_offsets"] for i in range(batch_size)]
-            answer_annotations = [metadata[i]["answer_annotation"] for i in range(batch_size)]
-            (batch_best_spans, batch_predicted_answers) = self._get_best_spans(batch_denotations,
-                                                                               batch_denotation_types,
-                                                                               batch_question_token_offsets,
-                                                                               batch_question_strs,
-                                                                               batch_passage_token_offsets,
-                                                                               batch_passage_strs,
-                                                                               question_mask_aslist,
-                                                                               passage_mask_aslist)
-            predicted_answers = [batch_predicted_answers[i][0] for i in range(batch_size)]
+            output_dict["predicted_answer"] = []
+            output_dict["all_predicted_answers"] = []
+
+            for i in range(batch_size):
+                original_question = metadata[i]["original_question"]
+                original_passage = metadata[i]["original_passage"]
+                question_token_offsets = metadata[i]["question_token_offsets"]
+                passage_token_offsets = metadata[i]["passage_token_offsets"]
+                instance_year_differences = year_differences[i]
+                answer_annotations = metadata[i]["answer_annotations"]
+
+                instance_prog_denotations, instance_prog_types = batch_denotations[i], batch_denotation_types[i]
+                instance_progs_logprob_list = batch_actionseq_scores[i]
+
+                all_instance_progs_predicted_answer_strs: List[str] = []
+                for progidx in range(len(instance_prog_denotations)):
+                    denotation = instance_prog_denotations[progidx]
+                    progtype = instance_prog_types[progidx]
+                    if progtype == "PassageSpanAnswer":
+                        # Tuple of start, end log_probs
+                        denotation: PassageSpanAnswer = denotation
+                        # Shape: (2, ) -- start / end token ids
+                        best_span = get_best_span(span_start_logits=denotation._value[0].unsqueeze(0),
+                                                  span_end_logits=denotation._value[1].unsqueeze(0)).squeeze(0)
+
+                        predicted_span = tuple(best_span.detach().cpu().numpy())
+                        start_offset = passage_token_offsets[predicted_span[0]][0]
+                        end_offset = passage_token_offsets[predicted_span[1]][1]
+                        predicted_answer = original_passage[start_offset:end_offset]
+
+                    elif progtype == "YearDifference":
+                        # Distribution over year_differences vector
+                        denotation: YearDifference = denotation
+                        predicted_yeardiff_idx = torch.argmax(denotation._value).detach().cpu().numpy()
+                        predicted_year_difference = instance_year_differences[predicted_yeardiff_idx]   # int
+                        predicted_answer = str(predicted_year_difference)
+                    else:
+                        raise NotImplementedError
+
+                    all_instance_progs_predicted_answer_strs.append(predicted_answer)
+                    # Since the programs are sorted by decreasing scores, we can directly take the first pred answer
+                instance_predicted_answer = all_instance_progs_predicted_answer_strs[0]
+                output_dict["predicted_answer"].append(instance_predicted_answer)
+                output_dict["all_predicted_answers"].append(all_instance_progs_predicted_answer_strs)
+
+                answer_annotations = metadata[i].get('answer_annotations', [])
+                self._drop_metrics(instance_predicted_answer, answer_annotations)
+
+            # batch_question_strs = [metadata[i]["original_question"] for i in range(batch_size)]
+            # batch_passage_strs = [metadata[i]["original_passage"] for i in range(batch_size)]
+            # batch_passage_token_offsets = [metadata[i]["passage_token_offsets"] for i in range(batch_size)]
+            # batch_question_token_offsets = [metadata[i]["question_token_offsets"] for i in range(batch_size)]
+            # answer_annotations = [metadata[i]["answer_annotation"] for i in range(batch_size)]
+            # (batch_best_spans, batch_predicted_answers) = self._get_best_spans(batch_denotations,
+            #                                                                    batch_denotation_types,
+            #                                                                    batch_question_token_offsets,
+            #                                                                    batch_question_strs,
+            #                                                                    batch_passage_token_offsets,
+            #                                                                    batch_passage_strs,
+            #                                                                    question_mask_aslist,
+            #                                                                    passage_mask_aslist)
+            # predicted_answers = [batch_predicted_answers[i][0] for i in range(batch_size)]
 
             output_dict['metadata'] = metadata
-            output_dict['best_span_ans_str'] = predicted_answers
+            # output_dict['best_span_ans_str'] = predicted_answers
             output_dict['answer_as_passage_spans'] = answer_as_passage_spans
-            output_dict['predicted_spans'] = batch_best_spans
+            # output_dict['predicted_spans'] = batch_best_spans
 
             output_dict["batch_action_seqs"] = batch_actionseqs
             output_dict["batch_actionseq_scores"] = batch_actionseq_scores
             output_dict["batch_actionseq_sideargs"] = batch_actionseq_sideargs
             output_dict["languages"] = languages
-            output_dict["all_pred_ansspans"] = batch_predicted_answers
-
-            if answer_annotations:
-                for i in range(batch_size):
-                    self._drop_metrics(predicted_answers[i], [answer_annotations[i]])
-
-        batch_denotations = None
-        batch_denotation_types = None
+            # output_dict["all_pred_ansspans"] = batch_predicted_answers
 
         return output_dict
 
@@ -687,6 +751,9 @@ class DROPSemanticParser(DROPParserBase):
             allenutil.replace_masked_values(log_likelihood_for_spans, gold_passage_span_mask, -1e7)
         # Shape: (batch_size, )
         log_marginal_likelihood_for_span = allenutil.logsumexp(log_likelihood_for_spans)
+
+        # Squeezing the batch-size 1
+        log_marginal_likelihood_for_span = log_marginal_likelihood_for_span.squeeze(-1)
 
         return log_marginal_likelihood_for_span
 
@@ -778,13 +845,16 @@ class DROPSemanticParser(DROPParserBase):
                                languages: List[DropLanguage],
                                batch_action2actionidx: List[Dict[str, int]],
                                device_id: int) -> Tuple[List[List[List[int]]],
-                                                        List[List[List[int]]]]:
+                                                        List[List[List[int]]],
+                                                        bool]:
 
         qtypes_supported = [dropconstants.DATECOMP_QTYPE, dropconstants.NUMCOMP_QTYPE]
+        instances_w_goldseqs = 0
+        total_instances = len(question_tokens)
 
         gold_actionseq_idxs: List[List[List[int]]] = []
         gold_actionseq_mask: List[List[List[int]]] = []
-        for idx in range(len(question_tokens)):
+        for idx in range(total_instances):
             instance_gold_actionseqs: List[List[int]] = []
             instance_actionseqs_mask: List[List[int]] = []
             qtokens = question_tokens[idx]
@@ -802,12 +872,13 @@ class DROPSemanticParser(DROPParserBase):
                     gold_actions: List[str] = languages[idx].logical_form_to_action_sequence(gold_logicalform)
                     actionseq_idxs: List[int] = [action2actionidx[a] for a in gold_actions]
                     actionseq_mask: List[int] = [1 for _ in range(len(actionseq_idxs))]
+                    instances_w_goldseqs += 1
                 elif qtype == dropconstants.NUMCOMP_QTYPE:
                     gold_logicalform, operator = getGoldLF_numcomparison(qtokens)
                     gold_actions: List[str] = languages[idx].logical_form_to_action_sequence(gold_logicalform)
                     actionseq_idxs: List[int] = [action2actionidx[a] for a in gold_actions]
                     actionseq_mask: List[int] = [1 for _ in range(len(actionseq_idxs))]
-
+                    instances_w_goldseqs += 1
                 else:
                     actionseq_idxs: List[int] = [0]
                     actionseq_mask: List[int] = [0]
@@ -816,41 +887,45 @@ class DROPSemanticParser(DROPParserBase):
                 gold_actionseq_idxs.append([actionseq_idxs])
                 gold_actionseq_mask.append([actionseq_mask])
 
-        # if device_id > -1:
-        #     batch_goldactions_tensor = torch.cuda.LongTensor(batch_actionseq_idxs)
-        #     batch_goldactions_mask = torch.cuda.LongTensor(*batch_goldactions_tensor.size(), device=device_id).fill_(1)
+        zero_gold_seqs = False
+        if instances_w_goldseqs == 0:
+            zero_gold_seqs = True
 
-        return (gold_actionseq_idxs, gold_actionseq_mask)
+        return (gold_actionseq_idxs, gold_actionseq_mask, zero_gold_seqs)
 
 
     @staticmethod
-    def find_valid_start_states(answer_as_question_spans: torch.LongTensor,
-                                answer_as_passage_spans: torch.LongTensor,
-                                batch_size: int) -> List[Set[Any]]:
-        """ Firgure out valid start types based on gold answers
-            If answer as question (passage) span exist, QuestionSpanAnswer (PassageSpanAnswer) are valid start types
+    def find_valid_start_states(answer_program_start_types: List[List[str]],
+                                batch_size: int) -> List[Union[Set, None]]:
+        """ For each instances, given answer_program_start_types as man-made strings,
+            return the set of valid LanguageTypes
+            If start-types for an instance is None, return None and the language should allow all types in that case.
 
-        answer_as_question_spans: (B, N1, 2)
-        answer_as_passage_spans: (B, N2, 2)
-
+            See the reader for all possible start_types
         Returns:
         --------
         start_types: `List[Set[Type]]`
             For each instance, a set of possible start_types
         """
 
-        # List containing 0/1 indicating whether a question / passage answer span is given
-        passage_span_ans_bool = [((answer_as_passage_spans[i] != -1).sum() > 0) for i in range(batch_size)]
-        question_span_ans_bool = [((answer_as_question_spans[i] != -1).sum() > 0) for i in range(batch_size)]
+        language_start_types: List[Union[Set, None]] = []
 
-        start_types = [set() for _ in range(batch_size)]
+        # Map from string passed by reader to LanguageType class
+        answer_start_type_mapping = {'passage_span': PassageSpanAnswer,
+                                     'year_difference': YearDifference,
+                                     'passage_number': PassageNumber}
+
         for i in range(batch_size):
-            if passage_span_ans_bool[i] > 0:
-                start_types[i].add(PassageSpanAnswer)
-            if question_span_ans_bool[i] > 0:
-                start_types[i].add(QuestionSpanAnswer)
+            answer_program_types: List[str] = answer_program_start_types[i]
+            if not answer_program_types:
+                language_start_types.append(None)
+            else:
+                language_types = set()
+                for start_type in answer_program_types:
+                    language_types.add(answer_start_type_mapping[start_type])
+                language_start_types.append(language_types)
 
-        return start_types
+        return language_start_types
 
 
     @staticmethod

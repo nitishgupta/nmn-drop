@@ -272,6 +272,9 @@ def getQuestionOperatorSwitchQA(question_answer,
     new_question_answer[constants.cleaned_question] = new_question_text
     new_question_answer[constants.question] = new_question_text
 
+    if "validated_answers" in new_question_answer:
+        new_question_answer.pop("validated_answers")
+
     new_question_answer["augmented_data"] = True
     new_question_answer[constants.query_id] = question_answer[constants.query_id] + '-dc-qop-switch'
     return new_question_answer

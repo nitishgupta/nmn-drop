@@ -32,7 +32,68 @@ local compareff_inputdim =
     "dataset_reader": {
       "type": std.extVar("DATASET_READER"),
       "lazy": false,
+      "skip_instances": true,
+      "token_indexers":
+        if tokenidx == "glove" then {
+          "tokens": {
+            "type": "single_id",
+            "lowercase_tokens": true
+          }
+        }
+        else if tokenidx == "bidaf" then {
+          "tokens": {
+              "type": "single_id",
+              "lowercase_tokens": true
+          },
+          "token_characters": {
+            "type": "characters",
+            "character_tokenizer": {
+                "byte_encoding": "utf-8",
+                "start_tokens": [
+                    259
+                ],
+                "end_tokens": [
+                    260,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                ]
+            }
+          }
+        }
+        else if tokenidx == "elmo" then {
+          "elmo": {
+            "type": "elmo_characters"
+          }
+        }
+        else if tokenidx == "qanet" then {
+          "tokens": {
+              "type": "single_id",
+              "lowercase_tokens": true
+          },
+          "token_characters": {
+              "type": "characters",
+              "min_padding_length": 5
+          }
+        }
+        else if tokenidx == "elmoglove" then {
+          "elmo": {
+            "type": "elmo_characters"
+          },
+          "tokens": {
+            "type": "single_id",
+            "lowercase_tokens": true
+          }
+        }
+      ,
+    },
 
+    "validation_dataset_reader": {
+      "type": std.extVar("DATASET_READER"),
+      "lazy": false,
+      "skip_instances": false,
       "token_indexers":
         if tokenidx == "glove" then {
           "tokens": {
@@ -286,9 +347,9 @@ local compareff_inputdim =
 
 
     "trainer": {
-        "num_serialized_models_to_keep": -1,
+        "num_serialized_models_to_keep": 10,
         "grad_norm": 5,
-        "patience": 10,
+        "patience": 20,
         "cuda_device": utils.parse_number(std.extVar("GPU")),
         "num_epochs": utils.parse_number(std.extVar("EPOCHS")),
         "shuffle": true,

@@ -8,9 +8,6 @@ from typing import List, Tuple, Dict, Union
 from datasets.drop import constants
 
 
-FILES_TO_MERGE = ['drop_dataset_train.json', 'drop_dataset_dev.json']
-
-
 def mergeDatasets(input_json1: str, input_json2: str, output_json: str) -> None:
     """ Merge DROP datasets from two different files.
         First make a union list of passages.
@@ -84,6 +81,10 @@ if __name__ == '__main__':
     dir1 = args.dir1
     dir2 = args.dir2
     outputdir = args.outputdir
+
+    os.makedirs(outputdir, exist_ok=True)
+
+    FILES_TO_MERGE = ['drop_dataset_train.json', 'drop_dataset_dev.json']
 
     for filename in FILES_TO_MERGE:
         print(filename)

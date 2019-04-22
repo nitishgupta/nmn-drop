@@ -76,43 +76,45 @@ class DropQANetPredictor(Predictor):
 
         out_str = ''
         metadata = outputs['metadata']
-        predicted_ans = outputs['best_span_ans_str']
+        predicted_ans = outputs['predicted_answer']
 
-        answer_as_passage_spans = outputs['answer_as_passage_spans']
-        instance_spans_for_all_progs = outputs['predicted_spans']
-        best_span = instance_spans_for_all_progs[0]
+        # answer_as_passage_spans = outputs['answer_as_passage_spans']
+        # instance_spans_for_all_progs = outputs['predicted_spans']
+        # best_span = instance_spans_for_all_progs[0]
 
         question = metadata['original_question']
         passage = metadata['original_passage']
-        answer_annotation_dict = metadata['answer_annotation']
+        answer_annotation_dicts = metadata['answer_annotations']
         passage_date_values = metadata['passage_date_values']
         passage_num_values = metadata['passage_number_values']
-        (exact_match, f1_score) = f1metric(predicted_ans, [answer_annotation_dict])
+        passage_year_diffs = metadata['passage_year_diffs']
+        (exact_match, f1_score) = f1metric(predicted_ans, answer_annotation_dicts)
 
         out_str += question + '\n'
         out_str += passage + '\n'
 
-        out_str += f'GoldAnswer: {answer_annotation_dict}' + '\n'
-        out_str += f"GoldPassageSpans:{answer_as_passage_spans}" + '\n'
+        out_str += f'GoldAnswer: {answer_annotation_dicts}' + '\n'
+        # out_str += f"GoldPassageSpans:{answer_as_passage_spans}" + '\n'
 
-        out_str += f"PredPassageSpan: {best_span}" + '\n'
+        # out_str += f"PredPassageSpan: {best_span}" + '\n'
         out_str += f'PredictedAnswer: {predicted_ans}' + '\n'
         out_str += f'F1:{f1_score} EM:{exact_match}' + '\n'
         out_str += f'Dates: {passage_date_values}' + '\n'
         out_str += f'Nums: {passage_num_values}' + '\n'
+        out_str += f'YearDiffs: {passage_year_diffs}' + '\n'
 
         logical_forms = outputs["logical_forms"]
         execution_vals = outputs["execution_vals"]
         actionseq_scores = outputs["batch_actionseq_scores"]
-        predicted_anspans = outputs["all_pred_ansspans"]
+        all_predicted_answers = outputs["all_predicted_answers"]
         if 'logical_forms':
-            for lf, d, ex_vals, progscore in zip(logical_forms, predicted_anspans, execution_vals, actionseq_scores):
+            for lf, d, ex_vals, progscore in zip(logical_forms, all_predicted_answers, execution_vals, actionseq_scores):
                 ex_vals = myutils.round_all(ex_vals, 1)
                 # Stripping the trailing new line
                 ex_vals_str = self._print_ExecutionValTree(ex_vals, 0).strip()
                 out_str += f"LogicalForm: {lf}\n"
                 out_str += f"Score: {progscore}\n"
-                out_str +=  f"Denotation: {d}\n"
+                out_str +=  f"Answer: {d}\n"
                 out_str += f"ExecutionTree:\n{ex_vals_str}"
                 out_str += f"\n"
                 # NUM_PROGS_TO_PRINT -= 1

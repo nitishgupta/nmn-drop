@@ -44,7 +44,8 @@ class DROPReader(DatasetReader):
                  question_length_limit: int = None,
                  passage_length_limit_for_evaluation: int = None,
                  question_length_limit_for_evaluation: int = None,
-                 only_strongly_supervised: bool = False) -> None:
+                 only_strongly_supervised: bool = False,
+                 skip_instances=False) -> None:
         super().__init__(lazy)
         self._tokenizer = tokenizer
         self._token_indexers = token_indexers or {"tokens": SingleIdTokenIndexer()}
@@ -55,9 +56,12 @@ class DROPReader(DatasetReader):
         self.passage_length_limit_for_eval = passage_length_limit_for_evaluation or passage_length_limit
         self.question_length_limit_for_eval = question_length_limit_for_evaluation or question_length_limit
         self.only_strongly_supervised = only_strongly_supervised
+        self.skip_instances = skip_instances
+        self.skipped_instances = 0
 
     @overrides
     def _read(self, file_path: str):
+        self.skipped_instances = 0
         # pylint: disable=logging-fstring-interpolation
         # if `file_path` is a URL, redirect to the cache
         is_train = "train" in str(file_path)
@@ -92,7 +96,12 @@ class DROPReader(DatasetReader):
                 answer_type = question_answer[constants.answer_type]
                 answer_passage_spans = question_answer[constants.answer_passage_spans]
                 answer_question_spans = question_answer[constants.answer_question_spans]
-                answer_annotation = question_answer["answer"] if "answer" in question_answer else None
+                answer_annotations = []
+                if "answer" in question_answer:
+                    answer_annotations.append(question_answer["answer"])
+                if "validated_answers" in question_answer:
+                    answer_annotations += question_answer["validated_answers"]
+                # answer_annotation = question_answer["answer"] if "answer" in question_answer else None
 
                 strongly_supervised = False
                 if constants.strongly_supervised in question_answer:
@@ -136,7 +145,7 @@ class DROPReader(DatasetReader):
                                                  numcomp_qspan_num_groundings,
                                                  question_id,
                                                  passage_id,
-                                                 answer_annotation,
+                                                 answer_annotations,
                                                  max_passage_len,
                                                  max_question_len,
                                                  drop_invalid=is_train)
@@ -179,7 +188,7 @@ class DROPReader(DatasetReader):
                          numcomp_qspan_num_groundings: Tuple[List[int], List[int]] = None,
                          question_id: str = None,
                          passage_id: str = None,
-                         answer_annotation: Dict[str, Union[str, Dict, List]] = None,
+                         answer_annotations: List[Dict[str, Union[str, Dict, List]]] = None,
                          max_passage_len: int = None,
                          max_question_len: int = None,
                          drop_invalid: bool = False) -> Union[Instance, None]:
@@ -207,27 +216,17 @@ class DROPReader(DatasetReader):
         if max_question_len is not None:
             question_tokens = question_tokens[: max_question_len]
 
-        # TODO(nitish): Only span answer supported. Extend to other types
-        answer_texts = answer_annotation["spans"]
-        answer_texts_for_evaluation = [' '.join(answer_texts)]
-
-        answer_info = {"answer_type": answer_type,
-                       "answer_texts": answer_texts_for_evaluation,
-                       "answer_passage_spans": answer_passage_spans,
-                       "answer_question_spans": answer_question_spans}
-        additional_metadata = {
+        metadata = {
             "original_passage": original_passage_text,
             "original_question": original_ques_text,
             # "original_numbers": numbers_in_passage,
             "passage_id": passage_id,
             "question_id": question_id,
-            "answer_annotation": answer_annotation
             # "candidate_additions": candidate_additions,
             # "candidate_subtractions": candidate_subtractions
         }
 
-        additional_metadata = additional_metadata or {}
-        fields: Dict[str, Field] = {}
+        fields = {}
 
         fields["actions"] = action_field
         # fields["languages"] = language_field
@@ -238,6 +237,8 @@ class DROPReader(DatasetReader):
         fields["passage"] = TextField(passage_tokens, self._token_indexers)
         fields["question"] = TextField(question_tokens, self._token_indexers)
 
+        # The normalization values in processed dataset are floats even if the pasage had ints. Converting ..
+        p_num_normvals = [int(x) if int(x) == x else x for x in p_num_normvals]
         passage_number_entidxs = p_num_entidxs
         passage_number_values = p_num_normvals
         passage_number_indices = [tokenidx for (_, tokenidx, _) in p_num_mens]
@@ -249,7 +250,7 @@ class DROPReader(DatasetReader):
         else:
             # No numbers found in the passage - making a fake number at the 0th token
             passage_number_idx2entidx[0] = 0
-            passage_number_values = [0]
+            passage_number_values = [-1]
         fields["passageidx2numberidx"] = ArrayField(np.array(passage_number_idx2entidx), padding_value=-1)
         fields["passage_number_values"] = MetadataField(passage_number_values)
 
@@ -269,7 +270,9 @@ class DROPReader(DatasetReader):
         fields["passage_date_values"] = MetadataField(passage_date_objs)
         passage_date_strvals = [str(d) for d in passage_date_objs]
 
-        metadata = additional_metadata
+        year_differences, year_differences_mat = self.get_year_difference_candidates(passage_date_objs)
+        fields["year_differences"] = MetadataField(year_differences)
+        fields["year_differences_mat"] = MetadataField(year_differences_mat)
 
         metadata.update({"passage_token_offsets": passage_offsets,
                          "question_token_offsets": question_offsets,
@@ -277,6 +280,7 @@ class DROPReader(DatasetReader):
                          "passage_tokens": [token.text for token in passage_tokens],
                          "passage_date_values": passage_date_strvals,
                          "passage_number_values": passage_number_values,
+                         "passage_year_diffs": year_differences
                          # "number_tokens": [token.text for token in number_tokens],
                          # "number_indices": number_indices
                         })
@@ -289,6 +293,7 @@ class DROPReader(DatasetReader):
         # Question Attention Supervision
         if strongly_supervised and ques_attn_supervision:
             # QAttn supervision, is a n-tuple of question attentions
+            ques_attn_supervision_reversed = (ques_attn_supervision[1], ques_attn_supervision[0])
             fields["qattn_supervision"] = ArrayField(np.array(ques_attn_supervision), padding_value=0)
         else:
             qlen = len(question_tokens)
@@ -298,6 +303,8 @@ class DROPReader(DatasetReader):
 
         # Date-comparison - Date Grounding Supervision
         if strongly_supervised and datecomp_ques_event_date_groundings:
+                datecomp_ques_event_date_groundings_reversed = (datecomp_ques_event_date_groundings[1],
+                                                                datecomp_ques_event_date_groundings[0])
                 fields["datecomp_ques_event_date_groundings"] = MetadataField(datecomp_ques_event_date_groundings)
         else:
             empty_date_grounding = [0.0] * len(passage_date_objs)
@@ -312,31 +319,83 @@ class DROPReader(DatasetReader):
             empty_passagenum_grounding_tuple = (empty_passagenum_grounding, empty_passagenum_grounding)
             fields["numcomp_qspan_num_groundings"] = MetadataField(empty_passagenum_grounding_tuple)
 
+        ########     ANSWER FIELDS      ###################
 
-        if answer_info:
-            metadata["answer_type"] = answer_info["answer_type"]
-            metadata["answer_texts"] = answer_info["answer_texts"]
+        if answer_annotations:
+            metadata.update({"answer_annotations": answer_annotations})
 
-            fields["answer_types"] = MetadataField(answer_info["answer_type"])
+            # Using the first one for training (really, there's only one)
+            answer_annotation = answer_annotations[0]
+            answer_type = "UNK"
+            if answer_annotation["spans"]:
+                answer_type = "spans"
+            elif answer_annotation["number"]:
+                answer_type = "number"
+            else:
+                raise NotImplementedError
 
-            passage_span_fields = \
-                [SpanField(span[0], span[1], fields["passage"]) for span in answer_info["answer_passage_spans"]]
-            if not passage_span_fields:
-                passage_span_fields.append(SpanField(-1, -1, fields["passage"]))
+            # This list contains the possible-start-types for programs that can yield the correct answer
+            # For example, if the answer is a number but also in passage, this will contain two keys
+            # If the answer is a number, we'll find which kind and that program-start-type will be added here
+            answer_program_start_types = []
 
+            # We've pre-parsed the span types to passage / question spans
+            if answer_passage_spans:
+                answer_program_start_types.append("passage_span")
+                passage_span_fields = \
+                    [SpanField(span[0], span[1], fields["passage"]) for span in answer_passage_spans]
+            else:
+                passage_span_fields = [SpanField(-1, -1, fields["passage"])]
             fields["answer_as_passage_spans"] = ListField(passage_span_fields)
 
-            question_span_fields = \
-                [SpanField(span[0], span[1], fields["question"]) for span in answer_info["answer_question_spans"]]
-            if not question_span_fields:
-                question_span_fields.append(SpanField(-1, -1, fields["question"]))
+            # Don't support question-spans-currently
+            # question_span_fields = \
+            #     [SpanField(span[0], span[1], fields["question"]) for span in answer_question_spans]
+            # if not question_span_fields:
+            #     question_span_fields.append(SpanField(-1, -1, fields["question"]))
+            # fields["answer_as_question_spans"] = ListField(question_span_fields)
 
-            fields["answer_as_question_spans"] = ListField(question_span_fields)
+            ans_as_passage_number = [0] * len(passage_number_values)
+            ans_as_year_difference = [0] * len(year_differences)
+            if answer_type == "number":
+                answer_text = answer_annotation["number"]
+                answer_number = float(answer_text)
+                answer_number = int(answer_number) if int(answer_number) == answer_number else answer_number
+
+                # if answer_number in passage_number_values:
+                #     answer_program_start_types.append("passage_number")
+                #     ans_as_passage_number_idx = passage_number_values.index(answer_number)
+                #     ans_as_passage_number[ans_as_passage_number_idx] = 1
+
+                if answer_number in year_differences:
+                    answer_program_start_types.append("year_difference")
+                    ans_as_year_difference_idx = year_differences.index(answer_number)
+                    ans_as_year_difference[ans_as_year_difference_idx] = 1
+
+            fields["answer_as_passage_number"] = MetadataField(ans_as_passage_number)
+            fields["answer_as_year_difference"] = MetadataField(ans_as_year_difference)
+
+            fields["answer_program_start_types"] = MetadataField(answer_program_start_types)
+
+            if self.skip_instances:
+                if len(answer_program_start_types) == 0:
+                    self.skipped_instances += 1
+                    print(f"Skipped instances: {self.skipped_instances}")
+                    # print("\nNo answer grounding")
+                    # print(original_ques_text)
+                    # print(original_passage_text)
+                    # print(answer_annotation)
+                    # print(year_differences)
+                    # print(passage_date_strvals)
+                    return None
+
 
         # TODO(nitish): Only using questions which have PassageSpan as answers
-        if not answer_info["answer_passage_spans"]:
+        '''
+        if not answer_passage_spans:
             # print("Not dealing with empty passage answers")
             return None
+        '''
 
         fields["metadata"] = MetadataField(metadata)
         return Instance(fields)
@@ -437,6 +496,46 @@ class DROPReader(DatasetReader):
             # answer_content is a string of number
             answer_texts = [answer_content]
         return answer_type, answer_texts
+
+
+    @staticmethod
+    def get_year_difference_candidates(passage_date_objs: List[Date]) -> Tuple[List[int], np.array]:
+        """ List of integers indicating all-possible year differences between the passage-dates
+            If year difference is not defined (year = -1) or negative, we don't consider such date-combinations
+
+            Returns the following:
+
+            Returns:
+            ---------
+            year_differences:
+                List[int] These are the possible year differences.
+            year_difference_mat: Binary np.array of shape (D, D, y_d)
+                Entry (i, j, k) == 1 denotes that D[i] - D[j] == year_differences[k]
+        """
+        num_date_objs = len(passage_date_objs)
+        # Adding zero-first since it'll definitely be added and makes sanity-checking easy
+        year_differences: List[int] = [0]
+
+        # If any year is -1, we consider the year difference to be 0
+        # If the year difference is negative, we consider the difference to be 0
+        for (date1, date2) in itertools.product(passage_date_objs, repeat=2):
+            year_diff = date1.year_diff(date2)
+            if year_diff >= 0:
+                if year_diff not in year_differences:
+                    year_differences.append(year_diff)
+
+        num_of_year_differences = len(year_differences)
+        # Making year_difference_mat
+        year_difference_mat = np.zeros(shape=(num_date_objs, num_date_objs, num_of_year_differences), dtype=int)
+        for ((date_idx1, date1), (date_idx2, date2)) in itertools.product(enumerate(passage_date_objs), repeat=2):
+            year_diff = date1.year_diff(date2)
+            if year_diff >= 0:
+                year_diff_idx = year_differences.index(year_diff)   # We know this will not fail
+                year_difference_mat[date_idx1, date_idx2, year_diff_idx] = 1
+
+        return year_differences, year_difference_mat
+
+
 
     @staticmethod
     def get_candidate_additions(numbers_in_passage: List[int],
