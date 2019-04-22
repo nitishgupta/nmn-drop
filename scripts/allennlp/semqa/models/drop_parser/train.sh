@@ -3,10 +3,10 @@
 export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
-# DATASET_NAME=num/num_prune_supervised
-DATASET_NAME=date/datecomp_after
-# DATASET_NAME=date_num/date_num_100
-# DATASET_NAME=num/how_many_years_after_the
+# DATASET_NAME=num/numcomp_prune_supervised
+# DATASET_NAME=date/datecomp_pruned_augment_100
+# DATASET_NAME=date_num/datecomp_numcomp
+DATASET_NAME=num/how_many_years_after_the
 
 DATASET_DIR=./resources/data/drop/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
@@ -71,9 +71,9 @@ SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/${DATASET_NAME}
 MODEL_DIR=drop_parser
 PD_1=BS_${BS}/LR_${LR}/Drop_${DROPOUT}/TOKENS_${TOKENIDX}/ED_${WEMB_DIM}/RG_${RG}/GACT_${GOLDACTIONS}/GPROGS_${GOLDPROGS}
 PD_2=QPSIMKEY_${QP_SIM_KEY}/QAL_${DENLOSS}/EXL_${EXCLOSS}/QATL_${QATTLOSS}/MML_${MMLLOSS}/SUPFIRST_${SUPFIRST}/SUPEPOCHS_${SUPEPOCHS}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/${PD_2}/S_${SEED}/test2
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/${PD_2}/S_${SEED}/reverse
 
-# SERIALIZATION_DIR=./resources/semqa/checkpoints/test
+SERIALIZATION_DIR=./resources/semqa/checkpoints/test_yearsafter
 
 #######################################################################################################################
 

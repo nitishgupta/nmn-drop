@@ -141,12 +141,15 @@ class QuestionSpanAnswer():
                  question_span_start_log_probs: Tensor,
                  question_span_end_log_probs: Tensor,
                  start_logits,
-                 end_logits) -> None:
+                 end_logits,
+                 loss=0.0,
+                 debug_value="") -> None:
         """ Tuple of start_log_probs and end_log_probs tensor """
         self.start_logits = start_logits
         self.end_logits = end_logits
         self._value = (question_span_start_log_probs, question_span_end_log_probs)
-        self.debug_value = ""
+        self.loss = loss
+        self.debug_value = debug_value
 
 
 class QuestionAttention():
@@ -208,6 +211,7 @@ def get_empty_language_object():
                                 year_differences=None,
                                 year_differences_mat=None,
                                 question_passage_attention=None,
+                                passage_question_attention=None,
                                 passage_token2date_similarity=None,
                                 passage_token2num_similarity=None,
                                 parameters=None,
@@ -245,6 +249,7 @@ class DropLanguage(DomainLanguage):
                  year_differences: List[int],
                  year_differences_mat: np.array,
                  question_passage_attention: Tensor,
+                 passage_question_attention: Tensor,
                  passage_token2date_similarity: Tensor,
                  passage_token2num_similarity: Tensor,
                  parameters: ExecutorParameters,
@@ -255,7 +260,7 @@ class DropLanguage(DomainLanguage):
                  debug=False) -> None:
 
         if start_types is None:
-            start_types = {PassageSpanAnswer, YearDifference} # , PassageNumber}
+            start_types = {PassageSpanAnswer, YearDifference, QuestionSpanAnswer}  # , PassageNumber}
 
         super().__init__(start_types=start_types)
 
@@ -301,6 +306,8 @@ class DropLanguage(DomainLanguage):
 
         # Shape: (question_length, passage_length)
         self.question_passage_attention = question_passage_attention  # initialization_returns["question_passage_attention"]
+        # Shape: (passage_length, question_length)
+        self.passage_question_attention = passage_question_attention
         # Shape: (passage_length, passage_length)
         self.passage_passage_token2date_similarity = passage_token2date_similarity
         self.passage_passage_token2num_similarity = passage_token2num_similarity
@@ -448,9 +455,10 @@ class DropLanguage(DomainLanguage):
             Softmax over these scores is the date dist.
         '''
 
+        # print(self.passage_passage_token2date_similarity)
+
         # Shape: (passage_length, ) -- indicating which tokens are dates
         passage_tokenidx2dateidx_mask = (self.passage_tokenidx2dateidx > -1)
-        passage_datetokens_mask_fl = passage_tokenidx2dateidx_mask.float()
 
         # (passage_length, passage_length)
         passage_passage_tokendate_attention = self.passage_passage_token2date_similarity * passage_attention.unsqueeze(1)
@@ -875,6 +883,10 @@ class DropLanguage(DomainLanguage):
         date_distribution_1, _ = self.compute_date_scores(passage_attention_1)
         date_distribution_2, _ = self.compute_date_scores(passage_attention_2)
 
+        # print(date_distribution_1)
+        # print(date_distribution_2)
+        # print()
+
         # Shape: (number_of_year_differences, )
         year_difference_dist = self.expected_date_year_difference(date_distribution_1, date_distribution_2)
 
@@ -905,7 +917,7 @@ class DropLanguage(DomainLanguage):
         passage_attn = (passage_attn * self.passage_mask)
 
         scaled_attentions = [passage_attn * sf for sf in self.parameters.passage_attention_scalingvals]
-        # Shape: (passage_lengths, num_scaling_factors)
+        # Shape: (passage_length, num_scaling_factors)
         scaled_passage_attentions = torch.stack(scaled_attentions, dim=1)
 
         # Shape: (passage_lengths, hidden_dim)
@@ -945,9 +957,65 @@ class DropLanguage(DomainLanguage):
                      debug_value=debug_value)
 
 
+    @predicate
+    def find_questionSpanAnswer(self, passage_attention: PassageAttention_answer) -> QuestionSpanAnswer:
+        passage_attn = passage_attention._value
+        # passage_attn = passage_attention
+
+        # Shape: (passage_length)
+        passage_attn = (passage_attn * self.passage_mask)
+
+
+        # Shape: (question_length)
+        question_attn = torch.sum(self.passage_question_attention * passage_attn.unsqueeze(1), dim=0)
+        question_attn = question_attn * self.question_mask
+
+        scaled_attentions = [question_attn * sf for sf in self.parameters.passage_attention_scalingvals]
+        # Shape: (question_length, num_scaling_factors)
+        scaled_question_attentions = torch.stack(scaled_attentions, dim=1)
+
+        # Shape: (question_length, hidden_dim)
+        ques_span_hidden_reprs = self.parameters.question_attention_to_span(scaled_question_attentions.unsqueeze(0),
+                                                                            self.question_mask.unsqueeze(0)).squeeze(0)
+
+        # Shape: (passage_lengths, 2)
+        question_span_logits = self.parameters.question_startend_predictor(ques_span_hidden_reprs)
+
+        # Shape: (passage_length)
+        span_start_logits = question_span_logits[:, 0]
+        span_end_logits = question_span_logits[:, 1]
+
+        span_start_logits = allenutil.replace_masked_values(span_start_logits, self.question_mask, -1e32)
+        span_end_logits = allenutil.replace_masked_values(span_end_logits, self.question_mask, -1e32)
+
+        span_start_log_probs = allenutil.masked_log_softmax(span_start_logits, self.question_mask)
+        span_end_log_probs = allenutil.masked_log_softmax(span_end_logits, self.question_mask)
+
+        span_start_log_probs = allenutil.replace_masked_values(span_start_log_probs,
+                                                               self.question_mask, -1e32)
+        span_end_log_probs = allenutil.replace_masked_values(span_end_log_probs,
+                                                             self.question_mask, -1e32)
+
+        loss = passage_attention.loss
+
+        debug_value = ""
+        if self._debug:
+            _, pattn_vis_most = dlutils.listTokensVis(question_attn, self.metadata["question_tokens"])
+            debug_value += f"Qattn: {pattn_vis_most}"
+
+        return QuestionSpanAnswer(question_span_start_log_probs=span_start_log_probs,
+                                  question_span_end_log_probs=span_end_log_probs,
+                                  start_logits=span_start_logits,
+                                  end_logits=span_end_logits,
+                                  loss=loss,
+                                  debug_value=debug_value)
+
 
 if __name__=='__main__':
     dl = get_empty_language_object()
+    print(dl.all_possible_productions())
     print(dl.get_nonterminal_productions())
+
+
 
     # print(spanans.__class__.__name__)

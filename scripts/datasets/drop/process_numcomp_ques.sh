@@ -4,9 +4,8 @@ ROOT_DIR=./resources/data/drop
 
 PREPROCESS_DIR=${ROOT_DIR}/preprocess_new
 
-NUM_DIR=${ROOT_DIR}/num
-NUM_PRUNE_DIR=${NUM_DIR}/num_prune_test
-NUM_PRUNE_SUP_DIR=${NUM_DIR}/num_prune_supervised_test
+NUM_PRUNE_DIR=${ROOT_DIR}/num/numcomp_prune
+NUM_PRUNE_SUP_DIR=${ROOT_DIR}/num/numcomp_prune_supervised
 
 mkdir ${NUM_PRUNE_DIR}
 mkdir ${NUM_PRUNE_SUP_DIR}

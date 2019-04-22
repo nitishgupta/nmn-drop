@@ -294,6 +294,14 @@ local compareff_inputdim =
             "bidirectional": true,
         },
 
+        "question_attention_to_span": {
+            "type": "gru",
+            "input_size": 4,
+            "hidden_size": 20,
+            "num_layers": 3,
+            "bidirectional": true,
+        },
+
         "bidafutils":
             if tokenidx == "bidaf" then {
                 "bidaf_model_path": std.extVar("BIDAF_MODEL_TAR"),
@@ -366,7 +374,7 @@ local compareff_inputdim =
             "type": "exponential",
             "decay": 0.9999
         },
-        "summary_interval": 10,
+        "summary_interval": 1,
         "validation_metric": "+f1"
     },
 

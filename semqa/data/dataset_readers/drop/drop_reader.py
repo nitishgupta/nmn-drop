@@ -294,7 +294,7 @@ class DROPReader(DatasetReader):
         if strongly_supervised and ques_attn_supervision:
             # QAttn supervision, is a n-tuple of question attentions
             ques_attn_supervision_reversed = (ques_attn_supervision[1], ques_attn_supervision[0])
-            fields["qattn_supervision"] = ArrayField(np.array(ques_attn_supervision), padding_value=0)
+            fields["qattn_supervision"] = ArrayField(np.array(ques_attn_supervision_reversed), padding_value=0)
         else:
             qlen = len(question_tokens)
             empty_question_attention = [0.0] * qlen
@@ -303,9 +303,9 @@ class DROPReader(DatasetReader):
 
         # Date-comparison - Date Grounding Supervision
         if strongly_supervised and datecomp_ques_event_date_groundings:
-                datecomp_ques_event_date_groundings_reversed = (datecomp_ques_event_date_groundings[1],
-                                                                datecomp_ques_event_date_groundings[0])
-                fields["datecomp_ques_event_date_groundings"] = MetadataField(datecomp_ques_event_date_groundings)
+            datecomp_ques_event_date_groundings_reversed = (datecomp_ques_event_date_groundings[1],
+                                                            datecomp_ques_event_date_groundings[0])
+            fields["datecomp_ques_event_date_groundings"] = MetadataField(datecomp_ques_event_date_groundings_reversed)
         else:
             empty_date_grounding = [0.0] * len(passage_date_objs)
             empty_date_grounding_tuple = (empty_date_grounding, empty_date_grounding)
@@ -313,7 +313,9 @@ class DROPReader(DatasetReader):
 
         # Number Comparison - Passage Number Grounding Supervision
         if strongly_supervised and numcomp_qspan_num_groundings:
-            fields["numcomp_qspan_num_groundings"] = MetadataField(numcomp_qspan_num_groundings)
+            numcomp_qspan_num_groundings_reversed = (numcomp_qspan_num_groundings[1],
+                                                     numcomp_qspan_num_groundings[0])
+            fields["numcomp_qspan_num_groundings"] = MetadataField(numcomp_qspan_num_groundings_reversed)
         else:
             empty_passagenum_grounding = [0.0] * len(passage_number_values)
             empty_passagenum_grounding_tuple = (empty_passagenum_grounding, empty_passagenum_grounding)
@@ -340,6 +342,7 @@ class DROPReader(DatasetReader):
             answer_program_start_types = []
 
             # We've pre-parsed the span types to passage / question spans
+
             if answer_passage_spans:
                 answer_program_start_types.append("passage_span")
                 passage_span_fields = \
@@ -348,12 +351,13 @@ class DROPReader(DatasetReader):
                 passage_span_fields = [SpanField(-1, -1, fields["passage"])]
             fields["answer_as_passage_spans"] = ListField(passage_span_fields)
 
-            # Don't support question-spans-currently
-            # question_span_fields = \
-            #     [SpanField(span[0], span[1], fields["question"]) for span in answer_question_spans]
-            # if not question_span_fields:
-            #     question_span_fields.append(SpanField(-1, -1, fields["question"]))
-            # fields["answer_as_question_spans"] = ListField(question_span_fields)
+            if answer_question_spans:
+                answer_program_start_types.append("question_span")
+                question_span_fields = \
+                    [SpanField(span[0], span[1], fields["question"]) for span in answer_question_spans]
+            else:
+                question_span_fields = [SpanField(-1, -1, fields["question"])]
+            fields["answer_as_question_spans"] = ListField(question_span_fields)
 
             ans_as_passage_number = [0] * len(passage_number_values)
             ans_as_year_difference = [0] * len(year_differences)
@@ -385,8 +389,8 @@ class DROPReader(DatasetReader):
                     # print(original_ques_text)
                     # print(original_passage_text)
                     # print(answer_annotation)
-                    # print(year_differences)
-                    # print(passage_date_strvals)
+                    # print(answer_passage_spans)
+                    # print(answer_question_spans)
                     return None
 
 

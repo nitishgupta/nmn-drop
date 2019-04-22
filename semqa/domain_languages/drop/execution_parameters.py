@@ -32,6 +32,7 @@ class ExecutorParameters(torch.nn.Module, Registrable):
                  modeling_proj_layer,
                  modeling_layer: Seq2SeqEncoder,
                  passage_attention_to_span: Seq2SeqEncoder,
+                 question_attention_to_span: Seq2SeqEncoder,
                  hidden_dim: int,
                  dropout: float = 0.0):
         super().__init__()
@@ -43,9 +44,13 @@ class ExecutorParameters(torch.nn.Module, Registrable):
         self._modeling_proj_layer = modeling_proj_layer
         self._modeling_layer: Seq2SeqEncoder = modeling_layer
 
-        self.passage_attention_to_span = passage_attention_to_span
         self.passage_attention_scalingvals = [1, 2, 5, 10]
+
+        self.passage_attention_to_span = passage_attention_to_span
         self.passage_startend_predictor = torch.nn.Linear(self.passage_attention_to_span.get_output_dim(), 2)
+
+        self.question_attention_to_span = question_attention_to_span
+        self.question_startend_predictor = torch.nn.Linear(self.question_attention_to_span.get_output_dim(), 2)
 
         passage_encoding_dim = self._phrase_layer.get_output_dim()
         question_encoding_dim = self._phrase_layer.get_output_dim()

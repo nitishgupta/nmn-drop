@@ -86,22 +86,31 @@ def removeDateCompPassageWeakAnnotations(dataset, annotation_for_numpassages):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input_trnfp')
-    parser.add_argument('--input_devfp')
-    parser.add_argument('--output_trnfp')
-    parser.add_argument('--output_devfp')
+    parser.add_argument('--input_dir')
+    parser.add_argument('--output_dir')
     parser.add_argument('--annotation_for_numpassages', type=int, required=True)
     args = parser.parse_args()
 
-    input_trnfp = args.input_trnfp
-    input_devfp = args.input_devfp
-    output_trnfp = args.output_trnfp
-    output_devfp = args.output_devfp
+    input_dir = args.input_dir
+    output_dir = args.output_dir
+
+    train_json = 'drop_dataset_train.json'
+    dev_json = 'drop_dataset_dev.json'
+
     annotation_for_numpassages = args.annotation_for_numpassages
+
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir, exist_ok=True)
+
+    input_trnfp = os.path.join(input_dir, train_json)
+    input_devfp = os.path.join(input_dir, dev_json)
+    output_trnfp = os.path.join(output_dir, train_json)
+    output_devfp = os.path.join(output_dir, dev_json)
 
     train_dataset = readDataset(input_trnfp)
     dev_dataset = readDataset(input_devfp)
 
+    print("Training questions .... ")
     new_train_dataset = removeDateCompPassageWeakAnnotations(train_dataset, annotation_for_numpassages)
 
     with open(output_trnfp, 'w') as f:

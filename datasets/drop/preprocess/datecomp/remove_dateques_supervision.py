@@ -6,6 +6,7 @@ from collections import defaultdict
 import datasets.drop.constants as constants
 import random
 import argparse
+import os
 
 random.seed(100)
 
@@ -133,14 +134,21 @@ if __name__=='__main__':
     print("Removing strong annotation for DateComp QAs")
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input_trnfp')
-    parser.add_argument('--input_devfp')
-    parser.add_argument('--output_trnfp')
-    parser.add_argument('--output_devfp')
+    parser.add_argument('--input_dir')
+    parser.add_argument('--output_dir')
     parser.add_argument('--annotation_for_numpassages', type=int, required=True)
     args = parser.parse_args()
 
+    input_dir = args.input_dir
+    output_dir = args.output_dir
+
+    train_json = 'drop_dataset_train.json'
+    dev_json = 'drop_dataset_dev.json'
+
     annotation_for_numpassages = args.annotation_for_numpassages
+
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir, exist_ok=True)
 
     input_trnfp = args.input_trnfp
     input_devfp = args.input_devfp

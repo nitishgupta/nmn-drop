@@ -82,7 +82,8 @@ if __name__ == '__main__':
     dir2 = args.dir2
     outputdir = args.outputdir
 
-    os.makedirs(outputdir, exist_ok=True)
+    # Raise error if directory already exists
+    os.makedirs(outputdir)
 
     FILES_TO_MERGE = ['drop_dataset_train.json', 'drop_dataset_dev.json']
 
@@ -91,6 +92,9 @@ if __name__ == '__main__':
         file1 = os.path.join(dir1, filename)
         file2 = os.path.join(dir2, filename)
         outputfile = os.path.join(outputdir, filename)
+        print(f"File1: {file1}")
+        print(f"File2: {file2}")
+        print(f"OutFile: {outputfile}")
 
         mergeDatasets(input_json1=file1, input_json2=file2, output_json=outputfile)
 

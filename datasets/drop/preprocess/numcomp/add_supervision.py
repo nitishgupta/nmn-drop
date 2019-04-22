@@ -210,7 +210,7 @@ def addSupervision(input_json: str, output_json: str, output_txt: str, THRESHOLD
             1. Question attention -- two attention values for the spans for which the numbers will be compared
                 constants.ques_attention_supervision -- holds a 2-tuple of attentions
             2. Number supervision -- for the two spans, a passage_num_grounding and their values. These satisfy the
-                coherency between the question operator and the values we ground to. Similar to prune_date_comparison.py
+                coherency between the question operator and the values we ground to. Similar to depr_prune_date_comparison.py
 
                 Fields added:
                 constants.numcomp_qspan_num_groundings - 2-tuple containing number grounding
