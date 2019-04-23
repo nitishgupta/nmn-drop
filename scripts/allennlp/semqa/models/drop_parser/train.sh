@@ -3,7 +3,7 @@
 export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
-DATASET_NAME=date/datecomp_pruned_augment_100
+DATASET_NAME=num/numcomp_prune_supervised_100
 
 DATASET_DIR=./resources/data/drop/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json

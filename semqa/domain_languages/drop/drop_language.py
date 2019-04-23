@@ -489,9 +489,10 @@ class DropLanguage(DomainLanguage):
         ''' normalized method with method 2 '''
         date_distribution = passage_attention.new_zeros(self.num_passage_dates)
         date_distribution.scatter_add_(0, masked_passage_tokenidx2dateidx, masked_passage_datetoken_probs)
-        date_scores = date_distribution
 
-        return date_distribution, date_scores
+        date_distribution = torch.clamp(date_distribution, min=1e-20, max=1 - 1e-20)
+
+        return date_distribution, date_distribution
 
     def compute_num_distribution(self, passage_attention: Tensor):
         ''' Given a passage over passage token2num attention (normalized), and an additional passage attention
@@ -526,6 +527,8 @@ class DropLanguage(DomainLanguage):
         num_distribution = passage_attention.new_zeros(self.num_passage_nums)
         num_distribution.scatter_add_(0, masked_passage_tokenidx2numidx, masked_passage_numtoken_probs)
         num_scores = num_distribution
+
+        num_distribution = torch.clamp(num_distribution, min=1e-20, max=1 - 1e-20)
 
         return num_distribution, num_distribution
 
