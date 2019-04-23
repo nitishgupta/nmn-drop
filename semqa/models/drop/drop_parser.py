@@ -19,7 +19,9 @@ from allennlp.nn import InitializerApplicator, RegularizerApplicator
 from allennlp.models.reading_comprehension.util import get_best_span
 from allennlp.state_machines.transition_functions import BasicTransitionFunction
 from allennlp.state_machines.trainers.maximum_marginal_likelihood import MaximumMarginalLikelihood
-from semqa.state_machines.constrained_beam_search import ConstrainedBeamSearch
+from allennlp.state_machines import BeamSearch
+from allennlp.state_machines import ConstrainedBeamSearch
+from semqa.state_machines.constrained_beam_search import ConstrainedBeamSearch as MyConstrainedBeamSearch
 from semqa.state_machines.transition_functions.linking_transition_func_emb import LinkingTransitionFunctionEmbeddings
 from allennlp.training.metrics import Average, DropEmAndF1
 from semqa.models.utils.bidaf_utils import PretrainedBidafModelUtils
@@ -179,7 +181,8 @@ class DROPSemanticParser(DROPParserBase):
                  # passage_token_to_date: Seq2SeqEncoder,
                  passage_attention_to_span: Seq2SeqEncoder,
                  question_attention_to_span: Seq2SeqEncoder,
-                 decoder_beam_search: ConstrainedBeamSearch,
+                 beam_size: int,
+                 # decoder_beam_search: ConstrainedBeamSearch,
                  max_decoding_steps: int,
                  qp_sim_key: str,
                  goldactions: bool = None,
@@ -239,7 +242,8 @@ class DROPSemanticParser(DROPParserBase):
                                                                  dropout=dropout)
         '''
 
-        self._decoder_beam_search = decoder_beam_search
+        self._beam_size = beam_size
+        self._decoder_beam_search = BeamSearch(beam_size=self._beam_size)
         self._max_decoding_steps = max_decoding_steps
         self._action_padding_index = -1
 
@@ -307,8 +311,8 @@ class DROPSemanticParser(DROPParserBase):
         self.qattloss = qattloss
         self.mmlloss = mmlloss
 
-        # self._passage_date_bias = torch.nn.Parameter(torch.FloatTensor(1))
-        # torch.nn.init.normal_(self._passage_date_bias, mean=0.0, std=0.00001)
+        self._passage_date_bias = torch.nn.Parameter(torch.FloatTensor(1))
+        torch.nn.init.normal_(self._passage_date_bias, mean=0.0, std=0.00001)
 
         initializers(self)
 
@@ -332,6 +336,7 @@ class DROPSemanticParser(DROPParserBase):
                 numcomp_qspan_num_groundings: List[Tuple[List[int], List[int]]] = None,
                 strongly_supervised: List[bool] = None,
                 qtypes: List[str] = None,
+                gold_action_seqs: List[Tuple[List[List[int]], List[List[int]]]]=None,
                 qattn_supervision: torch.FloatTensor = None,
                 epoch_num: List[int] = None,
                 metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
@@ -391,12 +396,10 @@ class DROPSemanticParser(DROPParserBase):
         else:
             raise NotImplementedError
 
-
-
         # Shape: (batch_size, question_length, passage_length)
         question_passage_similarity = self._executor_parameters.dotprod_matrix_attn(question_sim_repr,
                                                                                     passage_sim_repr)
-        question_passage_similarity = self._dropout(question_passage_similarity)
+        # question_passage_similarity = self._dropout(question_passage_similarity)
         # Shape: (batch_size, question_length, passage_length)
         question_passage_attention = allenutil.masked_softmax(question_passage_similarity,
                                                               passage_mask.unsqueeze(1),
@@ -409,8 +412,8 @@ class DROPSemanticParser(DROPParserBase):
                                                               memory_efficient=True)
 
         # Shape: (batch_size, passage_length, passage_length)
-        passage_passage_token2date_similarity = self._executor_parameters.passage_to_date_attention(
-                                                        encoded_passage, encoded_passage)
+        passage_passage_token2date_similarity = self._executor_parameters.passage_to_date_attention(encoded_passage,
+                                                                                                    encoded_passage)
         passage_passage_token2date_similarity = self._dropout(passage_passage_token2date_similarity)
         passage_passage_token2date_similarity = passage_passage_token2date_similarity * passage_mask.unsqueeze(1)
         passage_passage_token2date_similarity = passage_passage_token2date_similarity * passage_mask.unsqueeze(2)
@@ -425,8 +428,8 @@ class DROPSemanticParser(DROPParserBase):
                                                  passage_tokenidx2dateidx_mask.unsqueeze(1))
 
         # Shape: (batch_size, passage_length, passage_length)
-        passage_passage_token2num_similarity = self._executor_parameters.passage_to_num_attention(
-            encoded_passage, encoded_passage)
+        passage_passage_token2num_similarity = self._executor_parameters.passage_to_num_attention(encoded_passage,
+                                                                                                  encoded_passage)
         passage_passage_token2num_similarity = self._dropout(passage_passage_token2num_similarity)
         passage_passage_token2num_similarity = passage_passage_token2num_similarity * passage_mask.unsqueeze(1)
         passage_passage_token2num_similarity = passage_passage_token2num_similarity * passage_mask.unsqueeze(2)
@@ -457,11 +460,6 @@ class DROPSemanticParser(DROPParserBase):
         p2pnum_similarity_aslist = [passage_passage_token2num_similarity[i] for i in range(batch_size)]
         # passage_token2datetoken_sim_aslist = [passage_token2datetoken_similarity[i] for i in range(batch_size)]
 
-        # Based on the gold answer - figure out possible start types for the instance_language
-        # if answer_as_passage_spans:
-        batch_start_types: List[Union[Set, None]] = self.find_valid_start_states(
-                                                        answer_program_start_types=answer_program_start_types,
-                                                        batch_size=batch_size)
 
         languages = [DropLanguage(rawemb_question=question_rawemb_aslist[i],
                                   embedded_question=question_embedded_aslist[i],
@@ -484,25 +482,110 @@ class DROPSemanticParser(DROPParserBase):
                                   passage_token2date_similarity=p2pdate_similarity_aslist[i],
                                   passage_token2num_similarity=p2pnum_similarity_aslist[i],
                                   parameters=self._executor_parameters,
-                                  start_types=batch_start_types[i],
+                                  start_types=None, # batch_start_types[i],
                                   device_id=device_id,
                                   debug=self._debug,
                                   metadata=metadata[i]) for i in range(batch_size)]
 
-        (initial_state,
-         batch_action2actionidx,
-         batch_actionidx2actionstr) = self.getInitialDecoderState(question, languages, actions, encoded_question,
-                                                                  question_mask, question_encoded_final_state,
-                                                                  question_encoded_aslist, question_mask_aslist,
-                                                                  batch_size)
+        action2idx_map = {rule: i for i, rule in enumerate(languages[0].all_possible_productions())}
+        idx2action_map = languages[0].all_possible_productions()
 
+        # TODO(nitish): While training, we know the correct start-types for all instances and the gold-programs,
+        # for some. For instances,
+        #   with gold-programs, we should run a ConstrainedBeamSearch with target_sequences,
+        #   with start-types, figure out the valid start-action-ids and run ConstrainedBeamSearch with firststep_allo..
+        # In Validation, we should **always** be running an un-constrained BeamSearch
+        mml_loss = 0
+        if self.training:
+            # If any instance is strongly supervised, then we need to divide the batch into supervised / unsupervised
+            # and run fully-constrained decoding on supervised, and start-type-constrained-decoding on the rest
+            if any(strongly_supervised):
+                supervised_instances = [i for (i, ss) in enumerate(strongly_supervised) if ss is True]
+                unsupervised_instances = [i for (i, ss) in enumerate(strongly_supervised) if ss is False]
 
-        # Mapping[int, Sequence[StateType]]
-        best_final_states = self._decoder_beam_search.search(self._max_decoding_steps,
-                                                             initial_state,
-                                                             self._decoder_step,
-                                                             # firststep_allowed_actions=firststep_action_ids,
-                                                             keep_final_unfinished_states=False)
+                # List of (gold_actionseq_idxs, gold_actionseq_masks) -- for supervised instances
+                supervised_gold_actionseqs = self._select_indices_from_list(gold_action_seqs, supervised_instances)
+                s_gold_actionseq_idxs, s_gold_actionseq_masks = zip(*supervised_gold_actionseqs)
+                s_gold_actionseq_idxs = list(s_gold_actionseq_idxs)
+                s_gold_actionseq_masks = list(s_gold_actionseq_masks)
+                (supervised_initial_state, _, _) = self.initialState_forInstanceIndices(supervised_instances,
+                                                                                        languages, actions,
+                                                                                        encoded_question,
+                                                                                        question_mask,
+                                                                                        question_encoded_final_state,
+                                                                                        question_encoded_aslist,
+                                                                                        question_mask_aslist)
+                constrained_search = ConstrainedBeamSearch(self._beam_size,
+                                                           allowed_sequences=s_gold_actionseq_idxs,
+                                                           allowed_sequence_mask=s_gold_actionseq_masks)
+
+                supervised_final_states = constrained_search.search(initial_state=supervised_initial_state,
+                                                                    transition_function=self._decoder_step)
+
+                for instance_states in supervised_final_states.values():
+                    scores = [state.score[0].view(-1) for state in instance_states]
+                    mml_loss += -allenutil.logsumexp(torch.cat(scores))
+                mml_loss = mml_loss / len(supervised_final_states)
+
+                if len(unsupervised_instances) > 0:
+                    (unsupervised_initial_state, _, _) = self.initialState_forInstanceIndices(unsupervised_instances,
+                                                                                              languages, actions,
+                                                                                              encoded_question,
+                                                                                              question_mask,
+                                                                                              question_encoded_final_state,
+                                                                                              question_encoded_aslist,
+                                                                                              question_mask_aslist)
+
+                    unsupervised_answer_types: List[List[str]] = self._select_indices_from_list(
+                                                                                    answer_program_start_types,
+                                                                                    unsupervised_instances)
+                    unsupervised_ins_start_actionids: List[Set[int]] = self.get_valid_start_actionids(
+                                                                            answer_types=unsupervised_answer_types,
+                                                                            action2actionidx=action2idx_map)
+
+                    firststep_constrained_search = MyConstrainedBeamSearch(self._beam_size)
+                    unsup_final_states = firststep_constrained_search.search(num_steps=self._max_decoding_steps,
+                                                                             initial_state=unsupervised_initial_state,
+                                                                             transition_function=self._decoder_step,
+                                                                             firststep_allowed_actions=\
+                                                                                    unsupervised_ins_start_actionids,
+                                                                             keep_final_unfinished_states=False)
+                else:
+                    unsup_final_states = []
+
+                # Merge final_states for supervised and unsupervised instances
+                best_final_states = self.merge_final_states(supervised_final_states,
+                                                            unsup_final_states,
+                                                            supervised_instances,
+                                                            unsupervised_instances)
+
+            else:
+                (initial_state, _, _) = self.getInitialDecoderState(languages, actions, encoded_question,
+                                                                    question_mask, question_encoded_final_state,
+                                                                    question_encoded_aslist, question_mask_aslist,
+                                                                    batch_size)
+                batch_valid_start_actionids: List[Set[int]] = self.get_valid_start_actionids(
+                                                                        answer_types=answer_program_start_types,
+                                                                        action2actionidx=action2idx_map)
+                search = MyConstrainedBeamSearch(self._beam_size)
+                # Mapping[int, Sequence[StateType]])
+                best_final_states = search.search(self._max_decoding_steps,
+                                                  initial_state,
+                                                  self._decoder_step,
+                                                  firststep_allowed_actions=batch_valid_start_actionids,
+                                                  keep_final_unfinished_states=False)
+        else:
+            (initial_state,
+             _,
+             _) = self.getInitialDecoderState(languages, actions, encoded_question,
+                                              question_mask, question_encoded_final_state,
+                                              question_encoded_aslist, question_mask_aslist,
+                                              batch_size)
+            # This is unconstrained beam-search
+            best_final_states = self._decoder_beam_search.search(self._max_decoding_steps,
+                                                                 initial_state,
+                                                                 self._decoder_step,
+                                                                 keep_final_unfinished_states=False)
 
         # batch_actionidxs: List[List[List[int]]]: All action sequence indices for each instance in the batch
         # batch_actionseqs: List[List[List[str]]]: All decoded action sequences for each instance in the batch
@@ -554,14 +637,14 @@ class DROPSemanticParser(DROPParserBase):
                                                numcomp_qspan_num_groundings,
                                                device_id)
 
-        # For printing predicted - programs
+        # # For printing predicted - programs
         # for idx, instance_progs in enumerate(batch_actionseqs):
         #     print(f"InstanceIdx:{idx}")
         #     print(metadata[idx]["question_tokens"])
         #     scores = batch_actionseq_scores[idx]
         #     for prog, score in zip(instance_progs, scores):
-        #         # print(f"{languages[idx].action_sequence_to_logical_form(prog)} : {score}")
-        #         print(f"{prog} : {score}")
+        #         print(f"{languages[idx].action_sequence_to_logical_form(prog)} : {score}")
+        #         # print(f"{prog} : {score}")
         #     print("\n")
 
         # List[List[Any]], List[List[str]]: Denotations and their types for all instances
@@ -590,36 +673,13 @@ class DROPSemanticParser(DROPParserBase):
 
             if self.qattloss:
                 # Compute Question Attention Supervision auxiliary loss
-                qattn_loss = self._ques_attention_loss(batch_actionseqs,
-                                                       batch_actionseq_sideargs,
-                                                       qtypes,
-                                                       strongly_supervised,
-                                                       qattn_supervision)
+                qattn_loss = self._ques_attention_loss(batch_actionseqs, batch_actionseq_sideargs, qtypes,
+                                                       strongly_supervised, qattn_supervision)
                 if qattn_loss != 0.0:
                     self.qattloss_metric(qattn_loss.item())
                 total_aux_loss += qattn_loss
 
             if self.mmlloss:
-                (gold_actionseq_idxs,
-                 gold_actionseq_mask,
-                 zero_gold_seqs) = self._gold_actionseq_forMML(qtypes=qtypes,
-                                                               strongly_supervised=strongly_supervised,
-                                                               question_tokens=[metadata[idx]["question_tokens"]
-                                                                                for idx in range(batch_size)],
-                                                               languages=languages,
-                                                               batch_action2actionidx=batch_action2actionidx,
-                                                               device_id=device_id)
-                # for i in range(batch_size):
-                #     print(metadata[i]["question_tokens"])
-                #     actionstr_seq = [batch_actionidx2actionstr[i][ii] for ii in gold_actionseq_idxs[i][0]]
-                #     lf = languages[i].action_sequence_to_logical_form(actionstr_seq)
-                #     print(lf)
-                mml_loss = 0.0
-                if not zero_gold_seqs:
-                    mml_loss = self._mml.decode(initial_state=initial_state,
-                                                transition_function=self._decoder_step,
-                                                supervision=(gold_actionseq_idxs, gold_actionseq_mask))['loss']
-
                 if mml_loss != 0.0:
                     self.mmlloss_metric(mml_loss.item())
                 total_aux_loss += mml_loss
@@ -674,16 +734,7 @@ class DROPSemanticParser(DROPParserBase):
                             gold_year_difference_dist = allenutil.move_to_device(
                                                                     torch.FloatTensor(answer_as_year_difference[i]),
                                                                     cuda_device=device_id)
-
                             log_likelihood = torch.sum(pred_year_diff_log_probs * gold_year_difference_dist)
-
-                            # print(pred_year_diff_log_probs)
-                            # print(gold_year_difference_dist)
-                            # print(log_likelihood)
-
-                            # print(pred_year_difference_dist)
-                            # print(gold_year_difference_dist)
-                            # print(log_likelihood)
 
                         # Here implement losses for other program-return-types in else-ifs
                         else:
@@ -714,8 +765,6 @@ class DROPSemanticParser(DROPParserBase):
                     denotation_loss += -1.0 * instance_marginal_log_likelihood
 
                 batch_denotation_loss = denotation_loss / batch_size
-
-            # print(f"\n  LOSS: {batch_denotation_loss}\n")
 
             self.modelloss_metric(batch_denotation_loss.item())
             output_dict["loss"] = batch_denotation_loss + total_aux_loss
@@ -888,6 +937,48 @@ class DROPSemanticParser(DROPParserBase):
 
         return log_marginal_likelihood_for_span
 
+    @staticmethod
+    def get_valid_start_actionids(answer_types: List[List[str]],
+                                  action2actionidx: Dict[str, int]) -> List[Set[int]]:
+        """ For each instances, given answer_types as man-made strings, return the set of valid start action ids
+            that return an object of that type.
+            For example, given start_type as 'passage_span', '@start@ -> PassageSpanAnswer' is a valid start action
+            See the reader for all possible values of start_types
+
+            TODO(nitish): Instead of the reader passing in arbitrary strings and maintaining a mapping here,
+            TODO(nitish): we can pass in the names of the LanguageObjects directly and make the start-action-str
+                          in a programmatic manner.
+
+            This is used while *training* to run constrained-beam-search to only search through programs for which
+            the gold answer is known. These *** shouldn't *** beused during validation
+        Returns:
+        --------
+        start_types: `List[Set[int]]`
+            For each instance, a set of possible start_types
+        """
+
+        # Map from string passed by reader to LanguageType class
+        answer_type_to_action_mapping = {'passage_span': '@start@ -> PassageSpanAnswer',
+                                         'year_difference': '@start@ -> YearDifference',
+                                         # 'passage_number': PassageNumber,
+                                         'question_span': '@start@ -> QuestionSpanAnswer'}
+
+        valid_start_action_ids: List[Set[int]] = []
+        for i in range(len(answer_types)):
+            answer_program_types: List[str] = answer_types[i]
+            start_action_ids = set()
+            for start_type in answer_program_types:
+                if start_type in answer_type_to_action_mapping:
+                    actionstr = answer_type_to_action_mapping[start_type]
+                    action_id = action2actionidx[actionstr]
+                    start_action_ids.add(action_id)
+                else:
+                    print(f"StartType: {start_type} -- {answer_type_to_action_mapping}")
+                    raise RuntimeError
+            valid_start_action_ids.append(start_action_ids)
+
+        return valid_start_action_ids
+
 
     def _ques_attention_loss(self,
                              batch_actionseqs: List[List[List[str]]],
@@ -969,116 +1060,80 @@ class DROPSemanticParser(DROPParserBase):
             return -1 * (loss/normalizer)
 
 
-    def _gold_actionseq_forMML(self,
-                               qtypes: List[str],
-                               strongly_supervised: List[bool],
-                               question_tokens: List[List[str]],
-                               languages: List[DropLanguage],
-                               batch_action2actionidx: List[Dict[str, int]],
-                               device_id: int) -> Tuple[List[List[List[int]]],
-                                                        List[List[List[int]]],
-                                                        bool]:
-
-        qtypes_supported = [dropconstants.DATECOMP_QTYPE, dropconstants.NUMCOMP_QTYPE]
-        instances_w_goldseqs = 0
-        total_instances = len(question_tokens)
-
-        gold_actionseq_idxs: List[List[List[int]]] = []
-        gold_actionseq_mask: List[List[List[int]]] = []
-        for idx in range(total_instances):
-            instance_gold_actionseqs: List[List[int]] = []
-            instance_actionseqs_mask: List[List[int]] = []
-            qtokens = question_tokens[idx]
-            strongly_supervised_ins = strongly_supervised[idx]
-            qtype = qtypes[idx]
-            action2actionidx = batch_action2actionidx[idx]
-            if (not strongly_supervised_ins) or (qtype not in qtypes_supported):
-                instance_gold_actionseqs.append([-1])
-                instance_actionseqs_mask.append([0])
-                gold_actionseq_idxs.append(instance_gold_actionseqs)
-                gold_actionseq_mask.append(instance_actionseqs_mask)
-            else:
-                if qtype == dropconstants.DATECOMP_QTYPE:
-                    gold_logicalforms = getGoldLF_datecomparison(qtokens, languages[idx])
-                elif qtype == dropconstants.NUMCOMP_QTYPE:
-                    gold_logicalforms = getGoldLF_numcomparison(qtokens, languages[idx])
-                else:
-                    gold_logicalforms = []
-                    actionseq_idxs: List[int] = [[0]]
-                    actionseq_mask: List[int] = [[0]]
-                    raise NotImplementedError
-                # list_actionseq_idxs: List[List[int]] = []
-                # list_actionseq_mask: List[List[int]] = []
-                for logical_form in gold_logicalforms:
-                    try:
-                        gold_actions: List[str] = languages[idx].logical_form_to_action_sequence(logical_form)
-                        actionseq_idxs: List[int] = [action2actionidx[a] for a in gold_actions]
-                        actionseq_mask: List[int] = [1 for _ in range(len(actionseq_idxs))]
-                        instance_gold_actionseqs.append(actionseq_idxs)
-                        instance_actionseqs_mask.append(actionseq_mask)
-                        instances_w_goldseqs += 1
-                    except:
-                        instance_gold_actionseqs.append([0])
-                        instance_actionseqs_mask.append([0])
-
-                # elif qtype == dropconstants.NUMCOMP_QTYPE:
-                #     gold_logicalform, operator = getGoldLF_numcomparison(qtokens)
-                #     try:
-                #         gold_actions: List[str] = languages[idx].logical_form_to_action_sequence(gold_logicalform)
-                #         actionseq_idxs: List[int] = [action2actionidx[a] for a in gold_actions]
-                #         actionseq_mask: List[int] = [1 for _ in range(len(actionseq_idxs))]
-                #         instances_w_goldseqs += 1
-                #     except:
-                #         actionseq_idxs: List[int] = [0]
-                #         actionseq_mask: List[int] = [0]
-                # else:
-                #     actionseq_idxs: List[int] = [0]
-                #     actionseq_mask: List[int] = [0]
-                #     raise NotImplementedError
-
-                gold_actionseq_idxs.append(instance_gold_actionseqs)
-                gold_actionseq_mask.append(instance_actionseqs_mask)
-
-        zero_gold_seqs = False
-        if instances_w_goldseqs == 0:
-            zero_gold_seqs = True
-
-        return (gold_actionseq_idxs, gold_actionseq_mask, zero_gold_seqs)
-
-
-    @staticmethod
-    def find_valid_start_states(answer_program_start_types: List[List[str]],
-                                batch_size: int) -> List[Union[Set, None]]:
-        """ For each instances, given answer_program_start_types as man-made strings,
-            return the set of valid LanguageTypes
-            If start-types for an instance is None, return None and the language should allow all types in that case.
-
-            See the reader for all possible start_types
-        Returns:
-        --------
-        start_types: `List[Set[Type]]`
-            For each instance, a set of possible start_types
-        """
-
-        language_start_types: List[Union[Set, None]] = []
-
-        # Map from string passed by reader to LanguageType class
-        answer_start_type_mapping = {'passage_span': PassageSpanAnswer,
-                                     'year_difference': YearDifference,
-                                     'passage_number': PassageNumber,
-                                     'question_span': QuestionSpanAnswer}
-
-        for i in range(batch_size):
-            answer_program_types: List[str] = answer_program_start_types[i]
-            if not answer_program_types:
-                language_start_types.append(None)
-            else:
-                language_types = set()
-                for start_type in answer_program_types:
-                    language_types.add(answer_start_type_mapping[start_type])
-                language_start_types.append(language_types)
-
-        return language_start_types
+    # def _gold_actionseq_forMML(self,
+    #                            qtypes: List[str],
+    #                            strongly_supervised: List[bool],
+    #                            question_tokens: List[List[str]],
+    #                            languages: List[DropLanguage],
+    #                            action2actionidx: Dict[str, int],
+    #                            device_id: int) -> Tuple[List[List[List[int]]],
+    #                                                     List[List[List[int]]],
+    #                                                     bool]:
+    #
+    #     qtypes_supported = [dropconstants.DATECOMP_QTYPE, dropconstants.NUMCOMP_QTYPE]
+    #     instances_w_goldseqs = 0
+    #     total_instances = len(question_tokens)
+    #
+    #     gold_actionseq_idxs: List[List[List[int]]] = []
+    #     gold_actionseq_mask: List[List[List[int]]] = []
+    #     for idx in range(total_instances):
+    #         instance_gold_actionseqs: List[List[int]] = []
+    #         instance_actionseqs_mask: List[List[int]] = []
+    #         qtokens = question_tokens[idx]
+    #         strongly_supervised_ins = strongly_supervised[idx]
+    #         qtype = qtypes[idx]
+    #         if (not strongly_supervised_ins) or (qtype not in qtypes_supported):
+    #             instance_gold_actionseqs.append([-1])
+    #             instance_actionseqs_mask.append([0])
+    #             gold_actionseq_idxs.append(instance_gold_actionseqs)
+    #             gold_actionseq_mask.append(instance_actionseqs_mask)
+    #         else:
+    #             if qtype == dropconstants.DATECOMP_QTYPE:
+    #                 gold_logicalforms = getGoldLF_datecomparison(qtokens, languages[idx])
+    #             elif qtype == dropconstants.NUMCOMP_QTYPE:
+    #                 gold_logicalforms = getGoldLF_numcomparison(qtokens, languages[idx])
+    #             else:
+    #                 gold_logicalforms = []
+    #                 actionseq_idxs: List[int] = [[0]]
+    #                 actionseq_mask: List[int] = [[0]]
+    #                 raise NotImplementedError
+    #             # list_actionseq_idxs: List[List[int]] = []
+    #             # list_actionseq_mask: List[List[int]] = []
+    #             for logical_form in gold_logicalforms:
+    #                 try:
+    #                     gold_actions: List[str] = languages[idx].logical_form_to_action_sequence(logical_form)
+    #                     actionseq_idxs: List[int] = [action2actionidx[a] for a in gold_actions]
+    #                     actionseq_mask: List[int] = [1 for _ in range(len(actionseq_idxs))]
+    #                     instance_gold_actionseqs.append(actionseq_idxs)
+    #                     instance_actionseqs_mask.append(actionseq_mask)
+    #                     instances_w_goldseqs += 1
+    #                 except:
+    #                     instance_gold_actionseqs.append([0])
+    #                     instance_actionseqs_mask.append([0])
+    #
+    #             # elif qtype == dropconstants.NUMCOMP_QTYPE:
+    #             #     gold_logicalform, operator = getGoldLF_numcomparison(qtokens)
+    #             #     try:
+    #             #         gold_actions: List[str] = languages[idx].logical_form_to_action_sequence(gold_logicalform)
+    #             #         actionseq_idxs: List[int] = [action2actionidx[a] for a in gold_actions]
+    #             #         actionseq_mask: List[int] = [1 for _ in range(len(actionseq_idxs))]
+    #             #         instances_w_goldseqs += 1
+    #             #     except:
+    #             #         actionseq_idxs: List[int] = [0]
+    #             #         actionseq_mask: List[int] = [0]
+    #             # else:
+    #             #     actionseq_idxs: List[int] = [0]
+    #             #     actionseq_mask: List[int] = [0]
+    #             #     raise NotImplementedError
+    #
+    #             gold_actionseq_idxs.append(instance_gold_actionseqs)
+    #             gold_actionseq_mask.append(instance_actionseqs_mask)
+    #
+    #     zero_gold_seqs = False
+    #     if instances_w_goldseqs == 0:
+    #         zero_gold_seqs = True
+    #
+    #     return (gold_actionseq_idxs, gold_actionseq_mask, zero_gold_seqs)
 
 
     @staticmethod
@@ -1178,10 +1233,10 @@ class DROPSemanticParser(DROPParserBase):
 
 
     def numcompare_eventnumgr_to_sideargs(self,
-                                            batch_actionseqs: List[List[List[str]]],
-                                            batch_actionseq_sideargs: List[List[List[Dict]]],
-                                            numcomp_qspan_num_groundings: List[Tuple[List[float], List[float]]],
-                                            device_id):
+                                          batch_actionseqs: List[List[List[str]]],
+                                          batch_actionseq_sideargs: List[List[List[Dict]]],
+                                          numcomp_qspan_num_groundings: List[Tuple[List[float], List[float]]],
+                                          device_id):
         """ batch_event_num_groundings: For each question, a two-tuple containing the correct num-grounding for the
             two events mentioned in the question.
             These are in order of the annotation (order of events in question) but later the question attention
@@ -1268,22 +1323,6 @@ class DROPSemanticParser(DROPParserBase):
 
         return attention_aslist
 
-    ''' TESTING
-    def passageAnsSpan_to_PassageAttention(self, answer_as_passage_spans, passage_mask):
-        final_attentions = []
-
-        for i in range(passage_mask.size(0)):
-            attn = passage_mask.new_zeros(passage_mask.size(1))
-            ans_spans = answer_as_passage_spans[i]
-            for span in ans_spans:
-                if span[0] > -1:
-                    attn[span[0]] = 1.0
-                    attn[span[1]] = 1.0
-
-            final_attentions.append(attn)
-
-        return final_attentions
-    '''
 
     def passageattn_to_startendlogits(self, passage_attention, passage_mask):
         span_start_logits = passage_attention.new_zeros(passage_attention.size())
@@ -1327,17 +1366,22 @@ class DROPSemanticParser(DROPParserBase):
 
 
     def getInitialDecoderState(self,
-                               question, languages, actions, encoded_question, question_mask,
-                               question_encoded_final_state, question_encoded_aslist, question_mask_aslist,
-                               batch_size):
+                               languages: List[DropLanguage],
+                               actions: List[List[ProductionRule]],
+                               encoded_question: torch.FloatTensor,
+                               question_mask: torch.FloatTensor,
+                               question_encoded_final_state: torch.FloatTensor,
+                               question_encoded_aslist: List[torch.Tensor],
+                               question_mask_aslist: List[torch.Tensor],
+                               batch_size: int):
         # List[torch.Tensor(0.0)] -- Initial log-score list for the decoding
-        initial_score_list = [next(iter(question.values())).new_zeros(1, dtype=torch.float)
-                              for _ in range(batch_size)]
+        initial_score_list = [encoded_question.new_zeros(1, dtype=torch.float) for _ in range(batch_size)]
 
         initial_grammar_statelets = []
         batch_action2actionidx: List[Dict[str, int]] = []
         # This is kind of useless, only needed for debugging in BasicTransitionFunction
         batch_actionidx2actionstr: List[List[str]] = []
+
         for i in range(batch_size):
             (grammar_statelet,
              action2actionidx,
@@ -1366,3 +1410,71 @@ class DROPSemanticParser(DROPParserBase):
                                           debug_info=initial_side_args)
 
         return (initial_state, batch_action2actionidx, batch_actionidx2actionstr)
+
+
+    def _select_indices_from_list(self, list, indices):
+        new_list = [list[i] for i in indices]
+        return new_list
+
+    def initialState_forInstanceIndices(self,
+                                        instances_list: List[int],
+                                        languages: List[DropLanguage],
+                                        actions: List[List[ProductionRule]],
+                                        encoded_question: torch.FloatTensor,
+                                        question_mask: torch.FloatTensor,
+                                        question_encoded_final_state: torch.FloatTensor,
+                                        question_encoded_aslist: List[torch.Tensor],
+                                        question_mask_aslist: List[torch.Tensor]):
+
+        s_languages = self._select_indices_from_list(languages, instances_list)
+        s_actions = self._select_indices_from_list(actions, instances_list)
+        s_encoded_question = encoded_question[instances_list]
+        s_question_mask = question_mask[instances_list]
+        s_question_encoded_final_state = question_encoded_final_state[instances_list]
+        s_question_encoded_aslist = self._select_indices_from_list(question_encoded_aslist, instances_list)
+        s_question_mask_aslist = self._select_indices_from_list(question_mask_aslist, instances_list)
+
+        num_instances = len(instances_list)
+
+        return self.getInitialDecoderState(s_languages, s_actions, s_encoded_question, s_question_mask,
+                                           s_question_encoded_final_state, s_question_encoded_aslist,
+                                           s_question_mask_aslist, num_instances)
+
+
+    def merge_final_states(self,
+                           supervised_final_states, unsupervised_final_states,
+                           supervised_instances: List[int], unsupervised_instances: List[int]):
+
+        """ Supervised and unsupervised final_states are dicts with keys in order from 0 - len(dict)
+            The final keys are the instances' batch index which is stored in (un)supervised_instances list
+            i.e. index = supervised_instances[0] is the index of the instance in the original batch
+            whose final state is now in supervised_final_states[0].
+            Therefore the final_state should contain; final_state[index] = supervised_final_states[0]
+        """
+
+        if len(supervised_instances) == 0:
+            return unsupervised_final_states
+
+        if len(unsupervised_instances) == 0:
+            return supervised_final_states
+
+        batch_size = len(supervised_instances) + len(unsupervised_instances)
+
+        final_states = {}
+
+        for i in range(batch_size):
+            if i in supervised_instances:
+                idx = supervised_instances.index(i)
+                state_value = supervised_final_states[idx]
+            else:
+                idx = unsupervised_instances.index(i)
+                state_value = unsupervised_final_states[idx]
+
+            final_states[i] = state_value
+
+        return final_states
+
+
+
+
+

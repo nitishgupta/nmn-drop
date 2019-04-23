@@ -310,9 +310,11 @@ local compareff_inputdim =
         ,
         "action_embedding_dim": 100,
 
-        "decoder_beam_search": {
-          "beam_size": utils.parse_number(std.extVar("BEAMSIZE")),
-        },
+        "beam_size": utils.parse_number(std.extVar("BEAMSIZE")),
+
+//        "decoder_beam_search": {
+//            "beam_size": utils.parse_number(std.extVar("BEAMSIZE")),
+//        },
 
         "qp_sim_key": std.extVar("QP_SIM_KEY"),
 

@@ -24,7 +24,6 @@ from datasets.drop import constants
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-# TODO: Add more number here
 WORD_NUMBER_MAP = {"zero": 0, "one": 1, "two": 2, "three": 3, "four": 4,
                    "five": 5, "six": 6, "seven": 7, "eight": 8,
                    "nine": 9, "ten": 10, "eleven": 11, "twelve": 12,
@@ -195,14 +194,11 @@ class DROPReader(DatasetReader):
 
         language = get_empty_language_object()
 
-        # DropLanguage(None, None, None, None, None, None, None)
-
         production_rule_fields: List[Field] = []
         for production_rule in language.all_possible_productions():
             field = ProductionRuleField(production_rule, is_global_rule=True)
             production_rule_fields.append(field)
         action_field = ListField(production_rule_fields)
-        # language_field = MetadataField(language)
 
         # pylint: disable=arguments-differ
         passage_tokens = [Token(text=t, idx=t_charidx)
@@ -321,6 +317,18 @@ class DROPReader(DatasetReader):
             empty_passagenum_grounding_tuple = (empty_passagenum_grounding, empty_passagenum_grounding)
             fields["numcomp_qspan_num_groundings"] = MetadataField(empty_passagenum_grounding_tuple)
 
+        # Get gold action_seqs for strongly_supervised questions
+        action2idx_map = {rule: i for i, rule in enumerate(language.all_possible_productions())}
+
+        # Tuple[List[List[int]], List[List[int]]]
+        gold_action_seqs, gold_actionseq_masks = self.get_gold_action_seqs(qtype=qtype,
+                                                                           questions_tokens=question_text.split(' '),
+                                                                           language=language,
+                                                                           action2idx_map=action2idx_map)
+        fields["gold_action_seqs"] = MetadataField((gold_action_seqs, gold_actionseq_masks))
+
+
+
         ########     ANSWER FIELDS      ###################
 
         if answer_annotations:
@@ -347,16 +355,21 @@ class DROPReader(DatasetReader):
                 answer_program_start_types.append("passage_span")
                 passage_span_fields = \
                     [SpanField(span[0], span[1], fields["passage"]) for span in answer_passage_spans]
+                metadata.update({'answer_passage_spans': answer_passage_spans})
             else:
                 passage_span_fields = [SpanField(-1, -1, fields["passage"])]
             fields["answer_as_passage_spans"] = ListField(passage_span_fields)
 
-            if answer_question_spans:
-                answer_program_start_types.append("question_span")
-                question_span_fields = \
-                    [SpanField(span[0], span[1], fields["question"]) for span in answer_question_spans]
-            else:
-                question_span_fields = [SpanField(-1, -1, fields["question"])]
+            # if answer_question_spans:
+            #     answer_program_start_types.append("question_span")
+            #     question_span_fields = \
+            #         [SpanField(span[0], span[1], fields["question"]) for span in answer_question_spans]
+            #     metadata.update({'answer_question_spans': answer_question_spans})
+            # else:
+            #     question_span_fields = [SpanField(-1, -1, fields["question"])]
+            # fields["answer_as_question_spans"] = ListField(question_span_fields)
+
+            question_span_fields = [SpanField(-1, -1, fields["question"])]
             fields["answer_as_question_spans"] = ListField(question_span_fields)
 
             ans_as_passage_number = [0] * len(passage_number_values)
@@ -562,3 +575,107 @@ class DROPReader(DatasetReader):
                 result = number_1 - number_2
                 candidate_subtractions[result].append((index_1, index_2))
         return candidate_subtractions
+
+    def get_gold_action_seqs(self,
+                             qtype: str,
+                             questions_tokens: List[str],
+                             language: DropLanguage,
+                             action2idx_map: Dict[str, int]) -> Tuple[List[List[int]], List[List[int]]]:
+        qtype_to_lffunc = {constants.DATECOMP_QTYPE: self.get_gold_logicalforms_datecomp,
+                           constants.NUMCOMP_QTYPE: self.get_gold_logicalforms_numcomp}
+        gold_actionseq_idxs: List[List[int]] = []
+        gold_actionseq_mask: List[List[int]] = []
+
+        if qtype in qtype_to_lffunc:
+            gold_logical_forms: List[str] = qtype_to_lffunc[qtype](questions_tokens, language)
+            assert len(gold_logical_forms) >= 1, f"No logical forms found for: {questions_tokens}"
+            for logical_form in gold_logical_forms:
+                gold_actions: List[str] = language.logical_form_to_action_sequence(logical_form)
+                actionseq_idxs: List[int] = [action2idx_map[a] for a in gold_actions]
+                actionseq_mask: List[int] = [1 for _ in range(len(actionseq_idxs))]
+                gold_actionseq_idxs.append(actionseq_idxs)
+                gold_actionseq_mask.append(actionseq_mask)
+        else:
+            gold_actionseq_idxs.append([0])
+            gold_actionseq_mask.append([0])
+
+        return gold_actionseq_idxs, gold_actionseq_mask
+
+    @staticmethod
+    def get_gold_logicalforms_datecomp(question_tokens: List[str], language: DropLanguage) -> List[str]:
+        # "(find_passageSpanAnswer (compare_date_greater_than find_PassageAttention find_PassageAttention))"
+        psa_start = "(find_passageSpanAnswer ("
+        qsa_start = "(find_questionSpanAnswer ("
+        # lf1 = "(find_passageSpanAnswer ("
+
+        lf2 = " find_PassageAttention find_PassageAttention))"
+        greater_than = "compare_date_greater_than"
+        lesser_than = "compare_date_lesser_than"
+
+        # Correct if Attn1 is first event
+        lesser_tokens = ['first', 'earlier', 'forst', 'firts']
+        greater_tokens = ['later', 'last', 'second']
+
+        operator_action = None
+
+        for t in lesser_tokens:
+            if t in question_tokens:
+                operator_action = lesser_than
+                break
+
+        for t in greater_tokens:
+            if t in question_tokens:
+                operator_action = greater_than
+                break
+
+        if operator_action is None:
+            operator_action = greater_than
+
+        gold_logical_forms = []
+        if '@start@ -> PassageSpanAnswer' in language.all_possible_productions():
+            gold_logical_forms.append(f"{psa_start}{operator_action}{lf2}")
+        if '@start@ -> QuestionSpanAnswer' in language.all_possible_productions():
+            gold_logical_forms.append(f"{qsa_start}{operator_action}{lf2}")
+
+        return gold_logical_forms
+
+    @staticmethod
+    def get_gold_logicalforms_numcomp(question_tokens: List[str], language: DropLanguage) -> List[str]:
+        # "(find_passageSpanAnswer (compare_date_greater_than find_PassageAttention find_PassageAttention))"
+        psa_start = "(find_passageSpanAnswer ("
+        qsa_start = "(find_questionSpanAnswer ("
+
+        lf2 = " find_PassageAttention find_PassageAttention))"
+        greater_than = "compare_num_greater_than"
+        lesser_than = "compare_num_lesser_than"
+
+        # Correct if Attn1 is first event
+        greater_tokens = ['larger', 'more', 'largest', 'bigger', 'higher', 'highest', 'most', 'greater']
+        lesser_tokens = ['smaller', 'fewer', 'lowest', 'smallest', 'less', 'least', 'fewest', 'lower']
+
+        operator_action = None
+
+        for t in lesser_tokens:
+            if t in question_tokens:
+                operator_action = lesser_than
+                break
+                # return [f"{psa_start}{lesser_than}{lf2}", f"{qsa_start}{lesser_than}{lf2}"]
+        if operator_action is None:
+            for t in greater_tokens:
+                if t in question_tokens:
+                    operator_action = greater_than
+                    break
+                    # return [f"{psa_start}{greater_than}{lf2}", f"{qsa_start}{greater_than}{lf2}"]
+
+        if operator_action is None:
+            operator_action = greater_than
+
+        gold_logical_forms = []
+        if '@start@ -> PassageSpanAnswer' in language.all_possible_productions():
+            gold_logical_forms.append(f"{psa_start}{operator_action}{lf2}")
+        if '@start@ -> QuestionSpanAnswer' in language.all_possible_productions():
+            gold_logical_forms.append(f"{qsa_start}{operator_action}{lf2}")
+
+        return gold_logical_forms
+
+

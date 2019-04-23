@@ -111,6 +111,7 @@ if __name__ == '__main__':
     dev_dataset = readDataset(input_devfp)
 
     print("Training questions .... ")
+    print(output_dir)
     new_train_dataset = removeDateCompPassageWeakAnnotations(train_dataset, annotation_for_numpassages)
 
     with open(output_trnfp, 'w') as f:

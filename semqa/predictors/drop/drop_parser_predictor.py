@@ -78,7 +78,9 @@ class DropQANetPredictor(Predictor):
         metadata = outputs['metadata']
         predicted_ans = outputs['predicted_answer']
 
-        # answer_as_passage_spans = outputs['answer_as_passage_spans']
+        gold_passage_span_ans = metadata['answer_passage_spans'] if 'answer_passage_spans' in metadata else []
+        gold_question_span_ans = metadata['answer_question_spans'] if 'answer_question_spans' in metadata else []
+
         # instance_spans_for_all_progs = outputs['predicted_spans']
         # best_span = instance_spans_for_all_progs[0]
 
@@ -94,6 +96,7 @@ class DropQANetPredictor(Predictor):
         out_str += passage + '\n'
 
         out_str += f'GoldAnswer: {answer_annotation_dicts}' + '\n'
+        out_str += f'GoldPassageSpans:{gold_passage_span_ans}  GoldQuesSpans:{gold_question_span_ans}\n'
         # out_str += f"GoldPassageSpans:{answer_as_passage_spans}" + '\n'
 
         # out_str += f"PredPassageSpan: {best_span}" + '\n'

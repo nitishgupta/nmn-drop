@@ -3,12 +3,11 @@
 export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
-# DATASET_NAME=date_num_50
-# DATASET_NAME=num/num_prune_supervised
-DATASET_NAME=date/datecomp_traindevpruned_augment_woqsa
-# DATASET_NAME=num/how_many_years_after_the
+TRAINDATASET_NAME=date_num/datecomp_numcomp
 
-DATASET_DIR=./resources/data/drop/${DATASET_NAME}
+EVAL_DATASET=date/datecomp_pruned_augment
+
+DATASET_DIR=./resources/data/drop/${EVAL_DATASET}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
 VALFILE=${DATASET_DIR}/drop_dataset_dev.json
 
@@ -40,7 +39,7 @@ export MMLLOSS=true
 
 # Whether strong supervison instances should be trained on first, if yes for how many epochs
 export SUPFIRST=true
-export SUPEPOCHS=0
+export SUPEPOCHS=15
 
 export SEED=100
 
@@ -50,11 +49,11 @@ export DEBUG=true
 
 ####    SERIALIZATION DIR --- Check for checkpoint_root/task/dataset/model/parameters/
 CHECKPOINT_ROOT=./resources/semqa/checkpoints
-SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/${DATASET_NAME}
+SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/${TRAINDATASET_NAME}
 MODEL_DIR=drop_parser
 PD_1=BS_${BS}/LR_${LR}/Drop_${DROPOUT}/TOKENS_${TOKENIDX}/ED_${WEMB_DIM}/RG_${RG}/GACT_${GOLDACTIONS}/GPROGS_${GOLDPROGS}
 PD_2=QPSIMKEY_${QP_SIM_KEY}/QAL_${DENLOSS}/EXL_${EXCLOSS}/QATL_${QATTLOSS}/MML_${MMLLOSS}/SUPFIRST_${SUPFIRST}/SUPEPOCHS_${SUPEPOCHS}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/${PD_2}/S_${SEED}/test_reverse_wqsa
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/${PD_2}/S_${SEED}/reverse
 
 # SERIALIZATION_DIR=./resources/semqa/checkpoints/test
 
@@ -62,9 +61,11 @@ SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/${PD_2}/S_${SEE
 PREDICT_OUTPUT_DIR=${SERIALIZATION_DIR}/predictions
 mkdir ${PREDICT_OUTPUT_DIR}
 
+mkdir -p ${PREDICT_OUTPUT_DIR}/${EVAL_DATASET}
+
 #*****************    PREDICTION FILENAME   *****************
-PRED_FILENAME=dev_predictions.txt
-EVAL_FILENAME=dev_eval.txt
+PRED_FILENAME=${EVAL_DATASET}.dev_pred.txt
+EVAL_FILENAME=${EVAL_DATASET}.dev_eval.txt
 TESTFILE=${VALFILE}
 #PRED_FILENAME=train_predictions.txt
 #TESTFILE=${TRAINFILE}
@@ -86,19 +87,10 @@ PREDICTOR=drop_parser_predictor
 #                 --overrides "{"model": {"decoder_beam_search": {"beam_size": ${BEAMSIZE}}, "debug": ${DEBUG}}}" \
 #                 ${MODEL_TAR} ${TESTFILE}
 
-# --weights-file ${SERIALIZATION_DIR}/model_state_epoch_9.th \
-
 allennlp evaluate --output-file ${EVALUATION_FILE} \
                   --cuda-device ${GPU} \
                   --include-package ${INCLUDE_PACKAGE} \
                   ${MODEL_TAR} ${TESTFILE}
 
-
-
-
-#allennlp evaluate --output-file ${EVALUATION_FILE} \
-#                  --cuda-device ${GPU} \
-#                  --include-package ${INCLUDE_PACKAGE} \
-#                  ${MODEL_TAR} ./resources/data/drop/num/how_many_years_after_the/drop_dataset_dev.json # ${DATASET_NAME} ${TESTFILE}
-
 echo -e "Predictions file saved at: ${PREDICTION_FILE}"
+echo -e "Evaluations file saved at: ${EVALUATION_FILE}"

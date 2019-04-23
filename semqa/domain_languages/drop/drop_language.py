@@ -253,14 +253,14 @@ class DropLanguage(DomainLanguage):
                  passage_token2date_similarity: Tensor,
                  passage_token2num_similarity: Tensor,
                  parameters: ExecutorParameters,
-                 start_types,
+                 start_types=None,
                  device_id: int = -1,
                  max_samples=10,
                  metadata={},
                  debug=False) -> None:
 
         if start_types is None:
-            start_types = {PassageSpanAnswer, YearDifference, QuestionSpanAnswer}  # , PassageNumber}
+            start_types = {PassageSpanAnswer, YearDifference}   # , QuestionSpanAnswer}
 
         super().__init__(start_types=start_types)
 
@@ -455,11 +455,6 @@ class DropLanguage(DomainLanguage):
             Softmax over these scores is the date dist.
         '''
 
-        # print(self.passage_passage_token2date_similarity)
-
-        # Shape: (passage_length, ) -- indicating which tokens are dates
-        passage_tokenidx2dateidx_mask = (self.passage_tokenidx2dateidx > -1)
-
         # (passage_length, passage_length)
         passage_passage_tokendate_attention = self.passage_passage_token2date_similarity * passage_attention.unsqueeze(1)
 
@@ -475,8 +470,7 @@ class DropLanguage(DomainLanguage):
         # Attention value for each passage token to be a date associated to the query
         passage_datetoken_attention = passage_passage_tokendate_attention.sum(0)
 
-        masked_passage_tokenidx2dateidx = passage_tokenidx2dateidx_mask.long() * self.passage_tokenidx2dateidx
-        masked_passage_datetoken_scores = passage_tokenidx2dateidx_mask.float() * passage_datetoken_attention
+        masked_passage_tokenidx2dateidx = self.passage_tokenidx2dateidx * self.passage_datetokens_mask_long
 
         ''' We first softmax scores over tokens then aggregate probabilities for same dates
             Another way could be to first aggregate scores, then compute softmx -- in that method if the scores are
@@ -488,22 +482,14 @@ class DropLanguage(DomainLanguage):
             I think the bottomline is to control the scaling of scores.
         '''
         masked_passage_datetoken_probs = allenutil.masked_softmax(passage_datetoken_attention,
-                                                                  mask=passage_tokenidx2dateidx_mask,
+                                                                  mask=self.passage_datetokens_mask_long,
                                                                   memory_efficient=True)
-
-        # print(masked_passage_datetoken_scores)
-        # print(masked_passage_datetoken_probs)
-        # print()
+        masked_passage_datetoken_probs = masked_passage_datetoken_probs * self.passage_datetokens_mask_float
 
         ''' normalized method with method 2 '''
         date_distribution = passage_attention.new_zeros(self.num_passage_dates)
         date_distribution.scatter_add_(0, masked_passage_tokenidx2dateidx, masked_passage_datetoken_probs)
         date_scores = date_distribution
-
-        # print(passage_datetoken_attention)
-        # print(masked_passage_datetoken_scores)
-        # print(date_distribution)
-        # print()
 
         return date_distribution, date_scores
 
@@ -554,11 +540,21 @@ class DropLanguage(DomainLanguage):
             date_distribution_1: ``torch.FloatTensor`` Shape: (self.num_passage_dates, )
             date_distribution_2: ``torch.FloatTensor`` Shape: (self.num_passage_dates, )
         """
+
         # Shape: (num_passage_dates, num_passage_dates)
         joint_dist = torch.matmul(date_distribution_1.unsqueeze(1), date_distribution_2.unsqueeze(0))
 
         # Shape: (number_year_differences, )
         year_differences_dist = torch.sum(self.year_differences_mat * joint_dist.unsqueeze(2), dim=(0, 1))
+
+        # if torch.sum(year_differences_dist) > 1.0:
+        # print("year dist")
+        # print(f"{date_distribution_1} {date_distribution_1.sum()}")
+        # print(f"{date_distribution_2} {date_distribution_2.sum()}")
+        # print(f"{year_differences_dist} {year_differences_dist.sum()}")
+        # print()
+
+        year_differences_dist = torch.clamp(year_differences_dist, min=1e-20, max=1 - 1e-20)
 
         return year_differences_dist
 
@@ -882,10 +878,6 @@ class DropLanguage(DomainLanguage):
 
         date_distribution_1, _ = self.compute_date_scores(passage_attention_1)
         date_distribution_2, _ = self.compute_date_scores(passage_attention_2)
-
-        # print(date_distribution_1)
-        # print(date_distribution_2)
-        # print()
 
         # Shape: (number_of_year_differences, )
         year_difference_dist = self.expected_date_year_difference(date_distribution_1, date_distribution_2)
