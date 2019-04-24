@@ -832,31 +832,16 @@ class DROPSemanticParser(DROPParserBase):
                 answer_annotations = metadata[i].get('answer_annotations', [])
                 self._drop_metrics(instance_predicted_answer, answer_annotations)
 
-            # batch_question_strs = [metadata[i]["original_question"] for i in range(batch_size)]
-            # batch_passage_strs = [metadata[i]["original_passage"] for i in range(batch_size)]
-            # batch_passage_token_offsets = [metadata[i]["passage_token_offsets"] for i in range(batch_size)]
-            # batch_question_token_offsets = [metadata[i]["question_token_offsets"] for i in range(batch_size)]
-            # answer_annotations = [metadata[i]["answer_annotation"] for i in range(batch_size)]
-            # (batch_best_spans, batch_predicted_answers) = self._get_best_spans(batch_denotations,
-            #                                                                    batch_denotation_types,
-            #                                                                    batch_question_token_offsets,
-            #                                                                    batch_question_strs,
-            #                                                                    batch_passage_token_offsets,
-            #                                                                    batch_passage_strs,
-            #                                                                    question_mask_aslist,
-            #                                                                    passage_mask_aslist)
-            # predicted_answers = [batch_predicted_answers[i][0] for i in range(batch_size)]
+            if not self.training:
+                output_dict['metadata'] = metadata
+                # output_dict['best_span_ans_str'] = predicted_answers
+                output_dict['answer_as_passage_spans'] = answer_as_passage_spans
+                # output_dict['predicted_spans'] = batch_best_spans
 
-            output_dict['metadata'] = metadata
-            # output_dict['best_span_ans_str'] = predicted_answers
-            output_dict['answer_as_passage_spans'] = answer_as_passage_spans
-            # output_dict['predicted_spans'] = batch_best_spans
-
-            output_dict["batch_action_seqs"] = batch_actionseqs
-            output_dict["batch_actionseq_scores"] = batch_actionseq_scores
-            output_dict["batch_actionseq_sideargs"] = batch_actionseq_sideargs
-            output_dict["languages"] = languages
-            # output_dict["all_pred_ansspans"] = batch_predicted_answers
+                output_dict["batch_action_seqs"] = batch_actionseqs
+                output_dict["batch_actionseq_scores"] = batch_actionseq_scores
+                output_dict["batch_actionseq_sideargs"] = batch_actionseq_sideargs
+                output_dict["languages"] = languages
 
         return output_dict
 

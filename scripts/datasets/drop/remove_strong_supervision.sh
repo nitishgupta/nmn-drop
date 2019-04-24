@@ -2,7 +2,7 @@
 
 ROOT_DIR=./resources/data/drop
 
-ANNOTATION_FOR_PARAS=100
+ANNOTATION_FOR_PARAS=50
 
 INPUT_DIR=${ROOT_DIR}/num/numcomp_prune_supervised
 OUTPUT_DIR=${ROOT_DIR}/num/numcomp_prune_supervised_${ANNOTATION_FOR_PARAS}

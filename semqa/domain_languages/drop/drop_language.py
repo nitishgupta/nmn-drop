@@ -896,9 +896,9 @@ class DropLanguage(DomainLanguage):
             date2 = myutils.round_all(myutils.tocpuNPList(date_distribution_2), 3)
             year_diff_dist = myutils.round_all(myutils.tocpuNPList(year_difference_dist), 3)
 
-            debug_value += f"Pattn1: {pattn_vis_most_1}\n Date1: {date1}" + \
-                           f"\nPattn2: {pattn_vis_most_2}\n Date2: {date2}" + \
-                           f"\nYearDiffDist: {year_diff_dist}"
+            debug_value += f"YearDiffDist: {year_diff_dist}\n" + \
+                           f"\nPattn1: {pattn_vis_most_1}\n Date1: {date1}" + \
+                           f"\nPattn2: {pattn_vis_most_2}\n Date2: {date2}"
 
         return YearDifference(year_difference_dist=year_difference_dist, loss=0.0, debug_value=debug_value)
 

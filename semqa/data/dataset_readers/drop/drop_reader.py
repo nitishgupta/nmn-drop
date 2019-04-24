@@ -394,6 +394,14 @@ class DROPReader(DatasetReader):
 
             fields["answer_program_start_types"] = MetadataField(answer_program_start_types)
 
+            if len(answer_program_start_types) == 0:
+                print(original_ques_text)
+                print(original_passage_text)
+                print(answer_annotation)
+                print(passage_date_strvals)
+                print(year_differences)
+                print(passage_number_values)
+
             if self.skip_instances:
                 if len(answer_program_start_types) == 0:
                     self.skipped_instances += 1
