@@ -41,8 +41,6 @@ class DROPReader(DatasetReader):
                  do_augmentation: bool = True,
                  passage_length_limit: int = None,
                  question_length_limit: int = None,
-                 passage_length_limit_for_evaluation: int = None,
-                 question_length_limit_for_evaluation: int = None,
                  only_strongly_supervised: bool = False,
                  skip_instances=False) -> None:
         super().__init__(lazy)
@@ -52,8 +50,6 @@ class DROPReader(DatasetReader):
         self._do_augmentation = do_augmentation
         self.passage_length_limit = passage_length_limit
         self.question_length_limit = question_length_limit
-        self.passage_length_limit_for_eval = passage_length_limit_for_evaluation or passage_length_limit
-        self.question_length_limit_for_eval = question_length_limit_for_evaluation or question_length_limit
         self.only_strongly_supervised = only_strongly_supervised
         self.skip_instances = skip_instances
         self.skipped_instances = 0
@@ -63,15 +59,14 @@ class DROPReader(DatasetReader):
         self.skipped_instances = 0
         # pylint: disable=logging-fstring-interpolation
         # if `file_path` is a URL, redirect to the cache
-        is_train = "train" in str(file_path)
         file_path = cached_path(file_path)
         logger.info("Reading file at %s", file_path)
         with open(file_path) as dataset_file:
             dataset = json.load(dataset_file)
         logger.info("Reading the dataset")
         instances, skip_count = [], 0
-        max_passage_len = self.passage_length_limit if is_train else self.passage_length_limit_for_eval
-        max_question_len = self.question_length_limit if is_train else self.question_length_limit_for_eval
+        max_passage_len = self.passage_length_limit
+        max_question_len = self.question_length_limit
         for passage_id, passage_info in dataset.items():
             original_passage_text = passage_info[constants.cleaned_passage]
             passage_text = passage_info[constants.tokenized_passage]
@@ -146,8 +141,7 @@ class DROPReader(DatasetReader):
                                                  passage_id,
                                                  answer_annotations,
                                                  max_passage_len,
-                                                 max_question_len,
-                                                 drop_invalid=is_train)
+                                                 max_question_len)
 
                 if self.only_strongly_supervised:
                     if not strongly_supervised:
@@ -189,8 +183,7 @@ class DROPReader(DatasetReader):
                          passage_id: str = None,
                          answer_annotations: List[Dict[str, Union[str, Dict, List]]] = None,
                          max_passage_len: int = None,
-                         max_question_len: int = None,
-                         drop_invalid: bool = False) -> Union[Instance, None]:
+                         max_question_len: int = None) -> Union[Instance, None]:
 
         language = get_empty_language_object()
 
@@ -211,6 +204,9 @@ class DROPReader(DatasetReader):
             passage_tokens = passage_tokens[: max_passage_len]
         if max_question_len is not None:
             question_tokens = question_tokens[: max_question_len]
+
+        passage_len = len(passage_tokens)
+        question_len = len(question_tokens)
 
         metadata = {
             "original_passage": original_passage_text,
@@ -233,6 +229,8 @@ class DROPReader(DatasetReader):
         fields["passage"] = TextField(passage_tokens, self._token_indexers)
         fields["question"] = TextField(question_tokens, self._token_indexers)
 
+        # TODO(nitish): Both numbers and passage values also need to be pruned based on passagelen.
+        # TODO(nitish): Currently, there might be values that don't appear in the passage (after pruning)
         ##  Passage Number
         # The normalized values in processed dataset are floats even if the passage had ints. Converting them back ..
         p_num_normvals = [int(x) if int(x) == x else x for x in p_num_normvals]
@@ -244,15 +242,28 @@ class DROPReader(DatasetReader):
          passage_number_entidxs) = self.sort_passage_numbers(passage_number_values=passage_number_values,
                                                              passage_number_entidxs=passage_number_entidxs)
 
+        _pruned_number_indices, _pruned_number_entidxs = [], []
+        for number_idx, number_entidx in zip(passage_number_indices, passage_number_entidxs):
+            if number_idx >= passage_len:
+                continue
+            else:
+                _pruned_number_indices.append(number_idx)
+                _pruned_number_entidxs.append(number_entidx)
+
+        passage_number_indices = _pruned_number_indices
+        passage_number_entidxs = _pruned_number_entidxs
+
         # List of passage_len containing number_entidx for each token (-1 otherwise)
         passage_number_idx2entidx = [-1 for _ in range(len(passage_tokens))]
         if passage_number_entidxs:
-            for passage_num_idx, number_idx in zip(passage_number_indices, passage_number_entidxs):
-                passage_number_idx2entidx[passage_num_idx] = number_idx
+            for passage_num_tokenidx, number_idx in zip(passage_number_indices, passage_number_entidxs):
+                passage_number_idx2entidx[passage_num_tokenidx] = number_idx
         else:
             # No numbers found in the passage - making a fake number at the 0th token
             passage_number_idx2entidx[0] = 0
-            passage_number_values = [-1]
+            # passage_number_values = [-1]
+        if not passage_number_values:
+            passage_number_values.append(-1)
         fields["passageidx2numberidx"] = ArrayField(np.array(passage_number_idx2entidx), padding_value=-1)
         fields["passage_number_values"] = MetadataField(passage_number_values)
 
@@ -260,14 +271,27 @@ class DROPReader(DatasetReader):
         passage_date_entidxs = p_date_entidxs
         passage_date_values = p_date_normvals
         passage_date_spanidxs = [(x, y) for (_, (x, y), _) in p_date_mens]
+
+        _pruned_passage_date_spanidxs, _pruned_passage_date_entidxs = [], []
+        for (x, y), date_idx in zip(passage_date_spanidxs, passage_date_entidxs):
+            if y >= passage_len:
+                continue
+            else:
+                _pruned_passage_date_spanidxs.append((x, y))
+                _pruned_passage_date_entidxs.append(date_idx)
+        passage_date_spanidxs = _pruned_passage_date_spanidxs
+        passage_date_entidxs = _pruned_passage_date_entidxs
+
         passage_date_idx2dateidx = [-1 for _ in range(len(passage_tokens))]
-        if passage_date_values:
+        if passage_date_spanidxs:
             for passage_date_span, date_idx in zip(passage_date_spanidxs, passage_date_entidxs):
                 (s, e) = passage_date_span
                 passage_date_idx2dateidx[s:e+1] = [date_idx] * (e + 1 - s)
-            passage_date_objs = [Date(day=d, month=m, year=y) for (d, m, y) in passage_date_values]
         else:
             passage_date_idx2dateidx[0] = 0
+        if passage_date_values:
+            passage_date_objs = [Date(day=d, month=m, year=y) for (d, m, y) in passage_date_values]
+        else:
             passage_date_objs = [Date(day=-1, month=-1, year=-1)]
         fields["passageidx2dateidx"] = ArrayField(np.array(passage_date_idx2dateidx), padding_value=-1)
         fields["passage_date_values"] = MetadataField(passage_date_objs)
@@ -296,6 +320,7 @@ class DROPReader(DatasetReader):
 
         # Question Attention Supervision
         if strongly_supervised and ques_attn_supervision:
+            ques_attn_supervision = [x[0:question_len] for x in ques_attn_supervision]
             if qtype in [constants.DATECOMP_QTYPE, constants.NUMCOMP_QTYPE]:
                 # QAttn supervision, is a n-tuple of question attentions
                 ques_attn_supervision = (ques_attn_supervision[1], ques_attn_supervision[0])
@@ -309,6 +334,7 @@ class DROPReader(DatasetReader):
         # Date-comparison - Date Grounding Supervision
         if strongly_supervised and datecomp_ques_event_date_groundings:
             # TODO(nitish): Reverse this in pre-processing
+            # TODO(nitish): Prune this based on pruning of date_values above
             datecomp_ques_event_date_groundings_reversed = (datecomp_ques_event_date_groundings[1],
                                                             datecomp_ques_event_date_groundings[0])
             fields["datecomp_ques_event_date_groundings"] = MetadataField(datecomp_ques_event_date_groundings_reversed)
@@ -320,6 +346,7 @@ class DROPReader(DatasetReader):
         # Number Comparison - Passage Number Grounding Supervision
         if strongly_supervised and numcomp_qspan_num_groundings:
             # TODO(nitish): Reverse this in pre-processing
+            # TODO(nitish): Prune this based on pruning of number values above
             numcomp_qspan_num_groundings_reversed = (numcomp_qspan_num_groundings[1],
                                                      numcomp_qspan_num_groundings[0])
             fields["numcomp_qspan_num_groundings"] = MetadataField(numcomp_qspan_num_groundings_reversed)
@@ -364,7 +391,18 @@ class DROPReader(DatasetReader):
 
             # We've pre-parsed the span types to passage / question spans
 
+            # Pruning answer_passage_spans based on passage_len
+            _pruned_answer_passage_spans = []
+            if answer_passage_spans:
+                for (x, y) in answer_passage_spans:
+                    if y >= passage_len:
+                        continue
+                    else:
+                        _pruned_answer_passage_spans.append((x, y))
+            answer_passage_spans = _pruned_answer_passage_spans
+
             # Passage-span answer
+            passage_span_fields = []
             if answer_passage_spans:
                 answer_program_start_types.append("passage_span")
                 passage_span_fields = \
@@ -422,7 +460,6 @@ class DROPReader(DatasetReader):
                 print(f"PassageNumVals:{passage_number_values}")
                 print(f"PassageDates:{passage_date_strvals}")
                 print(f"YearDiffs:{year_differences}")
-
 
             if self.skip_instances:
                 if len(answer_program_start_types) == 0:

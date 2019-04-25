@@ -637,6 +637,7 @@ class DropLanguage(DomainLanguage):
             # Shape: [2, num_of_dates]
             stacked_date_distributions = torch.cat([date_distribution_1.unsqueeze(0),
                                                     date_distribution_2.unsqueeze(0)], dim=0)
+
             # Shape: (2) - Converting date_distribution to log-probabilties
             date_grounding_loss = F.nll_loss(input=(stacked_date_distributions + 1e-40).log(),
                                              target=gold_date_idxs,

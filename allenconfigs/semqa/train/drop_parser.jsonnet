@@ -33,6 +33,8 @@ local compareff_inputdim =
       "type": std.extVar("DATASET_READER"),
       "lazy": false,
       "skip_instances": true,
+      "passage_length_limit": 400,
+      "question_length_limit": 50,
       "token_indexers":
         if tokenidx == "glove" then {
           "tokens": {
