@@ -255,12 +255,12 @@ class DropLanguage(DomainLanguage):
                  parameters: ExecutorParameters,
                  start_types=None,
                  device_id: int = -1,
-                 max_samples=10,
+                 max_samples=5,
                  metadata={},
                  debug=False) -> None:
 
         if start_types is None:
-            start_types = {PassageSpanAnswer, YearDifference}   # , QuestionSpanAnswer}
+            start_types = {PassageSpanAnswer, YearDifference, PassageNumber}   # , QuestionSpanAnswer}
 
         super().__init__(start_types=start_types)
 
@@ -520,6 +520,7 @@ class DropLanguage(DomainLanguage):
         masked_passage_numtoken_probs = allenutil.masked_softmax(masked_passage_numtoken_scores,
                                                                  mask=self.passage_numtokens_mask_float,
                                                                  memory_efficient=True)
+        masked_passage_numtoken_probs = masked_passage_numtoken_probs * self.passage_numtokens_mask_float
         # print(masked_passage_datetoken_scores)
         # print(masked_passage_datetoken_probs)
         # print()
@@ -951,7 +952,7 @@ class DropLanguage(DomainLanguage):
                      loss=loss,
                      debug_value=debug_value)
 
-
+    '''
     @predicate
     def find_questionSpanAnswer(self, passage_attention: PassageAttention_answer) -> QuestionSpanAnswer:
         passage_attn = passage_attention._value
@@ -1004,6 +1005,63 @@ class DropLanguage(DomainLanguage):
                                   end_logits=span_end_logits,
                                   loss=loss,
                                   debug_value=debug_value)
+    '''
+
+
+    @predicate
+    def max_PassageNumber(self, number_distribution: PassageNumber) -> PassageNumber:
+        num_dist = number_distribution._value
+
+        cum_dist = num_dist.cumsum(0)
+        cum_dist_n = cum_dist ** self.max_samples
+        maximum_distribution = cum_dist_n - torch.cat([cum_dist_n.new_zeros(1), cum_dist_n[:-1]])
+
+        loss = number_distribution.loss
+
+        maximum_distribution = torch.clamp(maximum_distribution, min=1e-10, max=1 - 1e-10)
+
+        return PassageNumber(passage_number_dist=maximum_distribution, loss=loss, debug_value="")
+
+    @predicate
+    def min_PassageNumber(self, number_distribution: PassageNumber) -> PassageNumber:
+        num_dist = number_distribution._value
+
+        cumulative_distribution_function = num_dist.cumsum(0)
+        # P(x>=i) = 1 - (P(x<=i) - P(x=i))
+        inverse_cumdist = 1 - cumulative_distribution_function + num_dist
+
+        inverse_cumdist_n = inverse_cumdist ** self.max_samples
+
+        inverse_cumdist_n_shifted = torch.cat([inverse_cumdist_n[1:], inverse_cumdist_n.new_zeros(1)])
+        minimum_distribution = inverse_cumdist_n - inverse_cumdist_n_shifted
+
+        loss = number_distribution.loss
+
+        minimum_distribution = torch.clamp(minimum_distribution, min=1e-10, max=1 - 1e-10)
+
+        return PassageNumber(passage_number_dist=minimum_distribution, loss=loss, debug_value="")
+
+
+    @predicate
+    def find_PassageNumber(self, passage_attention: PassageAttention) -> PassageNumber:
+        passage_attn = passage_attention._value
+        # Shape: (passage_length)
+        passage_attn = (passage_attn * self.passage_mask)
+
+        number_distribution, _ = self.compute_num_distribution(passage_attention=passage_attn)
+
+        loss = 0.0
+
+        debug_value = ""
+        if self._debug:
+            number_dist = myutils.round_all(myutils.tocpuNPList(number_distribution), 3)
+            _, pattn_vis_most = dlutils.listTokensVis(passage_attn, self.metadata["passage_tokens"])
+            debug_value += f"PassageNumber: {number_dist}"
+            debug_value += f"\nPattn: {pattn_vis_most}"
+
+        return PassageNumber(passage_number_dist=number_distribution,
+                             loss=loss,
+                             debug_value=debug_value)
 
 
 if __name__=='__main__':

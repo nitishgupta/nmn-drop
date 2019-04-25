@@ -343,9 +343,6 @@ class DROPSemanticParser(DROPParserBase):
                 metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
 
 
-        print(answer_as_passage_number)
-
-
         batch_size = len(actions)
         device_id = self._get_prediction_device()
 
@@ -743,6 +740,16 @@ class DROPSemanticParser(DROPParserBase):
                                                                     cuda_device=device_id)
                             log_likelihood = torch.sum(pred_year_diff_log_probs * gold_year_difference_dist)
 
+                        elif progtype == 'PassageNumber':
+                            # Distribution over PassageNumbers
+                            denotation: PassageNumber = denotation
+                            pred_passagenumber_dist = denotation._value
+                            pred_passagenumber_logprobs = torch.log(pred_passagenumber_dist + 1e-40)
+                            gold_passagenum_dist = allenutil.move_to_device(
+                                                                    torch.FloatTensor(answer_as_passage_number[i]),
+                                                                    cuda_device=device_id)
+                            log_likelihood = torch.sum(pred_passagenumber_logprobs * gold_passagenum_dist)
+
                         # Here implement losses for other program-return-types in else-ifs
                         else:
                             raise NotImplementedError
@@ -788,6 +795,7 @@ class DROPSemanticParser(DROPParserBase):
                 question_token_offsets = metadata[i]["question_token_offsets"]
                 passage_token_offsets = metadata[i]["passage_token_offsets"]
                 instance_year_differences = year_differences[i]
+                instance_passage_numbers = passage_number_values[i]
                 answer_annotations = metadata[i]["answer_annotations"]
 
                 instance_prog_denotations, instance_prog_types = batch_denotations[i], batch_denotation_types[i]
@@ -827,6 +835,14 @@ class DROPSemanticParser(DROPParserBase):
                         predicted_yeardiff_idx = torch.argmax(denotation._value).detach().cpu().numpy()
                         predicted_year_difference = instance_year_differences[predicted_yeardiff_idx]   # int
                         predicted_answer = str(predicted_year_difference)
+                    elif progtype == "PassageNumber":
+                        denotation: PassageNumber = denotation
+                        predicted_passagenum_idx = torch.argmax(denotation._value).detach().cpu().numpy()
+                        predicted_passage_number = instance_passage_numbers[predicted_passagenum_idx]   # int/float
+                        predicted_passage_number = int(predicted_passage_number) if int(predicted_passage_number) == \
+                                                                                    predicted_passage_number \
+                                                                                        else predicted_passage_number
+                        predicted_answer = str(predicted_passage_number)
                     else:
                         raise NotImplementedError
 
@@ -952,7 +968,7 @@ class DROPSemanticParser(DROPParserBase):
         # Map from string passed by reader to LanguageType class
         answer_type_to_action_mapping = {'passage_span': '@start@ -> PassageSpanAnswer',
                                          'year_difference': '@start@ -> YearDifference',
-                                         # 'passage_number': PassageNumber,
+                                         'passage_number': '@start@ -> PassageNumber',
                                          'question_span': '@start@ -> QuestionSpanAnswer'}
 
         valid_start_action_ids: List[Set[int]] = []

@@ -646,14 +646,17 @@ class DROPReader(DatasetReader):
                              action2idx_map: Dict[str, int]) -> Tuple[List[List[int]], List[List[int]], bool]:
 
         qtype_to_lffunc = {constants.DATECOMP_QTYPE: self.get_gold_logicalforms_datecomp,
-                           constants.NUMCOMP_QTYPE: self.get_gold_logicalforms_numcomp}
+                           constants.NUMCOMP_QTYPE: self.get_gold_logicalforms_numcomp,
+                           constants.YARDS_longest_qtype: self.get_gold_logicalforms_yardslongest,
+                           constants.YARDS_shortest_qtype: self.get_gold_logicalforms_yardsshortest}
 
         gold_actionseq_idxs: List[List[int]] = []
         gold_actionseq_mask: List[List[int]] = []
         instance_w_goldprog: bool = False
 
         if qtype in qtype_to_lffunc:
-            gold_logical_forms: List[str] = qtype_to_lffunc[qtype](questions_tokens, language)
+            gold_logical_forms: List[str] = qtype_to_lffunc[qtype](questions_tokens=questions_tokens,
+                                                                   language=language)
             assert len(gold_logical_forms) >= 1, f"No logical forms found for: {questions_tokens}"
             for logical_form in gold_logical_forms:
                 gold_actions: List[str] = language.logical_form_to_action_sequence(logical_form)
@@ -668,6 +671,18 @@ class DROPReader(DatasetReader):
             instance_w_goldprog = False
 
         return gold_actionseq_idxs, gold_actionseq_mask, instance_w_goldprog
+
+
+    @staticmethod
+    def get_gold_logicalforms_yardsshortest(**kwargs):
+        gold_lf = "(min_PassageNumber (find_PassageNumber find_PassageAttention))"
+        return [gold_lf]
+
+    @staticmethod
+    def get_gold_logicalforms_yardslongest(**kwargs):
+        gold_lf = "(max_PassageNumber (find_PassageNumber find_PassageAttention))"
+        return [gold_lf]
+
 
     @staticmethod
     def get_gold_logicalforms_datecomp(question_tokens: List[str], language: DropLanguage) -> List[str]:
