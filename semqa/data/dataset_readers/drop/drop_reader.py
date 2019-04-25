@@ -164,7 +164,7 @@ class DROPReader(DatasetReader):
         # return instances
 
     @overrides
-    def text_to_instance(self,  # type: ignore
+    def text_to_instance(self,
                          question_text: str,
                          original_ques_text: str,
                          question_charidxs: List[int],
@@ -233,11 +233,17 @@ class DROPReader(DatasetReader):
         fields["passage"] = TextField(passage_tokens, self._token_indexers)
         fields["question"] = TextField(question_tokens, self._token_indexers)
 
-        # The normalization values in processed dataset are floats even if the pasage had ints. Converting ..
+        ##  Passage Number
+        # The normalized values in processed dataset are floats even if the passage had ints. Converting them back ..
         p_num_normvals = [int(x) if int(x) == x else x for x in p_num_normvals]
-        passage_number_entidxs = p_num_entidxs
+        passage_number_entidxs = p_num_entidxs      # same length as p_num_mens, containing num_grounding for the mens
         passage_number_values = p_num_normvals
         passage_number_indices = [tokenidx for (_, tokenidx, _) in p_num_mens]
+
+        (passage_number_values,
+         passage_number_entidxs) = self.sort_passage_numbers(passage_number_values=passage_number_values,
+                                                             passage_number_entidxs=passage_number_entidxs)
+
         # List of passage_len containing number_entidx for each token (-1 otherwise)
         passage_number_idx2entidx = [-1 for _ in range(len(passage_tokens))]
         if passage_number_entidxs:
@@ -250,6 +256,7 @@ class DROPReader(DatasetReader):
         fields["passageidx2numberidx"] = ArrayField(np.array(passage_number_idx2entidx), padding_value=-1)
         fields["passage_number_values"] = MetadataField(passage_number_values)
 
+        ##  Passage Dates
         passage_date_entidxs = p_date_entidxs
         passage_date_values = p_date_normvals
         passage_date_spanidxs = [(x, y) for (_, (x, y), _) in p_date_mens]
@@ -266,6 +273,7 @@ class DROPReader(DatasetReader):
         fields["passage_date_values"] = MetadataField(passage_date_objs)
         passage_date_strvals = [str(d) for d in passage_date_objs]
 
+        # year_differences: List[int]
         year_differences, year_differences_mat = self.get_year_difference_candidates(passage_date_objs)
         fields["year_differences"] = MetadataField(year_differences)
         fields["year_differences_mat"] = MetadataField(year_differences_mat)
@@ -288,9 +296,10 @@ class DROPReader(DatasetReader):
 
         # Question Attention Supervision
         if strongly_supervised and ques_attn_supervision:
-            # QAttn supervision, is a n-tuple of question attentions
-            ques_attn_supervision_reversed = (ques_attn_supervision[1], ques_attn_supervision[0])
-            fields["qattn_supervision"] = ArrayField(np.array(ques_attn_supervision_reversed), padding_value=0)
+            if qtype in [constants.DATECOMP_QTYPE, constants.NUMCOMP_QTYPE]:
+                # QAttn supervision, is a n-tuple of question attentions
+                ques_attn_supervision = (ques_attn_supervision[1], ques_attn_supervision[0])
+            fields["qattn_supervision"] = ArrayField(np.array(ques_attn_supervision), padding_value=0)
         else:
             qlen = len(question_tokens)
             empty_question_attention = [0.0] * qlen
@@ -299,6 +308,7 @@ class DROPReader(DatasetReader):
 
         # Date-comparison - Date Grounding Supervision
         if strongly_supervised and datecomp_ques_event_date_groundings:
+            # TODO(nitish): Reverse this in pre-processing
             datecomp_ques_event_date_groundings_reversed = (datecomp_ques_event_date_groundings[1],
                                                             datecomp_ques_event_date_groundings[0])
             fields["datecomp_ques_event_date_groundings"] = MetadataField(datecomp_ques_event_date_groundings_reversed)
@@ -309,6 +319,7 @@ class DROPReader(DatasetReader):
 
         # Number Comparison - Passage Number Grounding Supervision
         if strongly_supervised and numcomp_qspan_num_groundings:
+            # TODO(nitish): Reverse this in pre-processing
             numcomp_qspan_num_groundings_reversed = (numcomp_qspan_num_groundings[1],
                                                      numcomp_qspan_num_groundings[0])
             fields["numcomp_qspan_num_groundings"] = MetadataField(numcomp_qspan_num_groundings_reversed)
@@ -321,12 +332,14 @@ class DROPReader(DatasetReader):
         action2idx_map = {rule: i for i, rule in enumerate(language.all_possible_productions())}
 
         # Tuple[List[List[int]], List[List[int]]]
-        gold_action_seqs, gold_actionseq_masks = self.get_gold_action_seqs(qtype=qtype,
-                                                                           questions_tokens=question_text.split(' '),
-                                                                           language=language,
-                                                                           action2idx_map=action2idx_map)
+        (gold_action_seqs,
+         gold_actionseq_masks,
+         instance_w_goldprog) = self.get_gold_action_seqs(qtype=qtype,
+                                                          questions_tokens=question_text.split(' '),
+                                                          language=language,
+                                                          action2idx_map=action2idx_map)
         fields["gold_action_seqs"] = MetadataField((gold_action_seqs, gold_actionseq_masks))
-
+        fields["instance_w_goldprog"] = MetadataField(instance_w_goldprog)
 
 
         ########     ANSWER FIELDS      ###################
@@ -351,6 +364,7 @@ class DROPReader(DatasetReader):
 
             # We've pre-parsed the span types to passage / question spans
 
+            # Passage-span answer
             if answer_passage_spans:
                 answer_program_start_types.append("passage_span")
                 passage_span_fields = \
@@ -369,26 +383,33 @@ class DROPReader(DatasetReader):
             #     question_span_fields = [SpanField(-1, -1, fields["question"])]
             # fields["answer_as_question_spans"] = ListField(question_span_fields)
 
+            # Question-span answer
             question_span_fields = [SpanField(-1, -1, fields["question"])]
             fields["answer_as_question_spans"] = ListField(question_span_fields)
 
+            # Number answers
             ans_as_passage_number = [0] * len(passage_number_values)
             ans_as_year_difference = [0] * len(year_differences)
             if answer_type == "number":
                 answer_text = answer_annotation["number"]
                 answer_number = float(answer_text)
-                answer_number = int(answer_number) if int(answer_number) == answer_number else answer_number
+                # Number lists below are mix of floats and ints. Type of answer_number doesn't matter
 
-                # if answer_number in passage_number_values:
-                #     answer_program_start_types.append("passage_number")
-                #     ans_as_passage_number_idx = passage_number_values.index(answer_number)
-                #     ans_as_passage_number[ans_as_passage_number_idx] = 1
+                # Passage-number answer
+                if answer_number in passage_number_values:
+                    answer_program_start_types.append("passage_number")
+                    answer_number = int(answer_number) if int(answer_number) == answer_number else answer_number
+                    ans_as_passage_number_idx = passage_number_values.index(answer_number)
+                    ans_as_passage_number[ans_as_passage_number_idx] = 1
 
+                # Year-difference answer
                 if answer_number in year_differences:
+                    answer_number = int(answer_number) if int(answer_number) == answer_number else answer_number
                     answer_program_start_types.append("year_difference")
                     ans_as_year_difference_idx = year_differences.index(answer_number)
                     ans_as_year_difference[ans_as_year_difference_idx] = 1
 
+            fields["answer_as_passage_number"] = MetadataField(ans_as_passage_number)
             fields["answer_as_passage_number"] = MetadataField(ans_as_passage_number)
             fields["answer_as_year_difference"] = MetadataField(ans_as_year_difference)
 
@@ -398,9 +419,10 @@ class DROPReader(DatasetReader):
                 print(original_ques_text)
                 print(original_passage_text)
                 print(answer_annotation)
-                print(passage_date_strvals)
-                print(year_differences)
-                print(passage_number_values)
+                print(f"PassageNumVals:{passage_number_values}")
+                print(f"PassageDates:{passage_date_strvals}")
+                print(f"YearDiffs:{year_differences}")
+
 
             if self.skip_instances:
                 if len(answer_program_start_types) == 0:
@@ -424,6 +446,39 @@ class DROPReader(DatasetReader):
 
         fields["metadata"] = MetadataField(metadata)
         return Instance(fields)
+
+    @staticmethod
+    def sort_passage_numbers(passage_number_values, passage_number_entidxs):
+        """ It will be easier to do computations in the model if the number values are sorted in increasing order.
+            Here we sort passage_number_values and correspondingly change the values in passage_number_entidxs
+
+            passage_number_indices: List[int] are the token_idxs of numbers in the passage
+            passage_number_entidxs: List[int] For each index above, mapping to the actual number in passage_number_values
+
+            Therefore if we re-order passage_number_values, we need to change the values in passage_number_entidxs
+            accordingly. For example:
+            passage_number_values = [20, 10, 30]
+            passage_number_entidxs = [2, 1, 0, 0, 1]
+
+            After sorting,
+            passage_number_values = [10, 20, 30]
+            passage_number_entidxs = [2, 0, 1, 1, 0]
+        """
+
+        # [ (new_idx, value) ]
+        new_idx_values_tuples = sorted(enumerate(passage_number_values), key=lambda x: x[1])
+
+        sorted_passage_number_values = [x[1] for x in new_idx_values_tuples]
+        reordered_oldidxs = [x[0] for x in new_idx_values_tuples]
+
+        oldidx2newidx = {}
+        for new_idx, oldidx in enumerate(reordered_oldidxs):
+            oldidx2newidx[oldidx] = new_idx
+
+        sorted_passage_number_entidxs = [oldidx2newidx[x] for x in passage_number_entidxs]
+
+        return sorted_passage_number_values, sorted_passage_number_entidxs
+
 
     @staticmethod
     def convert_string_to_int(string: str):
@@ -588,11 +643,14 @@ class DROPReader(DatasetReader):
                              qtype: str,
                              questions_tokens: List[str],
                              language: DropLanguage,
-                             action2idx_map: Dict[str, int]) -> Tuple[List[List[int]], List[List[int]]]:
+                             action2idx_map: Dict[str, int]) -> Tuple[List[List[int]], List[List[int]], bool]:
+
         qtype_to_lffunc = {constants.DATECOMP_QTYPE: self.get_gold_logicalforms_datecomp,
                            constants.NUMCOMP_QTYPE: self.get_gold_logicalforms_numcomp}
+
         gold_actionseq_idxs: List[List[int]] = []
         gold_actionseq_mask: List[List[int]] = []
+        instance_w_goldprog: bool = False
 
         if qtype in qtype_to_lffunc:
             gold_logical_forms: List[str] = qtype_to_lffunc[qtype](questions_tokens, language)
@@ -603,11 +661,13 @@ class DROPReader(DatasetReader):
                 actionseq_mask: List[int] = [1 for _ in range(len(actionseq_idxs))]
                 gold_actionseq_idxs.append(actionseq_idxs)
                 gold_actionseq_mask.append(actionseq_mask)
+            instance_w_goldprog = True
         else:
             gold_actionseq_idxs.append([0])
             gold_actionseq_mask.append([0])
+            instance_w_goldprog = False
 
-        return gold_actionseq_idxs, gold_actionseq_mask
+        return gold_actionseq_idxs, gold_actionseq_mask, instance_w_goldprog
 
     @staticmethod
     def get_gold_logicalforms_datecomp(question_tokens: List[str], language: DropLanguage) -> List[str]:

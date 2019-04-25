@@ -322,12 +322,13 @@ def pruneDateQuestions(dataset, ngram_prune_only: bool):
                     event1_date_value = p_date_values[event1_date_idx]
                     event2_date_grounding[event2_date_idx] = 1
                     event2_date_value = p_date_values[event2_date_idx]
-    
+
+                # TODO(nitish): reverse this ordering and add qtype. The type gets added in augmentation though
+                # TODO(nitish): At the same time change QATTN in addQuestionAttentionVectors - augmentation
                 question_answer[constants.datecomp_ques_event_date_groundings] = [event1_date_grounding,
                                                                                   event2_date_grounding]
                 question_answer[constants.datecomp_ques_event_date_values] = [event1_date_value,
                                                                               event2_date_value]
-
 
                 new_qa_pairs.append(question_answer)
 

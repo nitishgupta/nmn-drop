@@ -30,9 +30,10 @@ def readDataset(input_json):
     return dataset
 
 
-def preprocess_HowManyYardsLongestShortestQues(dataset):
+def preprocess_HowManyYardsWasThe_ques(dataset):
     """ This function foccuses on questions that start with "How many yards was the". These can come directly from the
         preprocessed dataset, or from the corresponding ngram-slice; aka we test for this n-gram in this script as well.
+        Mostly, longest, shortest style questions. We can also prune these; look at prune_longestshortest_ques.py
 
         For a few question types given below, we add a corresponding qtype key and strongly_supervised flag to them
         This could act as gold-program auxiliary supervision in the model
@@ -57,23 +58,12 @@ def preprocess_HowManyYardsLongestShortestQues(dataset):
         `second longest = how_many_second_longest` and `second shortest = how_many_second_shortest`
     """
 
-    longest_questions = ["How many yards was the longest touchdown?",
-                         "How many yards was the longest touchdown pass?",
-                         "How many yards was the longest field goal?"]
+    longest_question_ngram = "How many yards was the longest"
+    shortest_question_ngram = "How many yards was the shortest"
+    second_longest_question_ngram = "How many yards was the second longest"
+    second_shortest_question_ngram = "How many yards was the second shortest"
 
-    shortest_questions = ["How many yards was the shortest touchdown?",
-                          "How many yards was the shortest touchdown pass?",
-                          "How many yards was the shortest field goal?"]
-
-    second_longest_questions = ["How many yards was the second longest touchdown pass?",
-                                "How many yards was the second longest touchdown?",
-                                "How many yards was the second longest field goal?"]
-
-    second_shortest_questions = ["How many yards was the second shortest touchdown?",
-                                 "How many yards was the second shortest touchdown pass?",
-                                 "How many yards was the second shortest field goal?"]
-
-    question_start_ngram = "How many yards was the"
+    how_many_yards_was_the = "How many yards was the"
 
     longest_qtype = 'how_many_yards_longest'
     shortest_qtype = 'how_many_yards_shortest'
@@ -94,33 +84,32 @@ def preprocess_HowManyYardsLongestShortestQues(dataset):
 
             original_question = question_answer[constants.cleaned_question]
 
-            if question_start_ngram.lower() in original_question.lower():
-                if original_question in longest_questions:
-                    question_answer[constants.qtype] = longest_qtype
+            if how_many_yards_was_the.lower() in original_question.lower():
+                if longest_question_ngram in original_question:
+                    question_answer[constants.qtype] = constants.YARDS_longest_qtype
                     question_answer[constants.strongly_supervised] = True
                     qtype_dist[longest_qtype] += 1
                     questions_w_qtypes += 1
 
-                elif original_question in shortest_questions:
-                    question_answer[constants.qtype] = shortest_qtype
+                elif shortest_question_ngram in original_question:
+                    question_answer[constants.qtype] = constants.YARDS_shortest_qtype
                     question_answer[constants.strongly_supervised] = True
                     qtype_dist[shortest_qtype] += 1
                     questions_w_qtypes += 1
 
-                elif original_question in second_longest_questions:
-                    question_answer[constants.qtype] = second_longest_qtype
+                elif second_longest_question_ngram in original_question:
+                    question_answer[constants.qtype] = constants.YARDS_second_longest_qtype
                     question_answer[constants.strongly_supervised] = True
                     qtype_dist[second_longest_qtype] += 1
                     questions_w_qtypes += 1
 
-                elif original_question in second_shortest_questions:
-                    question_answer[constants.qtype] = second_shortest_qtype
+                elif second_shortest_question_ngram in original_question:
+                    question_answer[constants.qtype] = constants.YARDS_second_shortest_qtype
                     question_answer[constants.strongly_supervised] = True
                     qtype_dist[second_shortest_qtype] += 1
                     questions_w_qtypes += 1
                 else:
                     question_answer[constants.strongly_supervised] = False
-
 
                 new_qa_pairs.append(question_answer)
 
@@ -166,9 +155,9 @@ if __name__ == '__main__':
     train_dataset = readDataset(input_trnfp)
     dev_dataset = readDataset(input_devfp)
 
-    new_train_dataset = preprocess_HowManyYardsLongestShortestQues(train_dataset)
+    new_train_dataset = preprocess_HowManyYardsWasThe_ques(train_dataset)
 
-    new_dev_dataset = preprocess_HowManyYardsLongestShortestQues(dev_dataset)
+    new_dev_dataset = preprocess_HowManyYardsWasThe_ques(dev_dataset)
 
     with open(output_trnfp, 'w') as f:
         json.dump(new_train_dataset, f, indent=4)

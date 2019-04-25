@@ -83,6 +83,12 @@ numcomp_qspan_num_groundings = "numcomp_qspan_num_groundings"
 numcomp_qspan_num_values = "numcomp_qspan_num_values"
 
 
+# How many yards was the longest/shortest ..
+YARDS_longest_qtype = 'how_many_yards_longest'
+YARDS_shortest_qtype = 'how_many_yards_shortest'
+YARDS_second_longest_qtype = 'how_many_yards_second_longest'
+YARDS_second_shortest_qtype = 'how_many_yards_second_shortest'
+
 COMMA="@COMMA@"
 LRB="@LRB@"
 RRB="@RRB@"

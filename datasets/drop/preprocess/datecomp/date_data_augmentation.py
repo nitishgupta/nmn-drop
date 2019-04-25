@@ -189,6 +189,7 @@ def getEventOrderSwitchQuestion(question_answer):
     new_question_answer[constants.question] = new_question_text
 
     new_question_answer[constants.answer_question_spans] = []
+    # TODO(nitish): Reverse order of groundings
     # Reversing the order of the date groundings
     if constants.datecomp_ques_event_date_groundings in question_answer:
         qevent_date_groundings = question_answer[constants.datecomp_ques_event_date_groundings]
@@ -434,6 +435,7 @@ def addQuestionAttentionVectors(question_answer):
         event1_attention = [0.0] * qlen
         event2_attention = [0.0] * qlen
 
+    # TODO(nitish)
     question_answer[constants.ques_attention_supervision] = (event1_attention, event2_attention)
 
     return question_answer

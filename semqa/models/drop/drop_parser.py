@@ -337,9 +337,14 @@ class DROPSemanticParser(DROPParserBase):
                 strongly_supervised: List[bool] = None,
                 qtypes: List[str] = None,
                 gold_action_seqs: List[Tuple[List[List[int]], List[List[int]]]]=None,
+                instance_w_goldprog: List[bool]=None,
                 qattn_supervision: torch.FloatTensor = None,
                 epoch_num: List[int] = None,
                 metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
+
+
+        print(answer_as_passage_number)
+
 
         batch_size = len(actions)
         device_id = self._get_prediction_device()
@@ -490,18 +495,20 @@ class DROPSemanticParser(DROPParserBase):
         action2idx_map = {rule: i for i, rule in enumerate(languages[0].all_possible_productions())}
         idx2action_map = languages[0].all_possible_productions()
 
-        # TODO(nitish): While training, we know the correct start-types for all instances and the gold-programs,
-        # for some. For instances,
-        #   with gold-programs, we should run a ConstrainedBeamSearch with target_sequences,
-        #   with start-types, figure out the valid start-action-ids and run ConstrainedBeamSearch with firststep_allo..
-        # In Validation, we should **always** be running an un-constrained BeamSearch
+        """
+        While training, we know the correct start-types for all instances and the gold-programs for some.
+        For instances,
+            #   with gold-programs, we should run a ConstrainedBeamSearch with target_sequences,
+            #   with start-types, figure out the valid start-action-ids and run ConstrainedBeamSearch with firststep_allo..
+        During Validation, we should **always** be running an un-constrained BeamSearch on the full language
+        """
         mml_loss = 0
         if self.training:
-            # If any instance is strongly supervised, then we need to divide the batch into supervised / unsupervised
+            # If any instance is provided with goldprog, we need to divide the batch into supervised / unsupervised
             # and run fully-constrained decoding on supervised, and start-type-constrained-decoding on the rest
-            if any(strongly_supervised):
-                supervised_instances = [i for (i, ss) in enumerate(strongly_supervised) if ss is True]
-                unsupervised_instances = [i for (i, ss) in enumerate(strongly_supervised) if ss is False]
+            if any(instance_w_goldprog):
+                supervised_instances = [i for (i, ss) in enumerate(instance_w_goldprog) if ss is True]
+                unsupervised_instances = [i for (i, ss) in enumerate(instance_w_goldprog) if ss is False]
 
                 # List of (gold_actionseq_idxs, gold_actionseq_masks) -- for supervised instances
                 supervised_gold_actionseqs = self._select_indices_from_list(gold_action_seqs, supervised_instances)
@@ -958,8 +965,7 @@ class DROPSemanticParser(DROPParserBase):
                     action_id = action2actionidx[actionstr]
                     start_action_ids.add(action_id)
                 else:
-                    print(f"StartType: {start_type} -- {answer_type_to_action_mapping}")
-                    raise RuntimeError
+                    logging.error(f"StartType: {start_type} has no valid action in {answer_type_to_action_mapping}")
             valid_start_action_ids.append(start_action_ids)
 
         return valid_start_action_ids
