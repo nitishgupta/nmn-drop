@@ -335,7 +335,7 @@ class DROPReader(DatasetReader):
         (gold_action_seqs,
          gold_actionseq_masks,
          instance_w_goldprog) = self.get_gold_action_seqs(qtype=qtype,
-                                                          questions_tokens=question_text.split(' '),
+                                                          question_tokens=question_text.split(' '),
                                                           language=language,
                                                           action2idx_map=action2idx_map)
         fields["gold_action_seqs"] = MetadataField((gold_action_seqs, gold_actionseq_masks))
@@ -641,7 +641,7 @@ class DROPReader(DatasetReader):
 
     def get_gold_action_seqs(self,
                              qtype: str,
-                             questions_tokens: List[str],
+                             question_tokens: List[str],
                              language: DropLanguage,
                              action2idx_map: Dict[str, int]) -> Tuple[List[List[int]], List[List[int]], bool]:
 
@@ -655,9 +655,9 @@ class DROPReader(DatasetReader):
         instance_w_goldprog: bool = False
 
         if qtype in qtype_to_lffunc:
-            gold_logical_forms: List[str] = qtype_to_lffunc[qtype](questions_tokens=questions_tokens,
+            gold_logical_forms: List[str] = qtype_to_lffunc[qtype](question_tokens=question_tokens,
                                                                    language=language)
-            assert len(gold_logical_forms) >= 1, f"No logical forms found for: {questions_tokens}"
+            assert len(gold_logical_forms) >= 1, f"No logical forms found for: {question_tokens}"
             for logical_form in gold_logical_forms:
                 gold_actions: List[str] = language.logical_form_to_action_sequence(logical_form)
                 actionseq_idxs: List[int] = [action2idx_map[a] for a in gold_actions]
@@ -685,7 +685,9 @@ class DROPReader(DatasetReader):
 
 
     @staticmethod
-    def get_gold_logicalforms_datecomp(question_tokens: List[str], language: DropLanguage) -> List[str]:
+    def get_gold_logicalforms_datecomp(**kwargs) -> List[str]:
+        question_tokens: List[str] = kwargs['question_tokens']
+        language: DropLanguage = kwargs['language']
         # "(find_passageSpanAnswer (compare_date_greater_than find_PassageAttention find_PassageAttention))"
         psa_start = "(find_passageSpanAnswer ("
         qsa_start = "(find_questionSpanAnswer ("
@@ -723,7 +725,9 @@ class DROPReader(DatasetReader):
         return gold_logical_forms
 
     @staticmethod
-    def get_gold_logicalforms_numcomp(question_tokens: List[str], language: DropLanguage) -> List[str]:
+    def get_gold_logicalforms_numcomp(**kwargs) -> List[str]:
+        question_tokens: List[str] = kwargs['question_tokens']
+        language: DropLanguage = kwargs['language']
         # "(find_passageSpanAnswer (compare_date_greater_than find_PassageAttention find_PassageAttention))"
         psa_start = "(find_passageSpanAnswer ("
         qsa_start = "(find_questionSpanAnswer ("
