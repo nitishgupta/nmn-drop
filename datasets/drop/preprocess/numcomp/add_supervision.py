@@ -284,7 +284,8 @@ def addSupervision(input_json: str, output_json: str, output_txt: str, THRESHOLD
                                 question_tokens[span2[0]: span2[1]] + ["]]"] + question_tokens[span2[1]:]
             annotated_qtxt = ' '.join(annotated_qtokens)
 
-            qa_pair[constants.ques_attention_supervision] = (attention1, attention2)
+            ''' Keeping reverse annotation '''
+            qa_pair[constants.ques_attention_supervision] = (attention2, attention1)
 
 
             ''' NUMBER GROUNDING SUPERVISION '''
@@ -354,14 +355,15 @@ def addSupervision(input_json: str, output_json: str, output_txt: str, THRESHOLD
                 #     txtfile.write(f"{event1_tokens}  {event2_tokens}")
                 #     txtfile.write(f"{value1}  {value2}\n\n")
 
-                qa_pair[constants.numcomp_qspan_num_groundings] = (span1_num_grounding, span2_num_grounding)
-                qa_pair[constants.numcomp_qspan_num_values] = (value1, value2)
+                ''' Storing reversed supervision since it helps a little '''
+                qa_pair[constants.qspan_numgrounding_supervision] = (span2_num_grounding, span1_num_grounding)
+                qa_pair[constants.qspan_numvalue_supervision] = (value2, value1)
             else:
                 strongly_supervised = False
                 span1_num_grounding = [0] * len(passage_num_values)
                 span2_num_grounding = [0] * len(passage_num_values)
-                qa_pair[constants.numcomp_qspan_num_groundings] = (span1_num_grounding, span2_num_grounding)
-                qa_pair[constants.numcomp_qspan_num_values] = (value1, value2)
+                qa_pair[constants.qspan_numgrounding_supervision] = (span2_num_grounding, span1_num_grounding)
+                qa_pair[constants.qspan_numvalue_supervision] = (-1, -1)
 
             ''' QTYPE SUPERVISION '''
             qa_pair[constants.qtype] = constants.NUMCOMP_QTYPE

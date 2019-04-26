@@ -74,13 +74,13 @@ ques_attention_supervision = "ques_attention_supervision"
 
 # Date comparision question-type
 DATECOMP_QTYPE = "date_comparison"
-datecomp_ques_event_date_groundings = "datecomp_ques_event_date_groundings"
-datecomp_ques_event_date_values = "datecomp_ques_event_date_values"
+qspan_dategrounding_supervision = "qspan_dategrounding_supervision"
+qspan_datevalue_supervision = "qspan_datevalue_supervision"
 
 # Number comparision questions -- grounding should be a 2-tuple of grounding into passage_num_normalized_values
 NUMCOMP_QTYPE = "number_comparison"
-numcomp_qspan_num_groundings = "numcomp_qspan_num_groundings"
-numcomp_qspan_num_values = "numcomp_qspan_num_values"
+qspan_numgrounding_supervision = "qspan_numgrounding_supervision"
+qspan_numvalue_supervision = "qspan_numvalue_supervision"
 
 
 # How many yards was the longest/shortest ..

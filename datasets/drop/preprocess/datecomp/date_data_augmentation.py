@@ -191,13 +191,13 @@ def getEventOrderSwitchQuestion(question_answer):
     new_question_answer[constants.answer_question_spans] = []
     # TODO(nitish): Reverse order of groundings
     # Reversing the order of the date groundings
-    if constants.datecomp_ques_event_date_groundings in question_answer:
-        qevent_date_groundings = question_answer[constants.datecomp_ques_event_date_groundings]
-        qevent_date_values = question_answer[constants.datecomp_ques_event_date_values]
+    if constants.qspan_dategrounding_supervision in question_answer:
+        qevent_date_groundings = question_answer[constants.qspan_dategrounding_supervision]
+        qevent_date_values = question_answer[constants.qspan_datevalue_supervision]
         new_qevent_date_groundings = (qevent_date_groundings[1], qevent_date_groundings[0])
         new_qevent_date_values = (qevent_date_values[1], qevent_date_values[0])
-        new_question_answer[constants.datecomp_ques_event_date_groundings] = new_qevent_date_groundings
-        new_question_answer[constants.datecomp_ques_event_date_values] = new_qevent_date_values
+        new_question_answer[constants.qspan_dategrounding_supervision] = new_qevent_date_groundings
+        new_question_answer[constants.qspan_datevalue_supervision] = new_qevent_date_values
 
     new_question_answer["augmented_data"] = True
     new_question_answer[constants.query_id] = question_answer[constants.query_id] + '-dc-event-switch'
@@ -302,7 +302,7 @@ def getQuestionOperatorSwitchQA_wo_QSA(question_answer,
     return new_question_answer
 
 
-
+'''
 def getQuestionOperatorSwitchQA_w_QSA(question_answer,
                                       passage_tokenized_text,
                                       passage_token_charidxs, question_token_charidxs,
@@ -413,7 +413,7 @@ def getQuestionOperatorSwitchQA_w_QSA(question_answer,
     new_question_answer["augmented_data"] = True
     new_question_answer[constants.query_id] = question_answer[constants.query_id] + '-dc-qop-switch'
     return new_question_answer
-
+'''
 
 def addQuestionAttentionVectors(question_answer):
     question_tokenized_text = question_answer[constants.tokenized_question]
@@ -435,8 +435,8 @@ def addQuestionAttentionVectors(question_answer):
         event1_attention = [0.0] * qlen
         event2_attention = [0.0] * qlen
 
-    # TODO(nitish)
-    question_answer[constants.ques_attention_supervision] = (event1_attention, event2_attention)
+    ''' Add attentions in reverse order -- seem to help '''
+    question_answer[constants.ques_attention_supervision] = (event2_attention, event1_attention)
 
     return question_answer
 
@@ -444,10 +444,10 @@ def addQuestionAttentionVectors(question_answer):
 def strongSupervisionFlagAndQType(question_answer_pairs: List[Dict]):
     num_strongly_supervised_qas = 0
     for question_answer in question_answer_pairs:
-        if (constants.datecomp_ques_event_date_groundings in question_answer and
+        if (constants.qspan_dategrounding_supervision in question_answer and
                 constants.ques_attention_supervision in question_answer):
 
-            (event1_date_grn, event2_date_grn) = question_answer[constants.datecomp_ques_event_date_groundings]
+            (event1_date_grn, event2_date_grn) = question_answer[constants.qspan_dategrounding_supervision]
             (qevent1_qattn, qevent2_qattn) = question_answer[constants.ques_attention_supervision]
 
             if (sum(event1_date_grn) == 0 or
@@ -469,7 +469,7 @@ def strongSupervisionFlagAndQType(question_answer_pairs: List[Dict]):
     return question_answer_pairs, num_strongly_supervised_qas
 
 
-def augmentDateComparisonData(dataset, with_QSA: bool):
+def augmentDateComparisonData(dataset):
     """ Given a dataset containing date-comparison questions, we augment the data in the following manner:
         - Adding new questions. For eg: "What happened first, eventA or eventB ?"
             1. QuesEvent switched questions: "What happened first, eventB or eventA" - with same answer. 100% success
@@ -526,20 +526,12 @@ def augmentDateComparisonData(dataset, with_QSA: bool):
                 new_qa_pairs.append(event_switch_question_answer)
 
             # "first A or B" --> "second A or B"
-            if with_QSA:
-                qoperator_switch_question_answer = getQuestionOperatorSwitchQA_w_QSA(question_answer,
-                                                                                     passage_tokenized_text,
-                                                                                     passage_token_charidxs,
-                                                                                     question_token_charidxs,
-                                                                                     original_passage_text,
-                                                                                     original_question_text)
-            else:
-                qoperator_switch_question_answer = getQuestionOperatorSwitchQA_wo_QSA(question_answer,
-                                                                                      passage_tokenized_text,
-                                                                                      passage_token_charidxs,
-                                                                                      question_token_charidxs,
-                                                                                      original_passage_text,
-                                                                                      original_question_text)
+            qoperator_switch_question_answer = getQuestionOperatorSwitchQA_wo_QSA(question_answer,
+                                                                                  passage_tokenized_text,
+                                                                                  passage_token_charidxs,
+                                                                                  question_token_charidxs,
+                                                                                  original_passage_text,
+                                                                                  original_question_text)
 
             if qoperator_switch_question_answer is not None:
                 qoperator_switch_question_answer = addQuestionAttentionVectors(qoperator_switch_question_answer)
@@ -549,22 +541,13 @@ def augmentDateComparisonData(dataset, with_QSA: bool):
 
             if event_switch_question_answer is not None:
                 # "first B or A" --> "second B or A"
-                if with_QSA:
-                    event_sw_qoperator_sw_question_answer = getQuestionOperatorSwitchQA_w_QSA(
-                                                                                        event_switch_question_answer,
-                                                                                        passage_tokenized_text,
-                                                                                        passage_token_charidxs,
-                                                                                        question_token_charidxs,
-                                                                                        original_passage_text,
-                                                                                        original_question_text)
-                else:
-                    event_sw_qoperator_sw_question_answer = getQuestionOperatorSwitchQA_wo_QSA(
-                                                                                        event_switch_question_answer,
-                                                                                        passage_tokenized_text,
-                                                                                        passage_token_charidxs,
-                                                                                        question_token_charidxs,
-                                                                                        original_passage_text,
-                                                                                        original_question_text)
+                event_sw_qoperator_sw_question_answer = getQuestionOperatorSwitchQA_wo_QSA(
+                                                                                    event_switch_question_answer,
+                                                                                    passage_tokenized_text,
+                                                                                    passage_token_charidxs,
+                                                                                    question_token_charidxs,
+                                                                                    original_passage_text,
+                                                                                    original_question_text)
                 if event_sw_qoperator_sw_question_answer is not None:
                     event_sw_qoperator_sw_question_answer = \
                             addQuestionAttentionVectors(event_sw_qoperator_sw_question_answer)
@@ -603,18 +586,11 @@ if __name__=='__main__':
     train_json = 'drop_dataset_train.json'
     dev_json = 'drop_dataset_dev.json'
 
-    # input_dir = args.input_dir
-    # output_dir = args.output_dir
+    input_dir = args.input_dir
+    output_dir = args.output_dir
 
-    input_dir = "./resources/data/drop/date/datecomp_traindev_pruned"
-    # output_dir_w_qsa = "./resources/data/drop/date/datecomp_traindevpruned_augment_wqsa"
-    output_dir_wo_qsa = "./resources/data/drop/date/datecomp_traindevpruned_augment_woqsa"
-
-    # if not os.path.exists(output_dir_w_qsa):
-    #     os.makedirs(output_dir_w_qsa, exist_ok=True)
-
-    if not os.path.exists(output_dir_wo_qsa):
-        os.makedirs(output_dir_wo_qsa, exist_ok=True)
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir, exist_ok=True)
 
     input_trnfp = os.path.join(input_dir, train_json)
     input_devfp = os.path.join(input_dir, dev_json)
@@ -622,11 +598,11 @@ if __name__=='__main__':
     train_dataset = readDataset(input_trnfp)
     dev_dataset = readDataset(input_devfp)
 
-    output_trnfp = os.path.join(output_dir_wo_qsa, train_json)
-    output_devfp = os.path.join(output_dir_wo_qsa, dev_json)
+    output_trnfp = os.path.join(output_dir, train_json)
+    output_devfp = os.path.join(output_dir, dev_json)
 
-    new_train_dataset = augmentDateComparisonData(train_dataset, with_QSA=False)
-    new_dev_dataset = augmentDateComparisonData(dev_dataset, with_QSA=False)
+    new_train_dataset = augmentDateComparisonData(train_dataset)
+    new_dev_dataset = augmentDateComparisonData(dev_dataset)
 
     with open(output_trnfp, 'w') as f:
         json.dump(new_train_dataset, f, indent=4)

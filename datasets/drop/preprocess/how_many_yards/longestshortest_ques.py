@@ -21,7 +21,7 @@ def preprocess_HowManyYardsLongestShortestQues(dataset):
     """ This function takes the output of the how_many_yards.py (containing qtype-supervision)
         and prunes only the longest / shortest question to test max_distribution / min_distribution
 
-        This also adds question_attention supervision to "longest touchdown of the second half" in
+        This also adds question_attention supervision. Attention=1.0 for "touchdown of the second half" in
         "How many yards was the second longest touchdown of the second half?"
     """
 
@@ -46,17 +46,10 @@ def preprocess_HowManyYardsLongestShortestQues(dataset):
 
                 # How many yards was the longest/shortest has 6 tokens and excluding question mark at the end
                 attention_vec = [0.0 if i < 6 or i == qlen-1 else 1.0 for i in range(qlen)]
-                sum_att = sum(attention_vec)
-
-                # ill-formed question
-                if sum_att == 0:
-                    continue
-
-                normalized_attention_vec = [x/sum_att for x in attention_vec]
 
                 # This is a list of question attentions for the possibly many predicates that take
                 # question_attention as a side_arg in the correct program
-                question_answer[constants.ques_attention_supervision] = [normalized_attention_vec]
+                question_answer[constants.ques_attention_supervision] = [attention_vec]
 
                 new_qa_pairs.append(question_answer)
 
@@ -84,8 +77,8 @@ if __name__ == '__main__':
     input_dir = args.input_dir
     output_dir = args.output_dir
 
-    input_dir = "./resources/data/drop/num/how_many_yards_was_the"
-    output_dir = "./resources/data/drop/num/longest_shortest_yards"
+    input_dir = "./resources/data/drop_re/num/how_many_yards_was"
+    output_dir = "./resources/data/drop_re/num/longest_shortest_yards"
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)

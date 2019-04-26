@@ -110,12 +110,12 @@ class DROPReader(DatasetReader):
                     ques_attn_supervision = question_answer[constants.ques_attention_supervision]
 
                 datecomp_ques_event_date_groundings = None
-                if constants.datecomp_ques_event_date_groundings in question_answer:
-                    datecomp_ques_event_date_groundings = question_answer[constants.datecomp_ques_event_date_groundings]
+                if constants.qspan_dategrounding_supervision in question_answer:
+                    datecomp_ques_event_date_groundings = question_answer[constants.qspan_dategrounding_supervision]
 
                 numcomp_qspan_num_groundings = None
-                if constants.numcomp_qspan_num_groundings in question_answer:
-                    numcomp_qspan_num_groundings = question_answer[constants.numcomp_qspan_num_groundings]
+                if constants.qspan_numgrounding_supervision in question_answer:
+                    numcomp_qspan_num_groundings = question_answer[constants.qspan_numgrounding_supervision]
 
                 instance = self.text_to_instance(question_text,
                                                  original_ques_text,
@@ -238,10 +238,6 @@ class DROPReader(DatasetReader):
         passage_number_values = p_num_normvals
         passage_number_indices = [tokenidx for (_, tokenidx, _) in p_num_mens]
 
-        (passage_number_values,
-         passage_number_entidxs) = self.sort_passage_numbers(passage_number_values=passage_number_values,
-                                                             passage_number_entidxs=passage_number_entidxs)
-
         _pruned_number_indices, _pruned_number_entidxs = [], []
         for number_idx, number_entidx in zip(passage_number_indices, passage_number_entidxs):
             if number_idx >= passage_len:
@@ -333,11 +329,7 @@ class DROPReader(DatasetReader):
 
         # Date-comparison - Date Grounding Supervision
         if strongly_supervised and datecomp_ques_event_date_groundings:
-            # TODO(nitish): Reverse this in pre-processing
-            # TODO(nitish): Prune this based on pruning of date_values above
-            datecomp_ques_event_date_groundings_reversed = (datecomp_ques_event_date_groundings[1],
-                                                            datecomp_ques_event_date_groundings[0])
-            fields["datecomp_ques_event_date_groundings"] = MetadataField(datecomp_ques_event_date_groundings_reversed)
+            fields["datecomp_ques_event_date_groundings"] = MetadataField(datecomp_ques_event_date_groundings)
         else:
             empty_date_grounding = [0.0] * len(passage_date_objs)
             empty_date_grounding_tuple = (empty_date_grounding, empty_date_grounding)
@@ -345,15 +337,12 @@ class DROPReader(DatasetReader):
 
         # Number Comparison - Passage Number Grounding Supervision
         if strongly_supervised and numcomp_qspan_num_groundings:
-            # TODO(nitish): Reverse this in pre-processing
-            # TODO(nitish): Prune this based on pruning of number values above
-            numcomp_qspan_num_groundings_reversed = (numcomp_qspan_num_groundings[1],
-                                                     numcomp_qspan_num_groundings[0])
-            fields["numcomp_qspan_num_groundings"] = MetadataField(numcomp_qspan_num_groundings_reversed)
+            fields["numcomp_qspan_num_groundings"] = MetadataField(numcomp_qspan_num_groundings)
         else:
             empty_passagenum_grounding = [0.0] * len(passage_number_values)
             empty_passagenum_grounding_tuple = (empty_passagenum_grounding, empty_passagenum_grounding)
             fields["numcomp_qspan_num_groundings"] = MetadataField(empty_passagenum_grounding_tuple)
+
 
         # Get gold action_seqs for strongly_supervised questions
         action2idx_map = {rule: i for i, rule in enumerate(language.all_possible_productions())}
@@ -361,7 +350,8 @@ class DROPReader(DatasetReader):
         # Tuple[List[List[int]], List[List[int]]]
         (gold_action_seqs,
          gold_actionseq_masks,
-         instance_w_goldprog) = self.get_gold_action_seqs(qtype=qtype,
+         instance_w_goldprog) = self.get_gold_action_seqs(strongly_supervised=strongly_supervised,
+                                                          qtype=qtype,
                                                           question_tokens=question_text.split(' '),
                                                           language=language,
                                                           action2idx_map=action2idx_map)
@@ -677,6 +667,7 @@ class DROPReader(DatasetReader):
         return candidate_subtractions
 
     def get_gold_action_seqs(self,
+                             strongly_supervised: bool,
                              qtype: str,
                              question_tokens: List[str],
                              language: DropLanguage,
@@ -690,6 +681,12 @@ class DROPReader(DatasetReader):
         gold_actionseq_idxs: List[List[int]] = []
         gold_actionseq_mask: List[List[int]] = []
         instance_w_goldprog: bool = False
+
+        if not strongly_supervised:
+            gold_actionseq_idxs.append([0])
+            gold_actionseq_mask.append([0])
+            instance_w_goldprog = False
+            return gold_actionseq_idxs, gold_actionseq_mask, instance_w_goldprog
 
         if qtype in qtype_to_lffunc:
             gold_logical_forms: List[str] = qtype_to_lffunc[qtype](question_tokens=question_tokens,

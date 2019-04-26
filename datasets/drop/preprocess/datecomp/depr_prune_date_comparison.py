@@ -309,10 +309,10 @@ def pruneDateQuestions(dataset, weakdate: bool = False):
                     event2_date_grounding[event2_date_idx] = 1
                     event2_date_value = p_date_values[event2_date_idx]
 
-            question_answer[constants.datecomp_ques_event_date_groundings] = [event1_date_grounding,
-                                                                              event2_date_grounding]
-            question_answer[constants.datecomp_ques_event_date_values] = [event1_date_value,
-                                                                          event2_date_value]
+            question_answer[constants.qspan_dategrounding_supervision] = [event1_date_grounding,
+                                                                          event2_date_grounding]
+            question_answer[constants.qspan_datevalue_supervision] = [event1_date_value,
+                                                                      event2_date_value]
 
             if date_near_event1 and date_near_event2:
                 new_qa_pairs.append(question_answer)

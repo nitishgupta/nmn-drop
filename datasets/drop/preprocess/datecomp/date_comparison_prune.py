@@ -200,7 +200,7 @@ def dateInNeighborhood(passage_tokenidxs: List[int], passage_date_tokenidxs: Lis
         return True, closest_date_entidx
 
 
-def pruneDateQuestions(dataset, ngram_prune_only: bool):
+def pruneDateQuestions(dataset):
     """ Prunes questions where a date is not present near both events in the question.
         1. Find events in the question
         2. Find whether a nearby date exists or not; if yes, which date.
@@ -243,94 +243,86 @@ def pruneDateQuestions(dataset, ngram_prune_only: bool):
             question_tokens: List[str] = question_tokenized_text.split(' ')
             answer_annotation = question_answer[constants.answer]
 
-            if not date_comparison_filter(question_answer[constants.tokenized_question]):
+            if not date_comparison_filter(question_tokenized_text):
                 continue
             if question_answer[constants.answer_type] != constants.SPAN_TYPE:
                 continue
 
-            if ngram_prune_only:
-                new_qa_pairs.append(question_answer)
+            event_spans = quesEvents(question_tokenized_text)
+            answer_span: str = answer_annotation["spans"][0]
+
+            # If events are not found, we cannot find dates etc. therefore add this question
+            if event_spans is None:
                 continue
 
+            # For questions with identified events, we'll try to ground dates
+            event1_span, event2_span = event_spans
+
+            event1_tokens = question_tokens[event1_span[0]: event1_span[1]]
+            event2_tokens = question_tokens[event2_span[0]: event2_span[1]]
+
+            # List of tokenidxs in passage that is a rough grounding for event 1/2
+            event1_passage_tokenidxs: List[int] = matchEventToPassage(event1_tokens, passage_tokens)
+            event2_passage_tokenidxs: List[int] = matchEventToPassage(event2_tokens, passage_tokens)
+
+            date_near_event1, event1_date_idx = dateInNeighborhood(event1_passage_tokenidxs, passage_date_tokenidxs,
+                                                                   passage_datetoken_entidxs, threshold=THRESHOLD)
+            date_near_event2, event2_date_idx = dateInNeighborhood(event2_passage_tokenidxs, passage_date_tokenidxs,
+                                                                   passage_datetoken_entidxs, threshold=THRESHOLD)
+
+            if not date_near_event1 or not date_near_event2:
+                continue
+
+            question_operator = getQuestionComparisonOperator(question_tokens)
+            answer_event = find_answer_event(answer_span, event1_tokens, event2_tokens)
+
+            # Adding a tuple of zero vectors and empty_values to later store the date grounding of the two ques-events
+            event1_date_grounding = [0] * len(p_date_values)
+            event2_date_grounding = [0] * len(p_date_values)
+            event1_date_value = [-1, -1, -1]
+            event2_date_value = [-1, -1, -1]
+
+            # First find if the date groundings are relevant, checks:
+            # 1. Date grounding shouldn't be -1
+            # 2. Shouldn't be equal
+            # 3. The date grounding should be consistent with answer annotation
+            keep_dates = True
+            if not (event1_date_idx == -1 or event2_date_idx == -1 or (event1_date_idx == event2_date_idx)):
+                answer_event_date = event1_date_idx if answer_event == FIRST else event2_date_idx
+                other_event_date = event2_date_idx if answer_event == FIRST else event1_date_idx
+
+                answer_event_date = Date(year=p_date_values[answer_event_date][2],
+                                         month=p_date_values[answer_event_date][1],
+                                         day=p_date_values[answer_event_date][0])
+                other_event_date = Date(year=p_date_values[other_event_date][2],
+                                        month=p_date_values[other_event_date][1],
+                                        day=p_date_values[other_event_date][0])
+
+                # If the questions asks for what happened first, and our date grounding says that answer happened later,
+                # means our date annotation is wrong.
+                if question_operator == FIRST:
+                    if answer_event_date > other_event_date:
+                        keep_dates = False
+                if question_operator == SECOND:
+                    if answer_event_date < other_event_date:
+                        keep_dates = False
             else:
-                # Below is only run if ONLY_NGRAM = FALSE
+                keep_dates = False
 
-                event_spans = quesEvents(question_tokenized_text)
-                answer_span: str = answer_annotation["spans"][0]
+            if keep_dates:
+                numexamaples_w_dates_annotated += 1
+                event1_date_grounding[event1_date_idx] = 1
+                event1_date_value = p_date_values[event1_date_idx]
+                event2_date_grounding[event2_date_idx] = 1
+                event2_date_value = p_date_values[event2_date_idx]
 
-                # If events are not found, we cannot find dates etc. therefore add this question
-                if event_spans is None:
-                    continue
+            ''' We store the groundings in the reverse order since they seem to help '''
+            question_answer[constants.qspan_dategrounding_supervision] = [event2_date_grounding,
+                                                                          event1_date_grounding]
+            question_answer[constants.qspan_datevalue_supervision] = [event2_date_value,
+                                                                      event1_date_value]
 
-                # For questions with identified events, we'll try to ground dates
-                event1_span, event2_span = event_spans
-
-                event1_tokens = question_tokens[event1_span[0]: event1_span[1]]
-                event2_tokens = question_tokens[event2_span[0]: event2_span[1]]
-    
-                # List of tokenidxs in passage that is a rough grounding for event 1/2
-                event1_passage_tokenidxs: List[int] = matchEventToPassage(event1_tokens, passage_tokens)
-                event2_passage_tokenidxs: List[int] = matchEventToPassage(event2_tokens, passage_tokens)
-    
-                date_near_event1, event1_date_idx = dateInNeighborhood(event1_passage_tokenidxs, passage_date_tokenidxs,
-                                                                       passage_datetoken_entidxs, threshold=THRESHOLD)
-                date_near_event2, event2_date_idx = dateInNeighborhood(event2_passage_tokenidxs, passage_date_tokenidxs,
-                                                                       passage_datetoken_entidxs, threshold=THRESHOLD)
-
-                if not date_near_event1 or not date_near_event2:
-                    continue
-    
-                question_operator = getQuestionComparisonOperator(question_tokens)
-                answer_event = find_answer_event(answer_span, event1_tokens, event2_tokens)
-    
-                # Adding a tuple of zero vectors and empty_values to later store the date grounding of the two ques-events
-                event1_date_grounding = [0] * len(p_date_values)
-                event2_date_grounding = [0] * len(p_date_values)
-                event1_date_value = [-1, -1, -1]
-                event2_date_value = [-1, -1, -1]
-
-                # First find if the date groundings are relevant, checks:
-                # 1. Date grounding shouldn't be -1
-                # 2. Shouldn't be equal
-                # 3. The date grounding should be consistent with answer annotation
-                keep_dates = True
-                if not (event1_date_idx == -1 or event2_date_idx == -1 or (event1_date_idx == event2_date_idx)):
-                    answer_event_date = event1_date_idx if answer_event == FIRST else event2_date_idx
-                    other_event_date = event2_date_idx if answer_event == FIRST else event1_date_idx
-
-                    answer_event_date = Date(year=p_date_values[answer_event_date][2],
-                                             month=p_date_values[answer_event_date][1],
-                                             day=p_date_values[answer_event_date][0])
-                    other_event_date = Date(year=p_date_values[other_event_date][2],
-                                            month=p_date_values[other_event_date][1],
-                                            day=p_date_values[other_event_date][0])
-
-                    # If the questions asks for what happened first, and our date grounding says that answer happened later,
-                    # means our date annotation is wrong.
-                    if question_operator == FIRST:
-                        if answer_event_date > other_event_date:
-                            keep_dates = False
-                    if question_operator == SECOND:
-                        if answer_event_date < other_event_date:
-                            keep_dates = False
-                else:
-                    keep_dates = False
-
-                if keep_dates:
-                    numexamaples_w_dates_annotated += 1
-                    event1_date_grounding[event1_date_idx] = 1
-                    event1_date_value = p_date_values[event1_date_idx]
-                    event2_date_grounding[event2_date_idx] = 1
-                    event2_date_value = p_date_values[event2_date_idx]
-
-                # TODO(nitish): reverse this ordering and add qtype. The type gets added in augmentation though
-                # TODO(nitish): At the same time change QATTN in addQuestionAttentionVectors - augmentation
-                question_answer[constants.datecomp_ques_event_date_groundings] = [event1_date_grounding,
-                                                                                  event2_date_grounding]
-                question_answer[constants.datecomp_ques_event_date_values] = [event1_date_value,
-                                                                              event2_date_value]
-
-                new_qa_pairs.append(question_answer)
+            new_qa_pairs.append(question_answer)
 
 
         if len(new_qa_pairs) > 0:
@@ -367,10 +359,6 @@ if __name__=='__main__':
     input_dir = args.input_dir
     output_dir = args.output_dir
 
-
-    input_dir = "./resources/data/drop/preprocess_new"
-    output_dir = "./resources/data/drop/date/datecomp_traindev_pruned"
-
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
 
@@ -382,9 +370,9 @@ if __name__=='__main__':
     train_dataset = readDataset(input_trnfp)
     dev_dataset = readDataset(input_devfp)
 
-    new_train_dataset = pruneDateQuestions(train_dataset, ngram_prune_only=False)
+    new_train_dataset = pruneDateQuestions(train_dataset)
 
-    new_dev_dataset = pruneDateQuestions(dev_dataset, ngram_prune_only=False)
+    new_dev_dataset = pruneDateQuestions(dev_dataset)
 
     with open(output_trnfp, 'w') as f:
         json.dump(new_train_dataset, f, indent=4)

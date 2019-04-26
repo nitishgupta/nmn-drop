@@ -23,8 +23,8 @@ def printDataset(dataset, outfile):
             dates = pinfo[constants.passage_date_normalized_values]
             for qapair in qapairs:
                 q = qapair[constants.original_question]
-                if constants.datecomp_ques_event_date_groundings in qapair:
-                    passage_event_date_groundings = qapair[constants.datecomp_ques_event_date_groundings]
+                if constants.qspan_dategrounding_supervision in qapair:
+                    passage_event_date_groundings = qapair[constants.qspan_dategrounding_supervision]
                 else:
                     passage_event_date_groundings = []
                 if constants.question_event_date_values in qapair:

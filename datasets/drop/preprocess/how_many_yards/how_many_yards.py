@@ -31,31 +31,11 @@ def readDataset(input_json):
 
 
 def preprocess_HowManyYardsWasThe_ques(dataset):
-    """ This function foccuses on questions that start with "How many yards was the". These can come directly from the
-        preprocessed dataset, or from the corresponding ngram-slice; aka we test for this n-gram in this script as well.
-        Mostly, longest, shortest style questions. We can also prune these; look at prune_longestshortest_ques.py
+    """ This function prunes questions that start with "How many yards was".
+        Mostly, longest, shortest style questions. We can also prune for these; look at longestshortest_ques.py
 
-        For a few question types given below, we add a corresponding qtype key and strongly_supervised flag to them
-        This could act as gold-program auxiliary supervision in the model
-
-        How many yards was the longest touchdown?
-        How many yards was the longest touchdown pass?" -- 349 examples
-        How many yards was the longest field goal?"
-
-        How many yards was the shortest touchdown?
-        How many yards was the shortest touchdown pass?
-        How many yards was the shortest field goal?
-
-        How many yards was the second longest touchdown pass? -- 27
-        How many yards was the second longest touchdown? -- 38
-        How many yards was the second longest field goal? -- 37
-
-        How many yards was the second shortest touchdown? -- 7
-        How many yards was the second shortest touchdown pass?
-        How many yards was the second shortest field goal? -- 10
-
-        qtype for `longest = how_many_longest`; `shortest = how_many_shortest`;
-        `second longest = how_many_second_longest` and `second shortest = how_many_second_shortest`
+        Along with pruning, we also supervise the longest/shortest/second longest/second shortest questions
+        by adding the question_type for those questions.
     """
 
     longest_question_ngram = "How many yards was the longest"
@@ -63,7 +43,7 @@ def preprocess_HowManyYardsWasThe_ques(dataset):
     second_longest_question_ngram = "How many yards was the second longest"
     second_shortest_question_ngram = "How many yards was the second shortest"
 
-    how_many_yards_was_the = "How many yards was the"
+    how_many_yards_was_the = "How many yards was"
 
     longest_qtype = 'how_many_yards_longest'
     shortest_qtype = 'how_many_yards_shortest'
@@ -139,8 +119,8 @@ if __name__ == '__main__':
     input_dir = args.input_dir
     output_dir = args.output_dir
 
-    input_dir = "./resources/data/drop/analysis/ngram/num/how_many_yards_was_the/"
-    output_dir = "./resources/data/drop/num/how_many_yards_was_the"
+    input_dir = "./resources/data/drop_re/preprocess"
+    output_dir = "./resources/data/drop_re/num/how_many_yards_was"
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 
-ROOT_DIR=./resources/data/drop
+ROOT_DIR=./resources/data/drop_re
 
-ANNOTATION_FOR_PARAS=50
+ANNOTATION_FOR_PARAS=100
 
-INPUT_DIR=${ROOT_DIR}/num/numcomp_prune_supervised
-OUTPUT_DIR=${ROOT_DIR}/num/numcomp_prune_supervised_${ANNOTATION_FOR_PARAS}
+INPUT_DIR=${ROOT_DIR}/date/datecomp_full
+OUTPUT_DIR=${ROOT_DIR}/date/datecomp_${ANNOTATION_FOR_PARAS}
 
 mkdir ${OUTPUT_DIR}
 

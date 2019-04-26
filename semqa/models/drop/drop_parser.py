@@ -1044,17 +1044,20 @@ class DROPSemanticParser(DROPParserBase):
                 relevant_action_idx = 0
                 relevant_action = relevant_actions[relevant_action_idx]
                 gold_qattn = instance_qattn_supervision[relevant_action_idx]
-                if torch.sum(gold_qattn) == 0.0:
-                    print(f"Gold attention sum == 0.0. StronglySupervised: {strongly_supervised_instance}")
                 for action, side_arg in zip(program, side_args):
                     if action == relevant_action:
                         question_attention = side_arg['question_attention']
                         # log_question_attention = torch.log(question_attention + 1e-40)
                         # l = torch.sum(log_question_attention * gold_qattn)
                         # loss += l
-                        l = torch.sum(question_attention * gold_qattn)
-                        loss += torch.log(l)
-                        normalizer += 1
+                        if torch.sum(gold_qattn) != 0.0:
+                            l = torch.sum(question_attention * gold_qattn)
+                            loss += torch.log(l)
+                            normalizer += 1
+                        else:
+                            print(f"\nGold attention sum == 0.0."
+                                  f"\nStronglySupervised: {strongly_supervised_instance}"
+                                  f"\nQtype: {qtype}")
                         relevant_action_idx += 1
 
                         # All relevant actions for this instance in this program are found

@@ -3,11 +3,11 @@
 export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
-DATASET_NAME=num/longest_shortest_yards
-# DATASET_NAME=date_num/dc_nc_100_yeardiff
+# DATASET_NAME=num/longest_shortest_yards
+DATASET_NAME=date_num/dc_nc_100_yeardiff
 
 
-DATASET_DIR=./resources/data/drop/${DATASET_NAME}
+DATASET_DIR=./resources/data/drop_re/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
 VALFILE=${DATASET_DIR}/drop_dataset_dev.json
 

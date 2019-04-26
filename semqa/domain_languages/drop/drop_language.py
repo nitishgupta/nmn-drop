@@ -255,12 +255,12 @@ class DropLanguage(DomainLanguage):
                  parameters: ExecutorParameters,
                  start_types=None,
                  device_id: int = -1,
-                 max_samples=5,
+                 max_samples=2,
                  metadata={},
                  debug=False) -> None:
 
         if start_types is None:
-            start_types = {PassageSpanAnswer, YearDifference, PassageNumber}   # , QuestionSpanAnswer}
+            start_types = {PassageSpanAnswer, YearDifference, PassageNumber}    # , QuestionSpanAnswer}
 
         super().__init__(start_types=start_types)
 
@@ -1008,7 +1008,6 @@ class DropLanguage(DomainLanguage):
                                   debug_value=debug_value)
     '''
 
-
     @predicate
     def max_PassageNumber(self, number_distribution: PassageNumber) -> PassageNumber:
         num_dist = number_distribution._value
@@ -1021,7 +1020,14 @@ class DropLanguage(DomainLanguage):
 
         maximum_distribution = torch.clamp(maximum_distribution, min=1e-10, max=1 - 1e-10)
 
-        return PassageNumber(passage_number_dist=maximum_distribution, loss=loss, debug_value="")
+        debug_value = ""
+        if self._debug:
+            input_dist = myutils.round_all(myutils.tocpuNPList(num_dist), 3)
+            output_dist = myutils.round_all(myutils.tocpuNPList(maximum_distribution), 3)
+            debug_value += f"InputNumDist: {input_dist}"
+            debug_value += f"\nMaxDist: {output_dist}"
+
+        return PassageNumber(passage_number_dist=maximum_distribution, loss=loss, debug_value=debug_value)
 
     @predicate
     def min_PassageNumber(self, number_distribution: PassageNumber) -> PassageNumber:
@@ -1040,7 +1046,14 @@ class DropLanguage(DomainLanguage):
 
         minimum_distribution = torch.clamp(minimum_distribution, min=1e-10, max=1 - 1e-10)
 
-        return PassageNumber(passage_number_dist=minimum_distribution, loss=loss, debug_value="")
+        debug_value = ""
+        if self._debug:
+            input_dist = myutils.round_all(myutils.tocpuNPList(num_dist), 3)
+            output_dist = myutils.round_all(myutils.tocpuNPList(minimum_distribution), 3)
+            debug_value += f"InputNumDist: {input_dist}"
+            debug_value += f"\nMinDist: {output_dist}"
+
+        return PassageNumber(passage_number_dist=minimum_distribution, loss=loss, debug_value=debug_value)
 
 
     @predicate

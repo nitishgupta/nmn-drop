@@ -29,7 +29,7 @@ def parseDateNERS(ner_spans, passage_tokens: List[str]) -> Tuple[List, List, Lis
     parsed_dates: List[str, Tuple, Tuple] = []
     for ner in ner_spans:
         if ner[-1] == constants.DATE_TYPE:
-            # List of (text, (start, end), normalized_value_tuple)
+            # normalized_dates = List of (text, (start, end), normalized_value_tuple)
             normalized_dates = normalizeDATE(ner, dateparser_en)
             if normalized_dates is not None:
                 parsed_dates.extend(normalized_dates)
@@ -74,13 +74,17 @@ def parseNumNERS(ner_spans, tokens: List[str]) -> Tuple[List, List, List, int]:
     for token_idx, token in enumerate(tokens):
         normalized_value = _str2float(token)
         if normalized_value is not None:
+            # The number is int, store as one.
+            normalized_value = int(normalized_value) if int(normalized_value) == normalized_value else normalized_value
             parsed_nums.append((token, token_idx, normalized_value))
 
+    # Store the passage number values in a sorted manner -- this makes number computations easier in the model
+    sorted_parsed_numbers = sorted(parsed_nums, key=lambda x: x[2])
 
     num2idx = {}
     normalized_num_idxs = []
     normalized_number_values = []
-    for (_, _, value) in parsed_nums:
+    for (_, _, value) in sorted_parsed_numbers:
         if value not in num2idx:
             num2idx[value] = len(num2idx)
             normalized_number_values.append(value)
@@ -89,7 +93,7 @@ def parseNumNERS(ner_spans, tokens: List[str]) -> Tuple[List, List, List, int]:
     num_number_entities = len(normalized_number_values)
     assert len(parsed_nums) == len(normalized_num_idxs)
 
-    return (parsed_nums, normalized_num_idxs, normalized_number_values, num_number_entities)
+    return (sorted_parsed_numbers, normalized_num_idxs, normalized_number_values, num_number_entities)
 
 
 def merge_datener_with_yearmentions(date_mentions, year_mentions):
@@ -115,13 +119,13 @@ def merge_datener_with_yearmentions(date_mentions, year_mentions):
 
 
 def extract_years_from_text(passage_tokens) -> List[Tuple[str, Tuple, Tuple]]:
-    """ Extract 4 digit year mentions.
+    """ Extract 4 digit and 3 digit year mentions.
 
         Normalized date value: (day, month, year)
     """
     year_date_mentions = []
     for idx, token in enumerate(passage_tokens):
-        if len(token) == 4:
+        if len(token) == 4 or len(token) == 3:
             try:
                 int_token = int(token)
                 year_date_mentions.append((token, (idx, idx), (-1, -1, int_token)))

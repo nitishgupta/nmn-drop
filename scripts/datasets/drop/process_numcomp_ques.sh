@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 
-ROOT_DIR=./resources/data/drop
+ROOT_DIR=./resources/data/drop_re
 
-PREPROCESS_DIR=${ROOT_DIR}/preprocess_new
+PREPROCESS_DIR=${ROOT_DIR}/preprocess
 
 NUM_PRUNE_DIR=${ROOT_DIR}/num/numcomp_prune
-NUM_PRUNE_SUP_DIR=${ROOT_DIR}/num/numcomp_prune_supervised
+NUM_PRUNE_SUP_DIR=${ROOT_DIR}/num/numcomp_full
 
 mkdir ${NUM_PRUNE_DIR}
 mkdir ${NUM_PRUNE_SUP_DIR}
