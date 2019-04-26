@@ -21,7 +21,7 @@ FIRST = "first"
 SECOND = "second"
 
 YEAR_DIFF_NGRAMS = ["how many years after the", "how many years did it", "how many years did the",
-                    "what happened second", "how many years passed between", "how many years was"]
+                    "how many years passed between", "how many years was"]
 
 def readDataset(input_json):
     with open(input_json, 'r') as f:
