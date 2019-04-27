@@ -32,6 +32,8 @@ def preprocess_HowManyYardsLongestShortestQues(dataset):
     after_pruning_ques = 0
     num_passages = len(dataset)
 
+    supervision_dict = defaultdict(int)
+
     for passage_id, passage_info in dataset.items():
         new_qa_pairs = []
         for question_answer in passage_info[constants.qa_pairs]:
@@ -46,12 +48,23 @@ def preprocess_HowManyYardsLongestShortestQues(dataset):
 
                 # How many yards was the longest/shortest has 6 tokens and excluding question mark at the end
                 attention_vec = [0.0 if i < 6 or i == qlen-1 else 1.0 for i in range(qlen)]
+                if sum(attention_vec) == 0:
+                    continue
 
                 # This is a list of question attentions for the possibly many predicates that take
                 # question_attention as a side_arg in the correct program
                 question_answer[constants.ques_attention_supervision] = [attention_vec]
+                question_answer[constants.qattn_supervised] = True
 
                 new_qa_pairs.append(question_answer)
+
+        for qa in new_qa_pairs:
+            if constants.program_supervised in qa:
+                supervision_dict[constants.program_supervised] += 1 if qa[constants.program_supervised] else 0
+            if constants.qattn_supervised in qa:
+                supervision_dict[constants.qattn_supervised] += 1 if qa[constants.qattn_supervised] else 0
+            if constants.exection_supervised in qa:
+                supervision_dict[constants.program_supervised] += 1 if qa[constants.exection_supervised] else 0
 
         if len(new_qa_pairs) > 0:
             passage_info[constants.qa_pairs] = new_qa_pairs
@@ -61,6 +74,7 @@ def preprocess_HowManyYardsLongestShortestQues(dataset):
     num_passages_after_prune = len(new_dataset)
     print(f"Passages original:{num_passages}  After Pruning:{num_passages_after_prune}")
     print(f"Questions original:{total_ques}  After pruning:{after_pruning_ques}")
+    print(supervision_dict)
 
     return new_dataset
 
@@ -76,9 +90,6 @@ if __name__ == '__main__':
 
     input_dir = args.input_dir
     output_dir = args.output_dir
-
-    input_dir = "./resources/data/drop_re/num/how_many_yards_was"
-    output_dir = "./resources/data/drop_re/num/longest_shortest_yards"
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)

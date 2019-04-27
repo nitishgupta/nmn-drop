@@ -4,10 +4,9 @@ export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
 # DATASET_NAME=num/longest_shortest_yards
-DATASET_NAME=date_num/dc_nc_yeardiff
+DATASET_NAME=date_num/dc_nc_100
 
-
-DATASET_DIR=./resources/data/drop_re/${DATASET_NAME}
+DATASET_DIR=./resources/data/drop_s/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
 VALFILE=${DATASET_DIR}/drop_dataset_dev.json
 
@@ -72,7 +71,7 @@ PD_1=BS_${BS}/LR_${LR}/Drop_${DROPOUT}/TOKENS_${TOKENIDX}/ED_${WEMB_DIM}/RG_${RG
 PD_2=QPSIMKEY_${QP_SIM_KEY}/QAL_${DENLOSS}/EXL_${EXCLOSS}/QATL_${QATTLOSS}/MML_${MMLLOSS}/SUPFIRST_${SUPFIRST}/SUPEPOCHS_${SUPEPOCHS}
 SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/${PD_2}/S_${SEED}/lenpruned
 
-# SERIALIZATION_DIR=./resources/semqa/checkpoints/test_qatt
+# SERIALIZATION_DIR=./resources/semqa/checkpoints/test
 
 #######################################################################################################################
 

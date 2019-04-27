@@ -34,7 +34,7 @@ local compareff_inputdim =
       "lazy": false,
       "skip_instances": true,
       "passage_length_limit": 400,
-      "question_length_limit": 50,
+      "question_length_limit": 100,
       "token_indexers":
         if tokenidx == "glove" then {
           "tokens": {

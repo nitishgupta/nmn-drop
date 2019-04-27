@@ -81,41 +81,62 @@ class DROPReader(DatasetReader):
             p_num_normvals: List[int] = passage_info[constants.passage_num_normalized_values]
 
 
-            for question_answer in passage_info[constants.qa_pairs]:
-                question_id = question_answer[constants.query_id]
-                original_ques_text = question_answer[constants.cleaned_question]
-                question_text = question_answer[constants.tokenized_question]
-                question_charidxs = question_answer[constants.question_charidxs]
+            for qa in passage_info[constants.qa_pairs]:
+                question_id = qa[constants.query_id]
+                original_ques_text = qa[constants.cleaned_question]
+                question_text = qa[constants.tokenized_question]
+                question_charidxs = qa[constants.question_charidxs]
 
-                answer_type = question_answer[constants.answer_type]
-                answer_passage_spans = question_answer[constants.answer_passage_spans]
-                answer_question_spans = question_answer[constants.answer_question_spans]
+                answer_type = qa[constants.answer_type]
+                answer_passage_spans = qa[constants.answer_passage_spans]
+                answer_question_spans = qa[constants.answer_question_spans]
                 answer_annotations = []
-                if "answer" in question_answer:
-                    answer_annotations.append(question_answer["answer"])
-                if "validated_answers" in question_answer:
-                    answer_annotations += question_answer["validated_answers"]
+                if "answer" in qa:
+                    answer_annotations.append(qa["answer"])
+                if "validated_answers" in qa:
+                    answer_annotations += qa["validated_answers"]
                 # answer_annotation = question_answer["answer"] if "answer" in question_answer else None
 
-                strongly_supervised = False
-                if constants.strongly_supervised in question_answer:
-                    strongly_supervised = question_answer[constants.strongly_supervised]
-
                 qtype = "UNK"
-                if constants.qtype in question_answer:
-                    qtype = question_answer[constants.qtype]
+                if constants.qtype in qa and qa[constants.qtype] is not None:
+                    qtype = qa[constants.qtype]
+                program_supervised = False
+                if constants.program_supervised in qa:
+                    program_supervised = qa[constants.program_supervised]
+
+                # If qtype is known and program_supervised = False OR
+                # If qtype is unknown and program_supervision is True --- There's a problem, Houston!
+                if (program_supervised and qtype == "UNK") or (qtype != "UNK" and program_supervised is False):
+                    print(original_ques_text)
+                    print(f"Qtype: {qtype}")
+                    print(f"Program supervised: {program_supervised}")
+                    exit()
 
                 ques_attn_supervision = None
-                if constants.ques_attention_supervision in question_answer:
-                    ques_attn_supervision = question_answer[constants.ques_attention_supervision]
+                qattn_supervised = False
+                if constants.qattn_supervised in qa:
+                    qattn_supervised = qa[constants.qattn_supervised]
+                    if qattn_supervised is True:
+                        ques_attn_supervision = qa[constants.ques_attention_supervision]
 
-                datecomp_ques_event_date_groundings = None
-                if constants.qspan_dategrounding_supervision in question_answer:
-                    datecomp_ques_event_date_groundings = question_answer[constants.qspan_dategrounding_supervision]
+                date_grounding_supervision = None
+                num_grounding_supervision = None
+                execution_supervised = False
+                if constants.exection_supervised in qa:
+                    execution_supervised = qa[constants.exection_supervised]
+                    if qa[constants.exection_supervised] is True:
+                        # There can be multiple types of execution_supervision
+                        if constants.qspan_dategrounding_supervision in qa:
+                            date_grounding_supervision = qa[constants.qspan_dategrounding_supervision]
+                        if constants.qspan_numgrounding_supervision in qa:
+                            num_grounding_supervision = qa[constants.qspan_numgrounding_supervision]
 
-                numcomp_qspan_num_groundings = None
-                if constants.qspan_numgrounding_supervision in question_answer:
-                    numcomp_qspan_num_groundings = question_answer[constants.qspan_numgrounding_supervision]
+                strongly_supervised = program_supervised and qattn_supervised and execution_supervised
+
+                if qattn_supervised is True:
+                    assert program_supervised is True and qtype is not "UNK"
+                if execution_supervised is True:
+                    assert qattn_supervised is True
 
                 instance = self.text_to_instance(question_text,
                                                  original_ques_text,
@@ -129,14 +150,17 @@ class DROPReader(DatasetReader):
                                                  p_num_mens,
                                                  p_num_entidxs,
                                                  p_num_normvals,
-                                                 strongly_supervised,
                                                  qtype,
+                                                 program_supervised,
+                                                 qattn_supervised,
+                                                 execution_supervised,
+                                                 strongly_supervised,
                                                  ques_attn_supervision,
+                                                 date_grounding_supervision,
+                                                 num_grounding_supervision,
                                                  answer_type,
                                                  answer_passage_spans,
                                                  answer_question_spans,
-                                                 datecomp_ques_event_date_groundings,
-                                                 numcomp_qspan_num_groundings,
                                                  question_id,
                                                  passage_id,
                                                  answer_annotations,
@@ -157,6 +181,7 @@ class DROPReader(DatasetReader):
         # logger.info(f"Skipped {skip_count} questions, kept {len(instances)} questions.")
         # return instances
 
+
     @overrides
     def text_to_instance(self,
                          question_text: str,
@@ -171,14 +196,17 @@ class DROPReader(DatasetReader):
                          p_num_mens: List[Tuple[str, int, int]],
                          p_num_entidxs: List[int],
                          p_num_normvals: List[int],
-                         strongly_supervised: bool,
                          qtype: str,
+                         program_supervised: bool,
+                         qattn_supervised: bool,
+                         execution_supervised: bool,
+                         strongly_supervised: bool,
                          ques_attn_supervision: Tuple[List[float]],
+                         date_grounding_supervision: Tuple[List[int], List[int]],
+                         num_grounding_supervision: Tuple[List[int], List[int]],
                          answer_type: str,
                          answer_passage_spans: List[Tuple[int, int]],
                          answer_question_spans: List[Tuple[int, int]],
-                         datecomp_ques_event_date_groundings: Tuple[List[int], List[int]] = None,
-                         numcomp_qspan_num_groundings: Tuple[List[int], List[int]] = None,
                          question_id: str = None,
                          passage_id: str = None,
                          answer_annotations: List[Dict[str, Union[str, Dict, List]]] = None,
@@ -202,11 +230,21 @@ class DROPReader(DatasetReader):
 
         if max_passage_len is not None:
             passage_tokens = passage_tokens[: max_passage_len]
+            (p_date_mens, p_date_entidxs, p_date_normvals,
+             p_num_mens, p_num_entidxs, p_num_normvals,
+             answer_passage_spans,
+             date_grounding_supervision,
+             num_grounding_supervision) = self.prune_for_passage_len(max_passage_len,
+                                                                     p_date_mens, p_date_entidxs, p_date_normvals,
+                                                                     p_num_mens, p_num_entidxs, p_num_normvals,
+                                                                     answer_passage_spans,
+                                                                     date_grounding_supervision,
+                                                                     num_grounding_supervision)
         if max_question_len is not None:
             question_tokens = question_tokens[: max_question_len]
-
-        passage_len = len(passage_tokens)
-        question_len = len(question_tokens)
+            (answer_question_spans,
+             ques_attn_supervision) = self.prune_for_question_len(max_question_len, answer_question_spans,
+                                                                  ques_attn_supervision)
 
         metadata = {
             "original_passage": original_passage_text,
@@ -238,17 +276,6 @@ class DROPReader(DatasetReader):
         passage_number_values = p_num_normvals
         passage_number_indices = [tokenidx for (_, tokenidx, _) in p_num_mens]
 
-        _pruned_number_indices, _pruned_number_entidxs = [], []
-        for number_idx, number_entidx in zip(passage_number_indices, passage_number_entidxs):
-            if number_idx >= passage_len:
-                continue
-            else:
-                _pruned_number_indices.append(number_idx)
-                _pruned_number_entidxs.append(number_entidx)
-
-        passage_number_indices = _pruned_number_indices
-        passage_number_entidxs = _pruned_number_entidxs
-
         # List of passage_len containing number_entidx for each token (-1 otherwise)
         passage_number_idx2entidx = [-1 for _ in range(len(passage_tokens))]
         if passage_number_entidxs:
@@ -257,7 +284,6 @@ class DROPReader(DatasetReader):
         else:
             # No numbers found in the passage - making a fake number at the 0th token
             passage_number_idx2entidx[0] = 0
-            # passage_number_values = [-1]
         if not passage_number_values:
             passage_number_values.append(-1)
         fields["passageidx2numberidx"] = ArrayField(np.array(passage_number_idx2entidx), padding_value=-1)
@@ -267,16 +293,6 @@ class DROPReader(DatasetReader):
         passage_date_entidxs = p_date_entidxs
         passage_date_values = p_date_normvals
         passage_date_spanidxs = [(x, y) for (_, (x, y), _) in p_date_mens]
-
-        _pruned_passage_date_spanidxs, _pruned_passage_date_entidxs = [], []
-        for (x, y), date_idx in zip(passage_date_spanidxs, passage_date_entidxs):
-            if y >= passage_len:
-                continue
-            else:
-                _pruned_passage_date_spanidxs.append((x, y))
-                _pruned_passage_date_entidxs.append(date_idx)
-        passage_date_spanidxs = _pruned_passage_date_spanidxs
-        passage_date_entidxs = _pruned_passage_date_entidxs
 
         passage_date_idx2dateidx = [-1 for _ in range(len(passage_tokens))]
         if passage_date_spanidxs:
@@ -312,14 +328,13 @@ class DROPReader(DatasetReader):
 
         # FIELDS FOR STRONG-SUPERVISION
         fields["strongly_supervised"] = MetadataField(strongly_supervised)
-        fields["qtypes"] = MetadataField(qtype)   # String for strong supervision
+        fields["program_supervised"] = MetadataField(program_supervised)
+        fields["qattn_supervised"] = MetadataField(qattn_supervised)
+        fields["execution_supervised"] = MetadataField(execution_supervised)
+        fields["qtypes"] = MetadataField(qtype)
 
         # Question Attention Supervision
-        if strongly_supervised and ques_attn_supervision:
-            ques_attn_supervision = [x[0:question_len] for x in ques_attn_supervision]
-            if qtype in [constants.DATECOMP_QTYPE, constants.NUMCOMP_QTYPE]:
-                # QAttn supervision, is a n-tuple of question attentions
-                ques_attn_supervision = (ques_attn_supervision[1], ques_attn_supervision[0])
+        if ques_attn_supervision:
             fields["qattn_supervision"] = ArrayField(np.array(ques_attn_supervision), padding_value=0)
         else:
             qlen = len(question_tokens)
@@ -328,36 +343,32 @@ class DROPReader(DatasetReader):
             fields["qattn_supervision"] = ArrayField(np.array(empty_question_attention_tuple), padding_value=0)
 
         # Date-comparison - Date Grounding Supervision
-        if strongly_supervised and datecomp_ques_event_date_groundings:
-            fields["datecomp_ques_event_date_groundings"] = MetadataField(datecomp_ques_event_date_groundings)
+        if date_grounding_supervision:
+            fields["datecomp_ques_event_date_groundings"] = MetadataField(date_grounding_supervision)
         else:
             empty_date_grounding = [0.0] * len(passage_date_objs)
             empty_date_grounding_tuple = (empty_date_grounding, empty_date_grounding)
             fields["datecomp_ques_event_date_groundings"] = MetadataField(empty_date_grounding_tuple)
 
         # Number Comparison - Passage Number Grounding Supervision
-        if strongly_supervised and numcomp_qspan_num_groundings:
-            fields["numcomp_qspan_num_groundings"] = MetadataField(numcomp_qspan_num_groundings)
+        if num_grounding_supervision:
+            fields["numcomp_qspan_num_groundings"] = MetadataField(num_grounding_supervision)
         else:
             empty_passagenum_grounding = [0.0] * len(passage_number_values)
             empty_passagenum_grounding_tuple = (empty_passagenum_grounding, empty_passagenum_grounding)
             fields["numcomp_qspan_num_groundings"] = MetadataField(empty_passagenum_grounding_tuple)
-
 
         # Get gold action_seqs for strongly_supervised questions
         action2idx_map = {rule: i for i, rule in enumerate(language.all_possible_productions())}
 
         # Tuple[List[List[int]], List[List[int]]]
         (gold_action_seqs,
-         gold_actionseq_masks,
-         instance_w_goldprog) = self.get_gold_action_seqs(strongly_supervised=strongly_supervised,
-                                                          qtype=qtype,
-                                                          question_tokens=question_text.split(' '),
-                                                          language=language,
-                                                          action2idx_map=action2idx_map)
+         gold_actionseq_masks) = self.get_gold_action_seqs(program_supervised=program_supervised,
+                                                           qtype=qtype,
+                                                           question_tokens=question_text.split(' '),
+                                                           language=language,
+                                                           action2idx_map=action2idx_map)
         fields["gold_action_seqs"] = MetadataField((gold_action_seqs, gold_actionseq_masks))
-        fields["instance_w_goldprog"] = MetadataField(instance_w_goldprog)
-
 
         ########     ANSWER FIELDS      ###################
 
@@ -380,16 +391,6 @@ class DROPReader(DatasetReader):
             answer_program_start_types = []
 
             # We've pre-parsed the span types to passage / question spans
-
-            # Pruning answer_passage_spans based on passage_len
-            _pruned_answer_passage_spans = []
-            if answer_passage_spans:
-                for (x, y) in answer_passage_spans:
-                    if y >= passage_len:
-                        continue
-                    else:
-                        _pruned_answer_passage_spans.append((x, y))
-            answer_passage_spans = _pruned_answer_passage_spans
 
             # Passage-span answer
             passage_span_fields = []
@@ -474,6 +475,99 @@ class DROPReader(DatasetReader):
         fields["metadata"] = MetadataField(metadata)
         return Instance(fields)
 
+
+    def prune_for_passage_len(self,
+                              max_passage_len: int,
+                              p_date_mens, p_date_entidxs, p_date_normvals,
+                              p_num_mens, p_num_entidxs, p_num_normvals,
+                              answer_passage_spans,
+                              date_grounding_supervision,
+                              num_grounding_supervision):
+
+        """ Prunes the passage and related data for a maximum length
+
+            For the given max_passage_len, we first need to find out the pruned date and number mentions
+            Since these might remove some dates and numbers from the passage, we need to find the
+            pruned list of p_date_normvals (p_date_entidxs with the new date_entidxs)
+            pruned list of p_num_normvals (p_num_entidxs with new num_entidxs) -- make sure the numbers are still sorted
+
+            answer_passage_spans - only spans that are contained in the pruned passage
+
+            date_grounding_supervision, num_grounding_supervision -- both these are the length of original dates/nums
+            we need to find the new value by pruning and mapping old ent idxs to new ones.
+        """
+        pruned_date_mens = []       # New passage date mens
+        pruned_old_dateidxs = []
+        for date_men, date_idx in zip(p_date_mens, p_date_entidxs):
+            _, (x,y), _ = date_men
+            if y < max_passage_len:
+                pruned_date_mens.append(date_men)
+                pruned_old_dateidxs.append(date_idx)
+
+        new_date_values = []        # New passage date values
+        new2old_dateidx = {}
+        old2new_dateidx = {}
+        for old_date_idx, date_value in enumerate(p_date_normvals):
+            # Atleast one mention of this old_date_idx remains
+            if old_date_idx in pruned_old_dateidxs:
+                new_date_idx = len(new_date_values)
+                new2old_dateidx[new_date_idx] = old_date_idx
+                old2new_dateidx[old_date_idx] = new_date_idx
+                new_date_values.append(date_value)
+
+        new_date_entidxs = [old2new_dateidx[x] for x in pruned_old_dateidxs]      # New passage date entidxs
+
+        if date_grounding_supervision is not None:
+            new_dategrounding_supervision = []
+            for date_grounding in date_grounding_supervision:
+                new_grounding = [date_grounding[new2old_dateidx[newidx]] for newidx in range(len(new_date_values))]
+                new_dategrounding_supervision.append(new_grounding)
+        else:
+            new_dategrounding_supervision = None
+
+        # Pruning numbers
+        pruned_num_mens, pruned_old_numidxs = [], []
+        for num_men, num_idx in zip(p_num_mens, p_num_entidxs):
+            _, tokenidx, _ = num_men
+            if tokenidx < max_passage_len:
+                pruned_num_mens.append(num_men)
+                pruned_old_numidxs.append(num_idx)
+        new_num_values = []
+        old2new_numidx, new2old_numidx = {}, {}
+        for old_num_idx, num_value in enumerate(p_num_normvals):
+            if old_num_idx in pruned_old_numidxs:
+                new_num_idx = len(new_num_values)
+                old2new_numidx[old_num_idx] = new_num_idx
+                new2old_numidx[new_num_idx] = old_num_idx
+                new_num_values.append(num_value)
+        new_num_idxs = [old2new_numidx[x] for x in pruned_old_numidxs]
+
+        if num_grounding_supervision is not None:
+            new_numgrounding_supervision = []
+            for num_grounding in num_grounding_supervision:
+                new_grounding = [num_grounding[new2old_numidx[newidx]] for newidx in range(len(new_num_values))]
+                new_numgrounding_supervision.append(new_grounding)
+        else:
+            new_numgrounding_supervision = None
+
+        new_answer_passage_spans = [span for span in answer_passage_spans if span[1] < max_passage_len]
+
+        return (pruned_date_mens, new_date_entidxs, new_date_values,
+                pruned_num_mens, new_num_idxs, new_num_values,
+                new_answer_passage_spans,
+                new_dategrounding_supervision, new_numgrounding_supervision)
+
+    def prune_for_question_len(self, max_question_len, answer_question_spans, ques_attn_supervision):
+        new_answer_question_spans = [span for span in answer_question_spans if span[1] < max_question_len]
+
+        if ques_attn_supervision is not None:
+            new_qattn_supervision = [qattn[0:max_question_len] for qattn in ques_attn_supervision]
+        else:
+            new_qattn_supervision = None
+
+        return (new_answer_question_spans, new_qattn_supervision)
+
+    '''
     @staticmethod
     def sort_passage_numbers(passage_number_values, passage_number_entidxs):
         """ It will be easier to do computations in the model if the number values are sorted in increasing order.
@@ -505,6 +599,7 @@ class DROPReader(DatasetReader):
         sorted_passage_number_entidxs = [oldidx2newidx[x] for x in passage_number_entidxs]
 
         return sorted_passage_number_values, sorted_passage_number_entidxs
+    '''
 
 
     @staticmethod
@@ -667,11 +762,11 @@ class DROPReader(DatasetReader):
         return candidate_subtractions
 
     def get_gold_action_seqs(self,
-                             strongly_supervised: bool,
+                             program_supervised: bool,
                              qtype: str,
                              question_tokens: List[str],
                              language: DropLanguage,
-                             action2idx_map: Dict[str, int]) -> Tuple[List[List[int]], List[List[int]], bool]:
+                             action2idx_map: Dict[str, int]) -> Tuple[List[List[int]], List[List[int]]]:
 
         qtype_to_lffunc = {constants.DATECOMP_QTYPE: self.get_gold_logicalforms_datecomp,
                            constants.NUMCOMP_QTYPE: self.get_gold_logicalforms_numcomp,
@@ -680,13 +775,11 @@ class DROPReader(DatasetReader):
 
         gold_actionseq_idxs: List[List[int]] = []
         gold_actionseq_mask: List[List[int]] = []
-        instance_w_goldprog: bool = False
 
-        if not strongly_supervised:
+        if not program_supervised:
             gold_actionseq_idxs.append([0])
             gold_actionseq_mask.append([0])
-            instance_w_goldprog = False
-            return gold_actionseq_idxs, gold_actionseq_mask, instance_w_goldprog
+            return gold_actionseq_idxs, gold_actionseq_mask
 
         if qtype in qtype_to_lffunc:
             gold_logical_forms: List[str] = qtype_to_lffunc[qtype](question_tokens=question_tokens,
@@ -698,13 +791,11 @@ class DROPReader(DatasetReader):
                 actionseq_mask: List[int] = [1 for _ in range(len(actionseq_idxs))]
                 gold_actionseq_idxs.append(actionseq_idxs)
                 gold_actionseq_mask.append(actionseq_mask)
-            instance_w_goldprog = True
         else:
             gold_actionseq_idxs.append([0])
             gold_actionseq_mask.append([0])
-            instance_w_goldprog = False
 
-        return gold_actionseq_idxs, gold_actionseq_mask, instance_w_goldprog
+        return gold_actionseq_idxs, gold_actionseq_mask
 
 
     @staticmethod

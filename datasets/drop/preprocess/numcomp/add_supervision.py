@@ -231,10 +231,10 @@ def addSupervision(input_json: str, output_json: str, output_txt: str, THRESHOLD
     new_dataset = {}
 
     num_original_questions = 0
-    num_strong_annotated = 0
     qoperator_dict = defaultdict(float)
     qoperator_undefined = 0
     num_grounding_unsuccessful = 0
+    supervision_distribution = defaultdict(int)
 
     for passage_id, passage_info in dataset.items():
         passage = passage_info[constants.tokenized_passage]
@@ -255,13 +255,12 @@ def addSupervision(input_json: str, output_json: str, output_txt: str, THRESHOLD
             answer_span: str = qa_pair[constants.answer]["spans"][0]
             qlen = len(question_tokens)
 
-            strongly_supervised = True
-
             qoperator = getQuestionComparisonOperator(question_tokens)
             if qoperator is None:
                 qoperator_undefined += 1
-                strongly_supervised = False
+                program_supervision = False
             else:
+                program_supervision = True
                 qoperator_dict[qoperator] += 1
 
             ''' QUESTION ATTENTION SUPERVISION '''
@@ -269,27 +268,30 @@ def addSupervision(input_json: str, output_json: str, output_txt: str, THRESHOLD
             attention1 = [0.0] * qlen
             attention2 = [0.0] * qlen
             ques_spans = questionAttns(question)
-            if ques_spans:
+            if ques_spans and program_supervision:
                 # These span ends are exclusive
                 span1, span2 = ques_spans
                 for i in range(span1[0], span1[1]):
                     attention1[i] = 1.0
                 for i in range(span2[0], span2[1]):
                     attention2[i] = 1.0
-            else:
-                strongly_supervised = False
 
             annotated_qtokens = question_tokens[0 : span1[0]] + ["[["] + question_tokens[span1[0] : span1[1]] + \
                                 ["]]"] + question_tokens[span1[1]: span2[0]] + ["[["] + \
                                 question_tokens[span2[0]: span2[1]] + ["]]"] + question_tokens[span2[1]:]
             annotated_qtxt = ' '.join(annotated_qtokens)
 
-            ''' Keeping reverse annotation '''
+            if sum(attention1) > 0 and sum(attention2) > 0:
+                qattn_supervision = True
+            else:
+                qattn_supervision = False
+
+            ''' Keeping reverse question attentions '''
             qa_pair[constants.ques_attention_supervision] = (attention2, attention1)
 
 
             ''' NUMBER GROUNDING SUPERVISION '''
-            if ques_spans and qoperator:
+            if program_supervision and qattn_supervision:
                 span1, span2 = ques_spans
                 span1_tokens = question_tokens[span1[0]: span1[1]]
                 span2_tokens = question_tokens[span2[0]: span2[1]]
@@ -312,9 +314,10 @@ def addSupervision(input_json: str, output_json: str, output_txt: str, THRESHOLD
                 else:
                     value2 = -1000000
 
+                execution_supervision = True
                 if value1 == -1000000 or value2 == -1000000:
                     num_grounding_unsuccessful += 1
-                    strongly_supervised = False
+                    execution_supervision = False
 
                 else:
                     # First or Second
@@ -326,17 +329,17 @@ def addSupervision(input_json: str, output_json: str, output_txt: str, THRESHOLD
                     if qoperator == LT_OPERATOR:
                         if grounded_answer_num_value >= grounded_other_num_value:
                             num_grounding_unsuccessful += 1
-                            strongly_supervised = False
+                            execution_supervision = False
                     if qoperator == GT_OPERATOR:
                         if grounded_answer_num_value <= grounded_other_num_value:
                             num_grounding_unsuccessful += 1
-                            strongly_supervised = False
+                            execution_supervision = False
 
 
                 span1_num_grounding = [0] * len(passage_num_values)
                 span2_num_grounding = [0] * len(passage_num_values)
 
-                if strongly_supervised is True:
+                if execution_supervision is True:
                     span2_num_grounding[event2_num_idx] = 1
                     span1_num_grounding[event1_num_idx] = 1
 
@@ -359,18 +362,31 @@ def addSupervision(input_json: str, output_json: str, output_txt: str, THRESHOLD
                 qa_pair[constants.qspan_numgrounding_supervision] = (span2_num_grounding, span1_num_grounding)
                 qa_pair[constants.qspan_numvalue_supervision] = (value2, value1)
             else:
-                strongly_supervised = False
+                execution_supervision = False
                 span1_num_grounding = [0] * len(passage_num_values)
                 span2_num_grounding = [0] * len(passage_num_values)
                 qa_pair[constants.qspan_numgrounding_supervision] = (span2_num_grounding, span1_num_grounding)
                 qa_pair[constants.qspan_numvalue_supervision] = (-1, -1)
 
             ''' QTYPE SUPERVISION '''
-            qa_pair[constants.qtype] = constants.NUMCOMP_QTYPE
+            if program_supervision is True:
+                qa_pair[constants.qtype] = constants.NUMCOMP_QTYPE
+            qa_pair[constants.program_supervised] = program_supervision
+            qa_pair[constants.qattn_supervised] = qattn_supervision
+            qa_pair[constants.exection_supervised] = execution_supervision
+
+            if (program_supervision and qattn_supervision and execution_supervision):
+                strongly_supervised = True
+            else:
+                strongly_supervised = False
+
             qa_pair[constants.strongly_supervised] = strongly_supervised
 
-            if strongly_supervised:
-                num_strong_annotated += 1
+
+            supervision_distribution['program_supervision'] += 1 if program_supervision else 0
+            supervision_distribution['qattn_supervision'] += 1 if qattn_supervision else 0
+            supervision_distribution['execution_supervision'] += 1 if execution_supervision else 0
+            supervision_distribution['strongly_supervised'] += 1 if strongly_supervised else 0
 
             new_qa_pairs.append(qa_pair)
 
@@ -385,32 +401,41 @@ def addSupervision(input_json: str, output_json: str, output_txt: str, THRESHOLD
     txtfile.close()
 
     print(f"Number of input passages: {len(dataset)}\nNumber of input QA pairs: {num_original_questions}")
-    print(f"Number of output passages: {len(new_dataset)}\nNumber of strongly-annotated QA: {num_strong_annotated}")
+    print(f"Number of output passages: {len(new_dataset)}")
     print(f"Num grounding unsuccess: {num_grounding_unsuccessful}")
     print(f"{qoperator_dict}")
+    print(supervision_distribution)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input_trnfp')
-    parser.add_argument('--input_devfp')
-    parser.add_argument('--output_trnfp')
-    parser.add_argument('--output_devfp')
-    parser.add_argument('--output_trntxt')
-    parser.add_argument('--output_devtxt')
+    parser.add_argument('--input_dir')
+    parser.add_argument('--output_dir')
     args = parser.parse_args()
 
-    trn_input_json = args.input_trnfp
-    trn_output_json = args.output_trnfp
-    trn_output_txt = args.output_trntxt
+    train_json = 'drop_dataset_train.json'
+    dev_json = 'drop_dataset_dev.json'
+    train_txt = 'train.txt'
+    dev_txt = 'dev.txt'
 
-    dev_input_json = args.input_devfp
-    dev_output_json = args.output_devfp
-    dev_output_txt = args.output_devtxt
+    input_dir = args.input_dir
+    output_dir = args.output_dir
+
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir, exist_ok=True)
+
+    input_trnfp = os.path.join(input_dir, train_json)
+    input_devfp = os.path.join(input_dir, dev_json)
+
+    output_trnfp = os.path.join(output_dir, train_json)
+    output_devfp = os.path.join(output_dir, dev_json)
+    output_trn_txt = os.path.join(output_dir, train_txt)
+    output_dev_txt = os.path.join(output_dir, dev_txt)
+
 
     # args.input_json --- is the raw json from the DROP dataset
-    addSupervision(input_json=trn_input_json, output_json=trn_output_json, output_txt=trn_output_txt)
+    addSupervision(input_json=input_trnfp, output_json=output_trnfp, output_txt=output_trn_txt)
 
     # args.input_json --- is the raw json from the DROP dataset
-    addSupervision(input_json=dev_input_json, output_json=dev_output_json, output_txt=dev_output_txt)
+    addSupervision(input_json=input_devfp, output_json=output_devfp, output_txt=output_dev_txt)
 

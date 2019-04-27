@@ -4,6 +4,8 @@ from typing import Iterable, Deque
 import logging
 import random
 
+from collections import defaultdict
+
 from allennlp.common.util import lazy_groups_of
 from allennlp.data.instance import Instance
 from allennlp.data.iterators.data_iterator import DataIterator
@@ -27,6 +29,7 @@ class DataFilterIterator(DataIterator):
                  track_epoch: bool = False,
                  maximum_samples_per_batch: Tuple[str, int] = None,
                  filter_key: str = "strongly_supervised",
+                 supervision_keys: List[str] = ["program_supervised", "qattn_supervised", "execution_supervised"],
                  filter_instances: bool = False,
                  filter_for_epochs: int = 0) -> None:
         super(DataFilterIterator, self).__init__(batch_size=batch_size,
@@ -40,6 +43,7 @@ class DataFilterIterator(DataIterator):
         # This is the field_name in the instances that contains filter-ing bool
         self.filter_key = filter_key
         self.filter_for_epochs = filter_for_epochs
+        self.supervision_keys = supervision_keys
 
     def _create_batches(self, instances: Iterable[Instance], shuffle: bool) -> Iterable[Batch]:
         # First break the dataset into memory-sized lists:
@@ -55,6 +59,7 @@ class DataFilterIterator(DataIterator):
                 if 'epoch_num' in instance.fields:
                     instances_w_epoch_num += 1
 
+
             print(f"\nInstances: {len(instance_list)}")
 
             epochs_list = list(self._epochs.values())
@@ -63,6 +68,11 @@ class DataFilterIterator(DataIterator):
             if self._track_epoch:
                 for instance in instance_list:
                     instance.fields['epoch_num'] = epoch_num
+
+            supervision_dict = defaultdict(int)
+            for instance in instance_list:
+                for key in self.supervision_keys:
+                    supervision_dict[key] += 1 if instance[key].metadata else 0
 
             filtered_instance_list = []
             if self.filter_instances:
@@ -75,6 +85,7 @@ class DataFilterIterator(DataIterator):
             else:
                 filtered_instance_list = instance_list
 
+            print(f"SupervisionDict: {supervision_dict}")
             print(f"Filtered Instances: {len(filtered_instance_list)}")
 
             if shuffle:

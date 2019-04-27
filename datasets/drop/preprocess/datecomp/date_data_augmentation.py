@@ -429,11 +429,13 @@ def addQuestionAttentionVectors(question_answer):
             event1_attention[i] = 1.0
         for i in range(event2_span[0], event2_span[1]):
             event2_attention[i] = 1.0
+        question_answer[constants.qattn_supervised] = True
 
     else:
         # Couldn't find the two events; add empty annotation
         event1_attention = [0.0] * qlen
         event2_attention = [0.0] * qlen
+        question_answer[constants.qattn_supervised] = False
 
     ''' Add attentions in reverse order -- seem to help '''
     question_answer[constants.ques_attention_supervision] = (event2_attention, event1_attention)
@@ -443,30 +445,30 @@ def addQuestionAttentionVectors(question_answer):
 
 def strongSupervisionFlagAndQType(question_answer_pairs: List[Dict]):
     num_strongly_supervised_qas = 0
+    supervision_distribution = defaultdict(int)
+
     for question_answer in question_answer_pairs:
-        if (constants.qspan_dategrounding_supervision in question_answer and
-                constants.ques_attention_supervision in question_answer):
-
-            (event1_date_grn, event2_date_grn) = question_answer[constants.qspan_dategrounding_supervision]
-            (qevent1_qattn, qevent2_qattn) = question_answer[constants.ques_attention_supervision]
-
-            if (sum(event1_date_grn) == 0 or
-                sum(event2_date_grn) == 0 or
-                sum(qevent1_qattn) == 0 or
-                sum(qevent2_qattn) == 0):
-
-                strongly_supervised = False
-            else:
-                strongly_supervised = True
-        else:
-            strongly_supervised = False
-
-        num_strongly_supervised_qas += 1 if strongly_supervised is True else 0
-
-        question_answer[constants.strongly_supervised] = strongly_supervised
         question_answer[constants.qtype] = constants.DATECOMP_QTYPE
+        question_answer[constants.program_supervised] = True
 
-    return question_answer_pairs, num_strongly_supervised_qas
+
+        if (question_answer[constants.program_supervised] and
+                question_answer[constants.qattn_supervised] and
+                question_answer[constants.exection_supervised]):
+            question_answer[constants.strongly_supervised] = True
+        else:
+            question_answer[constants.strongly_supervised] = False
+
+        supervision_distribution[constants.program_supervised] += 1 if question_answer[
+            constants.program_supervised] else 0
+        supervision_distribution[constants.qattn_supervised] += 1 if question_answer[
+            constants.qattn_supervised] else 0
+        supervision_distribution[constants.exection_supervised] += 1 if question_answer[
+            constants.exection_supervised] else 0
+        supervision_distribution[constants.strongly_supervised] += 1 if question_answer[
+            constants.strongly_supervised] else 0
+
+    return question_answer_pairs, supervision_distribution
 
 
 def augmentDateComparisonData(dataset):
@@ -498,6 +500,8 @@ def augmentDateComparisonData(dataset):
     total_strongly_supervised_qas = 0
     num_qa_original = 0
     num_qa_augment = 0
+
+    supervision_distribution = defaultdict(int)
 
     for passage_id, passage_info in dataset.items():
         new_qa_pairs = []
@@ -555,8 +559,9 @@ def augmentDateComparisonData(dataset):
                     augment_operator_dist[ques_operator] += 1
                     new_qa_pairs.append(event_sw_qoperator_sw_question_answer)
 
-        new_qa_pairs, num_strong_supervised_qas = strongSupervisionFlagAndQType(new_qa_pairs)
-        total_strongly_supervised_qas += num_strong_supervised_qas
+        new_qa_pairs, para_supervision_dist = strongSupervisionFlagAndQType(new_qa_pairs)
+        for key, value in para_supervision_dist.items():
+            supervision_distribution[key] += value
 
         q_ids = set([qa[constants.query_id] for qa in new_qa_pairs])
         assert len(q_ids) == len(new_qa_pairs)
@@ -570,7 +575,7 @@ def augmentDateComparisonData(dataset):
     print(original_operator_dist)
     print(f"Num of question after augmentation: {num_qa_augment}")
     print(augment_operator_dist)
-    print(f"Strongly Supervised Questions: {total_strongly_supervised_qas}")
+    print(f"Supervision Dsitrbition: {supervision_distribution}")
 
     return new_dataset
 

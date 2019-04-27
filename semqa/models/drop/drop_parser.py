@@ -335,9 +335,11 @@ class DROPSemanticParser(DROPParserBase):
                 datecomp_ques_event_date_groundings: List[Tuple[List[int], List[int]]] = None,
                 numcomp_qspan_num_groundings: List[Tuple[List[int], List[int]]] = None,
                 strongly_supervised: List[bool] = None,
+                program_supervised: List[bool] = None,
+                qattn_supervised: List[bool] = None,
+                execution_supervised: List[bool] = None,
                 qtypes: List[str] = None,
                 gold_action_seqs: List[Tuple[List[List[int]], List[List[int]]]]=None,
-                instance_w_goldprog: List[bool]=None,
                 qattn_supervision: torch.FloatTensor = None,
                 epoch_num: List[int] = None,
                 metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
@@ -503,9 +505,9 @@ class DROPSemanticParser(DROPParserBase):
         if self.training:
             # If any instance is provided with goldprog, we need to divide the batch into supervised / unsupervised
             # and run fully-constrained decoding on supervised, and start-type-constrained-decoding on the rest
-            if any(instance_w_goldprog):
-                supervised_instances = [i for (i, ss) in enumerate(instance_w_goldprog) if ss is True]
-                unsupervised_instances = [i for (i, ss) in enumerate(instance_w_goldprog) if ss is False]
+            if any(program_supervised):
+                supervised_instances = [i for (i, ss) in enumerate(program_supervised) if ss is True]
+                unsupervised_instances = [i for (i, ss) in enumerate(program_supervised) if ss is False]
 
                 # List of (gold_actionseq_idxs, gold_actionseq_masks) -- for supervised instances
                 supervised_gold_actionseqs = self._select_indices_from_list(gold_action_seqs, supervised_instances)
@@ -631,7 +633,8 @@ class DROPSemanticParser(DROPParserBase):
             #                                       datecompare_gold_qattns)
 
         # Adding Date-Comparison supervised event groundings to relevant actions
-        self.datecompare_eventdategr_to_sideargs(batch_actionseqs,
+        self.datecompare_eventdategr_to_sideargs(qtypes,
+                                                 batch_actionseqs,
                                                  batch_actionseq_sideargs,
                                                  datecomp_ques_event_date_groundings,
                                                  device_id)
@@ -678,12 +681,13 @@ class DROPSemanticParser(DROPParserBase):
             if self.qattloss:
                 # Compute Question Attention Supervision auxiliary loss
                 qattn_loss = self._ques_attention_loss(batch_actionseqs, batch_actionseq_sideargs, qtypes,
-                                                       strongly_supervised, qattn_supervision)
+                                                       qattn_supervised, qattn_supervision)
                 if qattn_loss != 0.0:
                     self.qattloss_metric(qattn_loss.item())
                 total_aux_loss += qattn_loss
 
             if self.mmlloss:
+                # This is computed above during beam search
                 if mml_loss != 0.0:
                     self.mmlloss_metric(mml_loss.item())
                 total_aux_loss += mml_loss
@@ -991,7 +995,7 @@ class DROPSemanticParser(DROPParserBase):
                              batch_actionseqs: List[List[List[str]]],
                              batch_actionseq_sideargs: List[List[List[Dict]]],
                              qtypes: List[str],
-                             strongly_supervised: List[bool],
+                             qattn_supervised: List[bool],
                              qattn_supervision: torch.FloatTensor):
 
         """ Compute QAttn supervision loss for different kind of questions. Different question-types have diff.
@@ -1025,8 +1029,8 @@ class DROPSemanticParser(DROPParserBase):
         normalizer = 0
 
         for ins_idx in range(len(batch_actionseqs)):
-            strongly_supervised_instance = strongly_supervised[ins_idx]
-            if not strongly_supervised_instance:
+            qattn_supervised_instance = qattn_supervised[ins_idx]
+            if not qattn_supervised_instance:
                 # no point even bothering
                 continue
             qtype = qtypes[ins_idx]
@@ -1056,7 +1060,7 @@ class DROPSemanticParser(DROPParserBase):
                             normalizer += 1
                         else:
                             print(f"\nGold attention sum == 0.0."
-                                  f"\nStronglySupervised: {strongly_supervised_instance}"
+                                  f"\nQattnSupervised: {qattn_supervised_instance}"
                                   f"\nQtype: {qtype}")
                         relevant_action_idx += 1
 
@@ -1217,6 +1221,7 @@ class DROPSemanticParser(DROPParserBase):
         return batch_best_spans, batch_predicted_answers
 
     def datecompare_eventdategr_to_sideargs(self,
+                                            qtypes: List[str],
                                             batch_actionseqs: List[List[List[str]]],
                                             batch_actionseq_sideargs: List[List[List[Dict]]],
                                             datecomp_ques_event_date_groundings: List[Tuple[List[float], List[float]]],

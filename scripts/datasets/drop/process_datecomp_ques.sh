@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-ROOT_DIR=./resources/data/drop_re
+ROOT_DIR=./resources/data/drop_s
 
 PREPROCESS_DIR=${ROOT_DIR}/preprocess
 

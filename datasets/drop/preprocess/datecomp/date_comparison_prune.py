@@ -276,12 +276,6 @@ def pruneDateQuestions(dataset):
             question_operator = getQuestionComparisonOperator(question_tokens)
             answer_event = find_answer_event(answer_span, event1_tokens, event2_tokens)
 
-            # Adding a tuple of zero vectors and empty_values to later store the date grounding of the two ques-events
-            event1_date_grounding = [0] * len(p_date_values)
-            event2_date_grounding = [0] * len(p_date_values)
-            event1_date_value = [-1, -1, -1]
-            event2_date_value = [-1, -1, -1]
-
             # First find if the date groundings are relevant, checks:
             # 1. Date grounding shouldn't be -1
             # 2. Shouldn't be equal
@@ -309,12 +303,22 @@ def pruneDateQuestions(dataset):
             else:
                 keep_dates = False
 
+            # Adding a tuple of zero vectors and empty_values to later store the date grounding of the two ques-events
+            event1_date_grounding = [0] * len(p_date_values)
+            event2_date_grounding = [0] * len(p_date_values)
+            event1_date_value = [-1, -1, -1]
+            event2_date_value = [-1, -1, -1]
+
+            question_answer[constants.exection_supervised] = False
+
             if keep_dates:
                 numexamaples_w_dates_annotated += 1
                 event1_date_grounding[event1_date_idx] = 1
                 event1_date_value = p_date_values[event1_date_idx]
                 event2_date_grounding[event2_date_idx] = 1
                 event2_date_value = p_date_values[event2_date_idx]
+                question_answer[constants.exection_supervised] = True
+
 
             ''' We store the groundings in the reverse order since they seem to help '''
             question_answer[constants.qspan_dategrounding_supervision] = [event2_date_grounding,

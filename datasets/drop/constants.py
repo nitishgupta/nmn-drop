@@ -65,10 +65,12 @@ passage_date_normalized_values = "passage_" + DATE_TYPE + "_normalized_values"
 
 
 # STRONG SUPERVISION FIELDS
-# Boolean
-strongly_supervised = "strongly_supervised"
-# String
 qtype = "qtype"
+strongly_supervised = "strongly_supervised"
+program_supervised = "program_supervised"
+qattn_supervised = "qattn_supervised"
+exection_supervised = "execution_supervised"
+
 # n-tuple of question attention
 ques_attention_supervision = "ques_attention_supervision"
 

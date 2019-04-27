@@ -67,29 +67,29 @@ def preprocess_HowManyYardsWasThe_ques(dataset):
             if how_many_yards_was_the.lower() in original_question.lower():
                 if longest_question_ngram in original_question:
                     question_answer[constants.qtype] = constants.YARDS_longest_qtype
-                    question_answer[constants.strongly_supervised] = True
+                    question_answer[constants.program_supervised] = True
                     qtype_dist[longest_qtype] += 1
                     questions_w_qtypes += 1
 
                 elif shortest_question_ngram in original_question:
                     question_answer[constants.qtype] = constants.YARDS_shortest_qtype
-                    question_answer[constants.strongly_supervised] = True
+                    question_answer[constants.program_supervised] = True
                     qtype_dist[shortest_qtype] += 1
                     questions_w_qtypes += 1
 
                 elif second_longest_question_ngram in original_question:
                     question_answer[constants.qtype] = constants.YARDS_second_longest_qtype
-                    question_answer[constants.strongly_supervised] = True
+                    question_answer[constants.program_supervised] = True
                     qtype_dist[second_longest_qtype] += 1
                     questions_w_qtypes += 1
 
                 elif second_shortest_question_ngram in original_question:
                     question_answer[constants.qtype] = constants.YARDS_second_shortest_qtype
-                    question_answer[constants.strongly_supervised] = True
+                    question_answer[constants.program_supervised] = True
                     qtype_dist[second_shortest_qtype] += 1
                     questions_w_qtypes += 1
                 else:
-                    question_answer[constants.strongly_supervised] = False
+                    question_answer[constants.program_supervised] = False
 
                 new_qa_pairs.append(question_answer)
 
@@ -101,7 +101,7 @@ def preprocess_HowManyYardsWasThe_ques(dataset):
     num_passages_after_prune = len(new_dataset)
     print(f"Passages original:{num_passages}  After Pruning:{num_passages_after_prune}")
     print(f"Questions original:{total_ques}  After pruning:{after_pruning_ques}")
-    print(f"Num of QA with qtypes and strongly supervised: {questions_w_qtypes}")
+    print(f"Num of QA with qtypes and program supervised: {questions_w_qtypes}")
     print(f"Qtype dist: {qtype_dist}")
 
     return new_dataset
@@ -118,9 +118,6 @@ if __name__ == '__main__':
 
     input_dir = args.input_dir
     output_dir = args.output_dir
-
-    input_dir = "./resources/data/drop_re/preprocess"
-    output_dir = "./resources/data/drop_re/num/how_many_yards_was"
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)

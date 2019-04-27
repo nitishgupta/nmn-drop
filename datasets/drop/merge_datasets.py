@@ -8,6 +8,21 @@ from typing import List, Tuple, Dict, Union
 from datasets.drop import constants
 
 
+def count_supervision_types(passage_dict):
+    supervision_keys = [constants.program_supervised, constants.qattn_supervised, constants.exection_supervised,
+                        constants.strongly_supervised]
+    supervision_dict = defaultdict(int)
+    for _, pinfo in passage_dict.items():
+        qa_pairs = pinfo[constants.qa_pairs]
+        for qa in qa_pairs:
+            for key in supervision_keys:
+                if key in qa and qa[key] is True:
+                    supervision_dict[key] += 1
+
+    return supervision_dict
+
+
+
 def mergeDatasets(input_json1: str, input_json2: str, output_json: str) -> None:
     """ Merge DROP datasets from two different files.
         First make a union list of passages.
@@ -64,10 +79,12 @@ def mergeDatasets(input_json1: str, input_json2: str, output_json: str) -> None:
     with open(output_json, 'w') as outf:
         json.dump(output_passage_dict, outf, indent=4)
 
+    supervision_dict = count_supervision_types(output_passage_dict)
     print()
     print(f"Number of passages 1: {num_passage_1}\nNumber of questions 1: {num_qas_1}")
     print(f"Number of passages 2: {num_passage_2}\nNumber of questions 2: {num_qas_2}")
     print(f"Number of merged passages: {num_merged_passages}\nNumber of merged questions: {num_output_qas}")
+    print(f"SupervisionDict: {supervision_dict}")
     print()
 
 

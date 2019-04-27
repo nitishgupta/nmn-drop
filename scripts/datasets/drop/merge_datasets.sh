@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 
-ROOT_DIR=./resources/data/drop_re
+ROOT_DIR=./resources/data/drop_s
 
-DIR1=date_num/dc_nc
+DIR1=num/numcomp_100
 
-DIR2=date/year_diff
+DIR2=num/longest_shortest_yards
 
-OUTDIR=date_num/dc_nc_yeardiff
+OUTDIR=num/nc_100_longestyards
 
 
 python -m datasets.drop.merge_datasets --dir1 ${ROOT_DIR}/${DIR1} \

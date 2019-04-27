@@ -72,9 +72,6 @@ if __name__ == '__main__':
     input_dir = args.input_dir
     output_dir = args.output_dir
 
-    input_dir = "./resources/data/drop_re/preprocess"
-    output_dir = "./resources/data/drop_re/date/year_diff"
-
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
 

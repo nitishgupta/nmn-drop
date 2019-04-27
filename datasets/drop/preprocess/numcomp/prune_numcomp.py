@@ -116,25 +116,32 @@ def pruneDataset(input_json: str, output_json: str, output_txt: str) -> None:
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input_trnfp')
-    parser.add_argument('--input_devfp')
-    parser.add_argument('--output_trnfp')
-    parser.add_argument('--output_devfp')
-    parser.add_argument('--output_trntxt')
-    parser.add_argument('--output_devtxt')
+    parser.add_argument('--input_dir')
+    parser.add_argument('--output_dir')
     args = parser.parse_args()
 
-    trn_input_json = args.input_trnfp
-    trn_output_json = args.output_trnfp
-    trn_output_txt = args.output_trntxt
+    train_json = 'drop_dataset_train.json'
+    dev_json = 'drop_dataset_dev.json'
+    train_txt = 'train.txt'
+    dev_txt = 'dev.txt'
 
-    dev_input_json = args.input_devfp
-    dev_output_json = args.output_devfp
-    dev_output_txt = args.output_devtxt
+    input_dir = args.input_dir
+    output_dir = args.output_dir
+
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir, exist_ok=True)
+
+    input_trnfp = os.path.join(input_dir, train_json)
+    input_devfp = os.path.join(input_dir, dev_json)
+
+    output_trnfp = os.path.join(output_dir, train_json)
+    output_devfp = os.path.join(output_dir, dev_json)
+    output_trn_txt = os.path.join(output_dir, train_txt)
+    output_dev_txt = os.path.join(output_dir, dev_txt)
 
     # args.input_json --- is the raw json from the DROP dataset
-    pruneDataset(input_json=trn_input_json, output_json=trn_output_json, output_txt=trn_output_txt)
+    pruneDataset(input_json=input_trnfp, output_json=output_trnfp, output_txt=output_trn_txt)
 
     # args.input_json --- is the raw json from the DROP dataset
-    pruneDataset(input_json=dev_input_json, output_json=dev_output_json, output_txt=dev_output_txt)
+    pruneDataset(input_json=input_devfp, output_json=output_devfp, output_txt=output_dev_txt)
 
