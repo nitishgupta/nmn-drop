@@ -71,7 +71,8 @@ PD_1=BS_${BS}/LR_${LR}/Drop_${DROPOUT}/TOKENS_${TOKENIDX}/ED_${WEMB_DIM}/RG_${RG
 PD_2=QPSIMKEY_${QP_SIM_KEY}/QAL_${DENLOSS}/EXL_${EXCLOSS}/QATL_${QATTLOSS}/MML_${MMLLOSS}/SUPFIRST_${SUPFIRST}/SUPEPOCHS_${SUPEPOCHS}
 SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/${PD_2}/S_${SEED}/lenpruned_NOentloss
 
-SERIALIZATION_DIR=./resources/semqa/checkpoints/nc0e_enc_nc_longyards
+# SERIALIZATION_DIR=./resources/semqa/checkpoints/nc0e_enc_nc_longyards
+SERIALIZATION_DIR=./resources/semqa/checkpoints/test
 
 #######################################################################################################################
 

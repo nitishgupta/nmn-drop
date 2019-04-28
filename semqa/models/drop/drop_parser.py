@@ -296,13 +296,13 @@ class DROPSemanticParser(DROPParserBase):
         assert qp_sim_key in ['raw', 'enc', 'raw-enc']
         self.qp_sim_key = qp_sim_key
 
-        if self.qp_sim_key is 'raw':
+        if self.qp_sim_key == 'raw':
             self.q2p_bilinear_matrixattn = BilinearMatrixAttention(matrix_1_dim=text_embed_dim,
                                                                    matrix_2_dim=text_embed_dim)
-        elif self.qp_sim_key is 'enc':
+        elif self.qp_sim_key == 'enc':
             self.q2p_bilinear_matrixattn = BilinearMatrixAttention(matrix_1_dim=encoding_out_dim,
                                                                    matrix_2_dim=encoding_out_dim)
-        elif self.qp_sim_key is 'raw-enc':
+        elif self.qp_sim_key == 'raw-enc':
             self.q2p_bilinear_matrixattn = BilinearMatrixAttention(matrix_1_dim=encoding_out_dim + text_embed_dim,
                                                                    matrix_2_dim=encoding_out_dim + text_embed_dim)
         else:
