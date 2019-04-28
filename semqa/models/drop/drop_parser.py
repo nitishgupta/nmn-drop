@@ -26,6 +26,7 @@ from semqa.state_machines.transition_functions.linking_transition_func_emb impor
 from allennlp.training.metrics import Average, DropEmAndF1
 from semqa.models.utils.bidaf_utils import PretrainedBidafModelUtils
 from semqa.models.utils import semparse_utils
+from allennlp.modules.matrix_attention import (MatrixAttention, BilinearMatrixAttention)
 
 from semqa.models.drop.drop_parser_base import DROPParserBase
 from semqa.domain_languages.drop import (DropLanguage, Date, ExecutorParameters,
@@ -295,6 +296,18 @@ class DROPSemanticParser(DROPParserBase):
         assert qp_sim_key in ['raw', 'enc', 'raw-enc']
         self.qp_sim_key = qp_sim_key
 
+        if self.qp_sim_key is 'raw':
+            self.q2p_bilinear_matrixattn = BilinearMatrixAttention(matrix_1_dim=text_embed_dim,
+                                                                   matrix_2_dim=text_embed_dim)
+        elif self.qp_sim_key is 'enc':
+            self.q2p_bilinear_matrixattn = BilinearMatrixAttention(matrix_1_dim=encoding_out_dim,
+                                                                   matrix_2_dim=encoding_out_dim)
+        elif self.qp_sim_key is 'raw-enc':
+            self.q2p_bilinear_matrixattn = BilinearMatrixAttention(matrix_1_dim=encoding_out_dim + text_embed_dim,
+                                                                   matrix_2_dim=encoding_out_dim + text_embed_dim)
+        else:
+            raise NotImplementedError
+
         self.modelloss_metric = Average()
         self.excloss_metric = Average()
         self.qattloss_metric = Average()
@@ -401,8 +414,11 @@ class DROPSemanticParser(DROPParserBase):
             raise NotImplementedError
 
         # Shape: (batch_size, question_length, passage_length)
-        question_passage_similarity = self._executor_parameters.dotprod_matrix_attn(question_sim_repr,
-                                                                                    passage_sim_repr)
+        question_passage_similarity = self.q2p_bilinear_matrixattn(question_sim_repr,
+                                                                   passage_sim_repr)
+        # question_passage_similarity = self._executor_parameters.dotprod_matrix_attn(question_sim_repr,
+        #                                                                             passage_sim_repr)
+
         # question_passage_similarity = self._dropout(question_passage_similarity)
         # Shape: (batch_size, question_length, passage_length)
         question_passage_attention = allenutil.masked_softmax(question_passage_similarity,
