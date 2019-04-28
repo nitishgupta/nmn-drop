@@ -492,7 +492,9 @@ class DropLanguage(DomainLanguage):
 
         date_distribution = torch.clamp(date_distribution, min=1e-20, max=1 - 1e-20)
 
-        return date_distribution, date_distribution
+        date_distribution_entropy = -1 * torch.sum(date_distribution * torch.log(date_distribution + 1e-40))
+
+        return date_distribution, date_distribution, date_distribution_entropy
 
     def compute_num_distribution(self, passage_attention: Tensor):
         ''' Given a passage over passage token2num attention (normalized), and an additional passage attention
@@ -612,8 +614,8 @@ class DropLanguage(DomainLanguage):
     def date_comparison(self, passage_attention_1, passage_attention_2, comparison: str,
                         gold_date_groundings=None):
 
-        date_distribution_1, _ = self.compute_date_scores(passage_attention_1)
-        date_distribution_2, _ = self.compute_date_scores(passage_attention_2)
+        date_distribution_1, _, d1_dist_entropy = self.compute_date_scores(passage_attention_1)
+        date_distribution_2, _, d2_dist_entropy = self.compute_date_scores(passage_attention_2)
 
         bool1 = self.expected_date_comparison(date_distribution_1, date_distribution_2, comparison)
         bool2 = self.expected_date_comparison(date_distribution_2, date_distribution_1, comparison)
@@ -648,13 +650,11 @@ class DropLanguage(DomainLanguage):
         else:
             date_grounding_loss = 0.0
 
-        kl_div_neg_1_2 = -1 * F.kl_div(date_distribution_1, date_distribution_2, reduction='mean')
-        kl_div_neg_2_1 = -1 * F.kl_div(date_distribution_2, date_distribution_1, reduction='mean')
-
-        dist1_entropy = -1 * torch.sum(date_distribution_1 * torch.log(date_distribution_1 + 1e-40))
-        dist2_entropy = -1 * torch.sum(date_distribution_2 * torch.log(date_distribution_2 + 1e-40))
+        # kl_div_neg_1_2 = -1 * F.kl_div(date_distribution_1, date_distribution_2, reduction='mean')
+        # kl_div_neg_2_1 = -1 * F.kl_div(date_distribution_2, date_distribution_1, reduction='mean')
 
         aux_loss = date_grounding_loss
+        # aux_loss += d1_dist_entropy + d2_dist_entropy
 
         return (date_distribution_1, date_distribution_2, bool1, bool2, average_passage_distribution, aux_loss)
 
@@ -881,11 +881,15 @@ class DropLanguage(DomainLanguage):
         passage_attention_1 = passage_attn_1._value * self.passage_mask
         passage_attention_2 = passage_attn_2._value * self.passage_mask
 
-        date_distribution_1, _ = self.compute_date_scores(passage_attention_1)
-        date_distribution_2, _ = self.compute_date_scores(passage_attention_2)
+        date_distribution_1, _, d1_dist_entropy = self.compute_date_scores(passage_attention_1)
+        date_distribution_2, _, d2_dist_entropy = self.compute_date_scores(passage_attention_2)
 
         # Shape: (number_of_year_differences, )
         year_difference_dist = self.expected_date_year_difference(date_distribution_1, date_distribution_2)
+
+        loss = 0.0
+        # If we want to use an auxiliary entropy loss
+        # loss += d1_dist_entropy + d2_dist_entropy
 
         debug_value = ""
         if self._debug:
@@ -902,7 +906,7 @@ class DropLanguage(DomainLanguage):
                            f"\nPattn1: {pattn_vis_most_1}\n Date1: {date1}" + \
                            f"\nPattn2: {pattn_vis_most_2}\n Date2: {date2}"
 
-        return YearDifference(year_difference_dist=year_difference_dist, loss=0.0, debug_value=debug_value)
+        return YearDifference(year_difference_dist=year_difference_dist, loss=loss, debug_value=debug_value)
 
 
     @predicate

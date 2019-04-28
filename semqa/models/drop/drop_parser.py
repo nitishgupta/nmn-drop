@@ -292,7 +292,7 @@ class DROPSemanticParser(DROPParserBase):
                                                        hidden_dim=200,
                                                        dropout=dropout)
 
-        assert qp_sim_key in ['raw', 'encoded', 'raw-enc']
+        assert qp_sim_key in ['raw', 'enc', 'raw-enc']
         self.qp_sim_key = qp_sim_key
 
         self.modelloss_metric = Average()
@@ -391,7 +391,7 @@ class DROPSemanticParser(DROPParserBase):
         if self.qp_sim_key == 'raw':
             question_sim_repr = rawemb_question
             passage_sim_repr = rawemb_passage
-        elif self.qp_sim_key == 'encoded':
+        elif self.qp_sim_key == 'enc':
             question_sim_repr = encoded_question
             passage_sim_repr = encoded_passage
         elif self.qp_sim_key == 'raw-enc':
@@ -836,7 +836,12 @@ class DROPSemanticParser(DROPParserBase):
                     elif progtype == "YearDifference":
                         # Distribution over year_differences vector
                         denotation: YearDifference = denotation
-                        predicted_yeardiff_idx = torch.argmax(denotation._value).detach().cpu().numpy()
+                        year_differences_dist = denotation._value.detach().cpu().numpy()
+                        predicted_yeardiff_idx = np.argmax(year_differences_dist)
+                        # If not predicting year_diff = 0
+                        # if predicted_yeardiff_idx == 0 and len(instance_year_differences) > 1:
+                        #     predicted_yeardiff_idx = np.argmax(year_differences_dist[1:])
+                        #     predicted_yeardiff_idx += 1
                         predicted_year_difference = instance_year_differences[predicted_yeardiff_idx]   # int
                         predicted_answer = str(predicted_year_difference)
                     elif progtype == "PassageNumber":
