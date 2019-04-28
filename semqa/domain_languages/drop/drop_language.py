@@ -533,7 +533,9 @@ class DropLanguage(DomainLanguage):
 
         num_distribution = torch.clamp(num_distribution, min=1e-20, max=1 - 1e-20)
 
-        return num_distribution, num_distribution
+        num_distribution_entropy = -1 * torch.sum(num_distribution * torch.log(num_distribution + 1e-40))
+
+        return num_distribution, num_distribution, num_distribution_entropy
 
 
     def expected_date_year_difference(self,
@@ -662,8 +664,8 @@ class DropLanguage(DomainLanguage):
     def num_comparison(self, passage_attention_1, passage_attention_2, comparison: str,
                         gold_num_groundings=None):
 
-        num_distribution_1, _ = self.compute_num_distribution(passage_attention_1)
-        num_distribution_2, _ = self.compute_num_distribution(passage_attention_2)
+        num_distribution_1, _, num1_entropy = self.compute_num_distribution(passage_attention_1)
+        num_distribution_2, _, num2_entropy = self.compute_num_distribution(passage_attention_2)
 
         bool1 = self.expected_num_comparison(num_distribution_1, num_distribution_2, comparison)
         bool2 = self.expected_num_comparison(num_distribution_2, num_distribution_1, comparison)
@@ -698,6 +700,7 @@ class DropLanguage(DomainLanguage):
             num_grounding_loss = 0.0
 
         aux_loss = num_grounding_loss
+        # aux_loss += num1_entropy + num2_entropy
 
         return (num_distribution_1, num_distribution_2, bool1, bool2, average_passage_distribution, aux_loss)
 
@@ -1066,9 +1069,10 @@ class DropLanguage(DomainLanguage):
         # Shape: (passage_length)
         passage_attn = (passage_attn * self.passage_mask)
 
-        number_distribution, _ = self.compute_num_distribution(passage_attention=passage_attn)
+        number_distribution, _, num_dist_entropy = self.compute_num_distribution(passage_attention=passage_attn)
 
         loss = 0.0
+        # loss += num_dist_entropy
 
         debug_value = ""
         if self._debug:

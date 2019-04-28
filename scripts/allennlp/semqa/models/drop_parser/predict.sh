@@ -67,7 +67,7 @@ export GPU=0
 export BEAMSIZE=2
 export DEBUG=true
 
-EVAL_DATASET=num/longest_shortest_yards
+EVAL_DATASET=date/datecomp_full
 DATASET_DIR=./resources/data/drop_s/${EVAL_DATASET}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
 VALFILE=${DATASET_DIR}/drop_dataset_dev.json
@@ -81,10 +81,10 @@ TESTFILE=${VALFILE}
 ##TESTFILE=${TRAINFILE}
 
 # MODEL_TAR=${SERIALIZATION_DIR}/model.tar.gz
-MODEL_DIR=./resources/semqa/checkpoints/nc5e_raw_nc_longyards
+MODEL_DIR=./resources/semqa/checkpoints/drop/date/dc_100_yeardiff/drop_parser/BS_8/LR_0.001/Drop_0.2/TOKENS_qanet/ED_100/RG_1e-4/GACT_false/GPROGS_false/QPSIMKEY_raw/QAL_true/EXL_true/QATL_true/MML_true/SUPFIRST_true/SUPEPOCHS_10/S_100/lenpruned_wentloss
 MODEL_TAR=${MODEL_DIR}/model.tar.gz
-PREDICTION_FILE=${MODEL_DIR}/lsyards_pred.txt
-EVALUATION_FILE=${MODEL_DIR}/lsyards_eval.txt
+PREDICTION_FILE=${MODEL_DIR}/datecomp_pred.txt
+EVALUATION_FILE=${MODEL_DIR}/datecomp_eval.txt
 #PREDICTION_FILE=${PREDICT_OUTPUT_DIR}/${PRED_FILENAME}
 #EVALUATION_FILE=${PREDICT_OUTPUT_DIR}/${EVAL_FILENAME}
 PREDICTOR=drop_parser_predictor

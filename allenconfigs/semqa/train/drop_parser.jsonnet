@@ -319,7 +319,7 @@ local compareff_inputdim =
 //        },
 
         "qp_sim_key": std.extVar("QP_SIM_KEY"),
-        "bilinearsim": true,
+        "bilinearsim": utils.boolparser(std.extVar("BISIM")),
 
         "max_decoding_steps": utils.parse_number(std.extVar("MAX_DECODE_STEP")),
         "dropout": utils.parse_number(std.extVar("DROPOUT")),
