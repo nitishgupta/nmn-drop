@@ -2,15 +2,14 @@
 
 ### DATASET PATHS -- should be same across models for same dataset
 # DATASET_NAME=num/num_prune_supervised
-DATASET_NAME=date_num/dc_nc_100_yeardiff
-DATASET_DIR=./resources/data/drop/${DATASET_NAME}
+DATASET_NAME=num/longest_shortest_yards
+DATASET_DIR=./resources/data/drop_s/${DATASET_NAME}
 
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
 VALFILE=${DATASET_DIR}/drop_dataset_dev.json
 
 MODEL_TAR='https://s3-us-west-2.amazonaws.com/allennlp/models/naqanet-2019.03.01.tar.gz'
 GPU=0
-
 
 CHECKPOINT_ROOT=./resources/semqa/checkpoints
 SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/${DATASET_NAME}
@@ -39,6 +38,6 @@ allennlp evaluate --output-file ${EVAL_FILE} \
 #                 ${MODEL_TAR} ${TESTFILE}
 
 echo -e "Evaluation file saved at: ${EVAL_FILE}"
-#echo -e "Predictions file saved at: ${PREDICTION_FILE}"
+# echo -e "Predictions file saved at: ${PREDICTION_FILE}"
 
 
