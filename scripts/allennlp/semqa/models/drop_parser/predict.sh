@@ -81,10 +81,10 @@ TESTFILE=${VALFILE}
 ##TESTFILE=${TRAINFILE}
 
 # MODEL_TAR=${SERIALIZATION_DIR}/model.tar.gz
-MODEL_DIR=./resources/semqa/checkpoints/nc10e_rawenc_nc_longyards
+MODEL_DIR=./resources/semqa/checkpoints/nc5e_raw_nc_longyards
 MODEL_TAR=${MODEL_DIR}/model.tar.gz
-PREDICTION_FILE=${MODEL_DIR}/longest_shortest_yards_pred.txt
-EVALUATION_FILE=${MODEL_DIR}/longest_shortest_yards_eval.txt
+PREDICTION_FILE=${MODEL_DIR}/lsyards_pred.txt
+EVALUATION_FILE=${MODEL_DIR}/lsyards_eval.txt
 #PREDICTION_FILE=${PREDICT_OUTPUT_DIR}/${PRED_FILENAME}
 #EVALUATION_FILE=${PREDICT_OUTPUT_DIR}/${EVAL_FILENAME}
 PREDICTOR=drop_parser_predictor
@@ -92,15 +92,15 @@ PREDICTOR=drop_parser_predictor
 #######################################################################################################################
 
 
-allennlp predict --output-file ${PREDICTION_FILE} \
-                 --predictor ${PREDICTOR} \
-                 --cuda-device ${GPU} \
-                 --include-package ${INCLUDE_PACKAGE} \
-                 --silent \
-                 --batch-size 1 \
-                 --use-dataset-reader \
-                 --overrides "{"model": { "beam_size": ${BEAMSIZE}, "debug": ${DEBUG}}}" \
-                 ${MODEL_TAR} ${TESTFILE}
+#allennlp predict --output-file ${PREDICTION_FILE} \
+#                 --predictor ${PREDICTOR} \
+#                 --cuda-device ${GPU} \
+#                 --include-package ${INCLUDE_PACKAGE} \
+#                 --silent \
+#                 --batch-size 1 \
+#                 --use-dataset-reader \
+#                 --overrides "{"model": { "beam_size": ${BEAMSIZE}, "debug": ${DEBUG}}}" \
+#                 ${MODEL_TAR} ${TESTFILE}
 
 allennlp evaluate --output-file ${EVALUATION_FILE} \
                   --cuda-device ${GPU} \

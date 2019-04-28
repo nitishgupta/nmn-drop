@@ -186,6 +186,7 @@ class DROPSemanticParser(DROPParserBase):
                  # decoder_beam_search: ConstrainedBeamSearch,
                  max_decoding_steps: int,
                  qp_sim_key: str,
+                 bilinearsim: bool = False,
                  goldactions: bool = None,
                  goldprogs: bool = False,
                  denotationloss: bool = True,
@@ -295,18 +296,21 @@ class DROPSemanticParser(DROPParserBase):
 
         assert qp_sim_key in ['raw', 'enc', 'raw-enc']
         self.qp_sim_key = qp_sim_key
+        self.bilinearsim = bilinearsim
 
-        if self.qp_sim_key == 'raw':
-            self.q2p_bilinear_matrixattn = BilinearMatrixAttention(matrix_1_dim=text_embed_dim,
-                                                                   matrix_2_dim=text_embed_dim)
-        elif self.qp_sim_key == 'enc':
-            self.q2p_bilinear_matrixattn = BilinearMatrixAttention(matrix_1_dim=encoding_out_dim,
-                                                                   matrix_2_dim=encoding_out_dim)
-        elif self.qp_sim_key == 'raw-enc':
-            self.q2p_bilinear_matrixattn = BilinearMatrixAttention(matrix_1_dim=encoding_out_dim + text_embed_dim,
-                                                                   matrix_2_dim=encoding_out_dim + text_embed_dim)
-        else:
-            raise NotImplementedError
+        if self.bilinearsim:
+            if self.qp_sim_key == 'raw':
+                self.q2p_bilinear_matrixattn = BilinearMatrixAttention(matrix_1_dim=text_embed_dim,
+                                                                       matrix_2_dim=text_embed_dim)
+            elif self.qp_sim_key == 'enc':
+                self.q2p_bilinear_matrixattn = BilinearMatrixAttention(matrix_1_dim=encoding_out_dim,
+                                                                       matrix_2_dim=encoding_out_dim)
+            elif self.qp_sim_key == 'raw-enc':
+                self.q2p_bilinear_matrixattn = BilinearMatrixAttention(matrix_1_dim=encoding_out_dim + text_embed_dim,
+                                                                       matrix_2_dim=encoding_out_dim + text_embed_dim)
+            else:
+                raise NotImplementedError
+
 
         self.modelloss_metric = Average()
         self.excloss_metric = Average()
@@ -414,10 +418,12 @@ class DROPSemanticParser(DROPParserBase):
             raise NotImplementedError
 
         # Shape: (batch_size, question_length, passage_length)
-        question_passage_similarity = self.q2p_bilinear_matrixattn(question_sim_repr,
-                                                                   passage_sim_repr)
-        # question_passage_similarity = self._executor_parameters.dotprod_matrix_attn(question_sim_repr,
-        #                                                                             passage_sim_repr)
+        if self.bilinearsim:
+            question_passage_similarity = self.q2p_bilinear_matrixattn(question_sim_repr,
+                                                                       passage_sim_repr)
+        else:
+            question_passage_similarity = self._executor_parameters.dotprod_matrix_attn(question_sim_repr,
+                                                                                        passage_sim_repr)
 
         # question_passage_similarity = self._dropout(question_passage_similarity)
         # Shape: (batch_size, question_length, passage_length)
