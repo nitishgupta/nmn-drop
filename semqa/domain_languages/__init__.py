@@ -1,3 +1,4 @@
 import semqa.domain_languages.drop
+import semqa.domain_languages.drop_new
 import semqa.domain_languages.hotpotqa
 import semqa.domain_languages.domain_language_utils
