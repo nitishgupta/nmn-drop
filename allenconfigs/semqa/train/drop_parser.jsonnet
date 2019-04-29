@@ -154,9 +154,13 @@ local compareff_inputdim =
     },
 
     "vocabulary": {
+        "min_count": {
+            "token_characters": 200
+        },
         "pretrained_files": {
             "tokens": std.extVar("WORDEMB_FILE"),
-        }
+        },
+        "only_include_pretrained_words": true
     },
 
     "train_data_path": std.extVar("TRAINING_DATA_FILE"),
@@ -319,7 +323,7 @@ local compareff_inputdim =
 //        },
 
         "qp_sim_key": std.extVar("QP_SIM_KEY"),
-        "bilinearsim": utils.boolparser(std.extVar("BISIM")),
+        "sim_key": std.extVar("SIM_KEY"),
 
         "max_decoding_steps": utils.parse_number(std.extVar("MAX_DECODE_STEP")),
         "dropout": utils.parse_number(std.extVar("DROPOUT")),
@@ -329,7 +333,7 @@ local compareff_inputdim =
               ".*",
               {
                   "type": "l2",
-                  "alpha": 1e-4,
+                  "alpha": 1e-7,
               }
           ]
         ],
@@ -379,7 +383,8 @@ local compareff_inputdim =
             "type": "exponential",
             "decay": 0.9999
         },
-        "summary_interval": 1,
+        "summary_interval": 100,
+        "should_log_parameter_statistics": false,
         "validation_metric": "+f1"
     },
 

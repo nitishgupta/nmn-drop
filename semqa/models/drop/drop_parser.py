@@ -65,7 +65,7 @@ def getGoldLF_datecomparison(question_tokens: List[str]):
             return [f"{psa_start}{greater_than}{lf2}", f"{qsa_start}{greater_than}{lf2}"]
 
     return [f"{psa_start}{greater_than}{lf2}", f"{qsa_start}{greater_than}{lf2}"]
-'''
+
 
 def getGoldLF_datecomparison(question_tokens: List[str], language: DropLanguage):
     # "(find_passageSpanAnswer (compare_date_greater_than find_PassageAttention find_PassageAttention))"
@@ -104,7 +104,6 @@ def getGoldLF_datecomparison(question_tokens: List[str], language: DropLanguage)
 
     return gold_logical_forms
 
-'''
 def getGoldLF_numcomparison(question_tokens: List[str]):
     # "(find_passageSpanAnswer (compare_date_greater_than find_PassageAttention find_PassageAttention))"
     psa_start = "(find_passageSpanAnswer ("
@@ -127,7 +126,7 @@ def getGoldLF_numcomparison(question_tokens: List[str]):
             return [f"{psa_start}{greater_than}{lf2}", f"{qsa_start}{greater_than}{lf2}"]
 
     return [f"{psa_start}{greater_than}{lf2}", f"{qsa_start}{greater_than}{lf2}"]
-'''
+
 
 def getGoldLF_numcomparison(question_tokens: List[str], language: DropLanguage):
     # "(find_passageSpanAnswer (compare_date_greater_than find_PassageAttention find_PassageAttention))"
@@ -166,7 +165,7 @@ def getGoldLF_numcomparison(question_tokens: List[str], language: DropLanguage):
         gold_logical_forms.append(f"{qsa_start}{operator_action}{lf2}")
 
     return gold_logical_forms
-
+'''
 
 @Model.register("drop_parser")
 class DROPSemanticParser(DROPParserBase):
@@ -185,7 +184,7 @@ class DROPSemanticParser(DROPParserBase):
                  # decoder_beam_search: ConstrainedBeamSearch,
                  max_decoding_steps: int,
                  qp_sim_key: str,
-                 bilinearsim: bool = False,
+                 sim_key: str,
                  goldactions: bool = None,
                  goldprogs: bool = False,
                  denotationloss: bool = True,
@@ -295,9 +294,11 @@ class DROPSemanticParser(DROPParserBase):
 
         assert qp_sim_key in ['raw', 'enc', 'raw-enc']
         self.qp_sim_key = qp_sim_key
-        self.bilinearsim = bilinearsim
+        # dot - dot-product, bi-bilinear, ma-matrix-attention
+        assert sim_key in ['dot', 'bi', 'ma']
+        self.sim_key = sim_key
 
-        if self.bilinearsim:
+        if self.sim_key == 'bi':
             if self.qp_sim_key == 'raw':
                 self.q2p_bilinear_matrixattn = BilinearMatrixAttention(matrix_1_dim=text_embed_dim,
                                                                        matrix_2_dim=text_embed_dim)
@@ -309,7 +310,6 @@ class DROPSemanticParser(DROPParserBase):
                                                                        matrix_2_dim=encoding_out_dim + text_embed_dim)
             else:
                 raise NotImplementedError
-
 
         self.modelloss_metric = Average()
         self.excloss_metric = Average()
@@ -417,12 +417,16 @@ class DROPSemanticParser(DROPParserBase):
             raise NotImplementedError
 
         # Shape: (batch_size, question_length, passage_length)
-        if self.bilinearsim:
-            question_passage_similarity = self.q2p_bilinear_matrixattn(question_sim_repr,
-                                                                       passage_sim_repr)
-        else:
+        if self.sim_key == 'dot':
             question_passage_similarity = self._executor_parameters.dotprod_matrix_attn(question_sim_repr,
                                                                                         passage_sim_repr)
+        elif self.sim_key == 'bi':
+            question_passage_similarity = self.q2p_bilinear_matrixattn(question_sim_repr,
+                                                                       passage_sim_repr)
+        elif self.sim_key == 'ma':
+            question_passage_similarity = self._matrix_attention(question_sim_repr, passage_sim_repr)
+        else:
+            raise NotImplementedError
 
         # question_passage_similarity = self._dropout(question_passage_similarity)
         # Shape: (batch_size, question_length, passage_length)
@@ -628,7 +632,7 @@ class DROPSemanticParser(DROPParserBase):
          batch_actionseq_sideargs) = semparse_utils._convert_finalstates_to_actions(best_final_states=best_final_states,
                                                                                     possible_actions=actions,
                                                                                     batch_size=batch_size)
-
+        '''
         if self._goldactions:
             # Gold programs
             if self._goldprogs:
@@ -652,6 +656,7 @@ class DROPSemanticParser(DROPParserBase):
             # self.datecompare_goldattn_to_sideargs(batch_actionseqs,
             #                                       batch_actionseq_sideargs,
             #                                       datecompare_gold_qattns)
+        '''
 
         # Adding Date-Comparison supervised event groundings to relevant actions
         self.datecompare_eventdategr_to_sideargs(qtypes,

@@ -76,18 +76,19 @@ def preprocess_HowManyYardsWasThe_ques(dataset):
                     question_answer[constants.program_supervised] = True
                     qtype_dist[shortest_qtype] += 1
                     questions_w_qtypes += 1
+                # Not annotating second longest/shortest questions since we cannot handle them
+                # elif second_longest_question_ngram in original_question:
+                #     question_answer[constants.qtype] = constants.YARDS_second_longest_qtype
+                #     question_answer[constants.program_supervised] = True
+                #     qtype_dist[second_longest_qtype] += 1
+                #     questions_w_qtypes += 1
+                #
+                # elif second_shortest_question_ngram in original_question:
+                #     question_answer[constants.qtype] = constants.YARDS_second_shortest_qtype
+                #     question_answer[constants.program_supervised] = True
+                #     qtype_dist[second_shortest_qtype] += 1
+                #     questions_w_qtypes += 1
 
-                elif second_longest_question_ngram in original_question:
-                    question_answer[constants.qtype] = constants.YARDS_second_longest_qtype
-                    question_answer[constants.program_supervised] = True
-                    qtype_dist[second_longest_qtype] += 1
-                    questions_w_qtypes += 1
-
-                elif second_shortest_question_ngram in original_question:
-                    question_answer[constants.qtype] = constants.YARDS_second_shortest_qtype
-                    question_answer[constants.program_supervised] = True
-                    qtype_dist[second_shortest_qtype] += 1
-                    questions_w_qtypes += 1
                 else:
                     question_answer[constants.program_supervised] = False
 

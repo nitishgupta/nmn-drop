@@ -3,7 +3,7 @@
 export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
-DATASET_NAME=date_num/dc_nc_yeardiff
+DATASET_NAME=num/nc_howmanyyards
 
 DATASET_DIR=./resources/data/drop_s/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
@@ -24,16 +24,16 @@ export GPU=0
 export TRAINING_DATA_FILE=${TRAINFILE}
 export VAL_DATA_FILE=${VALFILE}
 
-export WEMB_DIM=100
-# export WORDEMB_FILE="./resources/embeddings/glove.840B.300d.lower.converted.zip"
-export WORDEMB_FILE="https://s3-us-west-2.amazonaws.com/allennlp/datasets/glove/glove.6B.100d.txt.gz"
+export WEMB_DIM=300
+export WORDEMB_FILE="./resources/embeddings/glove.840B.300d.lower.converted.zip"
+# export WORDEMB_FILE="https://s3-us-west-2.amazonaws.com/allennlp/datasets/glove/glove.6B.100d.txt.gz"
 
 export BIDAF_MODEL_TAR='https://s3-us-west-2.amazonaws.com/allennlp/models/bidaf-model-2017.09.15-charpad.tar.gz'
 export BIDAF_WORDEMB_FILE="https://s3-us-west-2.amazonaws.com/allennlp/datasets/glove/glove.6B.100d.txt.gz"
 
 # Which kind of similarity to use in Ques-Passage attention - raw / encoded / raw-enc
 export QP_SIM_KEY="enc"
-export BISIM=true
+export SIM_KEY="ma"
 
 export GOLDACTIONS=false
 export GOLDPROGS=false
@@ -53,7 +53,7 @@ export BS=8
 export DROPOUT=0.2
 
 export LR=0.001
-export RG=1e-4
+export RG=1e-7
 
 export SEED=100
 
@@ -68,11 +68,11 @@ CHECKPOINT_ROOT=./resources/semqa/checkpoints
 SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/${DATASET_NAME}
 MODEL_DIR=drop_parser
 PD_1=BS_${BS}/LR_${LR}/Drop_${DROPOUT}/TOKENS_${TOKENIDX}/ED_${WEMB_DIM}/RG_${RG}
-PD_2=QPSIMKEY_${QP_SIM_KEY}/BISIM_${BISIM}/SUPEPOCHS_${SUPEPOCHS}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/${PD_2}/S_${SEED}/noent
+PD_2=QPSIMKEY_${QP_SIM_KEY}/SIM_KEY_${SIM_KEY}/SUPEPOCHS_${SUPEPOCHS}
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/${PD_2}/S_${SEED}/newemb
 
 # SERIALIZATION_DIR=./resources/semqa/checkpoints/nc0e_rawenc_nc_longyards
-# SERIALIZATION_DIR=./resources/semqa/checkpoints/test
+# SERIALIZATION_DIR=./resources/semqa/checkpoints/test100f
 
 #######################################################################################################################
 
