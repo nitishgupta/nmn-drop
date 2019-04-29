@@ -793,7 +793,7 @@ class DROPSemanticParserNew(DROPParserBase):
                         predicted_passagenum_diff = instance_passagenum_diffs[predicted_passagenumdiff_idx]
                         predicted_passagenum_diff = int(predicted_passagenum_diff) if int(predicted_passagenum_diff) == \
                                                                                       predicted_passagenum_diff \
-                                                                                           else predicted_passage_number
+                                                                                           else predicted_passagenum_diff
                         predicted_answer = str(predicted_passagenum_diff)
 
                     elif progtype == 'CountNumber':
