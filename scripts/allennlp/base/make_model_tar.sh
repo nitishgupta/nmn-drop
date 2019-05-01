@@ -1,6 +1,6 @@
 #!/usr/bin/env
 
-SERIALIZATION_DIR=./resources/semqa/checkpoints/nc5e_nc_longyards/
+SERIALIZATION_DIR='./resources/semqa/checkpoints/drop/num/nc_howmanyyards_count_diff/drop_parser_new/TOKENS_qanet/ED_300/RG_1e-07/QPSIMKEY_enc/SIM_KEY_ma/SUPEPOCHS_5/S_100/pretrain_NoFinetune/'
 WEIGHTS_TH=best.th
 # WEIGHTS_TH=model_state_epoch_43.th
 

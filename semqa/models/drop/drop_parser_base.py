@@ -17,8 +17,8 @@ import allennlp.common.util as alcommon_utils
 from allennlp.nn import InitializerApplicator, RegularizerApplicator
 
 import semqa.domain_languages.domain_language_utils as dl_utils
-from semqa.domain_languages.drop.execution_parameters import ExecutorParameters
-from semqa.domain_languages.drop.drop_language import DropLanguage
+from semqa.domain_languages.drop_old.execution_parameters import ExecutorParameters
+from semqa.domain_languages.drop_old.drop_language import DropLanguage
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 

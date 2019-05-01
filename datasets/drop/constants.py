@@ -84,12 +84,31 @@ NUMCOMP_QTYPE = "number_comparison"
 qspan_numgrounding_supervision = "qspan_numgrounding_supervision"
 qspan_numvalue_supervision = "qspan_numvalue_supervision"
 
-
 # How many yards was the longest/shortest ..
 YARDS_longest_qtype = 'how_many_yards_longest'
 YARDS_shortest_qtype = 'how_many_yards_shortest'
 YARDS_second_longest_qtype = 'how_many_yards_second_longest'
 YARDS_second_shortest_qtype = 'how_many_yards_second_shortest'
+# How many yards -- Find a PassageNum as answer
+YARDS_findnum_qtype = 'how_many_yards_findnum'
+
+# Difference between two passage numbers. Each number can be a direct grounding, or maximum / minimum of a set
+DIFF_MAXMIN_qtype = "diff_maxmin_qtype"
+DIFF_MAXNUM_qtype = "diff_maxnum_qtype"
+DIFF_MAXMAX_qtype = "diff_maxmax_qtype"
+
+DIFF_NUMMAX_qtype = "diff_nummax_qtype"
+DIFF_NUMMIN_qtype = "diff_nummin_qtype"
+DIFF_NUMNUM_qtype = "diff_numnum_qtype"
+
+DIFF_MINMAX_qtype = "diff_minmax_qtype"
+DIFF_MINNUM_qtype = "diff_minnum_qtype"
+DIFF_MINMIN_qtype = "diff_minmin_qtype"
+
+
+
+# Subset of "How many" which require counting over passage attention
+COUNT_qtype = "count_qtype"
 
 COMMA="@COMMA@"
 LRB="@LRB@"

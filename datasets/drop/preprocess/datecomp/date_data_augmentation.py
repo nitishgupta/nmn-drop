@@ -622,9 +622,9 @@ if __name__=='__main__':
 
 ''' DATASET CREATED THIS WAY
 
-input_dir = "./resources/data/drop/date/datecomp_traindev_pruned"
-# output_dir_w_qsa = "./resources/data/drop/date/datecomp_traindevpruned_augment_wqsa"
-output_dir_wo_qsa = "./resources/data/drop/date/datecomp_traindevpruned_augment_woqsa"
+input_dir = "./resources/data/drop_old/date/datecomp_traindev_pruned"
+# output_dir_w_qsa = "./resources/data/drop_old/date/datecomp_traindevpruned_augment_wqsa"
+output_dir_wo_qsa = "./resources/data/drop_old/date/datecomp_traindevpruned_augment_woqsa"
 
 # if not os.path.exists(output_dir_w_qsa):
 #     os.makedirs(output_dir_w_qsa, exist_ok=True)

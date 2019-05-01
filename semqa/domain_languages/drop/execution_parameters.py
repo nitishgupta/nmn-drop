@@ -7,42 +7,26 @@ import torch.nn
 from allennlp.common import Registrable
 from allennlp.modules import Highway
 from allennlp.nn.activations import Activation
-from allennlp.modules import Seq2SeqEncoder, SimilarityFunction, TextFieldEmbedder, TimeDistributed, FeedForward
-from allennlp.modules.similarity_functions.bilinear import BilinearSimilarity
-from allennlp.modules.span_extractors import EndpointSpanExtractor
-from allennlp.models.reading_comprehension.bidaf import BidirectionalAttentionFlow
-from allennlp.modules.matrix_attention.dot_product_matrix_attention import DotProductMatrixAttention
-from allennlp.modules.matrix_attention.legacy_matrix_attention import LegacyMatrixAttention
-from allennlp.nn import InitializerApplicator, RegularizerApplicator
+from allennlp.modules import Seq2SeqEncoder, Seq2VecEncoder
+
 from allennlp.modules.attention import Attention, DotProductAttention
 from allennlp.modules.matrix_attention import (MatrixAttention, BilinearMatrixAttention,
                                                DotProductMatrixAttention, LinearMatrixAttention)
-
-from allennlp.models.decomposable_attention import DecomposableAttention
-from allennlp.nn.util import masked_softmax, weighted_sum
-from semqa.domain_languages.hotpotqa.decompatt import DecompAtt
 
 class ExecutorParameters(torch.nn.Module, Registrable):
     """
         Global parameters for execution. Executor objects are made for each instance, where as these will be shared across.
     """
     def __init__(self,
-                 num_highway_layers: int,
-                 phrase_layer: Seq2SeqEncoder,
-                 modeling_proj_layer,
-                 modeling_layer: Seq2SeqEncoder,
+                 question_encoding_dim: int,
+                 passage_encoding_dim: int,
                  passage_attention_to_span: Seq2SeqEncoder,
                  question_attention_to_span: Seq2SeqEncoder,
-                 hidden_dim: int,
+                 passage_attention_to_count: Seq2VecEncoder,
                  dropout: float = 0.0):
         super().__init__()
 
-        encoding_in_dim = phrase_layer.get_input_dim()
-        self._highway_layer = Highway(encoding_in_dim, num_highway_layers)
-        self._phrase_layer: Seq2SeqEncoder = phrase_layer
-
-        self._modeling_proj_layer = modeling_proj_layer
-        self._modeling_layer: Seq2SeqEncoder = modeling_layer
+        self.num_counts = 10
 
         self.passage_attention_scalingvals = [1, 2, 5, 10]
 
@@ -52,11 +36,9 @@ class ExecutorParameters(torch.nn.Module, Registrable):
         self.question_attention_to_span = question_attention_to_span
         self.question_startend_predictor = torch.nn.Linear(self.question_attention_to_span.get_output_dim(), 2)
 
-        passage_encoding_dim = self._phrase_layer.get_output_dim()
-        question_encoding_dim = self._phrase_layer.get_output_dim()
-        modeling_out_dim = self._modeling_layer.get_output_dim()
-
-        self.find_attention: Attention = DotProductAttention()
+        self.passage_attention_to_count = passage_attention_to_count
+        self.passage_count_predictor = torch.nn.Linear(self.passage_attention_to_count.get_output_dim(),
+                                                       self.num_counts)
 
         self.dotprod_matrix_attn = DotProductMatrixAttention()
 
@@ -69,11 +51,6 @@ class ExecutorParameters(torch.nn.Module, Registrable):
         # that are related to it.
         self.passage_to_num_attention: MatrixAttention = BilinearMatrixAttention(matrix_1_dim=passage_encoding_dim,
                                                                                  matrix_2_dim=passage_encoding_dim)
-
-        self.relocate_linear1 = torch.nn.Linear(passage_encoding_dim, hidden_dim)
-        self.relocate_linear2 = torch.nn.Linear(hidden_dim, 1)
-        self.relocate_linear3 = torch.nn.Linear(passage_encoding_dim, 1)
-        self.relocate_linear4 = torch.nn.Linear(question_encoding_dim, hidden_dim)
 
         if dropout > 0:
             self._dropout = torch.nn.Dropout(p=dropout)

@@ -7,7 +7,7 @@ from allennlp.models.reading_comprehension.util import get_best_span
 import allennlp.nn.util as allenutil
 from collections import defaultdict
 import datasets.drop.constants as constants
-from semqa.domain_languages.drop.drop_language import Date
+from semqa.domain_languages.drop_old.drop_language import Date
 import argparse
 
 """ This script is used to augment date-comparison-data by flipping events in the questions """
@@ -340,11 +340,11 @@ if __name__=='__main__':
     # input_dir = "date"
     # output_dir = "date_prune_weakdate"
     #
-    # trnfp = f"/srv/local/data/nitishg/data/drop/{input_dir}/drop_dataset_train.json"
-    # devfp = f"/srv/local/data/nitishg/data/drop/{input_dir}/drop_dataset_dev.json"
+    # trnfp = f"/srv/local/data/nitishg/data/drop_old/{input_dir}/drop_dataset_train.json"
+    # devfp = f"/srv/local/data/nitishg/data/drop_old/{input_dir}/drop_dataset_dev.json"
     #
-    # out_trfp = f"/srv/local/data/nitishg/data/drop/{output_dir}/drop_dataset_train.json"
-    # out_devfp = f"/srv/local/data/nitishg/data/drop/{output_dir}/drop_dataset_dev.json"
+    # out_trfp = f"/srv/local/data/nitishg/data/drop_old/{output_dir}/drop_dataset_train.json"
+    # out_devfp = f"/srv/local/data/nitishg/data/drop_old/{output_dir}/drop_dataset_dev.json"
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--input_trnfp')

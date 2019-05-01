@@ -502,7 +502,7 @@ def tokenizeDocs(input_json: str, output_json: str, nump: int) -> None:
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    # This is the original drop json file
+    # This is the original drop_old json file
     parser.add_argument('--input_json', required=True)
     parser.add_argument('--output_json', default=True)
     parser.add_argument('--nump', type=int, default=10)

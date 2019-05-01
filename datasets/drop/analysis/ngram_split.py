@@ -7,7 +7,7 @@ import datasets.drop.constants as constants
 
 
 NUM_NGRAMS = ["how many field goals did", "how many field goals were",
-              "how many yards was the", "how many yards longer was", "how many yards difference",
+              "how many yards was", "how many yards longer was", "how many yards difference",
               "how many points did the", "how many points were",
               "how many years did the", "how many years did it", "how many years after the",
               "how many years passed between", "how many years was",

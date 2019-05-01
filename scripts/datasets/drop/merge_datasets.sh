@@ -4,9 +4,9 @@ ROOT_DIR=./resources/data/drop_s
 
 DIR1=num/numcomp_100
 
-DIR2=num/how_many_yards_was
+DIR2=num/howmanyyards_count_diff
 
-OUTDIR=num/nc_100_howmanyards
+OUTDIR=num/nc100_howmanyyards_count_diff
 
 
 python -m datasets.drop.merge_datasets --dir1 ${ROOT_DIR}/${DIR1} \

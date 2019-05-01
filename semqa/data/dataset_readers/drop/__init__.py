@@ -1,1 +1,1 @@
-from semqa.data.dataset_readers.drop.drop_reader import DROPReader
+from semqa.data.dataset_readers.drop.drop_reader_old import DROPReaderOld

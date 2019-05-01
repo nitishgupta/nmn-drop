@@ -7,7 +7,7 @@ from allennlp.models.reading_comprehension.util import get_best_span
 import allennlp.nn.util as allenutil
 from collections import defaultdict
 import datasets.drop.constants as constants
-from semqa.domain_languages.drop.drop_language import Date
+from semqa.domain_languages.drop_old.drop_language import Date
 import argparse
 
 
@@ -118,7 +118,7 @@ if __name__ == '__main__':
 
 ''' DATASET CREATED THIS WAY
 
-input_dir = "./resources/data/drop/analysis/ngram/num/how_many_yards_was_the/"
-output_dir = "./resources/data/drop/num/how_many_yards_was_the"
+input_dir = "./resources/data/drop_old/analysis/ngram/num/how_many_yards_was_the/"
+output_dir = "./resources/data/drop_old/num/how_many_yards_was_the"
 
 '''

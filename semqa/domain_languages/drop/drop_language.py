@@ -185,6 +185,20 @@ class PassageNumber():
         self.debug_value = debug_value
 
 
+class PassageNumberDifference():
+    def __init__(self, passagenumber_difference_dist, loss=0.0, debug_value=""):
+        self._value = passagenumber_difference_dist
+        self.loss = loss
+        self.debug_value = debug_value
+
+
+class CountNumber():
+    def __init__(self, count_number_dist, loss=0.0, debug_value=""):
+        self._value = count_number_dist
+        self.loss = loss
+        self.debug_value = debug_value
+
+
 # A ``NumberAnswer`` is a distribution over the possible answers from addition and subtraction.
 class NumberAnswer(Tensor):
     pass
@@ -210,6 +224,9 @@ def get_empty_language_object():
                                 passage_num_values=None,
                                 year_differences=None,
                                 year_differences_mat=None,
+                                count_num_values=None,
+                                passagenum_differences=None,
+                                passagenum_differences_mat=None,
                                 question_passage_attention=None,
                                 passage_question_attention=None,
                                 passage_token2date_similarity=None,
@@ -248,6 +265,9 @@ class DropLanguage(DomainLanguage):
                  passage_num_values: List[float],
                  year_differences: List[int],
                  year_differences_mat: np.array,
+                 count_num_values: List[int],
+                 passagenum_differences: List[float],
+                 passagenum_differences_mat: np.array,
                  question_passage_attention: Tensor,
                  passage_question_attention: Tensor,
                  passage_token2date_similarity: Tensor,
@@ -260,7 +280,8 @@ class DropLanguage(DomainLanguage):
                  debug=False) -> None:
 
         if start_types is None:
-            start_types = {PassageSpanAnswer, YearDifference, PassageNumber}    # , QuestionSpanAnswer}
+            start_types = {PassageSpanAnswer, YearDifference, PassageNumber, CountNumber, PassageNumberDifference}
+            # QuestionSpanAnswer - could be one
 
         super().__init__(start_types=start_types)
 
@@ -320,6 +341,13 @@ class DropLanguage(DomainLanguage):
         # Shape: (num_passage_dates, num_passage_dates, num_of_year_differences)
         self.year_differences_mat = allenutil.move_to_device(torch.FloatTensor(year_differences_mat),
                                                              cuda_device=self.device_id)
+        # List[int]
+        self.count_num_values = count_num_values
+        # List[int / float] -- Containing possible subtraction values between passage numbers
+        self.passagenum_differences = passagenum_differences
+        # Shape: (num_passage_numbers, num_passage_numbers, num_of_passagenum_differences)
+        self.passagnum_differences_mat = allenutil.move_to_device(torch.FloatTensor(passagenum_differences_mat),
+                                                                  cuda_device=self.device_id)
 
         if self._debug:
             num_date_tokens = self.passage_datetokens_mask_float.sum()
@@ -565,6 +593,38 @@ class DropLanguage(DomainLanguage):
         year_differences_dist = torch.clamp(year_differences_dist, min=1e-20, max=1 - 1e-20)
 
         return year_differences_dist
+
+
+    def expected_passagenumber_difference(self,
+                                          passagenumber_dist_1: torch.FloatTensor,
+                                          passagenumber_dist_2: torch.FloatTensor):
+
+        """ Compute a distribution over possible passagenumber-differences by marginalizing the joint number-dists
+            over the passagenumber_differences_mat
+
+            Parameters:
+            -----------
+            passagenumber_dist_1: ``torch.FloatTensor`` Shape: (self.num_passagenumbers, )
+            passagenumber_dist_2: ``torch.FloatTensor`` Shape: (self.num_passagenumbers, )
+        """
+
+        # Shape: (num_passage_dates, num_passage_dates)
+        joint_dist = torch.matmul(passagenumber_dist_1.unsqueeze(1), passagenumber_dist_2.unsqueeze(0))
+
+        # Shape: (num_passagenumber_differences, )
+        passagenumber_differences_dist = torch.sum(self.passagnum_differences_mat * joint_dist.unsqueeze(2), dim=(0, 1))
+
+        # if torch.sum(year_differences_dist) > 1.0:
+        # print("year dist")
+        # print(f"{date_distribution_1} {date_distribution_1.sum()}")
+        # print(f"{date_distribution_2} {date_distribution_2.sum()}")
+        # print(f"{year_differences_dist} {year_differences_dist.sum()}")
+        # print()
+
+        passagenumber_differences_dist = torch.clamp(passagenumber_differences_dist, min=1e-20, max=1 - 1e-20)
+
+        return passagenumber_differences_dist
+
 
 
     def expected_date_comparison(self, date_distribution_1, date_distribution_2, comparison):
@@ -959,6 +1019,71 @@ class DropLanguage(DomainLanguage):
                      end_logits=span_end_logits,
                      loss=loss,
                      debug_value=debug_value)
+
+    @predicate
+    def passageAttn2Count(self, passage_attention: PassageAttention) -> CountNumber:
+        passage_attn = passage_attention._value
+        # passage_attn = passage_attention
+
+        # Shape: (passage_length)
+        passage_attn = (passage_attn * self.passage_mask)
+
+        scaled_attentions = [passage_attn * sf for sf in self.parameters.passage_attention_scalingvals]
+        # Shape: (passage_length, num_scaling_factors)
+        scaled_passage_attentions = torch.stack(scaled_attentions, dim=1)
+
+        # Shape: (hidden_dim, )
+        count_hidden_repr = self.parameters.passage_attention_to_count(scaled_passage_attentions.unsqueeze(0),
+                                                                       self.passage_mask.unsqueeze(0)).squeeze(0)
+
+        # Shape: (num_counts, )
+        passage_span_logits = self.parameters.passage_count_predictor(count_hidden_repr)
+
+        count_distribution = torch.softmax(passage_span_logits, dim=0)
+
+        loss = 0
+        # loss += passage_attention.loss
+
+        debug_value = ""
+        if self._debug:
+            count = myutils.round_all(myutils.tocpuNPList(count_distribution), 3)
+            _, pattn_vis_most = dlutils.listTokensVis(passage_attn, self.metadata["passage_tokens"])
+            debug_value += f"CountDist: {count}"
+            debug_value += f"\nPattn: {pattn_vis_most}"
+
+        return CountNumber(count_number_dist=count_distribution,
+                           loss=loss,
+                           debug_value=debug_value)
+
+    @predicate
+    def passagenumber_difference(self,
+                                 passage_number_1: PassageNumber,
+                                 passage_number_2: PassageNumber) -> PassageNumberDifference:
+        ''' Given two passage spans, ground them to dates, and then return the difference between their years '''
+
+        passagenumber_dist_1 = passage_number_1._value
+        passagenumber_dist_2 = passage_number_2._value
+
+        # Shape: (num_of_passagenumber_differences, )
+        passagenumber_difference_dist = self.expected_passagenumber_difference(passagenumber_dist_1,
+                                                                               passagenumber_dist_2)
+
+        loss = 0.0
+        # If we want to use an auxiliary entropy loss
+        # loss += d1_dist_entropy + d2_dist_entropy
+
+        debug_value = ""
+        if self._debug:
+            num1 = myutils.round_all(myutils.tocpuNPList(passagenumber_dist_1), 3)
+            num2 = myutils.round_all(myutils.tocpuNPList(passagenumber_dist_2), 3)
+            passagenum_diff_dist = myutils.round_all(myutils.tocpuNPList(passagenumber_difference_dist), 3)
+
+            debug_value += f"PassageNumDiffDist: {passagenum_diff_dist}\n" + \
+                           f"\n Num1: {num1}" + \
+                           f"\n Num2: {num2}"
+
+        return PassageNumberDifference(passagenumber_difference_dist=passagenumber_difference_dist,
+                                       loss=loss, debug_value=debug_value)
 
     '''
     @predicate

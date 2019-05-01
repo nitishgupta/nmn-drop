@@ -1,8 +1,8 @@
 import os
 import json
 
-input_json="./resources/data/drop/date_subset/drop_dataset_train.json"
-output_json="./semqa/tests/data/drop/date/drop.json"
+input_json="./resources/data/drop_old/date_subset/drop_dataset_train.json"
+output_json="./semqa/tests/data/drop_old/date/drop_old.json"
 
 num_of_passages_in_out = 3
 

@@ -3,11 +3,11 @@ import datasets.drop.constants as constants
 
 
 input_dir = "date_subset_prune"
-train_infile = f"/srv/local/data/nitishg/data/drop/{input_dir}/drop_dataset_train.json"
-train_outfile = f"/srv/local/data/nitishg/data/drop/{input_dir}/train_qa.txt"
+train_infile = f"/srv/local/data/nitishg/data/drop_old/{input_dir}/drop_dataset_train.json"
+train_outfile = f"/srv/local/data/nitishg/data/drop_old/{input_dir}/train_qa.txt"
 
-dev_infile = f"/srv/local/data/nitishg/data/drop/{input_dir}/drop_dataset_dev.json"
-dev_outfile = f"/srv/local/data/nitishg/data/drop/{input_dir}/dev_qa.txt"
+dev_infile = f"/srv/local/data/nitishg/data/drop_old/{input_dir}/drop_dataset_dev.json"
+dev_outfile = f"/srv/local/data/nitishg/data/drop_old/{input_dir}/dev_qa.txt"
 
 def get_dataset(infile):
     with open(infile) as f:

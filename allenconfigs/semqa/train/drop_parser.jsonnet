@@ -30,137 +30,75 @@ local compareff_inputdim =
 
 {
     "dataset_reader": {
-      "type": std.extVar("DATASET_READER"),
-      "lazy": false,
-      "skip_instances": true,
-      "passage_length_limit": 400,
-      "question_length_limit": 100,
-      "token_indexers":
-        if tokenidx == "glove" then {
-          "tokens": {
-            "type": "single_id",
-            "lowercase_tokens": true
-          }
-        }
-        else if tokenidx == "bidaf" then {
-          "tokens": {
-              "type": "single_id",
-              "lowercase_tokens": true
-          },
-          "token_characters": {
-            "type": "characters",
-            "character_tokenizer": {
-                "byte_encoding": "utf-8",
-                "start_tokens": [
-                    259
-                ],
-                "end_tokens": [
-                    260,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0
-                ]
+        "type": std.extVar("DATASET_READER"),
+        "lazy": false,
+        "skip_instances": true,
+        "passage_length_limit": 400,
+        "question_length_limit": 100,
+        "token_indexers":
+            if tokenidx == "elmo" then {
+                "elmo": {
+                  "type": "elmo_characters"
+                }
             }
-          }
-        }
-        else if tokenidx == "elmo" then {
-          "elmo": {
-            "type": "elmo_characters"
-          }
-        }
-        else if tokenidx == "qanet" then {
-          "tokens": {
-              "type": "single_id",
-              "lowercase_tokens": true
-          },
-          "token_characters": {
-              "type": "characters",
-              "min_padding_length": 5
-          }
-        }
-        else if tokenidx == "elmoglove" then {
-          "elmo": {
-            "type": "elmo_characters"
-          },
-          "tokens": {
-            "type": "single_id",
-            "lowercase_tokens": true
-          }
-        }
-      ,
+            else if tokenidx == "qanet" then {
+                "tokens": {
+                    "type": "single_id",
+                    "lowercase_tokens": true
+                },
+                "token_characters": {
+                    "type": "characters",
+                    "min_padding_length": 5
+                }
+            }
+            else if tokenidx == "elmoglove" then {
+                "elmo": {
+                  "type": "elmo_characters"
+                },
+                "tokens": {
+                  "type": "single_id",
+                  "lowercase_tokens": true
+                }
+            }
+        ,
     },
 
     "validation_dataset_reader": {
-      "type": std.extVar("DATASET_READER"),
-      "lazy": false,
-      "skip_instances": false,
-      "token_indexers":
-        if tokenidx == "glove" then {
-          "tokens": {
-            "type": "single_id",
-            "lowercase_tokens": true
-          }
-        }
-        else if tokenidx == "bidaf" then {
-          "tokens": {
-              "type": "single_id",
-              "lowercase_tokens": true
-          },
-          "token_characters": {
-            "type": "characters",
-            "character_tokenizer": {
-                "byte_encoding": "utf-8",
-                "start_tokens": [
-                    259
-                ],
-                "end_tokens": [
-                    260,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0
-                ]
+        "type": std.extVar("DATASET_READER"),
+        "lazy": false,
+        "skip_instances": false,
+        "token_indexers":
+            if tokenidx == "elmo" then {
+                "elmo": {
+                  "type": "elmo_characters"
+                }
             }
-          }
-        }
-        else if tokenidx == "elmo" then {
-          "elmo": {
-            "type": "elmo_characters"
-          }
-        }
-        else if tokenidx == "qanet" then {
-          "tokens": {
-              "type": "single_id",
-              "lowercase_tokens": true
-          },
-          "token_characters": {
-              "type": "characters",
-              "min_padding_length": 5
-          }
-        }
-        else if tokenidx == "elmoglove" then {
-          "elmo": {
-            "type": "elmo_characters"
-          },
-          "tokens": {
-            "type": "single_id",
-            "lowercase_tokens": true
-          }
-        }
-      ,
+            else if tokenidx == "qanet" then {
+                "tokens": {
+                    "type": "single_id",
+                    "lowercase_tokens": true
+                },
+                "token_characters": {
+                    "type": "characters",
+                    "min_padding_length": 5
+                }
+            }
+            else if tokenidx == "elmoglove" then {
+                "elmo": {
+                  "type": "elmo_characters"
+                },
+                "tokens": {
+                  "type": "single_id",
+                  "lowercase_tokens": true
+                }
+            }
+        ,
     },
 
     "vocabulary": {
-        "min_count": {
-            "token_characters": 200
-        },
         "pretrained_files": {
             "tokens": std.extVar("WORDEMB_FILE"),
-        },
-        "only_include_pretrained_words": true
+        }
     },
 
     "train_data_path": std.extVar("TRAINING_DATA_FILE"),
@@ -172,18 +110,7 @@ local compareff_inputdim =
          "type": "drop_parser",
 
         "text_field_embedder":
-          if tokenidx == "glove" then {
-            "tokens": {
-              "type": "embedding",
-              "pretrained_file": std.extVar("BIDAF_WORDEMB_FILE"),
-              "embedding_dim": 100,
-              "trainable": false
-            },
-          }
-          else if tokenidx == "bidaf" then {
-            "token_embedders": std.manifestPython(null)
-          }
-          else if tokenidx == "elmo" then {
+          if tokenidx == "elmo" then {
             "elmo": {
               "type": "elmo_token_embedder",
               "options_file": "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_options.json",
@@ -235,6 +162,7 @@ local compareff_inputdim =
           "type": "dot_product",
           "normalize": true
         },
+
         "num_highway_layers": 2,
 
         "phrase_layer": {
@@ -267,20 +195,21 @@ local compareff_inputdim =
             "tensor_2_dim": 128,
             "combination": "x,y,x*y"
         },
-        "modeling_layer": {
-            "type": "qanet_encoder",
-            "input_dim": 128,
-            "hidden_dim": 128,
-            "attention_projection_dim": 128,
-            "feedforward_hidden_dim": 128,
-            "num_blocks": 7,
-            "num_convs_per_block": 2,
-            "conv_kernel_size": 5,
-            "num_attention_heads": 8,
-            "dropout_prob": 0.1,
-            "layer_dropout_undecayed_prob": 0.1,
-            "attention_dropout_prob": 0
-        },
+
+//        "modeling_layer": {
+//            "type": "qanet_encoder",
+//            "input_dim": 128,
+//            "hidden_dim": 128,
+//            "attention_projection_dim": 128,
+//            "feedforward_hidden_dim": 128,
+//            "num_blocks": 7,
+//            "num_convs_per_block": 2,
+//            "conv_kernel_size": 5,
+//            "num_attention_heads": 8,
+//            "dropout_prob": 0.1,
+//            "layer_dropout_undecayed_prob": 0.1,
+//            "attention_dropout_prob": 0
+//        },
 
     //    "passage_token_to_date": {
     //        "type": "stacked_self_attention",
@@ -308,19 +237,17 @@ local compareff_inputdim =
             "bidirectional": true,
         },
 
-        "bidafutils":
-            if tokenidx == "bidaf" then {
-                "bidaf_model_path": std.extVar("BIDAF_MODEL_TAR"),
-                "bidaf_wordemb_file": std.extVar("BIDAF_WORDEMB_FILE"),
-            }
-        ,
+        "passage_attention_to_count": {
+            "type": "gru",
+            "input_size": 4,
+            "hidden_size": 20,
+            "num_layers": 3,
+            "bidirectional": true,
+        },
+
         "action_embedding_dim": 100,
 
         "beam_size": utils.parse_number(std.extVar("BEAMSIZE")),
-
-//        "decoder_beam_search": {
-//            "beam_size": utils.parse_number(std.extVar("BEAMSIZE")),
-//        },
 
         "qp_sim_key": std.extVar("QP_SIM_KEY"),
         "sim_key": std.extVar("SIM_KEY"),
@@ -333,7 +260,7 @@ local compareff_inputdim =
               ".*",
               {
                   "type": "l2",
-                  "alpha": 1e-7,
+                  "alpha": 1e-07,
               }
           ]
         ],

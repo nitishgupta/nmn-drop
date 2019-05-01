@@ -3,7 +3,7 @@ import json
 import torch
 import allennlp.nn.util as allenutil
 
-from semqa.domain_languages.drop.drop_language import Date, DropLanguage
+from semqa.domain_languages.drop_old.drop_language import Date, DropLanguage
 
 
 def compute_date_greater_than_matrix(date_values: List[Date], device_id: int):

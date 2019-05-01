@@ -8,7 +8,7 @@ from allennlp.models.reading_comprehension.util import get_best_span
 import allennlp.nn.util as allenutil
 from collections import defaultdict
 import datasets.drop.constants as constants
-from semqa.domain_languages.drop.drop_language import Date
+from semqa.domain_languages.drop_old.drop_language import Date
 import argparse
 
 """ This script is used to augment date-comparison-data by flipping events in the questions """
@@ -16,12 +16,6 @@ THRESHOLD = 20
 
 STOP_WORDS = set(stopwords.words('english'))
 STOP_WORDS.update(["'s", ","])
-
-FIRST = "first"
-SECOND = "second"
-
-DATE_COMPARISON_TRIGRAMS = ["which happened", "which event", "what happened first", "what happened second",
-                            "what happened later", "what happened last", "what event happened", "what event came"]
 
 
 def readDataset(input_json):
@@ -38,17 +32,19 @@ def preprocess_HowManyYardsWasThe_ques(dataset):
         by adding the question_type for those questions.
     """
 
-    longest_question_ngram = "How many yards was the longest"
-    shortest_question_ngram = "How many yards was the shortest"
-    second_longest_question_ngram = "How many yards was the second longest"
-    second_shortest_question_ngram = "How many yards was the second shortest"
+    longest_question_ngram = "how many yards was the longest"
+    shortest_question_ngram = "how many yards was the shortest"
+    second_longest_question_ngram = "how many yards was the second longest"
+    second_shortest_question_ngram = "how many yards was the second shortest"
 
-    how_many_yards_was_the = "How many yards was"
+    how_many_yards_was = "how many yards was"
 
-    longest_qtype = 'how_many_yards_longest'
-    shortest_qtype = 'how_many_yards_shortest'
-    second_longest_qtype = 'how_many_yards_second_longest'
-    second_shortest_qtype = 'how_many_yards_second_shortest'
+    longest_qtype = constants.YARDS_longest_qtype
+    shortest_qtype = constants.YARDS_shortest_qtype
+    # second_longest_qtype = 'how_many_yards_second_longest'
+    # second_shortest_qtype = 'how_many_yards_second_shortest'
+
+    findnumber_qtype = constants.YARDS_findnum_qtype
 
     new_dataset = {}
     total_ques = 0
@@ -63,34 +59,47 @@ def preprocess_HowManyYardsWasThe_ques(dataset):
             total_ques += 1
 
             original_question = question_answer[constants.cleaned_question]
+            question_lower = original_question.lower()
 
-            if how_many_yards_was_the.lower() in original_question.lower():
-                if longest_question_ngram in original_question:
+            if how_many_yards_was in question_lower:
+                if longest_question_ngram in question_lower:
                     question_answer[constants.qtype] = constants.YARDS_longest_qtype
                     question_answer[constants.program_supervised] = True
                     qtype_dist[longest_qtype] += 1
                     questions_w_qtypes += 1
 
-                elif shortest_question_ngram in original_question:
+                elif shortest_question_ngram in question_lower:
                     question_answer[constants.qtype] = constants.YARDS_shortest_qtype
                     question_answer[constants.program_supervised] = True
                     qtype_dist[shortest_qtype] += 1
                     questions_w_qtypes += 1
-                # Not annotating second longest/shortest questions since we cannot handle them
-                # elif second_longest_question_ngram in original_question:
-                #     question_answer[constants.qtype] = constants.YARDS_second_longest_qtype
-                #     question_answer[constants.program_supervised] = True
-                #     qtype_dist[second_longest_qtype] += 1
-                #     questions_w_qtypes += 1
-                #
-                # elif second_shortest_question_ngram in original_question:
-                #     question_answer[constants.qtype] = constants.YARDS_second_shortest_qtype
-                #     question_answer[constants.program_supervised] = True
-                #     qtype_dist[second_shortest_qtype] += 1
-                #     questions_w_qtypes += 1
 
+                # Skip second longest/shortest questions for now
+                elif second_longest_question_ngram in question_lower:
+                    continue
+                elif second_shortest_question_ngram in question_lower:
+                    continue
+
+                # WHP -- a findNumber question unless longest or shortest token in the question
                 else:
-                    question_answer[constants.program_supervised] = False
+                    if 'longest' in question_lower:
+                        question_answer[constants.qtype] = constants.YARDS_longest_qtype
+                        question_answer[constants.program_supervised] = True
+                        qtype_dist[longest_qtype] += 1
+                        questions_w_qtypes += 1
+                    elif 'shortest' in question_lower:
+                        question_answer[constants.qtype] = constants.YARDS_shortest_qtype
+                        question_answer[constants.program_supervised] = True
+                        qtype_dist[shortest_qtype] += 1
+                        questions_w_qtypes += 1
+                    else:
+                        question_answer[constants.qtype] = constants.YARDS_findnum_qtype
+                        question_answer[constants.program_supervised] = True
+                        qtype_dist[findnumber_qtype] += 1
+                        questions_w_qtypes += 1
+
+                # else:
+                #     question_answer[constants.program_supervised] = False
 
                 new_qa_pairs.append(question_answer)
 
@@ -123,7 +132,7 @@ if __name__ == '__main__':
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
 
-    print(f"Output dir: {output_dir}")
+    print(f"\nOutput dir: {output_dir}")
 
     input_trnfp = os.path.join(input_dir, train_json)
     input_devfp = os.path.join(input_dir, dev_json)
@@ -143,11 +152,11 @@ if __name__ == '__main__':
     with open(output_devfp, 'w') as f:
         json.dump(new_dev_dataset, f, indent=4)
 
-    print("Written augmented datasets")
+    print("Written HowManyYards datasets")
 
 ''' DATASET CREATED THIS WAY
 
-input_dir = "./resources/data/drop/analysis/ngram/num/how_many_yards_was_the/"
-output_dir = "./resources/data/drop/num/how_many_yards_was_the"
+input_dir = "./resources/data/drop_old/analysis/ngram/num/how_many_yards_was_the/"
+output_dir = "./resources/data/drop_old/num/how_many_yards_was_the"
 
 '''

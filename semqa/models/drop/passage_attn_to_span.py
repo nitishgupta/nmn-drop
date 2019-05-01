@@ -26,7 +26,7 @@ from semqa.models.utils.bidaf_utils import PretrainedBidafModelUtils
 from semqa.models.utils import semparse_utils
 
 from semqa.models.drop.drop_parser_base import DROPParserBase
-from semqa.domain_languages.drop import DropLanguage, Date, ExecutorParameters, QuestionSpanAnswer, PassageSpanAnswer
+from semqa.domain_languages.drop_old import DropLanguage, Date, ExecutorParameters, QuestionSpanAnswer, PassageSpanAnswer
 
 import datasets.drop.constants as dropconstants
 import utils.util as myutils
