@@ -23,6 +23,7 @@ class ExecutorParameters(torch.nn.Module, Registrable):
                  passage_attention_to_span: Seq2SeqEncoder,
                  question_attention_to_span: Seq2SeqEncoder,
                  passage_attention_to_count: Seq2VecEncoder,
+                 passage_count_predictor=None,
                  dropout: float = 0.0):
         super().__init__()
 
@@ -37,8 +38,9 @@ class ExecutorParameters(torch.nn.Module, Registrable):
         self.question_startend_predictor = torch.nn.Linear(self.question_attention_to_span.get_output_dim(), 2)
 
         self.passage_attention_to_count = passage_attention_to_count
-        self.passage_count_predictor = torch.nn.Linear(self.passage_attention_to_count.get_output_dim(),
-                                                       self.num_counts)
+        # self.passage_count_predictor = torch.nn.Linear(self.passage_attention_to_count.get_output_dim(),
+        #                                                self.num_counts)
+        self.passage_count_predictor = passage_count_predictor
 
         self.dotprod_matrix_attn = DotProductMatrixAttention()
 
@@ -46,11 +48,19 @@ class ExecutorParameters(torch.nn.Module, Registrable):
         # that are related to it.
         self.passage_to_date_attention: MatrixAttention = BilinearMatrixAttention(matrix_1_dim=passage_encoding_dim,
                                                                                   matrix_2_dim=passage_encoding_dim)
+        # self.passage_to_date_attention: MatrixAttention = LinearMatrixAttention(tensor_1_dim=passage_encoding_dim,
+        #                                                                         tensor_2_dim=passage_encoding_dim,
+        #                                                                         combination='x,y,x*y')
 
         # This computes a passage_to_passage attention, hopefully, for each token, putting a weight on date tokens
         # that are related to it.
         self.passage_to_num_attention: MatrixAttention = BilinearMatrixAttention(matrix_1_dim=passage_encoding_dim,
                                                                                  matrix_2_dim=passage_encoding_dim)
+        # self.passage_to_num_attention: MatrixAttention = LinearMatrixAttention(tensor_1_dim=passage_encoding_dim,
+        #                                                                        tensor_2_dim=passage_encoding_dim,
+        #                                                                        combination='x,y,x*y')
+
+
 
         if dropout > 0:
             self._dropout = torch.nn.Dropout(p=dropout)

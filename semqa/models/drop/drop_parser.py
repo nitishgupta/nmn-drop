@@ -143,11 +143,17 @@ class DROPSemanticParser(DROPParserBase):
         else:
             self._dropout = lambda x: x
 
+        self.num_counts = 10
+        self.passage_attention_to_count = passage_attention_to_count
+        self.passage_count_predictor = torch.nn.Linear(self.passage_attention_to_count.get_output_dim(),
+                                                       self.num_counts, bias=False)
+
         self._executor_parameters = ExecutorParameters(question_encoding_dim=encoding_out_dim,
                                                        passage_encoding_dim=encoding_out_dim,
                                                        passage_attention_to_span=passage_attention_to_span,
                                                        question_attention_to_span=question_attention_to_span,
-                                                       passage_attention_to_count=passage_attention_to_count,
+                                                       passage_attention_to_count=self.passage_attention_to_count,
+                                                       passage_count_predictor=self.passage_count_predictor,
                                                        dropout=dropout)
 
         assert qp_sim_key in ['raw', 'enc', 'raw-enc']
@@ -193,6 +199,11 @@ class DROPSemanticParser(DROPParserBase):
             if name == "_text_field_embedder.token_embedder_tokens.weight":
                 parameter.requires_grad = False
 
+        # # Fix parameters for Counting
+        # for name, parameter in self.named_parameters():
+        #     if 'passage_attention_to_count' in name or 'passage_count_predictor' in name:
+        #         parameter.requires_grad = False
+
 
         # Fixing Pre-trained parameters
         # pretrained_components = ['text_field_embedder', 'highway_layer', 'embedding_proj_layer',
@@ -233,17 +244,19 @@ class DROPSemanticParser(DROPParserBase):
                 gold_action_seqs: List[Tuple[List[List[int]], List[List[int]]]]=None,
                 qattn_supervision: torch.FloatTensor = None,
                 epoch_num: List[int] = None,
-                metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
-
+                metadata: List[Dict[str, Any]] = None,
+                aux_passage_attention=None,
+                aux_answer_as_count=None,
+                aux_count_mask=None) -> Dict[str, torch.Tensor]:
 
         batch_size = len(actions)
         device_id = self._get_prediction_device()
 
-        # if epoch_num is not None:
-        #     # epoch_num in allennlp starts from 0
-        #     epoch = epoch_num[0] + 1
-        # else:
-        #     epoch = None
+        if epoch_num is not None:
+            # epoch_num in allennlp starts from 0
+            epoch = epoch_num[0] + 1
+        else:
+            epoch = None
 
         question_mask = allenutil.get_text_field_mask(question).float()
         passage_mask = allenutil.get_text_field_mask(passage).float()
@@ -254,15 +267,12 @@ class DROPSemanticParser(DROPParserBase):
         embedded_question = self._highway_layer(self._embedding_proj_layer(rawemb_question))
         embedded_passage = self._highway_layer(self._embedding_proj_layer(rawemb_passage))
 
-        embedded_question = self._dropout(embedded_question)
-        embedded_passage = self._dropout(embedded_passage)
-
         projected_embedded_question = self._encoding_proj_layer(embedded_question)
         projected_embedded_passage = self._encoding_proj_layer(embedded_passage)
 
         # # stripped version
-        # projected_embedded_question = rawemb_question
-        # projected_embedded_passage = rawemb_passage
+        # projected_embedded_question = embedded_question
+        # projected_embedded_passage = embedded_passage
 
         # Shape: (batch_size, question_length, encoding_dim)
         encoded_question = self._dropout(self._phrase_layer(projected_embedded_question, question_mask))
@@ -575,7 +585,7 @@ class DROPSemanticParser(DROPParserBase):
         ''' Computing losses if gold answers are given '''
         if answer_program_start_types is not None:
             # Execution losses --
-            total_aux_loss = allenutil.move_to_device(torch.tensor(0.0), device_id)
+            total_aux_loss = allenutil.move_to_device(torch.tensor(0.0), device_id).float()
             if self.excloss:
                 exec_loss = 0.0
                 execloss_normalizer = 0.0
@@ -589,6 +599,11 @@ class DROPSemanticParser(DROPParserBase):
                 if batch_exec_loss != 0.0:
                     self.excloss_metric(batch_exec_loss.item())
                 total_aux_loss += batch_exec_loss
+
+            # aux_count_loss, aux_count_acc = self.aux_count_loss(aux_passage_attention, passage_mask,
+            #                                                     aux_answer_as_count, aux_count_mask)
+            # total_aux_loss += aux_count_loss
+            # # self.excloss_metric(aux_count_acc)
 
             if self.qattloss:
                 # Compute Question Attention Supervision auxiliary loss
@@ -1010,13 +1025,17 @@ class DROPSemanticParser(DROPParserBase):
                 for action, side_arg in zip(program, side_args):
                     if action == relevant_action:
                         question_attention = side_arg['question_attention']
-                        # log_question_attention = torch.log(question_attention + 1e-40)
-                        # l = torch.sum(log_question_attention * gold_qattn)
-                        # loss += l
 
                         if torch.sum(gold_qattn) != 0.0:
-                            l = torch.sum(question_attention * gold_qattn)
-                            loss += torch.log(l)
+                            # Sum of probs -- model can distribute gold mass however it likes
+                            # l = torch.sum(question_attention * gold_qattn)
+                            # loss += torch.log(l)
+
+                            # Prod of probs -- forces model to evenly distribute mass on gold-attn
+                            log_question_attention = torch.log(question_attention + 1e-40)
+                            l = torch.sum(log_question_attention * gold_qattn)
+                            loss += l
+
                             normalizer += 1
                         else:
                             print(f"\nGold attention sum == 0.0."
@@ -1374,6 +1393,44 @@ class DROPSemanticParser(DROPParserBase):
             final_states[i] = state_value
 
         return final_states
+
+    def aux_count_loss(self, passage_attention, passage_mask, answer_as_count, count_mask):
+        if torch.sum(count_mask) == 0:
+            loss, accuracy = 0.0, 0.0
+            return loss, accuracy
+
+        batch_size = passage_attention.size()[0]
+        # List of (B, P) shaped tensors
+        scaled_attentions = [passage_attention * sf for sf in self._executor_parameters.passage_attention_scalingvals]
+        # Shape: (B, passage_length, num_scaling_factors)
+        scaled_passage_attentions = torch.stack(scaled_attentions, dim=2)
+        # Shape: (B, hidden_dim)
+        count_hidden_repr = self._executor_parameters.passage_attention_to_count(scaled_passage_attentions,
+                                                                                 passage_mask)
+        # Shape: (B, num_counts)
+        passage_span_logits = self._executor_parameters.passage_count_predictor(count_hidden_repr)
+        count_distribution = torch.softmax(passage_span_logits, dim=1)
+
+        loss = 0
+        accuracy = 0
+        if answer_as_count is not None:
+            # (B, num_counts)
+            answer_as_count = answer_as_count.float()
+            count_log_probs = torch.log(count_distribution + 1e-40)
+            log_likelihood = torch.sum(count_log_probs * answer_as_count * count_mask.unsqueeze(1).float())
+
+            loss = -1 * log_likelihood
+            loss = loss / torch.sum(count_mask).float()
+
+            # List of predicted count idxs
+            count_idx = torch.argmax(count_distribution, 1)
+            gold_count_idxs = torch.argmax(answer_as_count, 1)
+            correct_vec = (count_idx == gold_count_idxs).float() * count_mask.float()
+            accuracy = (torch.sum(correct_vec) / torch.sum(count_mask)).detach().cpu().numpy()
+
+        return loss, accuracy
+
+
 
 
 

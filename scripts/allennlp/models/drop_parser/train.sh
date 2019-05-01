@@ -3,7 +3,8 @@
 export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
-DATASET_NAME=num/yardscount_wqattn
+# DATASET_NAME=num/yardscount_wqattn
+DATASET_NAME=date_num/dc_nc_howmanyyards_count_diff
 
 DATASET_DIR=./resources/data/drop_s/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
@@ -33,8 +34,8 @@ export BIDAF_MODEL_TAR='https://s3-us-west-2.amazonaws.com/allennlp/models/bidaf
 export BIDAF_WORDEMB_FILE="https://s3-us-west-2.amazonaws.com/allennlp/datasets/glove/glove.6B.100d.txt.gz"
 
 # Which kind of similarity to use in Ques-Passage attention - raw / encoded / raw-enc
-export QP_SIM_KEY="raw"
-export SIM_KEY="dot"
+export QP_SIM_KEY="enc"
+export SIM_KEY="ma"
 
 export GOLDACTIONS=false
 export GOLDPROGS=false
@@ -45,7 +46,7 @@ export MMLLOSS=true
 
 # Whether strong supervison instances should be trained on first, if yes for how many epochs
 export SUPFIRST=true
-export SUPEPOCHS=0
+export SUPEPOCHS=5
 
 # export PTREX=false
 # export PTRWTS="./resources/semqa/checkpoints/hpqa/b_wsame/hpqa_parser/BS_4/OPT_adam/LR_0.001/Drop_0.2/TOKENS_glove/FUNC_snli/SIDEARG_true/GOLDAC_true/AUXGPLOSS_false/QENTLOSS_false/ATTCOV_false/PTREX_false/best.th"
@@ -71,6 +72,8 @@ MODEL_DIR=drop_parser_new
 PD_1=TOKENS_${TOKENIDX}/ED_${WEMB_DIM}/RG_${RG}
 PD_2=QPSIMKEY_${QP_SIM_KEY}/SIM_KEY_${SIM_KEY}/SUPEPOCHS_${SUPEPOCHS}
 SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/${PD_2}/S_${SEED}
+
+# SERIALIZATION_DIR=./resources/semqa/checkpoints/test
 
 #######################################################################################################################
 

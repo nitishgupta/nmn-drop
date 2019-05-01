@@ -68,7 +68,7 @@ export BEAMSIZE=2
 export DEBUG=true
 
 SUBFOLDER=num
-EVAL_DATASET=yardscount
+EVAL_DATASET=yardscount_wqattn
 DATASET_DIR=./resources/data/drop_s/${SUBFOLDER}/${EVAL_DATASET}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
 VALFILE=${DATASET_DIR}/drop_dataset_dev.json
@@ -82,7 +82,7 @@ TESTFILE=${VALFILE}
 ##PRED_FILENAME=train_predictions.txt
 ##TESTFILE=${TRAINFILE}
 
-MODEL_DIR=./resources/semqa/checkpoints/drop/num/yardscount/drop_parser_new/TOKENS_qanet/ED_300/RG_1e-07/QPSIMKEY_enc/SIM_KEY_ma/SUPEPOCHS_0/S_100
+MODEL_DIR=./resources/semqa/checkpoints/drop/num/yardscount_wqattn/drop_parser_new/TOKENS_qanet/ED_300/RG_1e-07/QPSIMKEY_enc/SIM_KEY_ma/SUPEPOCHS_0/S_100/count_pretrain_fix_logqatt
 MODEL_TAR=${MODEL_DIR}/model.tar.gz
 PREDICTION_FILE=${MODEL_DIR}/${EVAL_DATASET}_pred.txt
 EVALUATION_FILE=${MODEL_DIR}/${EVAL_DATASET}_eval.txt

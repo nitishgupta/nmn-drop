@@ -1,5 +1,6 @@
 import json
 import logging
+import random
 import itertools
 import numpy as np
 from typing import Dict, List, Union, Tuple, Any
@@ -497,6 +498,18 @@ class DROPReader(DatasetReader):
         if not answer_passage_spans:
             # print("Not dealing with empty passage answers")
             return None
+        '''
+
+        '''
+        attention, count_answer, mask = self.make_count_instance(passage_text.split(' '))
+        attention = [x + abs(random.gauss(0, 0.001)) for x in attention]
+        attention_sum = sum(attention)
+        attention = [float(x) / attention_sum for x in attention]
+        count_answer_vec = [0] * 10
+        count_answer_vec[count_answer] = 1
+        fields["aux_passage_attention"] = ArrayField(np.array(attention), padding_value=0.0)
+        fields["aux_answer_as_count"] = ArrayField(np.array(count_answer_vec))
+        fields["aux_count_mask"] = ArrayField(np.array(mask))
         '''
 
         fields["metadata"] = MetadataField(metadata)
@@ -1016,5 +1029,83 @@ class DROPReader(DatasetReader):
             gold_logical_forms.append(f"{qsa_start}{operator_action}{lf2}")
 
         return gold_logical_forms
+
+
+    def make_count_instance(self, passage_tokens: List[str]):
+        ''' output an attention, count_answer, mask. Mask is when we don;t find relevant spans '''
+
+        # We would like to count these spans
+        relevant_spans = ['TD pass', 'TD run', 'touchdown pass', 'field goal', 'touchdown run']
+        num_relevant_spans = len(relevant_spans)
+
+        attention = [0.0] * len(passage_tokens)
+
+        # With 10% prob select no span
+        count_zero_prob = random.random()
+        if count_zero_prob < 0.1:
+            return (attention, 0, 1)
+
+
+        # Choose a particular type of span from relevant ones and find it's starting positions
+        tries = 0
+        starting_positions_in_passage = []
+        while len(starting_positions_in_passage) == 0 and tries < 5:
+            choosen_span = random.randint(0, num_relevant_spans - 1)
+            span_tokens = relevant_spans[choosen_span].split(' ')
+            starting_positions_in_passage = self.contains(span_tokens, passage_tokens)
+            tries += 1
+
+        # even after 5 tries, span to count not found. Return masked attention
+        if len(starting_positions_in_passage) == 0:
+            return attention, 0, 0
+
+        # # TO save from infinite loop
+        # count_zero_prob = random.random()
+        # if count_zero_prob < 0.1:
+        #     return attention, 0
+
+        if len(starting_positions_in_passage) == 1:
+            count = len(starting_positions_in_passage)
+            starting_position = starting_positions_in_passage[0]
+            attention[starting_position] = 1.0
+            attention[starting_position + 1] = 1.0
+
+        else:
+            num_of_spans_found = len(starting_positions_in_passage)
+            # Choose a subset of the starting_positions
+            random.shuffle(starting_positions_in_passage)
+            num_spans = random.randint(2, num_of_spans_found)
+            num_spans = min(num_spans, 9)
+
+            count = num_spans
+
+            spread_len = random.randint(1, 3)
+
+            chosen_starting_positions = starting_positions_in_passage[0:num_spans]
+            for starting_position in chosen_starting_positions:
+                attention[starting_position] = 1.0
+                attention[starting_position + 1] = 1.0
+                for i in range(1, spread_len+1):
+                    prev_idx = starting_position - i
+                    if prev_idx >= 0:
+                        attention[prev_idx] = 0.5
+                    next_idx = starting_position + 1 + i
+                    if next_idx < len(passage_tokens):
+                        attention[next_idx] = 0.5
+
+        return attention, count, 1
+
+    def contains(self, small, big):
+        starting_positions = []
+        for i in range(len(big) - len(small) + 1):
+            start = True
+            for j in range(len(small)):
+                if big[i + j] != small[j]:
+                    start = False
+                    break
+            if start:
+                starting_positions.append(i)
+        return starting_positions
+
 
 

@@ -70,6 +70,7 @@ strongly_supervised = "strongly_supervised"
 program_supervised = "program_supervised"
 qattn_supervised = "qattn_supervised"
 exection_supervised = "execution_supervised"
+pattn_supervised = "pattn_supervised"       # Boolean
 
 # n-tuple of question attention
 ques_attention_supervision = "ques_attention_supervision"
@@ -105,10 +106,14 @@ DIFF_MINMAX_qtype = "diff_minmax_qtype"
 DIFF_MINNUM_qtype = "diff_minnum_qtype"
 DIFF_MINMIN_qtype = "diff_minmin_qtype"
 
-
-
 # Subset of "How many" which require counting over passage attention
 COUNT_qtype = "count_qtype"
+
+# Synthetic questions
+passage_attn_supervision = "passage_attn_supervision"     # passage-attention
+
+
+SYN_COUNT_qtype = "syn_count_qtype"
 
 COMMA="@COMMA@"
 LRB="@LRB@"

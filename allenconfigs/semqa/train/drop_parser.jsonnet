@@ -182,7 +182,7 @@ local compareff_inputdim =
 
 //        "phrase_layer": {
 //            "type": "gru",
-//            "input_size": 300,
+//            "input_size": 128,
 //            "hidden_size": 64,
 //            "num_layers": 2,
 //            "dropout": 0.2,
@@ -264,6 +264,17 @@ local compareff_inputdim =
               }
           ]
         ],
+
+//        "initializers":
+//        [
+//            ["passage_attention_to_count|passage_count_predictor",
+//                 {
+//                     "type": "pretrained",
+//                     "weights_file_path": "./resources/semqa/checkpoints/savedmodels/count_pretrn_nobias/best.th"
+//                 },
+//            ],
+//            [".*_text_field_embedder.*", "prevent"]
+//        ],
 
         "goldactions": utils.boolparser(std.extVar("GOLDACTIONS")),
         "goldprogs": utils.boolparser(std.extVar("GOLDPROGS")),
