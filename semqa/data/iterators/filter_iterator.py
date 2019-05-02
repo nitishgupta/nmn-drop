@@ -11,6 +11,8 @@ from allennlp.data.instance import Instance
 from allennlp.data.iterators.data_iterator import DataIterator
 from allennlp.data.dataset import Batch
 
+import datasets.drop.constants as constants
+
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
@@ -70,16 +72,30 @@ class DataFilterIterator(DataIterator):
                     instance.fields['epoch_num'] = epoch_num
 
             supervision_dict = defaultdict(int)
+            qtype_dict = defaultdict(int)
             for instance in instance_list:
                 for key in self.supervision_keys:
                     supervision_dict[key] += 1 if instance[key].metadata else 0
+                qtype_dict[instance['qtypes'].metadata] += 1
+
+            print(f"QType: {qtype_dict}")
+
+            # CURRICULUM = [constants.DATECOMP_QTYPE, constants.NUMCOMP_QTYPE, constants.YARDS_findnum_qtype]
+            # CURRICULUM = [constants.DATECOMP_QTYPE, constants.NUMCOMP_QTYPE, constants.YARDS_findnum_qtype,
+            #               constants.SYN_NUMGROUND_qtype, constants.SYN_COUNT_qtype]
+            CURRICULUM = [constants.DATECOMP_QTYPE, constants.NUMCOMP_QTYPE, constants.YARDS_findnum_qtype,
+                          constants.COUNT_qtype, constants.SYN_NUMGROUND_qtype, constants.SYN_COUNT_qtype]
 
             filtered_instance_list = []
             if self.filter_instances:
+                # In Curriculum 1
                 if epoch_num < self.filter_for_epochs:
                     for instance in instance_list:
-                        if instance[self.filter_key].metadata:
+                        if instance['qtypes'].metadata in CURRICULUM: # and instance[self.filter_key].metadata:
                             filtered_instance_list.append(instance)
+
+                        # if instance[self.filter_key].metadata:
+                        #     filtered_instance_list.append(instance)
                 else:
                     filtered_instance_list = instance_list
             else:

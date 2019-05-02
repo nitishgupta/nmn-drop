@@ -146,7 +146,7 @@ class DROPSemanticParser(DROPParserBase):
         self.num_counts = 10
         self.passage_attention_to_count = passage_attention_to_count
         self.passage_count_predictor = torch.nn.Linear(self.passage_attention_to_count.get_output_dim(),
-                                                       self.num_counts, bias=False)
+                                                       self.num_counts, bias=True)
 
         self._executor_parameters = ExecutorParameters(question_encoding_dim=encoding_out_dim,
                                                        passage_encoding_dim=encoding_out_dim,
@@ -239,10 +239,13 @@ class DROPSemanticParser(DROPParserBase):
                 strongly_supervised: List[bool] = None,
                 program_supervised: List[bool] = None,
                 qattn_supervised: List[bool] = None,
+                pattn_supervised: List[bool] = None,
                 execution_supervised: List[bool] = None,
                 qtypes: List[str] = None,
                 gold_action_seqs: List[Tuple[List[List[int]], List[List[int]]]]=None,
                 qattn_supervision: torch.FloatTensor = None,
+                passage_attn_supervision: List[List[float]] = None,
+                synthetic_numground_metadata: List[Tuple[int, int]] = None,
                 epoch_num: List[int] = None,
                 metadata: List[Dict[str, Any]] = None,
                 aux_passage_attention=None,
@@ -267,12 +270,12 @@ class DROPSemanticParser(DROPParserBase):
         embedded_question = self._highway_layer(self._embedding_proj_layer(rawemb_question))
         embedded_passage = self._highway_layer(self._embedding_proj_layer(rawemb_passage))
 
-        projected_embedded_question = self._encoding_proj_layer(embedded_question)
-        projected_embedded_passage = self._encoding_proj_layer(embedded_passage)
+        # projected_embedded_question = self._encoding_proj_layer(embedded_question)
+        # projected_embedded_passage = self._encoding_proj_layer(embedded_passage)
 
-        # # stripped version
-        # projected_embedded_question = embedded_question
-        # projected_embedded_passage = embedded_passage
+        # stripped version
+        projected_embedded_question = embedded_question
+        projected_embedded_passage = embedded_passage
 
         # Shape: (batch_size, question_length, encoding_dim)
         encoded_question = self._dropout(self._phrase_layer(projected_embedded_question, question_mask))
@@ -330,7 +333,6 @@ class DROPSemanticParser(DROPParserBase):
         # Shape: (batch_size, passage_length, passage_length)
         passage_passage_token2date_similarity = self._executor_parameters.passage_to_date_attention(encoded_passage,
                                                                                                     encoded_passage)
-        passage_passage_token2date_similarity = self._dropout(passage_passage_token2date_similarity)
         passage_passage_token2date_similarity = passage_passage_token2date_similarity * passage_mask.unsqueeze(1)
         passage_passage_token2date_similarity = passage_passage_token2date_similarity * passage_mask.unsqueeze(2)
 
@@ -343,7 +345,6 @@ class DROPSemanticParser(DROPParserBase):
         # Shape: (batch_size, passage_length, passage_length)
         passage_passage_token2num_similarity = self._executor_parameters.passage_to_num_attention(encoded_passage,
                                                                                                   encoded_passage)
-        passage_passage_token2num_similarity = self._dropout(passage_passage_token2num_similarity)
         passage_passage_token2num_similarity = passage_passage_token2num_similarity * passage_mask.unsqueeze(1)
         passage_passage_token2num_similarity = passage_passage_token2num_similarity * passage_mask.unsqueeze(2)
 
@@ -528,33 +529,11 @@ class DROPSemanticParser(DROPParserBase):
          batch_actionseq_sideargs) = semparse_utils._convert_finalstates_to_actions(best_final_states=best_final_states,
                                                                                     possible_actions=actions,
                                                                                     batch_size=batch_size)
-        '''
-        if self._goldactions:
-            # Gold programs
-            if self._goldprogs:
-                gold_batch_actionseqs = []
-                for idx in range(batch_size):
-                    question_tokens = metadata[idx]["question_tokens"]
-                    qtype = qtypes[idx]
-                    if qtype == dropconstants.DATECOMP_QTYPE:
-                        gold_lf, _ = getGoldLF_datecomparison(question_tokens)
-                    elif qtype == dropconstants.NUMCOMP_QTYPE:
-                        gold_lf, _ = getGoldLF_numcomparison(question_tokens, languages[idx])
-                    else:
-                        raise NotImplementedError
-                    gold_action_seq: List[str] = languages[idx].logical_form_to_action_sequence(gold_lf)
-                    gold_batch_actionseqs.append([gold_action_seq])
-                batch_actionseqs = gold_batch_actionseqs
-            # # Gold attn replacement
-            # # List[Tuple[torch.Tensor, torch.Tensor]]
-            # datecompare_gold_qattns = self.get_gold_quesattn_datecompare(metadata, encoded_question.size()[1],
-            #                                                              device_id)
-            # self.datecompare_goldattn_to_sideargs(batch_actionseqs,
-            #                                       batch_actionseq_sideargs,
-            #                                       datecompare_gold_qattns)
-        '''
-
         # Adding Date-Comparison supervised event groundings to relevant actions
+        max_passage_len = encoded_passage.size()[1]
+        self.passage_attention_to_sidearg(qtypes, batch_actionseqs, batch_actionseq_sideargs, pattn_supervised,
+                                          passage_attn_supervision, max_passage_len, device_id)
+
         self.datecompare_eventdategr_to_sideargs(qtypes,
                                                  batch_actionseqs,
                                                  batch_actionseq_sideargs,
@@ -569,9 +548,11 @@ class DROPSemanticParser(DROPParserBase):
         # # For printing predicted - programs
         # for idx, instance_progs in enumerate(batch_actionseqs):
         #     print(f"InstanceIdx:{idx}")
+        #     print(pattn_supervised)
         #     print(metadata[idx]["question_tokens"])
         #     scores = batch_actionseq_scores[idx]
         #     for prog, score in zip(instance_progs, scores):
+        #         print(prog)
         #         print(f"{languages[idx].action_sequence_to_logical_form(prog)} : {score}")
         #         # print(f"{prog} : {score}")
         #     print("\n")
@@ -600,10 +581,15 @@ class DROPSemanticParser(DROPParserBase):
                     self.excloss_metric(batch_exec_loss.item())
                 total_aux_loss += batch_exec_loss
 
-            # aux_count_loss, aux_count_acc = self.aux_count_loss(aux_passage_attention, passage_mask,
-            #                                                     aux_answer_as_count, aux_count_mask)
-            # total_aux_loss += aux_count_loss
-            # # self.excloss_metric(aux_count_acc)
+
+            # Num-grounding Loss on synthetic data
+            synthetic_numground_loss = self.synthetic_num_grounding_loss(qtypes,
+                                                                         synthetic_numground_metadata,
+                                                                         passage_passage_token2num_similarity,
+                                                                         passageidx2numberidx)
+            total_aux_loss += synthetic_numground_loss
+            if synthetic_numground_loss != 0:
+                self.excloss_metric(synthetic_numground_loss.item())
 
             if self.qattloss:
                 # Compute Question Attention Supervision auxiliary loss
@@ -964,6 +950,43 @@ class DROPSemanticParser(DROPParserBase):
         return valid_start_action_ids
 
 
+    def synthetic_num_grounding_loss(self,
+                                     qtypes,
+                                     synthetic_numgrounding_metadata,
+                                     passage_passage_num_similarity,
+                                     passageidx2numberidx):
+        """
+
+        Parameters:
+        -----------
+        passage_passage_num_similarity: (B, P, P)
+        passage_tokenidx2dateidx: (B, P) containing non -1 values for number tokens. We'll use this for masking.
+        synthetic_numgrounding_metadata: For each instance, list of (token_idx, number_idx), i.e.
+            for row = token_idx, column = number_idx should be high
+        """
+
+        # (B, P)
+        passageidx2numberidx_mask = (passageidx2numberidx > -1).float()
+
+        # (B, P, P) -- with each row now normalized for number tokens
+        passage_passage_num_attention = allenutil.masked_softmax(passage_passage_num_similarity,
+                                                                 mask=passageidx2numberidx_mask.unsqueeze(1))
+
+        log_likelihood = 0
+        normalizer = 0
+        for idx, (qtype, token_number_idx_pairs) in enumerate(zip(qtypes, synthetic_numgrounding_metadata)):
+            if qtype == dropconstants.SYN_NUMGROUND_qtype:
+                for token_idx, number_idx in token_number_idx_pairs:
+                    log_likelihood += torch.log(passage_passage_num_attention[idx, token_idx, number_idx] + 1e-40)
+                    normalizer += 1
+        if normalizer > 0:
+            log_likelihood = log_likelihood / normalizer
+
+        loss = -1 * log_likelihood
+
+        return loss
+
+
     def _ques_attention_loss(self,
                              batch_actionseqs: List[List[List[str]]],
                              batch_actionseq_sideargs: List[List[List[Dict]]],
@@ -980,7 +1003,8 @@ class DROPSemanticParser(DROPParserBase):
             We hard-code the question-types supported, and for each qtype, the relevant actions for which the
             qattn supervision will (should) be provided. For example, the gold program for date-comparison questions
             contains two 'PassageAttention -> find_PassageAttention' actions which use the question_attention sidearg
-            for which the supervision is provided. Hence, qtype2relevant_actions_list - contains the two actions for the
+            for which the supervision is
+             provided. Hence, qtype2relevant_actions_list - contains the two actions for the
             date-comparison question.
 
             The loss computed is the negative-log of sum of relevant probabilities.
@@ -1028,13 +1052,13 @@ class DROPSemanticParser(DROPParserBase):
 
                         if torch.sum(gold_qattn) != 0.0:
                             # Sum of probs -- model can distribute gold mass however it likes
-                            # l = torch.sum(question_attention * gold_qattn)
-                            # loss += torch.log(l)
+                            l = torch.sum(question_attention * gold_qattn)
+                            loss += torch.log(l)
 
                             # Prod of probs -- forces model to evenly distribute mass on gold-attn
-                            log_question_attention = torch.log(question_attention + 1e-40)
-                            l = torch.sum(log_question_attention * gold_qattn)
-                            loss += l
+                            # log_question_attention = torch.log(question_attention + 1e-40)
+                            # l = torch.sum(log_question_attention * gold_qattn)
+                            # loss += l
 
                             normalizer += 1
                         else:
@@ -1122,6 +1146,30 @@ class DROPSemanticParser(DROPParserBase):
             batch_predicted_answers.append(instance_predicted_ans)
 
         return batch_best_spans, batch_predicted_answers
+
+
+    def passage_attention_to_sidearg(self,
+                                     qtypes: List[str],
+                                     batch_actionseqs: List[List[List[str]]],
+                                     batch_actionseq_sideargs: List[List[List[Dict]]],
+                                     pattn_supervised: List[bool],
+                                     passage_attn_supervision: torch.FloatTensor,
+                                     max_passage_len: int,
+                                     device_id):
+        """ If instance has passage attention supervision, add it to 'PassageAttention -> find_PassageAttention' """
+
+        relevant_action = 'PassageAttention -> find_PassageAttention'
+        for ins_idx in range(len(batch_actionseqs)):
+            instance_programs = batch_actionseqs[ins_idx]
+            instance_prog_sideargs = batch_actionseq_sideargs[ins_idx]
+            instance_pattn_supervised = pattn_supervised[ins_idx]
+            pattn_supervision = passage_attn_supervision[ins_idx]
+            if not instance_pattn_supervised:
+                pattn_supervision = None
+            for program, side_args in zip(instance_programs, instance_prog_sideargs):
+                for action, sidearg_dict in zip(program, side_args):
+                    if action == relevant_action:
+                        sidearg_dict['passage_attention'] = pattn_supervision
 
     def datecompare_eventdategr_to_sideargs(self,
                                             qtypes: List[str],

@@ -453,8 +453,13 @@ class DropLanguage(DomainLanguage):
         return QuestionAttention(question_attention, debug_value=debug_value)
 
 
-    @predicate_with_side_args(['question_attention'])
-    def find_PassageAttention(self, question_attention: Tensor) -> PassageAttention:
+    @predicate_with_side_args(['question_attention', 'passage_attention'])
+    def find_PassageAttention(self, question_attention: Tensor,
+                              passage_attention: Tensor = None) -> PassageAttention:
+        # The passage attention is only used as supervision for certain synthetic questions
+        if passage_attention is not None:
+            return PassageAttention(passage_attention, debug_value="Supervised-Pattn-Used")
+
         question_attention = question_attention * self.question_mask
 
         # Shape: (question_length, passage_length)
@@ -1023,7 +1028,6 @@ class DropLanguage(DomainLanguage):
     @predicate
     def passageAttn2Count(self, passage_attention: PassageAttention) -> CountNumber:
         passage_attn = passage_attention._value
-        # passage_attn = passage_attention
 
         # Shape: (passage_length)
         passage_attn = (passage_attn * self.passage_mask)
@@ -1191,6 +1195,7 @@ class DropLanguage(DomainLanguage):
     @predicate
     def find_PassageNumber(self, passage_attention: PassageAttention) -> PassageNumber:
         passage_attn = passage_attention._value
+
         # Shape: (passage_length)
         passage_attn = (passage_attn * self.passage_mask)
 

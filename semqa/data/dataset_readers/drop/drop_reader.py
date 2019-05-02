@@ -132,6 +132,17 @@ class DROPReader(DatasetReader):
                         if constants.qspan_numgrounding_supervision in qa:
                             num_grounding_supervision = qa[constants.qspan_numgrounding_supervision]
 
+                passage_attn_supervision = None
+                pattn_supervised = False
+                if constants.pattn_supervised in qa:
+                    pattn_supervised = qa[constants.pattn_supervised]
+                    if constants.passage_attn_supervision in qa:
+                        passage_attn_supervision = qa[constants.passage_attn_supervision]
+
+                synthetic_numground_metadata = None
+                if constants.SYN_NUMGROUND_METADATA in qa:
+                    synthetic_numground_metadata = qa[constants.SYN_NUMGROUND_METADATA]
+
                 strongly_supervised = program_supervised and qattn_supervised and execution_supervised
 
                 if qattn_supervised is True:
@@ -155,10 +166,13 @@ class DROPReader(DatasetReader):
                                                  program_supervised,
                                                  qattn_supervised,
                                                  execution_supervised,
+                                                 pattn_supervised,
                                                  strongly_supervised,
                                                  ques_attn_supervision,
                                                  date_grounding_supervision,
                                                  num_grounding_supervision,
+                                                 passage_attn_supervision,
+                                                 synthetic_numground_metadata,
                                                  answer_type,
                                                  answer_passage_spans,
                                                  answer_question_spans,
@@ -201,10 +215,13 @@ class DROPReader(DatasetReader):
                          program_supervised: bool,
                          qattn_supervised: bool,
                          execution_supervised: bool,
+                         pattn_supervised: bool,
                          strongly_supervised: bool,
                          ques_attn_supervision: Tuple[List[float]],
                          date_grounding_supervision: Tuple[List[int], List[int]],
                          num_grounding_supervision: Tuple[List[int], List[int]],
+                         passage_attn_supervision: List[float],
+                         synthetic_numground_metadata: List[Tuple[int, int]],
                          answer_type: str,
                          answer_passage_spans: List[Tuple[int, int]],
                          answer_question_spans: List[Tuple[int, int]],
@@ -235,12 +252,14 @@ class DROPReader(DatasetReader):
              p_num_mens, p_num_entidxs, p_num_normvals,
              answer_passage_spans,
              date_grounding_supervision,
-             num_grounding_supervision) = self.prune_for_passage_len(max_passage_len,
-                                                                     p_date_mens, p_date_entidxs, p_date_normvals,
-                                                                     p_num_mens, p_num_entidxs, p_num_normvals,
-                                                                     answer_passage_spans,
-                                                                     date_grounding_supervision,
-                                                                     num_grounding_supervision)
+             num_grounding_supervision,
+             passage_attn_supervision) = self.prune_for_passage_len(max_passage_len,
+                                                                    p_date_mens, p_date_entidxs, p_date_normvals,
+                                                                    p_num_mens, p_num_entidxs, p_num_normvals,
+                                                                    answer_passage_spans,
+                                                                    date_grounding_supervision,
+                                                                    num_grounding_supervision,
+                                                                    passage_attn_supervision)
         if max_question_len is not None:
             question_tokens = question_tokens[: max_question_len]
             (answer_question_spans,
@@ -340,7 +359,9 @@ class DROPReader(DatasetReader):
         fields["program_supervised"] = MetadataField(program_supervised)
         fields["qattn_supervised"] = MetadataField(qattn_supervised)
         fields["execution_supervised"] = MetadataField(execution_supervised)
+        fields["pattn_supervised"] = MetadataField(pattn_supervised)
         fields["qtypes"] = MetadataField(qtype)
+        fields["synthetic_numground_metadata"] = MetadataField(synthetic_numground_metadata)
 
         # Question Attention Supervision
         if ques_attn_supervision:
@@ -350,6 +371,12 @@ class DROPReader(DatasetReader):
             empty_question_attention = [0.0] * qlen
             empty_question_attention_tuple = [empty_question_attention]
             fields["qattn_supervision"] = ArrayField(np.array(empty_question_attention_tuple), padding_value=0)
+
+        if passage_attn_supervision:
+            fields["passage_attn_supervision"] = ArrayField(np.array(passage_attn_supervision), padding_value=0)
+        else:
+            empty_passage_attention = [0.0] * len(passage_tokens)
+            fields["passage_attn_supervision"] = ArrayField(np.array(empty_passage_attention), padding_value=0)
 
         # Date-comparison - Date Grounding Supervision
         if date_grounding_supervision:
@@ -522,7 +549,8 @@ class DROPReader(DatasetReader):
                               p_num_mens, p_num_entidxs, p_num_normvals,
                               answer_passage_spans,
                               date_grounding_supervision,
-                              num_grounding_supervision):
+                              num_grounding_supervision,
+                              passage_attn_supervision):
 
         """ Prunes the passage and related data for a maximum length
 
@@ -535,6 +563,8 @@ class DROPReader(DatasetReader):
 
             date_grounding_supervision, num_grounding_supervision -- both these are the length of original dates/nums
             we need to find the new value by pruning and mapping old ent idxs to new ones.
+
+            passage_attn_supervision: if not None, is a list the length of the passage
         """
         pruned_date_mens = []       # New passage date mens
         pruned_old_dateidxs = []
@@ -592,10 +622,15 @@ class DROPReader(DatasetReader):
 
         new_answer_passage_spans = [span for span in answer_passage_spans if span[1] < max_passage_len]
 
+        if passage_attn_supervision is not None and len(passage_attn_supervision) > max_passage_len:
+            new_passage_attn_supervision = passage_attn_supervision[0:max_passage_len]
+        else:
+            new_passage_attn_supervision = passage_attn_supervision
+
         return (pruned_date_mens, new_date_entidxs, new_date_values,
                 pruned_num_mens, new_num_idxs, new_num_values,
                 new_answer_passage_spans,
-                new_dategrounding_supervision, new_numgrounding_supervision)
+                new_dategrounding_supervision, new_numgrounding_supervision, new_passage_attn_supervision)
 
     def prune_for_question_len(self, max_question_len, answer_question_spans, ques_attn_supervision):
         new_answer_question_spans = [span for span in answer_question_spans if span[1] < max_question_len]
@@ -862,7 +897,9 @@ class DROPReader(DatasetReader):
                            constants.DIFF_MINMAX_qtype: self.numdiff_logicalforms,
                            constants.DIFF_MINNUM_qtype: self.numdiff_logicalforms,
                            constants.DIFF_MINMIN_qtype: self.numdiff_logicalforms,
-                           constants.COUNT_qtype: self.count_logicalforms}
+                           constants.COUNT_qtype: self.count_logicalforms,
+                           constants.SYN_COUNT_qtype: self.count_logicalforms,
+                           constants.SYN_NUMGROUND_qtype: self.findnum_logicalforms}
 
         gold_actionseq_idxs: List[List[int]] = []
         gold_actionseq_mask: List[List[int]] = []

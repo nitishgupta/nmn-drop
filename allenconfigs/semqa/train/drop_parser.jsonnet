@@ -165,29 +165,29 @@ local compareff_inputdim =
 
         "num_highway_layers": 2,
 
-        "phrase_layer": {
-            "type": "qanet_encoder",
-            "input_dim": 128,
-            "hidden_dim": 128,
-            "attention_projection_dim": 128,
-            "feedforward_hidden_dim": 128,
-            "num_blocks": 1,
-            "num_convs_per_block": 4,
-            "conv_kernel_size": 7,
-            "num_attention_heads": 8,
-            "dropout_prob": 0.1,
-            "layer_dropout_undecayed_prob": 0.1,
-            "attention_dropout_prob": 0
-        },
-
 //        "phrase_layer": {
-//            "type": "gru",
-//            "input_size": 128,
-//            "hidden_size": 64,
-//            "num_layers": 2,
-//            "dropout": 0.2,
-//            "bidirectional": true
+//            "type": "qanet_encoder",
+//            "input_dim": 128,
+//            "hidden_dim": 128,
+//            "attention_projection_dim": 128,
+//            "feedforward_hidden_dim": 128,
+//            "num_blocks": 1,
+//            "num_convs_per_block": 4,
+//            "conv_kernel_size": 7,
+//            "num_attention_heads": 8,
+//            "dropout_prob": 0.1,
+//            "layer_dropout_undecayed_prob": 0.1,
+//            "attention_dropout_prob": 0
 //        },
+
+        "phrase_layer": {
+            "type": "gru",
+            "input_size": 128,
+            "hidden_size": 64,
+            "num_layers": 2,
+            "dropout": 0.2,
+            "bidirectional": true
+        },
 
         "matrix_attention_layer": {
             "type": "linear",

@@ -113,7 +113,9 @@ COUNT_qtype = "count_qtype"
 passage_attn_supervision = "passage_attn_supervision"     # passage-attention
 
 
-SYN_COUNT_qtype = "syn_count_qtype"
+SYN_COUNT_qtype = "synthetic_count_qtype"
+SYN_NUMGROUND_qtype = "synthetic_numground_qtype"         # Synthetic questions for number grounding
+SYN_NUMGROUND_METADATA = "synthetic_numground_metadata"   # Synthetic num ques come with Metadata
 
 COMMA="@COMMA@"
 LRB="@LRB@"

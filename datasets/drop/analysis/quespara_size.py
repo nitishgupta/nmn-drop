@@ -41,21 +41,19 @@ def quesParaSize(input_json):
                 qtype_dist["UNK"] += 1
 
 
-    print("\nCount based")
+    print("\nCount of QTypes")
     print(qtype_dist)
     print()
 
     for k, v in qtype_dist.items():
         qtype_dist[k] = round_all(100 * (float(v)/numques), 1)
 
-    print("\nPercentage wise:")
+    print("\nPercentage of QTypes:")
     print(qtype_dist)
     print()
 
     print(f"Paras: {numparas}  MaxParaLen:{maxparalen}")
     print(f"Questions: {numques}  MaxQuesLen:{maxqueslen}")
-
-
 
 
 if __name__ == '__main__':

@@ -3,8 +3,8 @@
 export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
-# DATASET_NAME=num/yardscount_wqattn
-DATASET_NAME=date_num/dc_nc_howmanyyards_count_diff
+# DATASET_NAME=num/synthetic_count_num
+DATASET_NAME=date_num/dc_nc_yd_num_syn
 
 DATASET_DIR=./resources/data/drop_s/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
@@ -71,7 +71,7 @@ SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/${DATASET_NAME}
 MODEL_DIR=drop_parser_new
 PD_1=TOKENS_${TOKENIDX}/ED_${WEMB_DIM}/RG_${RG}
 PD_2=QPSIMKEY_${QP_SIM_KEY}/SIM_KEY_${SIM_KEY}/SUPEPOCHS_${SUPEPOCHS}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/${PD_2}/S_${SEED}
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/${PD_2}/S_${SEED}_c3
 
 # SERIALIZATION_DIR=./resources/semqa/checkpoints/test
 
