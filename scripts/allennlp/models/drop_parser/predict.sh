@@ -76,14 +76,14 @@ export BEAMSIZE=1
 export DEBUG=true
 
 # SAVED MODEL
-MODEL_DIR=./resources/semqa/checkpoints/savedmodels/dateq_numcq_hmvy_ydiff
+MODEL_DIR=./resources/semqa/checkpoints/savedmodels/dateq_numcq_hmvy_ydiff_count
 MODEL_TAR=${MODEL_DIR}/model.tar.gz
 PREDICTION_DIR=${MODEL_DIR}/predictions
 mkdir ${PREDICTION_DIR}
 
 # EVALUATION DATASET
-SUBFOLDER=num
-EVAL_DATASET=hmyw_qattnumgr
+SUBFOLDER=date
+EVAL_DATASET=datecomp_full
 DATASET_DIR=./resources/data/drop_s/${SUBFOLDER}/${EVAL_DATASET}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
 VALFILE=${DATASET_DIR}/drop_dataset_dev.json

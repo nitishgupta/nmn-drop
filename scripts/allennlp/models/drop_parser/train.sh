@@ -3,7 +3,7 @@
 export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
-DATASET_NAME=date_num/dateq_numcq_hmvy_ydiff
+DATASET_NAME=num/hmyw_qattnumgr
 
 DATASET_DIR=./resources/data/drop_s/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
@@ -25,9 +25,9 @@ export GPU=0
 export TRAINING_DATA_FILE=${TRAINFILE}
 export VAL_DATA_FILE=${VALFILE}
 
-export WEMB_DIM=300
-export WORDEMB_FILE="https://s3-us-west-2.amazonaws.com/allennlp/datasets/glove/glove.840B.300d.lower.converted.zip"
-# export WORDEMB_FILE="https://s3-us-west-2.amazonaws.com/allennlp/datasets/glove/glove.6B.100d.txt.gz"
+export WEMB_DIM=100
+# export WORDEMB_FILE="https://s3-us-west-2.amazonaws.com/allennlp/datasets/glove/glove.840B.300d.lower.converted.zip"
+export WORDEMB_FILE="https://s3-us-west-2.amazonaws.com/allennlp/datasets/glove/glove.6B.100d.txt.gz"
 
 export BIDAF_MODEL_TAR='https://s3-us-west-2.amazonaws.com/allennlp/models/bidaf-model-2017.09.15-charpad.tar.gz'
 export BIDAF_WORDEMB_FILE="https://s3-us-west-2.amazonaws.com/allennlp/datasets/glove/glove.6B.100d.txt.gz"
@@ -60,7 +60,7 @@ export SEED=100
 
 export BEAMSIZE=4
 export MAX_DECODE_STEP=14
-export EPOCHS=60
+export EPOCHS=30
 
 export DEBUG=false
 
@@ -70,9 +70,9 @@ SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/${DATASET_NAME}
 MODEL_DIR=drop_parser_model
 PD_1=TOKENS_${TOKENIDX}/ED_${WEMB_DIM}/RG_${RG}
 PD_2=QPSIMKEY_${QP_SIM_KEY}/SIM_KEY_${SIM_KEY}/SUPEPOCHS_${SUPEPOCHS}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/${PD_2}/S_${SEED}
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/${PD_2}/S_${SEED}_pnumdatel
 
-# SERIALIZATION_DIR=./resources/semqa/checkpoints/test_wModel_newNC_prodQA_encNum
+SERIALIZATION_DIR=./resources/semqa/checkpoints/test/hmyw_sup0_modeldatenum
 
 #######################################################################################################################
 

@@ -470,9 +470,9 @@ class DropLanguage(DomainLanguage):
         debug_value = ""
         if self._debug:
             qattn_vis_complete, qattn_vis_most = dlutils.listTokensVis(question_attention, self.metadata["question_tokens"])
-            debug_value += f"Qattn: {qattn_vis_complete} \t "
+            debug_value += f"Qattn: {qattn_vis_complete}"
             pattn_vis_complete, pattn_vis_most = dlutils.listTokensVis(passage_attention, self.metadata["passage_tokens"])
-            debug_value += f"Pattn: {pattn_vis_complete}"
+            debug_value += f"\nPattn: {pattn_vis_complete}"
 
         return PassageAttention(passage_attention, debug_value=debug_value)
 

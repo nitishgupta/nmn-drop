@@ -51,7 +51,6 @@ class DROPSemanticWModelParser(DROPParserBase):
                  phrase_layer: Seq2SeqEncoder,
                  matrix_attention_layer: MatrixAttention,
                  modeling_layer: Seq2SeqEncoder,
-                 # passage_token_to_date: Seq2SeqEncoder,
                  passage_attention_to_span: Seq2SeqEncoder,
                  question_attention_to_span: Seq2SeqEncoder,
                  passage_attention_to_count: Seq2VecEncoder,
@@ -60,6 +59,7 @@ class DROPSemanticWModelParser(DROPParserBase):
                  max_decoding_steps: int,
                  qp_sim_key: str,
                  sim_key: str,
+                 passage_numdate_layer: Seq2SeqEncoder = None,
                  bilinearsim: bool = False,
                  goldactions: bool = None,
                  goldprogs: bool = False,
@@ -125,6 +125,13 @@ class DROPSemanticWModelParser(DROPParserBase):
 
         self._modeling_proj_layer = torch.nn.Linear(encoding_out_dim * 4, modeling_in_dim)
         self._modeling_layer = modeling_layer
+
+        # Use a separate encoder for passage - date - num similarity
+        if passage_numdate_layer is not None:
+            self.passage_numdate_layer = passage_numdate_layer
+        else:
+            self.passage_numdate_layer = None
+
         self.qp_matrix_attention = LinearMatrixAttention(tensor_1_dim=encoding_out_dim,
                                                          tensor_2_dim=modeling_out_dim,
                                                          combination="x,y,x*y")
@@ -353,15 +360,22 @@ class DROPSemanticWModelParser(DROPParserBase):
                                                               question_mask.unsqueeze(1),
                                                               memory_efficient=True)
 
+
+        # Passage-representation to use for date - num scores. Use passage_numdate_layer if given, else modeled_passage
+        if self.passage_numdate_layer is not None:
+            passage_numdate_repr = self.passage_numdate_layer(projected_embedded_passage, passage_mask)
+        else:
+            passage_numdate_repr = modeled_passage
+
         # Shape: (batch_size, passage_length, passage_length)
         # passage_passage_token2date_similarity = self._executor_parameters.passage_to_date_attention(encoded_passage,
         #                                                                                             encoded_passage)
-        passage_passage_token2date_similarity = self._executor_parameters.passage_to_date_attention(modeled_passage,
-                                                                                                    modeled_passage)
+        passage_passage_token2date_similarity = self._executor_parameters.passage_to_date_attention(
+                                                                            passage_numdate_repr, passage_numdate_repr)
         passage_passage_token2date_similarity = passage_passage_token2date_similarity * passage_mask.unsqueeze(1)
         passage_passage_token2date_similarity = passage_passage_token2date_similarity * passage_mask.unsqueeze(2)
 
-        # Shape: (batch_size, passage_length)
+        # Shape: (batch_size, passage_length) -- masking for number tokens in the passage
         passage_tokenidx2dateidx_mask = (passageidx2dateidx > -1).float()
         # Shape: (batch_size, passage_length, passage_length)
         passage_passage_token2date_similarity = (passage_passage_token2date_similarity *
@@ -370,12 +384,12 @@ class DROPSemanticWModelParser(DROPParserBase):
         # Shape: (batch_size, passage_length, passage_length)
         # passage_passage_token2num_similarity = self._executor_parameters.passage_to_num_attention(encoded_passage,
         #                                                                                           encoded_passage)
-        passage_passage_token2num_similarity = self._executor_parameters.passage_to_num_attention(modeled_passage,
-                                                                                                  modeled_passage)
+        passage_passage_token2num_similarity = self._executor_parameters.passage_to_num_attention(
+                                                                            passage_numdate_repr, passage_numdate_repr)
         passage_passage_token2num_similarity = passage_passage_token2num_similarity * passage_mask.unsqueeze(1)
         passage_passage_token2num_similarity = passage_passage_token2num_similarity * passage_mask.unsqueeze(2)
 
-        # Shape: (batch_size, passage_length)
+        # Shape: (batch_size, passage_length) -- masking for number tokens in the passage
         passage_tokenidx2numidx_mask = (passageidx2numberidx > -1).float()
         # Shape: (batch_size, passage_length, passage_length)
         passage_passage_token2num_similarity = (passage_passage_token2num_similarity *
@@ -1518,6 +1532,92 @@ class DROPSemanticWModelParser(DROPParserBase):
             accuracy = (torch.sum(correct_vec) / torch.sum(count_mask)).detach().cpu().numpy()
 
         return loss, accuracy
+
+    def masking_blockdiagonal(batch_size, passage_length, window, device_id):
+        """ Make a (batch_size, passage_length, passage_length) tensor M of 1 and -1 in which for each row x,
+            M[:, x, y] = -1 if y < x - window or y > x + window, else it is 1.
+            Basically for the x-th row, the [x-win, x+win] columns should be 1, and rest -1
+        """
+
+        lower_limit = [max(0, i - window) for i in range(passage_length)]
+        upper_limit = [min(passage_length, i + window) for i in range(passage_length)]
+
+        # Tensors of lower and upper limits for each row
+        lower = allenutil.move_to_device(torch.LongTensor(lower_limit), cuda_device=device_id)
+        upper = allenutil.move_to_device(torch.LongTensor(upper_limit), cuda_device=device_id)
+        lower_un = lower.unsqueeze(1)
+        upper_un = upper.unsqueeze(1)
+
+        # Range vector for each row
+        lower_range_vector = allenutil.get_range_vector(passage_length, device=device_id).unsqueeze(0)
+        upper_range_vector = allenutil.get_range_vector(passage_length, device=device_id).unsqueeze(0)
+
+        # Masks for lower and upper limits of the mask
+        lower_mask = lower_range_vector >= lower_un
+        upper_mask = upper_range_vector <= upper_un
+
+        # Final-mask that we require
+        inwindow_mask = (lower_mask == upper_mask).float()
+        outwindow_mask = (lower_mask != upper_mask).float()
+
+        return inwindow_mask, outwindow_mask
+
+
+    def window_loss_numdate(self, passage_passage_similarity_scores, passage_tokenidx_mask,
+                            inwindow_mask, outwindow_mask):
+        """
+        The idea is to first softmax the similarity_scores to get a distribution over the date/num tokens from each
+        passage token.
+
+        For each passage_token,
+            -- increase the sum of prob for date/num tokens around it in a window (don't know which date/num is correct)
+            -- decrease the prod of prob for date/num tokens outside the window (know that all date/num are wrong)
+
+        Parameters:
+        -----------
+        passage_passage_similarity_scores: (batch_size, passage_length, passage_length)
+            For each passage_token, a similarity score to other passage_tokens for data/num
+            This should ideally, already be masked
+
+        passage_tokenidx_mask: (batch_size, passage_length)
+            Mask for tokens that are num/date
+
+        inwindow_mask: (passage_length, passage_length)
+            For row x, inwindow_mask[x, x-window : x+window] = 1 and 0 otherwise. Mask for a window around the token
+        outwindow_mask: (passage_length, passage_length)
+            Opposite of inwindow_mask. For each row x, the colums are 1 outside of a window around x
+        """
+        # (batch_size, passage_length, passage_length)
+        passage_passage_alignment_matrix = allenutil.masked_softmax(passage_passage_similarity_scores,
+                                                                    passage_tokenidx_mask.unsqueeze(1),
+                                                                    memory_efficient=True)
+
+        inwindow_probs = passage_passage_alignment_matrix * inwindow_mask.unsqueeze(0)
+        # This signifies that each token can distribute it's prob to nearby-date/num in anyway
+        # Shape: (batch_size, passage_length)
+        sum_inwindow_probs = inwindow_probs.sum(2)
+        log_sum_inwindow_probs = torch.log(sum_inwindow_probs + 1e-40)
+        inwindow_likelihood = torch.sum(log_sum_inwindow_probs)
+
+
+        # For tokens outside the window, increase entropy of the distribution. i.e. -\sum p*log(p)
+        # Since we'd like to distribute the weight equally to things outside the window
+        # Shape: (batch_size, passage_length, passage_length)
+        outwindow_probs = passage_passage_alignment_matrix * outwindow_mask
+        outwindow_probs_log = torch.log(outwindow_probs + 1e-40)
+        # Shape: (batch_length, passage_length)
+        outwindow_negentropies = torch.sum(outwindow_probs * outwindow_probs_log, dim=2)
+
+        # Increase inwindow likelihod and decrease outwindow-negative-entropy
+        loss = -1 * inwindow_likelihood + outwindow_negentropies
+
+        return loss
+
+
+
+
+
+
 
 
 
