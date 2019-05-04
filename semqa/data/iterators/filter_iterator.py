@@ -80,22 +80,22 @@ class DataFilterIterator(DataIterator):
 
             print(f"QType: {qtype_dict}")
 
-            # CURRICULUM = [constants.DATECOMP_QTYPE, constants.NUMCOMP_QTYPE, constants.YARDS_findnum_qtype]
+            strongly_supervised_first = True
+            # CURRICULUM = None
+            # CURRICULUM = [constants.YARDS_longest_qtype, constants.YARDS_findnum_qtype, constants.YARDS_shortest_qtype]
+            CURRICULUM = [constants.DATECOMP_QTYPE, constants.NUMCOMP_QTYPE, constants.YARDS_findnum_qtype]
             # CURRICULUM = [constants.DATECOMP_QTYPE, constants.NUMCOMP_QTYPE, constants.YARDS_findnum_qtype,
             #               constants.SYN_NUMGROUND_qtype, constants.SYN_COUNT_qtype]
-            CURRICULUM = [constants.DATECOMP_QTYPE, constants.NUMCOMP_QTYPE, constants.YARDS_findnum_qtype,
-                          constants.COUNT_qtype, constants.SYN_NUMGROUND_qtype, constants.SYN_COUNT_qtype]
+            # CURRICULUM = [constants.DATECOMP_QTYPE, constants.NUMCOMP_QTYPE, constants.YARDS_findnum_qtype,
+            #               constants.COUNT_qtype, constants.SYN_NUMGROUND_qtype, constants.SYN_COUNT_qtype]
 
             filtered_instance_list = []
             if self.filter_instances:
                 # In Curriculum 1
-                if epoch_num < self.filter_for_epochs:
+                if epoch_num < self.filter_for_epochs and strongly_supervised_first:
                     for instance in instance_list:
-                        if instance['qtypes'].metadata in CURRICULUM: # and instance[self.filter_key].metadata:
+                        if instance[self.filter_key].metadata:
                             filtered_instance_list.append(instance)
-
-                        # if instance[self.filter_key].metadata:
-                        #     filtered_instance_list.append(instance)
                 else:
                     filtered_instance_list = instance_list
             else:

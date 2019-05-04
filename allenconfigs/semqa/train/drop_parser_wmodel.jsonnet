@@ -109,7 +109,7 @@ local compareff_inputdim =
 
 
     "model": {
-         "type": "drop_parser",
+         "type": "drop_parser_wmodel",
 
         "text_field_embedder":
           if tokenidx == "elmo" then {

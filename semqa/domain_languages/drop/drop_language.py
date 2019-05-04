@@ -275,7 +275,7 @@ class DropLanguage(DomainLanguage):
                  parameters: ExecutorParameters,
                  start_types=None,
                  device_id: int = -1,
-                 max_samples=2,
+                 max_samples=3,
                  metadata={},
                  debug=False) -> None:
 
@@ -472,11 +472,64 @@ class DropLanguage(DomainLanguage):
             qattn_vis_complete, qattn_vis_most = dlutils.listTokensVis(question_attention, self.metadata["question_tokens"])
             debug_value += f"Qattn: {qattn_vis_complete} \t "
             pattn_vis_complete, pattn_vis_most = dlutils.listTokensVis(passage_attention, self.metadata["passage_tokens"])
-            debug_value += f"Pattn: {pattn_vis_most}"
+            debug_value += f"Pattn: {pattn_vis_complete}"
 
         return PassageAttention(passage_attention, debug_value=debug_value)
 
 
+    # def compute_date_scores(self, passage_attention: Tensor):
+    #     ''' Given a passage over passage token2date attention (normalized), and an additional passage attention
+    #         for token importance, compute a distribution over (unique) dates in the passage.
+    #
+    #         Using the token_attention from the passage_attention, find the expected input_token2date_token
+    #         distribution - weigh each row in passage_passage_token2date_attention and sum
+    #         Use this date_token attention as scores for the dates they refer to. Since each date can be referred
+    #         to in multiple places, we use scatter_add_ to get the total_score.
+    #         Softmax over these scores is the date dist.
+    #     '''
+    #
+    #     # (passage_length, passage_length)
+    #     passage_passage_tokendate_attention = self.passage_passage_token2date_similarity * passage_attention.unsqueeze(1)
+    #
+    #     # maxidx = torch.argmax(passage_attention)
+    #     # print(passage_attention[maxidx])
+    #     # print(self.passage_passage_token2date_similarity[maxidx].sum())
+    #     # print(self.passage_passage_token2date_similarity[maxidx+1].sum())
+    #     # print(self.passage_passage_token2date_similarity[maxidx + 2].sum())
+    #     # print(passage_passage_tokendate_attention[maxidx])
+    #     # print()
+    #
+    #     # Shape: (passage_length, ) -- weighted average of distributions in above step
+    #     # Attention value for each passage token to be a date associated to the query
+    #     passage_datetoken_attention = passage_passage_tokendate_attention.sum(0)
+    #
+    #     masked_passage_tokenidx2dateidx = self.passage_tokenidx2dateidx * self.passage_datetokens_mask_long
+    #
+    #     ''' We first softmax scores over tokens then aggregate probabilities for same dates
+    #         Another way could be to first aggregate scores, then compute softmx -- in that method if the scores are
+    #         large, longer dates will get an unfair advantage; hence we keep it this way.
+    #         For eg. [800, 800, 800] where first two point to same date, current method will get a dist of [0.66, 0.33],
+    #         where as first-score-agg. will get [1.0, 0.0].
+    #         Potential downside, if the scores are [500, 500, 1200] our method will get [small, ~1.0],
+    #         where as first-score-agg. might get something more uniform.
+    #         I think the bottomline is to control the scaling of scores.
+    #     '''
+    #     masked_passage_datetoken_probs = allenutil.masked_softmax(passage_datetoken_attention,
+    #                                                               mask=self.passage_datetokens_mask_long,
+    #                                                               memory_efficient=True)
+    #     masked_passage_datetoken_probs = masked_passage_datetoken_probs * self.passage_datetokens_mask_float
+    #
+    #     ''' normalized method with method 2 '''
+    #     date_distribution = passage_attention.new_zeros(self.num_passage_dates)
+    #     date_distribution.scatter_add_(0, masked_passage_tokenidx2dateidx, masked_passage_datetoken_probs)
+    #
+    #     date_distribution = torch.clamp(date_distribution, min=1e-20, max=1 - 1e-20)
+    #
+    #     date_distribution_entropy = -1 * torch.sum(date_distribution * torch.log(date_distribution + 1e-40))
+    #
+    #     return date_distribution, date_distribution, date_distribution_entropy
+
+    # New Date Distribtion
     def compute_date_scores(self, passage_attention: Tensor):
         ''' Given a passage over passage token2date attention (normalized), and an additional passage attention
             for token importance, compute a distribution over (unique) dates in the passage.
@@ -488,40 +541,18 @@ class DropLanguage(DomainLanguage):
             Softmax over these scores is the date dist.
         '''
 
-        # (passage_length, passage_length)
-        passage_passage_tokendate_attention = self.passage_passage_token2date_similarity * passage_attention.unsqueeze(1)
+        passage_date_alignment_matrix = allenutil.masked_softmax(self.passage_passage_token2date_similarity,
+                                                                 mask=self.passage_datetokens_mask_float.unsqueeze(0),
+                                                                 memory_efficient=True)
 
-        # maxidx = torch.argmax(passage_attention)
-        # print(passage_attention[maxidx])
-        # print(self.passage_passage_token2date_similarity[maxidx].sum())
-        # print(self.passage_passage_token2date_similarity[maxidx+1].sum())
-        # print(self.passage_passage_token2date_similarity[maxidx + 2].sum())
-        # print(passage_passage_tokendate_attention[maxidx])
-        # print()
+        attn_weighted_date_aligment_matrix = passage_date_alignment_matrix * passage_attention.unsqueeze(1)
+        # Shape: (passage_length, )
+        passage_date_token_probs = attn_weighted_date_aligment_matrix.sum(0)
 
-        # Shape: (passage_length, ) -- weighted average of distributions in above step
-        # Attention value for each passage token to be a date associated to the query
-        passage_datetoken_attention = passage_passage_tokendate_attention.sum(0)
+        masked_passage_tokenidx2dateidx = self.passage_datetokens_mask_long * self.passage_tokenidx2dateidx
 
-        masked_passage_tokenidx2dateidx = self.passage_tokenidx2dateidx * self.passage_datetokens_mask_long
-
-        ''' We first softmax scores over tokens then aggregate probabilities for same dates
-            Another way could be to first aggregate scores, then compute softmx -- in that method if the scores are
-            large, longer dates will get an unfair advantage; hence we keep it this way.
-            For eg. [800, 800, 800] where first two point to same date, current method will get a dist of [0.66, 0.33],
-            where as first-score-agg. will get [1.0, 0.0].
-            Potential downside, if the scores are [500, 500, 1200] our method will get [small, ~1.0],
-            where as first-score-agg. might get something more uniform. 
-            I think the bottomline is to control the scaling of scores.
-        '''
-        masked_passage_datetoken_probs = allenutil.masked_softmax(passage_datetoken_attention,
-                                                                  mask=self.passage_datetokens_mask_long,
-                                                                  memory_efficient=True)
-        masked_passage_datetoken_probs = masked_passage_datetoken_probs * self.passage_datetokens_mask_float
-
-        ''' normalized method with method 2 '''
         date_distribution = passage_attention.new_zeros(self.num_passage_dates)
-        date_distribution.scatter_add_(0, masked_passage_tokenidx2dateidx, masked_passage_datetoken_probs)
+        date_distribution.scatter_add_(0, masked_passage_tokenidx2dateidx, passage_date_token_probs)
 
         date_distribution = torch.clamp(date_distribution, min=1e-20, max=1 - 1e-20)
 
@@ -529,39 +560,117 @@ class DropLanguage(DomainLanguage):
 
         return date_distribution, date_distribution, date_distribution_entropy
 
+
+    # def compute_num_distribution(self, passage_attention: Tensor):
+    #     ''' Given a passage over passage token2num attention (normalized), and an additional passage attention
+    #         for token importance, compute a distribution over (unique) nums in the passage.
+    #         See compute_date_distribution for details
+    #     '''
+    #
+    #     # print('-------------------------')
+    #     # print(self.metadata['question_tokens'])
+    #     # passage_tokens = self.metadata['passage_tokens']
+    #     # print(f"NUmber of passage tokens : {len(passage_tokens)}")
+    #     # attn, _= dlutils.listTokensVis(passage_attention, passage_tokens)
+    #     # print(attn)
+    #     # print()
+    #
+    #     # (passage_length, passage_length)
+    #     passage_passage_tokennum_attention = self.passage_passage_token2num_similarity * passage_attention.unsqueeze(1)
+    #
+    #     # # tokkindices = (K, num_tokens)
+    #     # _, number_indices = torch.topk(self.passage_tokenidx2numidx, k=10, dim=0)
+    #     # number_indices = myutils.tocpuNPList(number_indices)
+    #     # for number_idx in number_indices:
+    #     #     token2numberscores = self.passage_passage_token2num_similarity[:, number_idx]
+    #     #     _, top_tokens = torch.topk(token2numberscores, 5, dim=0)
+    #     #     top_tokens = myutils.tocpuNPList(top_tokens)
+    #     #     print(f"{self.metadata['passage_tokens'][number_idx]}")
+    #     #     print([passage_tokens[x] for x in top_tokens])
+    #     #     print(f"Sum: {torch.sum(self.passage_passage_token2num_similarity[:, number_idx])}")
+    #     #     compvis, _ = dlutils.listTokensVis(self.passage_passage_token2num_similarity[:, number_idx],
+    #     #                                        self.metadata['passage_tokens'])
+    #     #     print(compvis)
+    #
+    #     # Shape: (passage_length, ) -- weighted average of distributions in above step
+    #     # Attention value for each passage token to be a date associated to the query
+    #     passage_numtoken_attention = passage_passage_tokennum_attention.sum(0)
+    #
+    #     # compvis, _  = dlutils.listTokensVis(self.passage_passage_token2num_similarity.sum(0), self.metadata['passage_tokens'])
+    #     # print("Sum of Similarity Scores")
+    #     # print(compvis)
+    #     # compvis, _ = dlutils.listTokensVis(passage_numtoken_attention, self.metadata['passage_tokens'])
+    #     # print("Weighted Sum")
+    #     # print(compvis)
+    #     # print('-------------------------')
+    #
+    #     masked_passage_tokenidx2numidx = self.passage_numtokens_mask_long * self.passage_tokenidx2numidx
+    #     masked_passage_numtoken_scores = self.passage_numtokens_mask_float * passage_numtoken_attention
+    #
+    #     masked_passage_numtoken_probs = allenutil.masked_softmax(masked_passage_numtoken_scores,
+    #                                                              mask=self.passage_numtokens_mask_float,
+    #                                                              memory_efficient=True)
+    #     masked_passage_numtoken_probs = masked_passage_numtoken_probs * self.passage_numtokens_mask_float
+    #     # print(masked_passage_datetoken_scores)
+    #     # print(masked_passage_datetoken_probs)
+    #     # print()
+    #     ''' normalized method with method 2 '''
+    #     num_distribution = passage_attention.new_zeros(self.num_passage_nums)
+    #     num_distribution.scatter_add_(0, masked_passage_tokenidx2numidx, masked_passage_numtoken_probs)
+    #     num_scores = num_distribution
+    #
+    #     num_distribution = torch.clamp(num_distribution, min=1e-20, max=1 - 1e-20)
+    #
+    #     num_distribution_entropy = -1 * torch.sum(num_distribution * torch.log(num_distribution + 1e-40))
+    #
+    #     return num_distribution, num_distribution, num_distribution_entropy
+
+
+    # New Num Distribution by first computing a number-distribution for each passage-token
     def compute_num_distribution(self, passage_attention: Tensor):
         ''' Given a passage over passage token2num attention (normalized), and an additional passage attention
             for token importance, compute a distribution over (unique) nums in the passage.
             See compute_date_distribution for details
         '''
+        # Shape: (passage_length, passage_length) -- each row softmaxed over the number-tokens
+        passage_number_alignment_matrix = allenutil.masked_softmax(self.passage_passage_token2num_similarity,
+                                                                   mask=self.passage_numtokens_mask_float.unsqueeze(0),
+                                                                   memory_efficient=True)
+        # print('-------------------------')
+        # print(self.metadata['question_tokens'])
+        # passage_tokens = self.metadata['passage_tokens']
+        # attn, _= dlutils.listTokensVis(passage_attention, passage_tokens)
+        # print(attn)
+        # print()
+
+        # _, number_indices = torch.topk(self.passage_tokenidx2numidx, k=10, dim=0)
+        # number_indices = myutils.tocpuNPList(number_indices)
+        # for number_idx in number_indices:
+        #     token2numberscores = passage_number_alignment_matrix[:, number_idx]
+        #     _, top_tokens = torch.topk(token2numberscores, 5, dim=0)
+        #     top_tokens = myutils.tocpuNPList(top_tokens)
+        #     print(f"{passage_tokens[number_idx]}")
+        #     print([passage_tokens[x] for x in top_tokens])
+        #     print(f"Sum: {torch.sum(token2numberscores)}")
+        #     compvis, _ = dlutils.listTokensVis(token2numberscores, passage_tokens)
+        #     print(compvis)
 
         # (passage_length, passage_length)
-        passage_passage_tokennum_attention = self.passage_passage_token2num_similarity * passage_attention.unsqueeze(1)
-        # Shape: (passage_length, ) -- weighted average of distributions in above step
-        # Attention value for each passage token to be a date associated to the query
-        passage_numtoken_attention = passage_passage_tokennum_attention.sum(0)
+        attn_weighted_number_aligment_matrix = passage_number_alignment_matrix * passage_attention.unsqueeze(1)
+        # Shape: (passage_length, )
+        passage_number_token_probs = attn_weighted_number_aligment_matrix.sum(0)
 
-        # maxidx = torch.argmax(passage_attention)
-        # print(passage_attention[maxidx])
-        # print(self.passage_passage_token2date_similarity[maxidx].sum())
-        # print(self.passage_passage_token2date_similarity[maxidx+1].sum())
-        # print(self.passage_passage_token2date_similarity[maxidx + 2].sum())
-        # print(passage_passage_tokendate_attention[maxidx])
+        # attn, _ = dlutils.listTokensVis(passage_number_token_probs, passage_tokens)
         # print()
+        # print(attn)
+        # print()
+        # print("-----------------------------------")
 
         masked_passage_tokenidx2numidx = self.passage_numtokens_mask_long * self.passage_tokenidx2numidx
-        masked_passage_numtoken_scores = self.passage_numtokens_mask_float * passage_numtoken_attention
 
-        masked_passage_numtoken_probs = allenutil.masked_softmax(masked_passage_numtoken_scores,
-                                                                 mask=self.passage_numtokens_mask_float,
-                                                                 memory_efficient=True)
-        masked_passage_numtoken_probs = masked_passage_numtoken_probs * self.passage_numtokens_mask_float
-        # print(masked_passage_datetoken_scores)
-        # print(masked_passage_datetoken_probs)
-        # print()
         ''' normalized method with method 2 '''
         num_distribution = passage_attention.new_zeros(self.num_passage_nums)
-        num_distribution.scatter_add_(0, masked_passage_tokenidx2numidx, masked_passage_numtoken_probs)
+        num_distribution.scatter_add_(0, masked_passage_tokenidx2numidx, passage_number_token_probs)
         num_scores = num_distribution
 
         num_distribution = torch.clamp(num_distribution, min=1e-20, max=1 - 1e-20)
@@ -569,6 +678,7 @@ class DropLanguage(DomainLanguage):
         num_distribution_entropy = -1 * torch.sum(num_distribution * torch.log(num_distribution + 1e-40))
 
         return num_distribution, num_distribution, num_distribution_entropy
+
 
 
     def expected_date_year_difference(self,
@@ -741,6 +851,9 @@ class DropLanguage(DomainLanguage):
             # These are one-hot vectors the size of passage_dates
             # These can be zeros as well, indicating the date grounding is unknown, in which case they shouldn't be
             # used for computing the auxiliary date-grounding loss
+            # TODO(nitish): Sometimes in validation we only get one from other questions, for example findNumber
+            if len(gold_num_groundings) == 1:
+                gold_num_groundings = [gold_num_groundings[0], gold_num_groundings[0]]
             gold_num_grounding_1, gold_num_grounding_2 = gold_num_groundings
 
             # Shape: (2, num_passage_nums)
@@ -1192,24 +1305,37 @@ class DropLanguage(DomainLanguage):
         return PassageNumber(passage_number_dist=minimum_distribution, loss=loss, debug_value=debug_value)
 
 
-    @predicate
-    def find_PassageNumber(self, passage_attention: PassageAttention) -> PassageNumber:
-        passage_attn = passage_attention._value
+    @predicate_with_side_args(['event_num_groundings'])
+    def find_PassageNumber(self, passage_attention: PassageAttention, event_num_groundings = None) -> PassageNumber:
+        # This comes as a list of groundings; even though for this action there's just one
+        # This can be completely-zero indicating masked. In that case, don't compute loss
 
+        number_grounding_supervision = event_num_groundings[0]
+
+        passage_attn = passage_attention._value
         # Shape: (passage_length)
         passage_attn = (passage_attn * self.passage_mask)
 
         number_distribution, _, num_dist_entropy = self.compute_num_distribution(passage_attention=passage_attn)
 
+        grounding_mask = (torch.sum(number_grounding_supervision) > 0).float()
+        log_probs = torch.log(number_distribution + 1e-40) * number_grounding_supervision
+        log_likelihood = torch.sum(log_probs)      # Want all grounded numbers to be high, hence prod of probs
+        grounding_loss = -1 * grounding_mask * log_likelihood
+
         loss = 0.0
+        loss += grounding_loss
         # loss += num_dist_entropy
 
         debug_value = ""
         if self._debug:
             number_dist = myutils.round_all(myutils.tocpuNPList(number_distribution), 3)
+            num_grounding_sup = myutils.round_all(myutils.tocpuNPList(number_grounding_supervision), 3)
             _, pattn_vis_most = dlutils.listTokensVis(passage_attn, self.metadata["passage_tokens"])
             debug_value += f"PassageNumber: {number_dist}"
             debug_value += f"\nPattn: {pattn_vis_most}"
+            debug_value += f"\nGoldNum: {num_grounding_sup}"
+
 
         return PassageNumber(passage_number_dist=number_distribution,
                              loss=loss,

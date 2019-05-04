@@ -41,8 +41,8 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 GOLD_BOOL_LF = ("(bool_and (bool_qent_qstr ", ") (bool_qent_qstr", "))")
 
 
-@Model.register("drop_parser")
-class DROPSemanticParser(DROPParserBase):
+@Model.register("drop_parser_wmodel")
+class DROPSemanticWModelParser(DROPParserBase):
     def __init__(self,
                  vocab: Vocabulary,
                  action_embedding_dim: int,
@@ -50,7 +50,7 @@ class DROPSemanticParser(DROPParserBase):
                  num_highway_layers: int,
                  phrase_layer: Seq2SeqEncoder,
                  matrix_attention_layer: MatrixAttention,
-                 # modeling_layer: Seq2SeqEncoder,
+                 modeling_layer: Seq2SeqEncoder,
                  # passage_token_to_date: Seq2SeqEncoder,
                  passage_attention_to_span: Seq2SeqEncoder,
                  question_attention_to_span: Seq2SeqEncoder,
@@ -73,11 +73,11 @@ class DROPSemanticParser(DROPParserBase):
                  initializers: InitializerApplicator = InitializerApplicator(),
                  regularizer: Optional[RegularizerApplicator] = None) -> None:
 
-        super(DROPSemanticParser, self).__init__(vocab=vocab,
-                                                 action_embedding_dim=action_embedding_dim,
-                                                 dropout=dropout,
-                                                 debug=debug,
-                                                 regularizer=regularizer)
+        super(DROPSemanticWModelParser, self).__init__(vocab=vocab,
+                                                       action_embedding_dim=action_embedding_dim,
+                                                       dropout=dropout,
+                                                       debug=debug,
+                                                       regularizer=regularizer)
 
 
         question_encoding_dim = phrase_layer.get_output_dim()
@@ -91,16 +91,6 @@ class DROPSemanticParser(DROPParserBase):
                                                      add_action_bias=False,
                                                      dropout=dropout)
         self._mml = MaximumMarginalLikelihood()
-        '''
-        self._decoder_step = LinkingTransitionFunctionEmbeddings(encoder_output_dim=question_encoding_dim,
-                                                                 action_embedding_dim=action_embedding_dim,
-                                                                 input_attention=transitionfunc_attention,
-                                                                 num_start_types=1,
-                                                                 activation=Activation.by_name('tanh')(),
-                                                                 predict_start_type_separately=False,
-                                                                 add_action_bias=False,
-                                                                 dropout=dropout)
-        '''
 
         self._beam_size = beam_size
         self._decoder_beam_search = BeamSearch(beam_size=self._beam_size)
@@ -122,7 +112,8 @@ class DROPSemanticParser(DROPParserBase):
 
         encoding_in_dim = phrase_layer.get_input_dim()
         encoding_out_dim = phrase_layer.get_output_dim()
-        # modeling_in_dim = modeling_layer.get_input_dim()
+        modeling_in_dim = modeling_layer.get_input_dim()
+        modeling_out_dim = modeling_layer.get_output_dim()
 
         self._embedding_proj_layer = torch.nn.Linear(text_embed_dim, encoding_in_dim)
         self._highway_layer = Highway(encoding_in_dim, num_highway_layers)
@@ -131,6 +122,12 @@ class DROPSemanticParser(DROPParserBase):
         self._phrase_layer = phrase_layer
 
         self._matrix_attention = matrix_attention_layer
+
+        self._modeling_proj_layer = torch.nn.Linear(encoding_out_dim * 4, modeling_in_dim)
+        self._modeling_layer = modeling_layer
+        self.qp_matrix_attention = LinearMatrixAttention(tensor_1_dim=encoding_out_dim,
+                                                         tensor_2_dim=modeling_out_dim,
+                                                         combination="x,y,x*y")
 
         # self.passage_token_to_date = passage_token_to_date
         self.dotprod_matrix_attn = DotProductMatrixAttention()
@@ -304,34 +301,63 @@ class DROPSemanticParser(DROPParserBase):
         # Shape: (batch_size, question_length, passage_length)
         # Shape: (batch_size, question_length, passage_length)
         if self.sim_key == 'dot':
-            question_passage_similarity = self._executor_parameters.dotprod_matrix_attn(question_sim_repr,
-                                                                                        passage_sim_repr)
-            passage_question_similarity = question_passage_similarity.transpose(1, 2)
+            question_passage_similarity_phrase = self._executor_parameters.dotprod_matrix_attn(question_sim_repr,
+                                                                                               passage_sim_repr)
+            passage_question_similarity_phrase = question_passage_similarity_phrase.transpose(1, 2)
         elif self.sim_key == 'bi':
-            question_passage_similarity = self.q2p_bilinear_matrixattn(question_sim_repr,
-                                                                       passage_sim_repr)
-            passage_question_similarity = question_passage_similarity.transpose(1, 2)
+            question_passage_similarity_phrase = self.q2p_bilinear_matrixattn(question_sim_repr,
+                                                                              passage_sim_repr)
+            passage_question_similarity_phrase = question_passage_similarity_phrase.transpose(1, 2)
         elif self.sim_key == 'ma':
-            passage_question_similarity = self._matrix_attention(passage_sim_repr, question_sim_repr)
+            passage_question_similarity_phrase = self._matrix_attention(passage_sim_repr, question_sim_repr)
             # question_passage_similarity = self._matrix_attention(question_sim_repr, passage_sim_repr)
-            question_passage_similarity = passage_question_similarity.transpose(1, 2)
+            question_passage_similarity_phrase = passage_question_similarity_phrase.transpose(1, 2)
         else:
             raise NotImplementedError
 
-        # question_passage_similarity = self._dropout(question_passage_similarity)
+        # Shape: (batch_size, passage_length, question_length)
+        passage_question_attention_phrase = allenutil.masked_softmax(passage_question_similarity_phrase,
+                                                                     question_mask,
+                                                                     memory_efficient=True)
+        # Shape: (batch_size, passage_length, encoding_dim)
+        passage_question_vectors = allenutil.weighted_sum(encoded_question, passage_question_attention_phrase)
+
         # Shape: (batch_size, question_length, passage_length)
+        question_passage_attention_phrase = allenutil.masked_softmax(question_passage_similarity_phrase,
+                                                                     passage_mask,
+                                                                     memory_efficient=True)
+        # Shape: (batch_size, passage_length, passage_length)
+        attention_over_attention = torch.bmm(passage_question_attention_phrase, question_passage_attention_phrase)
+        # Shape: (batch_size, passage_length, encoding_dim)
+        passage_passage_vectors = allenutil.weighted_sum(encoded_passage, attention_over_attention)
+
+        # Shape: (batch_size, passage_length, encoding_dim * 4)
+        merged_passage_attention_vectors = self._dropout(
+            torch.cat([encoded_passage, passage_question_vectors,
+                       encoded_passage * passage_question_vectors,
+                       encoded_passage * passage_passage_vectors],
+                      dim=-1)
+        )
+
+        modeled_passage_input = self._modeling_proj_layer(merged_passage_attention_vectors)
+        modeled_passage = self._dropout(self._modeling_layer(modeled_passage_input, passage_mask))
+
+        question_passage_similarity = self.qp_matrix_attention(encoded_question, modeled_passage)
+        passage_question_similarity = question_passage_similarity.transpose(1, 2)
+
         question_passage_attention = allenutil.masked_softmax(question_passage_similarity,
                                                               passage_mask.unsqueeze(1),
                                                               memory_efficient=True)
 
-        # Shape: (batch_size, passage_length, question_length)
         passage_question_attention = allenutil.masked_softmax(passage_question_similarity,
-                                                              question_mask,
+                                                              question_mask.unsqueeze(1),
                                                               memory_efficient=True)
 
         # Shape: (batch_size, passage_length, passage_length)
-        passage_passage_token2date_similarity = self._executor_parameters.passage_to_date_attention(encoded_passage,
-                                                                                                    encoded_passage)
+        # passage_passage_token2date_similarity = self._executor_parameters.passage_to_date_attention(encoded_passage,
+        #                                                                                             encoded_passage)
+        passage_passage_token2date_similarity = self._executor_parameters.passage_to_date_attention(modeled_passage,
+                                                                                                    modeled_passage)
         passage_passage_token2date_similarity = passage_passage_token2date_similarity * passage_mask.unsqueeze(1)
         passage_passage_token2date_similarity = passage_passage_token2date_similarity * passage_mask.unsqueeze(2)
 
@@ -342,8 +368,10 @@ class DROPSemanticParser(DROPParserBase):
                                                  passage_tokenidx2dateidx_mask.unsqueeze(1))
 
         # Shape: (batch_size, passage_length, passage_length)
-        passage_passage_token2num_similarity = self._executor_parameters.passage_to_num_attention(encoded_passage,
-                                                                                                  encoded_passage)
+        # passage_passage_token2num_similarity = self._executor_parameters.passage_to_num_attention(encoded_passage,
+        #                                                                                           encoded_passage)
+        passage_passage_token2num_similarity = self._executor_parameters.passage_to_num_attention(modeled_passage,
+                                                                                                  modeled_passage)
         passage_passage_token2num_similarity = passage_passage_token2num_similarity * passage_mask.unsqueeze(1)
         passage_passage_token2num_similarity = passage_passage_token2num_similarity * passage_mask.unsqueeze(2)
 

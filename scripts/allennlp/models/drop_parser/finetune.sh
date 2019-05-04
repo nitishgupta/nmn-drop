@@ -4,7 +4,7 @@ export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
 # DATASET_NAME=num/longest_shortest_yards
-DATASET_NAME=num/nc_longestyards
+DATASET_NAME=num/hmyw_qattn_numg
 
 DATASET_DIR=./resources/data/drop_s/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
@@ -34,6 +34,7 @@ export BIDAF_WORDEMB_FILE="https://s3-us-west-2.amazonaws.com/allennlp/datasets/
 
 # Which kind of similarity to use in Ques-Passage attention - raw / encoded / raw-enc
 export QP_SIM_KEY="enc"
+export SIM_KEY="ma"
 
 export GOLDACTIONS=false
 export GOLDPROGS=false
@@ -57,9 +58,9 @@ export RG=1e-4
 
 export SEED=100
 
-export BEAMSIZE=2
-export MAX_DECODE_STEP=8
-export EPOCHS=50
+export BEAMSIZE=4
+export MAX_DECODE_STEP=14
+export EPOCHS=25
 
 export DEBUG=false
 
@@ -71,7 +72,7 @@ PD_1=BS_${BS}/LR_${LR}/Drop_${DROPOUT}/TOKENS_${TOKENIDX}/ED_${WEMB_DIM}/RG_${RG
 PD_2=QPSIMKEY_${QP_SIM_KEY}/QAL_${DENLOSS}/EXL_${EXCLOSS}/QATL_${QATTLOSS}/MML_${MMLLOSS}/SUPFIRST_${SUPFIRST}/SUPEPOCHS_${SUPEPOCHS}
 SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/${PD_2}/S_${SEED}/nc5e
 
-SERIALIZATION_DIR=./resources/semqa/checkpoints/nc20e_enc_nc_longyards
+SERIALIZATION_DIR=./resources/semqa/checkpoints/test_oldnumcomp_prodqatt
 
 #######################################################################################################################
 
@@ -79,9 +80,7 @@ SERIALIZATION_DIR=./resources/semqa/checkpoints/nc20e_enc_nc_longyards
 #                                    ${INCLUDE_PACKAGE} \
 #                                    ${SERIALIZATION_DIR}
 
-
-
-RESUME_SER_DIR=${SERIALIZATION_DIR}
-MODEL_TAR_GZ=./resources/semqa/checkpoints/nc20e_enc/model.tar.gz
+RESUME_SER_DIR=${SERIALIZATION_DIR}/Resume
+MODEL_TAR_GZ=${SERIALIZATION_DIR}/model.tar.gz
 
 allennlp fine-tune -c ${CONFIGFILE} --include-package ${INCLUDE_PACKAGE} -s ${RESUME_SER_DIR} -m ${MODEL_TAR_GZ}

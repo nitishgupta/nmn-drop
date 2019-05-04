@@ -61,20 +61,6 @@ export TMPDIR=/srv/local/data/nitishg/tmp
 #
 #mkdir -p ${PREDICT_OUTPUT_DIR}/${EVAL_DATASET}
 
-# PACKAGE TO BE INCLUDED WHICH HOUSES ALL THE CODE
-INCLUDE_PACKAGE=semqa
-export GPU=0
-export BEAMSIZE=2
-export DEBUG=true
-
-SUBFOLDER=date
-EVAL_DATASET=datecomp_full
-DATASET_DIR=./resources/data/drop_s/${SUBFOLDER}/${EVAL_DATASET}
-TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
-VALFILE=${DATASET_DIR}/drop_dataset_dev.json
-
-TESTFILE=${VALFILE}
-
 ##*****************    PREDICTION FILENAME   *****************
 #PRED_FILENAME=${EVAL_DATASET}.dev_pred.txt
 #EVAL_FILENAME=${EVAL_DATASET}.dev_eval.txt
@@ -82,10 +68,30 @@ TESTFILE=${VALFILE}
 ##PRED_FILENAME=train_predictions.txt
 ##TESTFILE=${TRAINFILE}
 
-MODEL_DIR=./resources/semqa/checkpoints/drop/date_num/dc_nc_howmanyyards_count_diff/drop_parser_new/TOKENS_qanet/ED_300/RG_1e-07/QPSIMKEY_enc/SIM_KEY_ma/SUPEPOCHS_5/S_100_gru
+
+# PACKAGE TO BE INCLUDED WHICH HOUSES ALL THE CODE
+INCLUDE_PACKAGE=semqa
+export GPU=0
+export BEAMSIZE=1
+export DEBUG=true
+
+# SAVED MODEL
+MODEL_DIR=./resources/semqa/checkpoints/savedmodels/dateq_numcq_hmvy_ydiff
 MODEL_TAR=${MODEL_DIR}/model.tar.gz
-PREDICTION_FILE=${MODEL_DIR}/${EVAL_DATASET}_pred.txt
-EVALUATION_FILE=${MODEL_DIR}/${EVAL_DATASET}_eval.txt
+PREDICTION_DIR=${MODEL_DIR}/predictions
+mkdir ${PREDICTION_DIR}
+
+# EVALUATION DATASET
+SUBFOLDER=num
+EVAL_DATASET=hmyw_qattnumgr
+DATASET_DIR=./resources/data/drop_s/${SUBFOLDER}/${EVAL_DATASET}
+TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
+VALFILE=${DATASET_DIR}/drop_dataset_dev.json
+
+TESTFILE=${VALFILE}
+
+PREDICTION_FILE=${PREDICTION_DIR}/${EVAL_DATASET}_train_pred.txt
+EVALUATION_FILE=${PREDICTION_DIR}/${EVAL_DATASET}_train_eval.txt
 PREDICTOR=drop_parser_predictor
 
 #######################################################################################################################

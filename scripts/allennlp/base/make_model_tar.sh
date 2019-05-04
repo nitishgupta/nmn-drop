@@ -1,8 +1,7 @@
 #!/usr/bin/env
 
-SERIALIZATION_DIR=./resources/semqa/checkpoints/drop/date_num/dc_nc_howmanyyards_count_diff/drop_parser_new/TOKENS_qanet/ED_300/RG_1e-07/QPSIMKEY_enc/SIM_KEY_ma/SUPEPOCHS_5/S_100_gru
+SERIALIZATION_DIR=./resources/semqa/checkpoints/drop/date_num/dateq_numcq_hmvy_ydiff/drop_parser_model/TOKENS_qanet/ED_300/RG_1e-07/QPSIMKEY_enc/SIM_KEY_ma/SUPEPOCHS_5/S_100/
 WEIGHTS_TH=best.th
-# WEIGHTS_TH=model_state_epoch_43.th
 
 MODEL_ARCHIVE=${SERIALIZATION_DIR}/model.tar.gz
 
@@ -11,7 +10,7 @@ if [ -f "${MODEL_ARCHIVE}" ]; then
     exit 1
 fi
 
-echo "Making model.tar.gz in ${SERIALIZATION_DIR}"
+echo "Making model.tar.gz in ${MODEL_ARCHIVE}"
 
 cd ${SERIALIZATION_DIR}
 
