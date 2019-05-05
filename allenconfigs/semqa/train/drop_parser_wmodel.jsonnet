@@ -216,6 +216,7 @@ local compareff_inputdim =
 //            "bidirectional": true
 //        },
 
+        "auxwinloss": false,
 
 //        "modeling_layer": {
 //            "type": "qanet_encoder",

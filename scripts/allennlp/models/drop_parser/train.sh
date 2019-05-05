@@ -3,7 +3,8 @@
 export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
-DATASET_NAME=num/hmyw_qattnumgr
+DATASET_NAME=date_num/dc_nc_hmyw
+# DATASET_NAME=date/datecomp_full
 
 DATASET_DIR=./resources/data/drop_s/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
@@ -72,7 +73,8 @@ PD_1=TOKENS_${TOKENIDX}/ED_${WEMB_DIM}/RG_${RG}
 PD_2=QPSIMKEY_${QP_SIM_KEY}/SIM_KEY_${SIM_KEY}/SUPEPOCHS_${SUPEPOCHS}
 SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/${PD_2}/S_${SEED}_pnumdatel
 
-SERIALIZATION_DIR=./resources/semqa/checkpoints/test/hmyw_sup0_modeldatenum
+# SERIALIZATION_DIR=./resources/semqa/checkpoints/test/hmyw_sup0_modeldatenum_aux
+SERIALIZATION_DIR=./resources/semqa/checkpoints/test/dc_nc_hmyw_sup0_modeldatenum_aux
 
 #######################################################################################################################
 

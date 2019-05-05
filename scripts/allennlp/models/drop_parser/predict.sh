@@ -76,7 +76,7 @@ export BEAMSIZE=1
 export DEBUG=true
 
 # SAVED MODEL
-MODEL_DIR=./resources/semqa/checkpoints/savedmodels/dateq_numcq_hmvy_ydiff_count
+MODEL_DIR=./resources/semqa/checkpoints/test/dc_sup0_sepdatenum
 MODEL_TAR=${MODEL_DIR}/model.tar.gz
 PREDICTION_DIR=${MODEL_DIR}/predictions
 mkdir ${PREDICTION_DIR}
