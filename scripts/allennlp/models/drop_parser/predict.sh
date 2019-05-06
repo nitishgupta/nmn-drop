@@ -76,14 +76,14 @@ export BEAMSIZE=1
 export DEBUG=true
 
 # SAVED MODEL
-MODEL_DIR=./resources/semqa/checkpoints/savedmodels/dateq_numcq_hmvy_ydiff/EncodedWAuxSup0
+MODEL_DIR=./resources/semqa/checkpoints/test/dcyearpadiff_sup0_t2t/
 MODEL_TAR=${MODEL_DIR}/model.tar.gz
 PREDICTION_DIR=${MODEL_DIR}/predictions
 mkdir ${PREDICTION_DIR}
 
 # EVALUATION DATASET
 SUBFOLDER=date
-EVAL_DATASET=yearpa_diff
+EVAL_DATASET=year_diff
 DATASET_DIR=./resources/data/drop_s/${SUBFOLDER}/${EVAL_DATASET}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
 VALFILE=${DATASET_DIR}/drop_dataset_dev.json

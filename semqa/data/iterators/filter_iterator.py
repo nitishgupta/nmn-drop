@@ -80,10 +80,10 @@ class DataFilterIterator(DataIterator):
 
             print(f"QType: {qtype_dict}")
 
-            strongly_supervised_first = True
+            strongly_supervised_first = False
             # CURRICULUM = None
             # CURRICULUM = [constants.YARDS_longest_qtype, constants.YARDS_findnum_qtype, constants.YARDS_shortest_qtype]
-            CURRICULUM = [constants.DATECOMP_QTYPE, constants.NUMCOMP_QTYPE, constants.YARDS_findnum_qtype]
+            NO_CURRICULUM = [constants.COUNT_find_qtype]
             # CURRICULUM = [constants.DATECOMP_QTYPE, constants.NUMCOMP_QTYPE, constants.YARDS_findnum_qtype,
             #               constants.SYN_NUMGROUND_qtype, constants.SYN_COUNT_qtype]
             # CURRICULUM = [constants.DATECOMP_QTYPE, constants.NUMCOMP_QTYPE, constants.YARDS_findnum_qtype,
@@ -92,9 +92,9 @@ class DataFilterIterator(DataIterator):
             filtered_instance_list = []
             if self.filter_instances:
                 # In Curriculum 1
-                if epoch_num < self.filter_for_epochs and strongly_supervised_first:
+                if epoch_num < self.filter_for_epochs:
                     for instance in instance_list:
-                        if instance[self.filter_key].metadata:
+                        if not instance["qtypes"].metadata in NO_CURRICULUM:
                             filtered_instance_list.append(instance)
                 else:
                     filtered_instance_list = instance_list

@@ -124,6 +124,7 @@ class DROPSemanticWModelParser(DROPParserBase):
         self._encoding_proj_layer = torch.nn.Linear(encoding_in_dim, encoding_in_dim)
         self._phrase_layer = phrase_layer
 
+        # Used for modeling
         self._matrix_attention = matrix_attention_layer
 
         self._modeling_proj_layer = torch.nn.Linear(encoding_out_dim * 4, modeling_in_dim)
@@ -438,7 +439,7 @@ class DROPSemanticWModelParser(DROPParserBase):
         passage_rawemb_aslist = [rawemb_passage[i] for i in range(batch_size)]
         passage_embedded_aslist = [projected_embedded_passage[i] for i in range(batch_size)]
         passage_encoded_aslist = [encoded_passage[i] for i in range(batch_size)]
-        # passage_modeled_aslist = [modeled_passage[i] for i in range(batch_size)]
+        passage_modeled_aslist = [modeled_passage[i] for i in range(batch_size)]
         passage_mask_aslist = [passage_mask[i] for i in range(batch_size)]
         q2p_attention_aslist = [question_passage_attention[i] for i in range(batch_size)]
         p2q_attention_aslist = [passage_question_attention[i] for i in range(batch_size)]
@@ -453,7 +454,7 @@ class DROPSemanticWModelParser(DROPParserBase):
                                   rawemb_passage=passage_rawemb_aslist[i],
                                   embedded_passage=passage_embedded_aslist[i],
                                   encoded_passage=passage_encoded_aslist[i],
-                                  # modeled_passage=passage_modeled_aslist[i],
+                                  modeled_passage=passage_modeled_aslist[i],
                                   # passage_token2datetoken_sim=None, #passage_token2datetoken_sim_aslist[i],
                                   question_mask=question_mask_aslist[i],
                                   passage_mask=passage_mask_aslist[i],
@@ -1101,7 +1102,7 @@ class DROPSemanticWModelParser(DROPParserBase):
                    dropconstants.YARDS_longest_qtype: ['PassageAttention -> find_PassageAttention'],
                    dropconstants.YARDS_shortest_qtype: ['PassageAttention -> find_PassageAttention'],
                    dropconstants.YARDS_findnum_qtype: ['PassageAttention -> find_PassageAttention'],
-                   dropconstants.COUNT_qtype: ['PassageAttention -> find_PassageAttention'],
+                   dropconstants.COUNT_find_qtype: ['PassageAttention -> find_PassageAttention'],
                }
 
         loss = 0.0

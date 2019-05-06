@@ -2,11 +2,11 @@
 
 ROOT_DIR=./resources/data/drop_s
 
-DIR1=date_num/dateq_numcq_hmvy_ydiff
+DIR1=date_num/datepaq_numcq_hmvy_ydiff
 
 DIR2=num/yardscount_wqattn
 
-OUTDIR=date_num/dateq_numcq_hmvy_ydiff_countqat
+OUTDIR=date_num/datepaq_numcq_hmvy_ydiff_countqa
 
 
 python -m datasets.drop.merge_datasets --dir1 ${ROOT_DIR}/${DIR1} \

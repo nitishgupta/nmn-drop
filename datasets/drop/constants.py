@@ -93,6 +93,13 @@ YARDS_second_shortest_qtype = 'how_many_yards_second_shortest'
 # How many yards -- Find a PassageNum as answer
 YARDS_findnum_qtype = 'how_many_yards_findnum'
 
+MAX_find_qtype = "max_find_qtype"
+MIN_find_qtype = "min_find_qtype"
+NUM_find_qtype = "num_find_qtype"
+MAX_filter_find_qtype = "max_filterfind_qtype"
+MIN_filter_find_qtype = "min_filterfind_qtype"
+NUM_filter_find_qtype = "num_filterfind_qtype"
+
 # Difference between two passage numbers. Each number can be a direct grounding, or maximum / minimum of a set
 DIFF_MAXMIN_qtype = "diff_maxmin_qtype"
 DIFF_MAXNUM_qtype = "diff_maxnum_qtype"
@@ -107,7 +114,8 @@ DIFF_MINNUM_qtype = "diff_minnum_qtype"
 DIFF_MINMIN_qtype = "diff_minmin_qtype"
 
 # Subset of "How many" which require counting over passage attention
-COUNT_qtype = "count_qtype"
+COUNT_find_qtype = "count_find_qtype"
+COUNT_filter_find_qtype = "count_filterfind_qtype"
 
 # Synthetic questions
 passage_attn_supervision = "passage_attn_supervision"     # passage-attention

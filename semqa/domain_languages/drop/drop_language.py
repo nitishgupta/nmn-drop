@@ -216,6 +216,7 @@ def get_empty_language_object():
                                 rawemb_passage=None,
                                 embedded_passage=None,
                                 encoded_passage=None,
+                                modeled_passage=None,
                                 question_mask=None,
                                 passage_mask=None,
                                 passage_tokenidx2dateidx=None,
@@ -255,7 +256,6 @@ class DropLanguage(DomainLanguage):
                  rawemb_passage: Tensor,
                  embedded_passage: Tensor,
                  encoded_passage: Tensor,
-                 # modeled_passage: Tensor,
                  # passage_token2datetoken_sim: Tensor,
                  question_mask: Tensor,
                  passage_mask: Tensor,
@@ -273,6 +273,7 @@ class DropLanguage(DomainLanguage):
                  passage_token2date_similarity: Tensor,
                  passage_token2num_similarity: Tensor,
                  parameters: ExecutorParameters,
+                 modeled_passage: Tensor = None,
                  start_types=None,
                  device_id: int = -1,
                  max_samples=3,
@@ -296,7 +297,7 @@ class DropLanguage(DomainLanguage):
         self.rawemb_passage = rawemb_passage
         self.embedded_passage = embedded_passage
         self.encoded_passage = encoded_passage
-        # self.modeled_passage = modeled_passage
+        self.modeled_passage = modeled_passage
         self.passage_mask = passage_mask
 
         # Shape: (passage_length, )
@@ -452,10 +453,10 @@ class DropLanguage(DomainLanguage):
 
         return QuestionAttention(question_attention, debug_value=debug_value)
 
-
     @predicate_with_side_args(['question_attention', 'passage_attention'])
     def find_PassageAttention(self, question_attention: Tensor,
                               passage_attention: Tensor = None) -> PassageAttention:
+
         # The passage attention is only used as supervision for certain synthetic questions
         if passage_attention is not None:
             return PassageAttention(passage_attention, debug_value="Supervised-Pattn-Used")
@@ -1377,7 +1378,7 @@ class DropLanguage(DomainLanguage):
                              loss=loss,
                              debug_value=debug_value)
 
-    '''
+
     @predicate
     def numberDistribution2Count(self, number_distribution: PassageNumber) -> CountNumber:
         number_distribution_vector = number_distribution._value
@@ -1411,7 +1412,6 @@ class DropLanguage(DomainLanguage):
         return CountNumber(count_number_dist=count_distribution,
                            loss=loss,
                            debug_value=debug_value)
-    '''
 
 
 if __name__=='__main__':

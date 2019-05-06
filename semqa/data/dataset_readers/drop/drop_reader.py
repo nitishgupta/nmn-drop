@@ -963,7 +963,7 @@ class DROPReader(DatasetReader):
                            constants.DIFF_MINMAX_qtype: self.numdiff_logicalforms,
                            constants.DIFF_MINNUM_qtype: self.numdiff_logicalforms,
                            constants.DIFF_MINMIN_qtype: self.numdiff_logicalforms,
-                           constants.COUNT_qtype: self.count_logicalforms,
+                           constants.COUNT_find_qtype: self.count_logicalforms,
                            constants.SYN_COUNT_qtype: self.count_logicalforms,
                            constants.SYN_NUMGROUND_qtype: self.findnum_logicalforms}
 

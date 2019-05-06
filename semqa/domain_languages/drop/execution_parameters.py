@@ -10,6 +10,7 @@ from allennlp.nn.activations import Activation
 from allennlp.modules import Seq2SeqEncoder, Seq2VecEncoder
 
 from allennlp.modules.attention import Attention, DotProductAttention
+from allennlp.modules.similarity_functions import LinearSimilarity
 from allennlp.modules.matrix_attention import (MatrixAttention, BilinearMatrixAttention,
                                                DotProductMatrixAttention, LinearMatrixAttention)
 
@@ -67,3 +68,50 @@ class ExecutorParameters(torch.nn.Module, Registrable):
         else:
             self._dropout = lambda x: x
 
+
+# Deprecated
+"""
+@predicate_with_side_args(['question_attention', 'passage_attention'])
+def find_PassageAttention(self, question_attention: Tensor,
+                          passage_attention: Tensor = None) -> PassageAttention:
+
+    # The passage attention is only used as supervision for certain synthetic questions
+    if passage_attention is not None:
+        return PassageAttention(passage_attention, debug_value="Supervised-Pattn-Used")
+
+    question_attention = question_attention * self.question_mask
+    # Shape: (encoding_size)
+    weighted_question_vector = torch.sum(self.encoded_question * question_attention.unsqueeze(1), 0)
+
+    # Shape: (passage_length, encoded_dim)
+    passage_repr = self.modeled_passage if self.modeled_passage is not None else self.encoded_passage
+
+    # Shape: (1, 1, 10)
+    passage_logits_unsqueezed = self.parameters.q2p_matrix_attention(
+                                                            weighted_question_vector.unsqueeze(0).unsqueeze(1),
+                                                            passage_repr.unsqueeze(0))
+
+    passage_logits = passage_logits_unsqueezed.squeeze(0).squeeze(0)
+
+    passage_attention = allenutil.masked_softmax(passage_logits, mask=self.passage_mask, memory_efficient=True)
+
+    passage_attention = passage_attention * self.passage_mask
+
+    debug_value = ""
+    if self._debug:
+        qattn_vis_complete, qattn_vis_most = dlutils.listTokensVis(question_attention, self.metadata["question_tokens"])
+        debug_value += f"Qattn: {qattn_vis_complete}"
+        pattn_vis_complete, pattn_vis_most = dlutils.listTokensVis(passage_attention, self.metadata["passage_tokens"])
+        debug_value += f"\nPattn: {pattn_vis_complete}"
+
+    return PassageAttention(passage_attention, debug_value=debug_value)
+"""
+
+"""
+# self.q2p_matrix_attention = LinearMatrixAttention(tensor_1_dim=question_encoding_dim,
+#                                                   tensor_2_dim=passage_encoding_dim,
+#                                                   combination="x,y,x*y")
+
+self.q2p_matrix_attention = BilinearMatrixAttention(matrix_1_dim=question_encoding_dim,
+                                                    matrix_2_dim=passage_encoding_dim)
+"""

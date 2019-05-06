@@ -32,19 +32,99 @@ def readDataset(input_json):
     return dataset
 
 
+def filter_questionattention(tokenized_queslower: str):
+    """ Here we'll annotate questions with one/two attentions depending on if the program type is
+        1. find(QuestionAttention)
+        2. filter(QuestionAttention, find(QuestionAttention))
+    """
+    question_lower = tokenized_queslower
+    question_tokens: List[str] = question_lower.split(' ')
+    qlen = len(question_tokens)
+
+    if "how many field goals were" in question_lower:
+        # Non-filter question
+        if question_lower in ["how many field goals were kicked ?", "how many field goals were kicked in the game ?",
+                              "how many field goals were made ?", "how many field goals were made in the game ?",
+                              "how many field goals were scored ?", "how many field goals were scored in the game ?",
+                              "how many field goals were in the game ?",
+                              "how many field goals were made in this game ?",
+                              "how many field goals were in this game?"]:
+            qtype = constants.COUNT_find_qtype
+            question_attention_find = [2, 3]       # Inclusive
+            question_attention_filter = None
+
+        else:
+            # QAttn1 (filter) is everything after "how many f gs were" until ?. QAttn2 (find) is F Gs, i.e. [2, 3]
+            qtype = constants.COUNT_filter_find_qtype
+            question_attention_filter = [5, qlen - 2]  # skipping first 5 tokens and ?
+            question_attention_find = [2, 3]
+
+    elif "how many field goals did" in question_lower:
+        qtype = constants.COUNT_filter_find_qtype
+        question_attention_find = [2, 3]
+        question_attention_filter = [5, qlen - 2]  # skipping first 5 tokens and ?
+
+    elif "how many interceptions did" in question_lower:
+        qtype = constants.COUNT_filter_find_qtype
+        question_attention_find = [2, 2]
+        question_attention_filter = [4, qlen - 2]  # skipping first 4 tokens and ?
+
+    elif "how many passes" in question_lower:
+        qtype = constants.COUNT_filter_find_qtype
+        question_attention_find = [2, 2]
+        question_attention_filter = [4, qlen - 2]  # skipping first 4 tokens and ?
+
+    elif "how many rushing" in question_lower:
+        # Most questions are How many rushing touchdowns/yards were / did
+        qtype = constants.COUNT_filter_find_qtype
+        question_attention_find = [2, 3]
+        question_attention_filter = [5, qlen - 2]  # skipping first 5 tokens and ?
+
+    elif "how many touchdown passes did" in question_lower:
+        qtype = constants.COUNT_filter_find_qtype
+        question_attention_find = [2, 3]
+        question_attention_filter = [5, qlen - 2]  # skipping first 5 tokens and ?
+
+    elif "how many touchdowns did the" in question_lower:
+        qtype = constants.COUNT_filter_find_qtype
+        question_attention_find = [2, 2]
+        question_attention_filter = [5, qlen - 2]  # skipping first 5 tokens and ?
+
+    elif "how many touchdowns were scored" in question_lower:
+        if question_lower in ["how many touchdowns were scored in the game ?", "how many touchdowns were scored ?",
+                              "how many touchdowns were scored in total ?"]:
+            qtype = constants.COUNT_find_qtype
+            question_attention_find = [2, 2]  # Inclusive
+            question_attention_filter = None
+        else:
+            qtype = constants.COUNT_filter_find_qtype
+            question_attention_find = [2, 2]
+            question_attention_filter = [5, qlen - 2]  # skipping first 5 tokens and ?
+
+    return qtype, question_attention_filter, question_attention_find
+
+
+def convert_span_to_attention(qlen, span):
+    # span is inclusive on both ends
+    qattn = [0.0] * qlen
+    for x in range(span[0], span[1] + 1):
+        qattn[x] = 1.0
+
+    return qattn
+
+
 def preprocess_HowManyYardsCount_ques(dataset):
     """ This function prunes for questions that are count based questions.
 
         Along with pruning, we also supervise the with the qtype and program_supervised flag
     """
 
-    count_qtype = constants.COUNT_qtype
-
     new_dataset = {}
     total_ques = 0
     after_pruning_ques = 0
-    questions_w_qtypes = 0
+    questions_w_attn = 0
     num_passages = len(dataset)
+    qtype_dist = defaultdict(int)
 
     for passage_id, passage_info in dataset.items():
         new_qa_pairs = []
@@ -55,15 +135,30 @@ def preprocess_HowManyYardsCount_ques(dataset):
             question_lower = original_question.lower()
             tokenized_ques = question_answer[constants.tokenized_question]
             tokens = tokenized_ques.split(' ')
+            qlen = len(tokens)
             if any(span in question_lower for span in COUNT_TRIGRAMS):
-                question_answer[constants.qtype] = constants.COUNT_qtype
+                (qtype,
+                 question_attention_filter_span,
+                 question_attention_find_span) = filter_questionattention(tokenized_queslower=tokenized_ques.lower())
+
+                if question_attention_filter_span is not None:
+                    filter_qattn = convert_span_to_attention(qlen, question_attention_filter_span)
+                else:
+                    filter_qattn = None
+
+                find_qattn = convert_span_to_attention(qlen, question_attention_find_span)
+
+                question_answer[constants.qtype] = qtype
                 question_answer[constants.program_supervised] = True
-                questions_w_qtypes += 1
+                qtype_dist[qtype] += 1
 
                 # Also adding qattn -- everything apart from the first two tokens
-                attention = [1.0 if x > 1 else 0.0 for x in range(len(tokens))]
-                question_answer[constants.ques_attention_supervision] = [attention]
+                if filter_qattn is not None:
+                    question_answer[constants.ques_attention_supervision] = [filter_qattn, find_qattn]
+                else:
+                    question_answer[constants.ques_attention_supervision] = [find_qattn]
                 question_answer[constants.qattn_supervised] = True
+                questions_w_attn += 1
 
                 new_qa_pairs.append(question_answer)
 
@@ -75,7 +170,9 @@ def preprocess_HowManyYardsCount_ques(dataset):
     num_passages_after_prune = len(new_dataset)
     print(f"Passages original:{num_passages}  Questions original:{total_ques}")
     print(f"Passages after-pruning:{num_passages_after_prune}  Question after-pruning:{after_pruning_ques}")
-    print(f"Num of QA with qtypes and program supervised: {questions_w_qtypes}")
+    print(f"Ques with attn: {questions_w_attn}")
+    print(f"QType distribution: {qtype_dist}")
+
 
     return new_dataset
 

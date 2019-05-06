@@ -1049,7 +1049,7 @@ class DROPSemanticParser(DROPParserBase):
                    dropconstants.YARDS_longest_qtype: ['PassageAttention -> find_PassageAttention'],
                    dropconstants.YARDS_shortest_qtype: ['PassageAttention -> find_PassageAttention'],
                    dropconstants.YARDS_findnum_qtype: ['PassageAttention -> find_PassageAttention'],
-                   dropconstants.COUNT_qtype: ['PassageAttention -> find_PassageAttention'],
+                   dropconstants.COUNT_find_qtype: ['PassageAttention -> find_PassageAttention'],
                }
 
         loss = 0.0
