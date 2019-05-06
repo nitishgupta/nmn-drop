@@ -1005,7 +1005,8 @@ class DROPReader(DatasetReader):
 
     @staticmethod
     def count_logicalforms(**kwargs)  -> Tuple[List[str], List[str]]:
-        gold_lf = "(passageAttn2Count find_PassageAttention)"
+        gold_lf = "(numberDistribution2Count (find_PassageNumber find_PassageAttention))"
+        # gold_lf = "(passageAttn2Count find_PassageAttention)"
         return [gold_lf], ['count_number']
 
 

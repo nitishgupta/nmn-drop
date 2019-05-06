@@ -51,7 +51,8 @@ class DROPParserBase(Model):
         self._debug = debug
 
         self._action_embedder = Embedding(num_embeddings=vocab.get_vocab_size(self._rule_namespace),
-                                          embedding_dim=action_embedding_dim)
+                                          embedding_dim=action_embedding_dim,
+                                          vocab_namespace=self._rule_namespace)
 
         self._action_embedding_dim = action_embedding_dim
         # This is what we pass as input in the first step of decoding, when we don't have a

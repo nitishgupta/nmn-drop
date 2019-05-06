@@ -76,22 +76,22 @@ export BEAMSIZE=1
 export DEBUG=true
 
 # SAVED MODEL
-MODEL_DIR=./resources/semqa/checkpoints/test/dc_sup0_sepdatenum
+MODEL_DIR=./resources/semqa/checkpoints/savedmodels/dateq_numcq_hmvy_ydiff/EncodedWAuxSup0
 MODEL_TAR=${MODEL_DIR}/model.tar.gz
 PREDICTION_DIR=${MODEL_DIR}/predictions
 mkdir ${PREDICTION_DIR}
 
 # EVALUATION DATASET
 SUBFOLDER=date
-EVAL_DATASET=datecomp_full
+EVAL_DATASET=yearpa_diff
 DATASET_DIR=./resources/data/drop_s/${SUBFOLDER}/${EVAL_DATASET}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
 VALFILE=${DATASET_DIR}/drop_dataset_dev.json
 
 TESTFILE=${VALFILE}
 
-PREDICTION_FILE=${PREDICTION_DIR}/${EVAL_DATASET}_train_pred.txt
-EVALUATION_FILE=${PREDICTION_DIR}/${EVAL_DATASET}_train_eval.txt
+PREDICTION_FILE=${PREDICTION_DIR}/${EVAL_DATASET}_dev_pred.txt
+EVALUATION_FILE=${PREDICTION_DIR}/${EVAL_DATASET}_dev_eval.txt
 PREDICTOR=drop_parser_predictor
 
 #######################################################################################################################

@@ -198,15 +198,16 @@ local compareff_inputdim =
             "combination": "x,y,x*y"
         },
 
-        "modeling_layer": {
-            "type": "gru",
-            "input_size": 128,
-            "hidden_size": 64,
-            "num_layers": 2,
-            "dropout": 0.2,
-            "bidirectional": true
-        },
+//        "modeling_layer": {
+//            "type": "gru",
+//            "input_size": 128,
+//            "hidden_size": 64,
+//            "num_layers": 2,
+//            "dropout": 0.2,
+//            "bidirectional": true
+//        },
 
+        "auxwinloss": false,
 
 //        "modeling_layer": {
 //            "type": "qanet_encoder",

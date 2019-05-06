@@ -4,7 +4,7 @@ export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
 # DATASET_NAME=num/longest_shortest_yards
-DATASET_NAME=num/hmyw_qattn_numg
+DATASET_NAME=num/yardscount_wqattn
 
 DATASET_DIR=./resources/data/drop_s/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
@@ -14,7 +14,7 @@ VALFILE=${DATASET_DIR}/drop_dataset_dev.json
 INCLUDE_PACKAGE=semqa
 
 ### TRAINING MODEL CONFIG -- should be same across datasets for the same model
-CONFIGFILE=allenconfigs/semqa/train/drop_parser.jsonnet
+CONFIGFILE=allenconfigs/semqa/train/drop_parser_wmodel.jsonnet
 export TOKENIDX="qanet"
 
 export DATASET_READER=drop_reader
@@ -50,7 +50,7 @@ export SUPEPOCHS=0
 # export PTREX=false
 # export PTRWTS="./resources/semqa/checkpoints/hpqa/b_wsame/hpqa_parser/BS_4/OPT_adam/LR_0.001/Drop_0.2/TOKENS_glove/FUNC_snli/SIDEARG_true/GOLDAC_true/AUXGPLOSS_false/QENTLOSS_false/ATTCOV_false/PTREX_false/best.th"
 
-export BS=8
+export BS=4
 export DROPOUT=0.2
 
 export LR=0.001
@@ -72,7 +72,7 @@ PD_1=BS_${BS}/LR_${LR}/Drop_${DROPOUT}/TOKENS_${TOKENIDX}/ED_${WEMB_DIM}/RG_${RG
 PD_2=QPSIMKEY_${QP_SIM_KEY}/QAL_${DENLOSS}/EXL_${EXCLOSS}/QATL_${QATTLOSS}/MML_${MMLLOSS}/SUPFIRST_${SUPFIRST}/SUPEPOCHS_${SUPEPOCHS}
 SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/${PD_2}/S_${SEED}/nc5e
 
-SERIALIZATION_DIR=./resources/semqa/checkpoints/test_oldnumcomp_prodqatt
+SERIALIZATION_DIR=./resources/semqa/checkpoints/savedmodels/dateq_numcq_hmvy_ydiff/ModeledWAuxSup0
 
 #######################################################################################################################
 
@@ -80,7 +80,7 @@ SERIALIZATION_DIR=./resources/semqa/checkpoints/test_oldnumcomp_prodqatt
 #                                    ${INCLUDE_PACKAGE} \
 #                                    ${SERIALIZATION_DIR}
 
-RESUME_SER_DIR=${SERIALIZATION_DIR}/Resume
+RESUME_SER_DIR=${SERIALIZATION_DIR}/CountQatt_finetune
 MODEL_TAR_GZ=${SERIALIZATION_DIR}/model.tar.gz
 
-allennlp fine-tune -c ${CONFIGFILE} --include-package ${INCLUDE_PACKAGE} -s ${RESUME_SER_DIR} -m ${MODEL_TAR_GZ}
+allennlp fine-tune --extend-vocab -c ${CONFIGFILE} --include-package ${INCLUDE_PACKAGE} -s ${RESUME_SER_DIR} -m ${MODEL_TAR_GZ}

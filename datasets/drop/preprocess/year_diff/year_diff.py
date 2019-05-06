@@ -20,8 +20,10 @@ STOP_WORDS.update(["'s", ","])
 FIRST = "first"
 SECOND = "second"
 
-YEAR_DIFF_NGRAMS = ["how many years after the", "how many years did it", "how many years did the",
-                    "how many years passed between", "how many years was"]
+# YEAR_DIFF_NGRAMS = ["how many years after the", "how many years did it", "how many years did the",
+#                     "how many years passed between", "how many years was"]
+
+YEAR_DIFF_NGRAMS = ["how many years after the", "how many years passed between"]
 
 def readDataset(input_json):
     with open(input_json, 'r') as f:

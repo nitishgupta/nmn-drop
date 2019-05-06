@@ -549,6 +549,36 @@ class DropLanguage(DomainLanguage):
         # Shape: (passage_length, )
         passage_date_token_probs = attn_weighted_date_aligment_matrix.sum(0)
 
+        """
+        if self._debug:
+            print('-------------------------')
+            print(self.metadata['question_tokens'])
+            passage_tokens = self.metadata['passage_tokens']
+            attn, topattn = dlutils.listTokensVis(passage_attention, passage_tokens)
+            print(f"PassageAttention: Top: {topattn}")
+            print(attn)
+            print()
+
+            print("Only showing 10 date-tokens ...")
+            _, date_indices = torch.topk(self.passage_tokenidx2dateidx, k=5, dim=0)
+            date_indices = myutils.tocpuNPList(date_indices)
+            for number_idx in date_indices:
+                token2datescores = passage_date_alignment_matrix[:, number_idx]
+                _, top_tokens = torch.topk(token2datescores, 5, dim=0)
+                top_tokens = myutils.tocpuNPList(top_tokens)
+                print(f"{passage_tokens[number_idx]}")
+                print([passage_tokens[x] for x in top_tokens])
+                print(f"Sum: {torch.sum(token2datescores)}")
+                compvis, _ = dlutils.listTokensVis(token2datescores, passage_tokens)
+                print(compvis)
+
+            print("After passage attention; number-token-probs:")
+            attn, _ = dlutils.listTokensVis(passage_date_token_probs, passage_tokens)
+            print(attn)
+            print()
+            print("-----------------------------------")
+        """
+
         masked_passage_tokenidx2dateidx = self.passage_datetokens_mask_long * self.passage_tokenidx2dateidx
 
         date_distribution = passage_attention.new_zeros(self.num_passage_dates)
@@ -636,35 +666,41 @@ class DropLanguage(DomainLanguage):
         passage_number_alignment_matrix = allenutil.masked_softmax(self.passage_passage_token2num_similarity,
                                                                    mask=self.passage_numtokens_mask_float.unsqueeze(0),
                                                                    memory_efficient=True)
-        # print('-------------------------')
-        # print(self.metadata['question_tokens'])
-        # passage_tokens = self.metadata['passage_tokens']
-        # attn, _= dlutils.listTokensVis(passage_attention, passage_tokens)
-        # print(attn)
-        # print()
-
-        # _, number_indices = torch.topk(self.passage_tokenidx2numidx, k=10, dim=0)
-        # number_indices = myutils.tocpuNPList(number_indices)
-        # for number_idx in number_indices:
-        #     token2numberscores = passage_number_alignment_matrix[:, number_idx]
-        #     _, top_tokens = torch.topk(token2numberscores, 5, dim=0)
-        #     top_tokens = myutils.tocpuNPList(top_tokens)
-        #     print(f"{passage_tokens[number_idx]}")
-        #     print([passage_tokens[x] for x in top_tokens])
-        #     print(f"Sum: {torch.sum(token2numberscores)}")
-        #     compvis, _ = dlutils.listTokensVis(token2numberscores, passage_tokens)
-        #     print(compvis)
 
         # (passage_length, passage_length)
         attn_weighted_number_aligment_matrix = passage_number_alignment_matrix * passage_attention.unsqueeze(1)
         # Shape: (passage_length, )
         passage_number_token_probs = attn_weighted_number_aligment_matrix.sum(0)
 
-        # attn, _ = dlutils.listTokensVis(passage_number_token_probs, passage_tokens)
-        # print()
-        # print(attn)
-        # print()
-        # print("-----------------------------------")
+        """
+        if self._debug:
+            print('-------------------------')
+            print(self.metadata['question_tokens'])
+            passage_tokens = self.metadata['passage_tokens']
+            attn, topattn = dlutils.listTokensVis(passage_attention, passage_tokens)
+            print(f"PassageAttention: Top: {topattn}")
+            print(attn)
+            print()
+
+            print("Only showing 10 number-tokens ...")
+            _, number_indices = torch.topk(self.passage_tokenidx2numidx, k=10, dim=0)
+            number_indices = myutils.tocpuNPList(number_indices)
+            for number_idx in number_indices:
+                token2numberscores = passage_number_alignment_matrix[:, number_idx]
+                _, top_tokens = torch.topk(token2numberscores, 5, dim=0)
+                top_tokens = myutils.tocpuNPList(top_tokens)
+                print(f"{passage_tokens[number_idx]}")
+                print([passage_tokens[x] for x in top_tokens])
+                print(f"Sum: {torch.sum(token2numberscores)}")
+                compvis, _ = dlutils.listTokensVis(token2numberscores, passage_tokens)
+                print(compvis)
+
+            print("After passage attention; number-token-probs:")
+            attn, _ = dlutils.listTokensVis(passage_number_token_probs, passage_tokens)
+            print(attn)
+            print()
+            print("-----------------------------------")
+        """
 
         masked_passage_tokenidx2numidx = self.passage_numtokens_mask_long * self.passage_tokenidx2numidx
 
@@ -1340,6 +1376,42 @@ class DropLanguage(DomainLanguage):
         return PassageNumber(passage_number_dist=number_distribution,
                              loss=loss,
                              debug_value=debug_value)
+
+    '''
+    @predicate
+    def numberDistribution2Count(self, number_distribution: PassageNumber) -> CountNumber:
+        number_distribution_vector = number_distribution._value
+
+        scaled_attentions = [number_distribution_vector * sf for sf in self.parameters.passage_attention_scalingvals]
+        # Shape: (passage_length, num_scaling_factors)
+        stacked_scaled_attentions = torch.stack(scaled_attentions, dim=1)
+
+        # We need a mask vector for the RNN of shape (num_of_passage_values, )
+        mask_vector = stacked_scaled_attentions.new_ones(self.num_passage_nums)
+
+        # Shape: (hidden_dim, )
+        count_hidden_repr = self.parameters.passage_attention_to_count(stacked_scaled_attentions.unsqueeze(0),
+                                                                       mask_vector.unsqueeze(0)).squeeze(0)
+
+        # Shape: (num_counts, )
+        count_logits = self.parameters.passage_count_predictor(count_hidden_repr)
+
+        count_distribution = torch.softmax(count_logits, dim=0)
+
+        loss = 0
+        # loss += passage_attention.loss
+
+        debug_value = ""
+        if self._debug:
+            count = myutils.round_all(myutils.tocpuNPList(count_distribution), 3)
+            number_distribution = myutils.round_all(myutils.tocpuNPList(number_distribution_vector), 3)
+            debug_value += f"CountDist: {count}"
+            debug_value += f"\nNumDist: {number_distribution}"
+
+        return CountNumber(count_number_dist=count_distribution,
+                           loss=loss,
+                           debug_value=debug_value)
+    '''
 
 
 if __name__=='__main__':

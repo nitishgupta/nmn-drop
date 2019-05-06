@@ -62,6 +62,7 @@ class DROPSemanticParser(DROPParserBase):
                  sim_key: str,
                  bilinearsim: bool = False,
                  goldactions: bool = None,
+                 auxwinloss: bool = False,
                  goldprogs: bool = False,
                  denotationloss: bool = True,
                  excloss: bool = False,
@@ -178,10 +179,13 @@ class DROPSemanticParser(DROPParserBase):
         self.excloss_metric = Average()
         self.qattloss_metric = Average()
         self.mmlloss_metric = Average()
+        self.auxwinloss_metric = Average()
         self._drop_metrics = DropEmAndF1()
 
         self._goldactions = goldactions
         self._goldprogs = goldprogs
+
+        self.auxwinloss = auxwinloss
 
         # Main loss for QA
         self.denotation_loss = denotationloss
@@ -267,6 +271,7 @@ class DROPSemanticParser(DROPParserBase):
         embedded_question = self._highway_layer(self._embedding_proj_layer(rawemb_question))
         embedded_passage = self._highway_layer(self._embedding_proj_layer(rawemb_passage))
 
+        passage_length = passage_mask.size()[1]
         # projected_embedded_question = self._encoding_proj_layer(embedded_question)
         # projected_embedded_passage = self._encoding_proj_layer(embedded_passage)
 
@@ -352,6 +357,22 @@ class DROPSemanticParser(DROPParserBase):
         # Shape: (batch_size, passage_length, passage_length)
         passage_passage_token2num_similarity = (passage_passage_token2num_similarity *
                                                 passage_tokenidx2numidx_mask.unsqueeze(1))
+
+        """ Aux Loss """
+        if self.auxwinloss:
+            inwindow_mask, outwindow_mask = self.masking_blockdiagonal(batch_size, passage_length,
+                                                                       10, device_id)
+            num_aux_loss = self.window_loss_numdate(passage_passage_token2num_similarity,
+                                                    passage_tokenidx2numidx_mask,
+                                                    inwindow_mask, outwindow_mask)
+
+            date_aux_loss = self.window_loss_numdate(passage_passage_token2date_similarity,
+                                                     passage_tokenidx2dateidx_mask,
+                                                     inwindow_mask, outwindow_mask)
+            aux_win_loss = num_aux_loss + date_aux_loss
+        else:
+            aux_win_loss = 0.0
+
 
         """ Parser setup """
         # Shape: (B, encoding_dim)
@@ -568,6 +589,11 @@ class DROPSemanticParser(DROPParserBase):
         if answer_program_start_types is not None:
             # Execution losses --
             total_aux_loss = allenutil.move_to_device(torch.tensor(0.0), device_id).float()
+
+            total_aux_loss += aux_win_loss
+            if aux_win_loss != 0:
+                self.auxwinloss_metric(aux_win_loss.item())
+
             if self.excloss:
                 exec_loss = 0.0
                 execloss_normalizer = 0.0
@@ -844,12 +870,14 @@ class DROPSemanticParser(DROPParserBase):
         exec_loss = self.excloss_metric.get_metric(reset)
         qatt_loss = self.qattloss_metric.get_metric(reset)
         mml_loss = self.mmlloss_metric.get_metric(reset)
+        winloss = self.auxwinloss_metric.get_metric(reset)
         exact_match, f1_score = self._drop_metrics.get_metric(reset)
         metric_dict.update({'em': exact_match, 'f1': f1_score,
                             'ans': model_loss,
                             'exc': exec_loss,
                             'qatt': qatt_loss,
-                            'mml': mml_loss})
+                            'mml': mml_loss,
+                            'win': winloss})
 
         return metric_dict
 
@@ -1491,6 +1519,100 @@ class DROPSemanticParser(DROPParserBase):
 
         return loss, accuracy
 
+
+    def masking_blockdiagonal(self, batch_size, passage_length, window, device_id):
+        """ Make a (batch_size, passage_length, passage_length) tensor M of 1 and -1 in which for each row x,
+            M[:, x, y] = -1 if y < x - window or y > x + window, else it is 1.
+            Basically for the x-th row, the [x-win, x+win] columns should be 1, and rest -1
+        """
+
+        lower_limit = [max(0, i - window) for i in range(passage_length)]
+        upper_limit = [min(passage_length, i + window) for i in range(passage_length)]
+
+        # Tensors of lower and upper limits for each row
+        lower = allenutil.move_to_device(torch.LongTensor(lower_limit), cuda_device=device_id)
+        upper = allenutil.move_to_device(torch.LongTensor(upper_limit), cuda_device=device_id)
+        lower_un = lower.unsqueeze(1)
+        upper_un = upper.unsqueeze(1)
+
+        # Range vector for each row
+        lower_range_vector = allenutil.get_range_vector(passage_length, device=device_id).unsqueeze(0)
+        upper_range_vector = allenutil.get_range_vector(passage_length, device=device_id).unsqueeze(0)
+
+        # Masks for lower and upper limits of the mask
+        lower_mask = lower_range_vector >= lower_un
+        upper_mask = upper_range_vector <= upper_un
+
+        # Final-mask that we require
+        inwindow_mask = (lower_mask == upper_mask).float()
+        outwindow_mask = (lower_mask != upper_mask).float()
+
+        return inwindow_mask, outwindow_mask
+
+
+    def window_loss_numdate(self, passage_passage_similarity_scores, passage_tokenidx_mask,
+                            inwindow_mask, outwindow_mask):
+        """
+        The idea is to first softmax the similarity_scores to get a distribution over the date/num tokens from each
+        passage token.
+
+        For each passage_token,
+            -- increase the sum of prob for date/num tokens around it in a window (don't know which date/num is correct)
+            -- decrease the prod of prob for date/num tokens outside the window (know that all date/num are wrong)
+
+        Parameters:
+        -----------
+        passage_passage_similarity_scores: (batch_size, passage_length, passage_length)
+            For each passage_token, a similarity score to other passage_tokens for data/num
+            This should ideally, already be masked
+
+        passage_tokenidx_mask: (batch_size, passage_length)
+            Mask for tokens that are num/date
+
+        inwindow_mask: (passage_length, passage_length)
+            For row x, inwindow_mask[x, x-window : x+window] = 1 and 0 otherwise. Mask for a window around the token
+        outwindow_mask: (passage_length, passage_length)
+            Opposite of inwindow_mask. For each row x, the colums are 1 outside of a window around x
+        """
+        # (batch_size, passage_length, passage_length)
+        passage_passage_alignment_matrix = allenutil.masked_softmax(passage_passage_similarity_scores,
+                                                                    passage_tokenidx_mask.unsqueeze(1),
+                                                                    memory_efficient=True)
+        inwindow_mask = inwindow_mask.unsqueeze(0) * passage_tokenidx_mask.unsqueeze(1)
+        inwindow_probs = passage_passage_alignment_matrix * inwindow_mask
+        # This signifies that each token can distribute it's prob to nearby-date/num in anyway
+        # Shape: (batch_size, passage_length)
+        sum_inwindow_probs = inwindow_probs.sum(2)
+        mask_sum = (inwindow_mask.sum(2) > 0).float()
+        # Image a row where mask = 0, there sum of probs will be zero and we need to compute masked_log
+        masked_sum_inwindow_probs = allenutil.replace_masked_values(sum_inwindow_probs, mask_sum, replace_with=1e-40)
+        log_sum_inwindow_probs = torch.log(masked_sum_inwindow_probs + 1e-40) * mask_sum
+        inwindow_likelihood = torch.sum(log_sum_inwindow_probs)
+        if torch.sum(inwindow_mask) > 0:
+            inwindow_likelihood = inwindow_likelihood / torch.sum(inwindow_mask)
+        else:
+            inwindow_likelihood = 0.0
+
+        outwindow_mask = outwindow_mask.unsqueeze(0) * passage_tokenidx_mask.unsqueeze(1)
+        # For tokens outside the window, increase entropy of the distribution. i.e. -\sum p*log(p)
+        # Since we'd like to distribute the weight equally to things outside the window
+        # Shape: (batch_size, passage_length, passage_length)
+        outwindow_probs = passage_passage_alignment_matrix * outwindow_mask
+
+        masked_outwindow_probs = allenutil.replace_masked_values(outwindow_probs, outwindow_mask, replace_with=1e-40)
+        outwindow_probs_log = torch.log(masked_outwindow_probs + 1e-40) * outwindow_mask
+        # Shape: (batch_length, passage_length)
+        outwindow_negentropies = torch.sum(outwindow_probs * outwindow_probs_log)
+
+        if torch.sum(outwindow_mask) > 0:
+            outwindow_negentropies = outwindow_negentropies / torch.sum(outwindow_mask)
+        else:
+            outwindow_negentropies = 0.0
+
+            # Increase inwindow likelihod and decrease outwindow-negative-entropy
+        loss = -1 * inwindow_likelihood + outwindow_negentropies
+
+        return loss
 
 
 
