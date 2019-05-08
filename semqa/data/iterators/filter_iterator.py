@@ -83,7 +83,8 @@ class DataFilterIterator(DataIterator):
             strongly_supervised_first = False
             # CURRICULUM = None
             # CURRICULUM = [constants.YARDS_longest_qtype, constants.YARDS_findnum_qtype, constants.YARDS_shortest_qtype]
-            NO_CURRICULUM = [constants.COUNT_find_qtype]
+            NO_CURRICULUM = [constants.COUNT_filter_find_qtype, constants.MAX_filter_find_qtype,
+                             constants.MIN_filter_find_qtype, constants.NUM_filter_find_qtype]
             # CURRICULUM = [constants.DATECOMP_QTYPE, constants.NUMCOMP_QTYPE, constants.YARDS_findnum_qtype,
             #               constants.SYN_NUMGROUND_qtype, constants.SYN_COUNT_qtype]
             # CURRICULUM = [constants.DATECOMP_QTYPE, constants.NUMCOMP_QTYPE, constants.YARDS_findnum_qtype,

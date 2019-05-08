@@ -109,7 +109,9 @@ local compareff_inputdim =
 
 
     "model": {
-         "type": "drop_parser_wmodel",
+        "type": "drop_parser_wmodel",
+
+        "modeltype": std.extVar("MODELTYPE"),
 
         "text_field_embedder":
           if tokenidx == "elmo" then {
@@ -207,41 +209,7 @@ local compareff_inputdim =
             "bidirectional": true
         },
 
-//        "passage_numdate_layer": {
-//            "type": "gru",
-//            "input_size": 128,
-//            "hidden_size": 64,
-//            "num_layers": 2,
-//            "dropout": 0.2,
-//            "bidirectional": true
-//        },
-
         "auxwinloss": true,
-
-//        "modeling_layer": {
-//            "type": "qanet_encoder",
-//            "input_dim": 128,
-//            "hidden_dim": 128,
-//            "attention_projection_dim": 128,
-//            "feedforward_hidden_dim": 128,
-//            "num_blocks": 7,
-//            "num_convs_per_block": 2,
-//            "conv_kernel_size": 5,
-//            "num_attention_heads": 8,
-//            "dropout_prob": 0.1,
-//            "layer_dropout_undecayed_prob": 0.1,
-//            "attention_dropout_prob": 0
-//        },
-
-    //    "passage_token_to_date": {
-    //        "type": "stacked_self_attention",
-    //        "input_dim": 128,
-    //        "hidden_dim": 128,
-    //        "projection_dim": 128,
-    //        "feedforward_hidden_dim": 256,
-    //        "num_layers": 3,
-    //        "num_attention_heads": 4,
-    //    },
 
         "passage_attention_to_span": {
             "type": "gru",
@@ -271,9 +239,6 @@ local compareff_inputdim =
 
         "beam_size": utils.parse_number(std.extVar("BEAMSIZE")),
 
-        "qp_sim_key": std.extVar("QP_SIM_KEY"),
-        "sim_key": std.extVar("SIM_KEY"),
-
         "max_decoding_steps": utils.parse_number(std.extVar("MAX_DECODE_STEP")),
         "dropout": utils.parse_number(std.extVar("DROPOUT")),
 
@@ -287,19 +252,19 @@ local compareff_inputdim =
           ]
         ],
 
-//        "initializers":
-//        [
-//            ["passage_attention_to_count|passage_count_predictor",
-//                 {
-//                     "type": "pretrained",
-//                     "weights_file_path": "./resources/semqa/checkpoints/savedmodels/count_pretrn_nobias/best.th"
-//                 },
-//            ],
-//            [".*_text_field_embedder.*", "prevent"]
-//        ],
+        "initializers":
+        [
+            ["passage_attention_to_count|passage_count_predictor",
+                 {
+                     "type": "pretrained",
+                     "weights_file_path": "./resources/semqa/checkpoints/savedmodels/num2count_vstd/best.th"
+                 },
+            ],
+            [".*_text_field_embedder.*", "prevent"]
+        ],
 
-        "goldactions": utils.boolparser(std.extVar("GOLDACTIONS")),
-        "goldprogs": utils.boolparser(std.extVar("GOLDPROGS")),
+        "countfixed": utils.boolparser(std.extVar("COUNT_FIXED")),
+
         "denotationloss": utils.boolparser(std.extVar("DENLOSS")),
         "excloss": utils.boolparser(std.extVar("EXCLOSS")),
         "qattloss": utils.boolparser(std.extVar("QATTLOSS")),

@@ -52,7 +52,7 @@ class DROPReader(DatasetReader):
         self._num_training_samples = num_training_samples
         self._normalized = normalized
         self._withnoise = withnoise
-    '''
+
     @overrides
     def _read(self, file_path: str):
         # pylint: disable=logging-fstring-interpolation
@@ -96,8 +96,63 @@ class DROPReader(DatasetReader):
             print("Making data")
 
         return instances
-    '''
 
+
+    def number2count_auxloss(self, passage_number_values: List[List[float]], device_id=-1):
+        """ Using passage numnbers, make a (batch_size, max_passage_numbers) (padded) tensor, each containing a
+            noisy distribution with mass distributed over x-numbers. The corresponding count-answer will be x.
+            Use the attention2count rnn to predict a count value and compute the loss.
+        """
+        batch_size = len(passage_number_values)
+        # List of length -- batch-size
+        num_of_passage_numbers = [len(nums) for nums in passage_number_values]
+        max_passage_numbers = max(num_of_passage_numbers)
+
+        # Shape: (batch_size, )
+        num_pasasge_numbers = allenutil.move_to_device(torch.LongTensor(num_of_passage_numbers), cuda_device=device_id)
+        # Shape: (max_passage_numbers, )
+        range_vector = allenutil.get_range_vector(size=max_passage_numbers, device=device_id)
+
+        # Shape: (batch_size, maxnum_passage_numbers)
+        mask = (range_vector.unsqueeze(0) < num_pasasge_numbers.unsqueeze(1)).float()
+
+        number_distributions = mask.new_zeros(batch_size, max_passage_numbers).normal_(0, 0.01).abs_()
+        count_answers = number_distributions.new_zeros(batch_size).long()
+        for i, num_numbers in enumerate(num_of_passage_numbers):
+            """ Sample a count value between [0, min(5, num_numbers)]. Sample indices in this range, and set them as 1.
+                Add gaussian noise to the whole tensor and normalize. 
+            """
+            # Pick a count answer
+            count_value = random.randint(0, min(7, num_numbers))
+            count_answers[i] = count_value
+            # Pick the indices that will have mass
+            if count_value > 0:
+                indices = random.sample(range(num_numbers), count_value)
+                # Add 1.0 to all sampled indices
+                number_distributions[i, indices] += 1.0
+
+        number_distributions = number_distributions * mask
+        # Shape: (batch_size, maxnum_passage_numbers)
+        number_distributions = number_distributions / torch.sum(number_distributions, dim=1).unsqueeze(1)
+
+        # Distributions made; computing loss
+        scaled_attentions = [number_distributions * sf for sf in
+                             self._executor_parameters.passage_attention_scalingvals]
+        # Shape: (batch_size, maxnum_passage_numbers, num_scaling_factors)
+        stacked_scaled_attentions = torch.stack(scaled_attentions, dim=2)
+
+        # Shape: (batch_size, hidden_dim)
+        count_hidden_repr = self.passage_attention_to_count(stacked_scaled_attentions, mask)
+
+        # Shape: (batch_size, num_counts)
+        count_logits = self.passage_count_predictor(count_hidden_repr)
+
+        count_loss = F.cross_entropy(input=count_logits, target=count_answers)
+
+        return count_loss
+
+
+    """
     def _read(self, file_path: str):
         # pylint: disable=logging-fstring-interpolation
 
@@ -233,3 +288,4 @@ class DROPReader(DatasetReader):
             if start:
                 starting_positions.append(i)
         return starting_positions
+    """

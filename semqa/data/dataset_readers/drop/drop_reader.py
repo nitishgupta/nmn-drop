@@ -954,6 +954,12 @@ class DROPReader(DatasetReader):
                            constants.YARDS_longest_qtype: self.yardslongest_logicalforms,
                            constants.YARDS_shortest_qtype: self.yardsshortest_logicalforms,
                            constants.YARDS_findnum_qtype: self.findnum_logicalforms,
+                           constants.NUM_find_qtype: self.findnum_logicalforms,
+                           constants.NUM_filter_find_qtype: self.filterfindnum_logicalforms,
+                           constants.MIN_find_qtype: self.minnum_find_logicalforms,
+                           constants.MIN_filter_find_qtype: self.minnum_filterfind_logicalforms,
+                           constants.MAX_find_qtype: self.maxnum_find_logicalforms,
+                           constants.MAX_filter_find_qtype: self.maxnum_filterfind_logicalforms,
                            constants.DIFF_MAXMIN_qtype: self.numdiff_logicalforms,
                            constants.DIFF_MAXNUM_qtype: self.numdiff_logicalforms,
                            constants.DIFF_MAXMAX_qtype: self.numdiff_logicalforms,
@@ -963,8 +969,9 @@ class DROPReader(DatasetReader):
                            constants.DIFF_MINMAX_qtype: self.numdiff_logicalforms,
                            constants.DIFF_MINNUM_qtype: self.numdiff_logicalforms,
                            constants.DIFF_MINMIN_qtype: self.numdiff_logicalforms,
-                           constants.COUNT_find_qtype: self.count_logicalforms,
-                           constants.SYN_COUNT_qtype: self.count_logicalforms,
+                           constants.COUNT_find_qtype: self.count_find_logicalforms,
+                           constants.COUNT_filter_find_qtype: self.count_filterfind_logicalforms,
+                           constants.SYN_COUNT_qtype: self.count_find_logicalforms,
                            constants.SYN_NUMGROUND_qtype: self.findnum_logicalforms}
 
         gold_actionseq_idxs: List[List[int]] = []
@@ -999,14 +1006,61 @@ class DROPReader(DatasetReader):
         return gold_actionseq_idxs, gold_actionseq_mask, gold_start_types, program_supervised
 
     @staticmethod
+    def filter_passageattn_lf() -> str:
+        gold_lf = "(filter_PassageAttention find_PassageAttention)"
+        return gold_lf
+
+    @staticmethod
     def findnum_logicalforms(**kwargs) -> Tuple[List[str], List[str]]:
         gold_lf = "(find_PassageNumber find_PassageAttention)"
         return [gold_lf], ['passage_number']
 
     @staticmethod
-    def count_logicalforms(**kwargs)  -> Tuple[List[str], List[str]]:
-        gold_lf = "(numberDistribution2Count (find_PassageNumber find_PassageAttention))"
-        # gold_lf = "(passageAttn2Count find_PassageAttention)"
+    def filterfindnum_logicalforms(**kwargs) -> Tuple[List[str], List[str]]:
+        filter_passage_attention_lf = DROPReader.filter_passageattn_lf()
+        gold_lf = f"(find_PassageNumber {filter_passage_attention_lf})"
+        return [gold_lf], ['passage_number']
+
+    @staticmethod
+    def minnum_find_logicalforms(**kwargs) -> Tuple[List[str], List[str]]:
+        find_num_lfs, _ = DROPReader.findnum_logicalforms()
+        find_num_lf = find_num_lfs[0]
+        gold_lf = f"(min_PassageNumber {find_num_lf})"
+        return [gold_lf], ['passage_number']
+
+    @staticmethod
+    def minnum_filterfind_logicalforms(**kwargs) -> Tuple[List[str], List[str]]:
+        findfilter_num_lfs, _ = DROPReader.filterfindnum_logicalforms()
+        findfilter_num_lf = findfilter_num_lfs[0]
+        gold_lf = f"(min_PassageNumber {findfilter_num_lf})"
+        return [gold_lf], ['passage_number']
+
+    @staticmethod
+    def maxnum_find_logicalforms(**kwargs) -> Tuple[List[str], List[str]]:
+        find_num_lfs, _ = DROPReader.findnum_logicalforms()
+        find_num_lf = find_num_lfs[0]
+        gold_lf = f"(max_PassageNumber {find_num_lf})"
+        return [gold_lf], ['passage_number']
+
+    @staticmethod
+    def maxnum_filterfind_logicalforms(**kwargs) -> Tuple[List[str], List[str]]:
+        findfilter_num_lfs, _ = DROPReader.filterfindnum_logicalforms()
+        findfilter_num_lf = findfilter_num_lfs[0]
+        gold_lf = f"(max_PassageNumber {findfilter_num_lf})"
+        return [gold_lf], ['passage_number']
+
+    @staticmethod
+    def count_find_logicalforms(**kwargs)  -> Tuple[List[str], List[str]]:
+        find_num_lfs, _ = DROPReader.findnum_logicalforms()
+        find_num_lf = find_num_lfs[0]
+        gold_lf = f"(numberDistribution2Count {find_num_lf})"
+        return [gold_lf], ['count_number']
+
+    @staticmethod
+    def count_filterfind_logicalforms(**kwargs) -> Tuple[List[str], List[str]]:
+        findfilter_num_lfs, _ = DROPReader.filterfindnum_logicalforms()
+        findfilter_num_lf = findfilter_num_lfs[0]
+        gold_lf = f"(numberDistribution2Count {findfilter_num_lf})"
         return [gold_lf], ['count_number']
 
 

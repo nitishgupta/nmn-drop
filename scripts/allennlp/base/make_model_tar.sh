@@ -1,6 +1,6 @@
 #!/usr/bin/env
 
-SERIALIZATION_DIR=./resources/semqa/checkpoints/drop/date_num/dateq_numcq_hmvy_ydiff/drop_parser_model/TOKENS_qanet/ED_300/RG_1e-07/QPSIMKEY_enc/SIM_KEY_ma/SUPEPOCHS_5/S_100/
+SERIALIZATION_DIR=./resources/semqa/checkpoints/drop/date_num/date_numcq_hmvy_cnt_filter/drop_parser/TOKENS_qanet/ED_100/RG_1e-07/MODELTYPE_modeled/SUPEPOCHS_2/S_100/SMFilter
 WEIGHTS_TH=best.th
 
 MODEL_ARCHIVE=${SERIALIZATION_DIR}/model.tar.gz

@@ -297,7 +297,7 @@ def preprocess_HowManyYardsWasThe_ques(dataset, ques_attn: bool, number_supervis
 
                 question_answer[constants.qattn_supervised] = True
                 if filter_qattn is not None:
-                    question_answer[constants.ques_attention_supervision] = [find_qattn, filter_qattn]
+                    question_answer[constants.ques_attention_supervision] = [filter_qattn, find_qattn]
                 else:
                     question_answer[constants.ques_attention_supervision] = [find_qattn]
                 questions_w_attn += 1

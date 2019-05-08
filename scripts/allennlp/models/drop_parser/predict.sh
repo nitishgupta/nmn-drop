@@ -76,41 +76,45 @@ export BEAMSIZE=1
 export DEBUG=true
 
 # SAVED MODEL
-MODEL_DIR=./resources/semqa/checkpoints/test/dcyearpadiff_sup0_t2t/
+MODEL_DIR=./resources/semqa/checkpoints/test/hmywcount_mod_sgfilter_filterlater5
 MODEL_TAR=${MODEL_DIR}/model.tar.gz
 PREDICTION_DIR=${MODEL_DIR}/predictions
 mkdir ${PREDICTION_DIR}
 
 # EVALUATION DATASET
-SUBFOLDER=date
-EVAL_DATASET=year_diff
-DATASET_DIR=./resources/data/drop_s/${SUBFOLDER}/${EVAL_DATASET}
-TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
-VALFILE=${DATASET_DIR}/drop_dataset_dev.json
+SUBFOLDER=num
+EVAL_DATASET=datecomp_full
 
-TESTFILE=${VALFILE}
+for EVAL_DATASET in hmyw_filter
+do
+    DATASET_DIR=./resources/data/drop_s/${SUBFOLDER}/${EVAL_DATASET}
+    TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
+    VALFILE=${DATASET_DIR}/drop_dataset_dev.json
 
-PREDICTION_FILE=${PREDICTION_DIR}/${EVAL_DATASET}_dev_pred.txt
-EVALUATION_FILE=${PREDICTION_DIR}/${EVAL_DATASET}_dev_eval.txt
-PREDICTOR=drop_parser_predictor
+    TESTFILE=${VALFILE}
 
-#######################################################################################################################
+    PREDICTION_FILE=${PREDICTION_DIR}/${EVAL_DATASET}_dev_pred.txt
+    EVALUATION_FILE=${PREDICTION_DIR}/${EVAL_DATASET}_dev_eval.txt
+    PREDICTOR=drop_parser_predictor
+
+    #######################################################################################################################
 
 
-allennlp predict --output-file ${PREDICTION_FILE} \
-                 --predictor ${PREDICTOR} \
-                 --cuda-device ${GPU} \
-                 --include-package ${INCLUDE_PACKAGE} \
-                 --silent \
-                 --batch-size 1 \
-                 --use-dataset-reader \
-                 --overrides "{"model": { "beam_size": ${BEAMSIZE}, "debug": ${DEBUG}}}" \
-                 ${MODEL_TAR} ${TESTFILE}
+    allennlp predict --output-file ${PREDICTION_FILE} \
+                     --predictor ${PREDICTOR} \
+                     --cuda-device ${GPU} \
+                     --include-package ${INCLUDE_PACKAGE} \
+                     --silent \
+                     --batch-size 1 \
+                     --use-dataset-reader \
+                     --overrides "{"model": { "beam_size": ${BEAMSIZE}, "debug": ${DEBUG}}}" \
+                     ${MODEL_TAR} ${TESTFILE}
 
-allennlp evaluate --output-file ${EVALUATION_FILE} \
-                  --cuda-device ${GPU} \
-                  --include-package ${INCLUDE_PACKAGE} \
-                  ${MODEL_TAR} ${TESTFILE}
+    allennlp evaluate --output-file ${EVALUATION_FILE} \
+                      --cuda-device ${GPU} \
+                      --include-package ${INCLUDE_PACKAGE} \
+                      ${MODEL_TAR} ${TESTFILE}
 
-echo -e "Predictions file saved at: ${PREDICTION_FILE}"
-echo -e "Evaluations file saved at: ${EVALUATION_FILE}"
+    echo -e "Predictions file saved at: ${PREDICTION_FILE}"
+    echo -e "Evaluations file saved at: ${EVALUATION_FILE}"
+done
