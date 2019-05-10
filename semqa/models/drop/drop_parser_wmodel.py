@@ -365,6 +365,10 @@ class DROPSemanticWModelParser(DROPParserBase):
         # Shape: (batch_size, passage_length, passage_length)
         passage_passage_token2date_similarity = (passage_passage_token2date_similarity *
                                                  passage_tokenidx2dateidx_mask.unsqueeze(1))
+        # Shape: (batch_size, passage_length, passage_length)
+        pasage_passage_token2date_aligment = allenutil.masked_softmax(passage_passage_token2date_similarity,
+                                                                      mask=passage_tokenidx2dateidx_mask.unsqueeze(1),
+                                                                      memory_efficient=True)
 
         # Shape: (batch_size, passage_length, passage_length)
         # passage_passage_token2num_similarity = self._executor_parameters.passage_to_num_attention(encoded_passage,
@@ -379,6 +383,10 @@ class DROPSemanticWModelParser(DROPParserBase):
         # Shape: (batch_size, passage_length, passage_length)
         passage_passage_token2num_similarity = (passage_passage_token2num_similarity *
                                                 passage_tokenidx2numidx_mask.unsqueeze(1))
+        # Shape: (batch_size, passage_length, passage_length)
+        passage_passage_token2num_alignment = allenutil.masked_softmax(passage_passage_token2num_similarity,
+                                                                       mask=passage_tokenidx2numidx_mask.unsqueeze(1),
+                                                                       memory_efficient=True)
 
         # json_dicts = []
         # for i in range(batch_size):
@@ -429,6 +437,8 @@ class DROPSemanticWModelParser(DROPParserBase):
         p2q_attention_aslist = [passage_question_attention[i] for i in range(batch_size)]
         p2pdate_similarity_aslist = [passage_passage_token2date_similarity[i] for i in range(batch_size)]
         p2pnum_similarity_aslist = [passage_passage_token2num_similarity[i] for i in range(batch_size)]
+        p2pdate_alignment_aslist = [pasage_passage_token2date_aligment[i] for i in range(batch_size)]
+        p2pnum_alignment_aslist = [passage_passage_token2num_alignment[i] for i in range(batch_size)]
         # passage_token2datetoken_sim_aslist = [passage_token2datetoken_similarity[i] for i in range(batch_size)]
 
 
@@ -453,8 +463,8 @@ class DROPSemanticWModelParser(DROPParserBase):
                                   passagenum_differences_mat=passagenumber_differences_mat[i],
                                   question_passage_attention=q2p_attention_aslist[i],
                                   passage_question_attention=p2q_attention_aslist[i],
-                                  passage_token2date_similarity=p2pdate_similarity_aslist[i],
-                                  passage_token2num_similarity=p2pnum_similarity_aslist[i],
+                                  passage_token2date_alignment=p2pdate_alignment_aslist[i],
+                                  passage_token2num_alignment=p2pnum_alignment_aslist[i],
                                   parameters=self._executor_parameters,
                                   start_types=None,  # batch_start_types[i],
                                   device_id=device_id,

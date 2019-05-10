@@ -230,8 +230,8 @@ def get_empty_language_object():
                                 passagenum_differences_mat=None,
                                 question_passage_attention=None,
                                 passage_question_attention=None,
-                                passage_token2date_similarity=None,
-                                passage_token2num_similarity=None,
+                                passage_token2date_alignment=None,
+                                passage_token2num_alignment=None,
                                 parameters=None,
                                 start_types=None)
     return droplanguage
@@ -270,8 +270,8 @@ class DropLanguage(DomainLanguage):
                  passagenum_differences_mat: np.array,
                  question_passage_attention: Tensor,
                  passage_question_attention: Tensor,
-                 passage_token2date_similarity: Tensor,
-                 passage_token2num_similarity: Tensor,
+                 passage_token2date_alignment: Tensor,
+                 passage_token2num_alignment: Tensor,
                  parameters: ExecutorParameters,
                  modeled_passage: Tensor = None,
                  start_types=None,
@@ -331,8 +331,8 @@ class DropLanguage(DomainLanguage):
         # Shape: (passage_length, question_length)
         self.passage_question_attention = passage_question_attention
         # Shape: (passage_length, passage_length)
-        self.passage_passage_token2date_similarity = passage_token2date_similarity
-        self.passage_passage_token2num_similarity = passage_token2num_similarity
+        self.passage_passage_token2date_alignment = passage_token2date_alignment
+        self.passage_passage_token2num_alignment = passage_token2num_alignment
         initialization_returns = self.initialize()
         self.date_lt_mat = initialization_returns["date_lt_mat"]
         self.date_gt_mat = initialization_returns["date_gt_mat"]
@@ -352,6 +352,7 @@ class DropLanguage(DomainLanguage):
 
         self.countvals = allenutil.move_to_device(torch.FloatTensor(range(0, 10)), cuda_device=self.device_id)
 
+        """
         if self._debug:
             num_date_tokens = self.passage_datetokens_mask_float.sum()
             plen = self.passage_mask.sum()
@@ -370,49 +371,45 @@ class DropLanguage(DomainLanguage):
                 print("Num fault")
                 print(self.passage_passage_token2num_similarity)
             print(f"Passage Token2Num sim, Avg L1 Norm: {siml1norm}. Avg Val: {sim_avgval}")
+        """
 
     def initialize(self):
         date_gt_mat, date_lt_mat = self.compute_date_comparison_matrices(self.passage_date_values, self.device_id)
         num_gt_mat, num_lt_mat = self.compute_item_comparison_matrices(self.passage_num_values, self.device_id)
 
-        # question_passage_attention = None # self.compute_question_passage_similarity()
-        # passage_passage_token2date_similarity = None # self.compute_passage_token2date_similarity()
-
         return {"date_gt_mat": date_gt_mat,
                 "date_lt_mat": date_lt_mat,
                 "num_gt_mat": num_gt_mat,
                 "num_lt_mat": num_lt_mat}
-                #"question_passage_attention": question_passage_attention,
-                #"p2p_t2date_sim_mat": passage_passage_token2date_similarity}
 
 
-    def compute_question_passage_similarity(self):
-        # Shape: (1, question_length, passage_length)
-        question_passage_similarity = self.parameters.dotprod_matrix_attn(self.rawemb_question.unsqueeze(0),
-                                                                          self.rawemb_passage.unsqueeze(0))
-        question_passage_similarity = self.parameters._dropout(question_passage_similarity)
+    # def compute_question_passage_similarity(self):
+    #     # Shape: (1, question_length, passage_length)
+    #     question_passage_similarity = self.parameters.dotprod_matrix_attn(self.rawemb_question.unsqueeze(0),
+    #                                                                       self.rawemb_passage.unsqueeze(0))
+    #     question_passage_similarity = self.parameters._dropout(question_passage_similarity)
+    #
+    #     # Shape: (question_length, passage_length)
+    #     question_passage_attention = allenutil.masked_softmax(question_passage_similarity,
+    #                                                           self.passage_mask.unsqueeze(0),
+    #                                                           memory_efficient=True).squeeze(0)
+    #
+    #     return question_passage_attention
 
-        # Shape: (question_length, passage_length)
-        question_passage_attention = allenutil.masked_softmax(question_passage_similarity,
-                                                              self.passage_mask.unsqueeze(0),
-                                                              memory_efficient=True).squeeze(0)
-
-        return question_passage_attention
-
-    def compute_passage_token2date_similarity(self):
-        # Shape: (passage_length, passage_length) - for each token x in the row, weight given by it to each token y in
-        # the column for y to be a date associated to x
-        passage_passage_token2date_similarity = self.parameters._dropout(self.parameters.passage_to_date_attention(
-            self.passage.unsqueeze(0),
-            self.passage.unsqueeze(0))).squeeze(0)
-
-        passage_passage_token2date_similarity = passage_passage_token2date_similarity * self.passage_mask.unsqueeze(0)
-        passage_passage_token2date_similarity = passage_passage_token2date_similarity * self.passage_mask.unsqueeze(1)
-
-        passage_passage_token2date_similarity = (passage_passage_token2date_similarity *
-                                                 self.passage_datetokens_mask_float.unsqueeze(0))
-
-        return passage_passage_token2date_similarity
+    # def compute_passage_token2date_similarity(self):
+    #     # Shape: (passage_length, passage_length) - for each token x in the row, weight given by it to each token y in
+    #     # the column for y to be a date associated to x
+    #     passage_passage_token2date_similarity = self.parameters._dropout(self.parameters.passage_to_date_attention(
+    #         self.passage.unsqueeze(0),
+    #         self.passage.unsqueeze(0))).squeeze(0)
+    #
+    #     passage_passage_token2date_similarity = passage_passage_token2date_similarity * self.passage_mask.unsqueeze(0)
+    #     passage_passage_token2date_similarity = passage_passage_token2date_similarity * self.passage_mask.unsqueeze(1)
+    #
+    #     passage_passage_token2date_similarity = (passage_passage_token2date_similarity *
+    #                                              self.passage_datetokens_mask_float.unsqueeze(0))
+    #
+    #     return passage_passage_token2date_similarity
 
 
     @staticmethod
@@ -561,9 +558,11 @@ class DropLanguage(DomainLanguage):
             Softmax over these scores is the date dist.
         '''
 
-        passage_date_alignment_matrix = allenutil.masked_softmax(self.passage_passage_token2date_similarity,
-                                                                 mask=self.passage_datetokens_mask_float.unsqueeze(0),
-                                                                 memory_efficient=True)
+        # passage_date_alignment_matrix = allenutil.masked_softmax(self.passage_passage_token2date_similarity,
+        #                                                          mask=self.passage_datetokens_mask_float.unsqueeze(0),
+        #                                                          memory_efficient=True)
+
+        passage_date_alignment_matrix = self.passage_passage_token2date_alignment
 
         attn_weighted_date_aligment_matrix = passage_date_alignment_matrix * passage_attention.unsqueeze(1)
         # Shape: (passage_length, )
@@ -618,9 +617,12 @@ class DropLanguage(DomainLanguage):
             See compute_date_distribution for details
         '''
         # Shape: (passage_length, passage_length) -- each row softmaxed over the number-tokens
-        passage_number_alignment_matrix = allenutil.masked_softmax(self.passage_passage_token2num_similarity,
-                                                                   mask=self.passage_numtokens_mask_float.unsqueeze(0),
-                                                                   memory_efficient=True)
+        # passage_number_alignment_matrix = allenutil.masked_softmax(self.passage_passage_token2num_similarity,
+        #                                                            mask=self.passage_numtokens_mask_float.unsqueeze(0),
+        #                                                            memory_efficient=True)
+
+        # Shape: (passage_length, passage_length) -- Each row is a masked-softmax over number-tokens
+        passage_number_alignment_matrix = self.passage_passage_token2num_alignment
 
         # (passage_length, passage_length)
         attn_weighted_number_aligment_matrix = passage_number_alignment_matrix * passage_attention.unsqueeze(1)

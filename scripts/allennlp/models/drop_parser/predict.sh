@@ -9,7 +9,7 @@ export BEAMSIZE=1
 export DEBUG=true
 
 # SAVED MODEL
-MODEL_DIR=./resources/semqa/checkpoints/drop/date_num/date_numcq_hmvy_cnt_filter/drop_parser/TOKENS_qanet/ED_100/RG_1e-07/MODELTYPE_encoded/CNTFIX_true/SUPEPOCHS_5/S_100/PattnCount
+MODEL_DIR=./resources/semqa/checkpoints/drop/date_num/date_numcq_hmvy_cnt_filter/drop_parser/TOKENS_qanet/ED_100/RG_1e-07/MODELTYPE_encoded/CNTFIX_false/SUPEPOCHS_5/S_100/PattnCount
 MODEL_TAR=${MODEL_DIR}/model.tar.gz
 PREDICTION_DIR=${MODEL_DIR}/predictions
 mkdir ${PREDICTION_DIR}
@@ -33,15 +33,15 @@ do
     #######################################################################################################################
 
 
-    allennlp predict --output-file ${PREDICTION_FILE} \
-                     --predictor ${PREDICTOR} \
-                     --cuda-device ${GPU} \
-                     --include-package ${INCLUDE_PACKAGE} \
-                     --silent \
-                     --batch-size 1 \
-                     --use-dataset-reader \
-                     --overrides "{"model": { "beam_size": ${BEAMSIZE}, "debug": ${DEBUG}}}" \
-                     ${MODEL_TAR} ${TESTFILE}
+#    allennlp predict --output-file ${PREDICTION_FILE} \
+#                     --predictor ${PREDICTOR} \
+#                     --cuda-device ${GPU} \
+#                     --include-package ${INCLUDE_PACKAGE} \
+#                     --silent \
+#                     --batch-size 1 \
+#                     --use-dataset-reader \
+#                     --overrides "{"model": { "beam_size": ${BEAMSIZE}, "debug": ${DEBUG}}}" \
+#                     ${MODEL_TAR} ${TESTFILE}
 
     allennlp evaluate --output-file ${EVALUATION_FILE} \
                       --cuda-device ${GPU} \
