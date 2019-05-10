@@ -305,6 +305,10 @@ class DROPReader(DatasetReader):
         passage_number_entidxs = p_num_entidxs      # same length as p_num_mens, containing num_grounding for the mens
         passage_number_values = p_num_normvals
         passage_number_indices = [tokenidx for (_, tokenidx, _) in p_num_mens]
+        # These are number-token idxs in an order so that their values are sorted
+        sorted_passagenumber_indices = self.get_numberindices_in_sorted_order(passage_number_values,
+                                                                              passage_number_indices,
+                                                                              passage_number_entidxs)
 
         # List of passage_len containing number_entidx for each token (-1 otherwise)
         passage_number_idx2entidx = [-1 for _ in range(len(passage_tokens))]
@@ -314,10 +318,12 @@ class DROPReader(DatasetReader):
         else:
             # No numbers found in the passage - making a fake number at the 0th token
             passage_number_idx2entidx[0] = 0
+            sorted_passagenumber_indices = [0]
         if not passage_number_values:
             passage_number_values.append(-1)
         fields["passageidx2numberidx"] = ArrayField(np.array(passage_number_idx2entidx), padding_value=-1)
         fields["passage_number_values"] = MetadataField(passage_number_values)
+        fields["passage_number_sortedtokenidxs"] = MetadataField(sorted_passagenumber_indices)
 
         ##  Passage Dates
         passage_date_entidxs = p_date_entidxs
@@ -917,7 +923,16 @@ class DROPReader(DatasetReader):
 
         return passage_number_differences, passage_number_diff_mat
 
+    @staticmethod
+    def get_numberindices_in_sorted_order(number_values, number_token_indices, passage_number_entidxs):
+        """ Returns the number_token_indices in an order so that their values are sorted in increasing order """
+        # These are the number-values the number-tokens
+        number_token_numbervalues = [number_values[x] for x in passage_number_entidxs]
 
+        number_tokenidx_values = list(zip(number_token_indices, number_token_numbervalues))
+        sorted_numberidx_value_tuples = sorted(number_tokenidx_values, key=lambda x: x[1])
+        sorted_number_indices, _ = zip(*sorted_numberidx_value_tuples)
+        return sorted_number_indices
 
     @staticmethod
     def get_candidate_additions(numbers_in_passage: List[int],
@@ -1023,30 +1038,36 @@ class DROPReader(DatasetReader):
 
     @staticmethod
     def minnum_find_logicalforms(**kwargs) -> Tuple[List[str], List[str]]:
-        find_num_lfs, _ = DROPReader.findnum_logicalforms()
-        find_num_lf = find_num_lfs[0]
-        gold_lf = f"(min_PassageNumber {find_num_lf})"
+        # find_num_lfs, _ = DROPReader.findnum_logicalforms()
+        # find_num_lf = find_num_lfs[0]
+        # gold_lf = f"(min_PassageNumber {find_num_lf})"
+        gold_lf = f"(min_num find_PassageAttention)"
         return [gold_lf], ['passage_number']
 
     @staticmethod
     def minnum_filterfind_logicalforms(**kwargs) -> Tuple[List[str], List[str]]:
-        findfilter_num_lfs, _ = DROPReader.filterfindnum_logicalforms()
-        findfilter_num_lf = findfilter_num_lfs[0]
-        gold_lf = f"(min_PassageNumber {findfilter_num_lf})"
+        # findfilter_num_lfs, _ = DROPReader.filterfindnum_logicalforms()
+        # findfilter_num_lf = findfilter_num_lfs[0]
+        # gold_lf = f"(min_PassageNumber {findfilter_num_lf})"
+        filter_passage_attention_lf = DROPReader.filter_passageattn_lf()
+        gold_lf = f"(min_num {filter_passage_attention_lf})"
         return [gold_lf], ['passage_number']
 
     @staticmethod
     def maxnum_find_logicalforms(**kwargs) -> Tuple[List[str], List[str]]:
-        find_num_lfs, _ = DROPReader.findnum_logicalforms()
-        find_num_lf = find_num_lfs[0]
-        gold_lf = f"(max_PassageNumber {find_num_lf})"
+        # find_num_lfs, _ = DROPReader.findnum_logicalforms()
+        # find_num_lf = find_num_lfs[0]
+        # gold_lf = f"(max_PassageNumber {find_num_lf})"
+        gold_lf = f"(max_num find_PassageAttention)"
         return [gold_lf], ['passage_number']
 
     @staticmethod
     def maxnum_filterfind_logicalforms(**kwargs) -> Tuple[List[str], List[str]]:
-        findfilter_num_lfs, _ = DROPReader.filterfindnum_logicalforms()
-        findfilter_num_lf = findfilter_num_lfs[0]
-        gold_lf = f"(max_PassageNumber {findfilter_num_lf})"
+        # findfilter_num_lfs, _ = DROPReader.filterfindnum_logicalforms()
+        # findfilter_num_lf = findfilter_num_lfs[0]
+        # gold_lf = f"(max_PassageNumber {findfilter_num_lf})"
+        filter_passage_attention_lf = DROPReader.filter_passageattn_lf()
+        gold_lf = f"(max_num {filter_passage_attention_lf})"
         return [gold_lf], ['passage_number']
 
     @staticmethod

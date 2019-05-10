@@ -213,6 +213,7 @@ class DROPSemanticWModelParser(DROPParserBase):
                 passage: Dict[str, torch.LongTensor],
                 passageidx2numberidx: torch.LongTensor,
                 passage_number_values: List[List[float]],
+                passage_number_sortedtokenidxs: List[List[int]],
                 passageidx2dateidx: torch.LongTensor,
                 passage_date_values: List[List[Date]],
                 actions: List[List[ProductionRule]],
@@ -456,6 +457,7 @@ class DROPSemanticWModelParser(DROPParserBase):
                                   passage_date_values=passage_date_values[i],
                                   passage_tokenidx2numidx=passageidx2numberidx[i],
                                   passage_num_values=passage_number_values[i],
+                                  passage_number_sortedtokenidxs=passage_number_sortedtokenidxs[i],
                                   year_differences=year_differences[i],
                                   year_differences_mat=year_differences_mat[i],
                                   count_num_values=count_values[i],
@@ -1144,7 +1146,6 @@ class DROPSemanticWModelParser(DROPParserBase):
             # These are the actions for which qattn_supervision should be provided.
             relevant_actions = qtype2relevant_actions_list[qtype]
             num_relevant_actions = len(relevant_actions)
-
             for program, side_args in zip(instance_programs, instance_prog_sideargs):
                 # Counter to keep a track of which relevant action we're looking for next
                 relevant_action_idx = 0
@@ -1157,12 +1158,10 @@ class DROPSemanticWModelParser(DROPParserBase):
                             # Sum of probs -- model can distribute gold mass however it likes
                             # l = torch.sum(question_attention * gold_qattn)
                             # loss += torch.log(l)
-
                             # Prod of probs -- forces model to evenly distribute mass on gold-attn
                             log_question_attention = torch.log(question_attention + 1e-40)
                             l = torch.sum(log_question_attention * gold_qattn)
                             loss += l
-
                             normalizer += 1
                         else:
                             print(f"\nGold attention sum == 0.0."
@@ -1324,7 +1323,11 @@ class DROPSemanticWModelParser(DROPParserBase):
         relevant_action1 = '<PassageAttention,PassageAttention:PassageAttention_answer> -> compare_num_greater_than'
         relevant_action2 = '<PassageAttention,PassageAttention:PassageAttention_answer> -> compare_num_lesser_than'
         relevant_action3 = '<PassageAttention:PassageNumber> -> find_PassageNumber'
-        relevant_actions = [relevant_action1, relevant_action2, relevant_action3]
+        relevant_action4 = '<PassageAttention:PassageNumber> -> max_num'
+        relevant_action5 = '<PassageAttention:PassageNumber> -> min_num'
+
+        relevant_actions = [relevant_action1, relevant_action2, relevant_action3,
+                            relevant_action4, relevant_action5]
 
         for ins_idx in range(len(batch_actionseqs)):
             instance_programs = batch_actionseqs[ins_idx]

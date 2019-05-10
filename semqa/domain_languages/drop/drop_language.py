@@ -159,8 +159,9 @@ class QuestionAttention():
 
 
 class PassageAttention():
-    def __init__(self, passage_attention, debug_value=""):
+    def __init__(self, passage_attention, loss=0.0, debug_value=""):
         self._value = passage_attention
+        self.loss = loss
         self.debug_value = debug_value
 
 
@@ -223,6 +224,7 @@ def get_empty_language_object():
                                 passage_date_values=None,
                                 passage_tokenidx2numidx=None,
                                 passage_num_values=None,
+                                passage_number_sortedtokenidxs=None,
                                 year_differences=None,
                                 year_differences_mat=None,
                                 count_num_values=None,
@@ -263,6 +265,7 @@ class DropLanguage(DomainLanguage):
                  passage_date_values: List[Date],
                  passage_tokenidx2numidx: torch.LongTensor,
                  passage_num_values: List[float],
+                 passage_number_sortedtokenidxs: List[int],
                  year_differences: List[int],
                  year_differences_mat: np.array,
                  count_num_values: List[int],
@@ -316,6 +319,8 @@ class DropLanguage(DomainLanguage):
         self.passage_numtokens_mask_float = passage_tokenidx2numidx_mask.float()
         # List[float] - number of unique numbers in the passage
         self.passage_num_values: List[float] = passage_num_values
+        # List[int] - number-token-idxs in an order so their values are sorted. Needed to max/min pattn
+        self.passage_number_sortedtokenidxs = passage_number_sortedtokenidxs
         self.num_passage_nums = len(self.passage_num_values)
 
         self.parameters = parameters
@@ -664,7 +669,6 @@ class DropLanguage(DomainLanguage):
         ''' normalized method with method 2 '''
         num_distribution = passage_attention.new_zeros(self.num_passage_nums)
         num_distribution.scatter_add_(0, masked_passage_tokenidx2numidx, passage_number_token_probs)
-        num_scores = num_distribution
 
         num_distribution = torch.clamp(num_distribution, min=1e-20, max=1 - 1e-20)
 
@@ -1265,6 +1269,23 @@ class DropLanguage(DomainLanguage):
                                   debug_value=debug_value)
     '''
 
+    def max_number_distribution(self, num_dist: torch.FloatTensor):
+        cum_dist = num_dist.cumsum(0)
+        cum_dist_n = cum_dist ** self.max_samples
+        maximum_distribution = cum_dist_n - torch.cat([cum_dist_n.new_zeros(1), cum_dist_n[:-1]])
+        # maximum_distribution = torch.clamp(maximum_distribution, min=1e-10, max=1 - 1e-10)
+        return maximum_distribution
+
+    def min_number_distribution(self, num_dist: torch.FloatTensor):
+        cumulative_distribution_function = num_dist.cumsum(0)
+        # P(x>=i) = 1 - (P(x<=i) - P(x=i))
+        inverse_cumdist = 1 - cumulative_distribution_function + num_dist
+        inverse_cumdist_n = inverse_cumdist ** self.max_samples
+        inverse_cumdist_n_shifted = torch.cat([inverse_cumdist_n[1:], inverse_cumdist_n.new_zeros(1)])
+        minimum_distribution = inverse_cumdist_n - inverse_cumdist_n_shifted
+        # minimum_distribution = torch.clamp(minimum_distribution, min=1e-10, max=1 - 1e-10)
+        return minimum_distribution
+
     @predicate
     def max_PassageNumber(self, number_distribution: PassageNumber) -> PassageNumber:
         num_dist = number_distribution._value
@@ -1350,39 +1371,132 @@ class DropLanguage(DomainLanguage):
                              debug_value=debug_value)
 
 
-    # @predicate
-    # def numberDistribution2Count(self, number_distribution: PassageNumber) -> CountNumber:
-    #     number_distribution_vector = number_distribution._value
-    #
-    #     scaled_attentions = [number_distribution_vector * sf for sf in self.parameters.passage_attention_scalingvals]
-    #     # Shape: (passage_length, num_scaling_factors)
-    #     stacked_scaled_attentions = torch.stack(scaled_attentions, dim=1)
-    #
-    #     # We need a mask vector for the RNN of shape (num_of_passage_values, )
-    #     mask_vector = stacked_scaled_attentions.new_ones(self.num_passage_nums)
-    #
-    #     # Shape: (hidden_dim, )
-    #     count_hidden_repr = self.parameters.passage_attention_to_count(stacked_scaled_attentions.unsqueeze(0),
-    #                                                                    mask_vector.unsqueeze(0)).squeeze(0)
-    #
-    #     # Shape: (num_counts, )
-    #     count_logits = self.parameters.passage_count_predictor(count_hidden_repr)
-    #
-    #     count_distribution = torch.softmax(count_logits, dim=0)
-    #
-    #     loss = 0
-    #     # loss += passage_attention.loss
-    #
-    #     debug_value = ""
-    #     if self._debug:
-    #         count = myutils.round_all(myutils.tocpuNPList(count_distribution), 3)
-    #         number_distribution = myutils.round_all(myutils.tocpuNPList(number_distribution_vector), 3)
-    #         debug_value += f"CountDist: {count}"
-    #         debug_value += f"\nNumDist: {number_distribution}"
-    #
-    #     return CountNumber(count_number_dist=count_distribution,
-    #                        loss=loss,
-    #                        debug_value=debug_value)
+    @predicate_with_side_args(['event_num_groundings'])
+    def max_num(self,
+                passage_attention: PassageAttention,
+                event_num_groundings=None) -> PassageNumber:
+
+        num_grounding_supervision = event_num_groundings[0]
+
+        pattn = passage_attention._value * self.passage_mask
+        # Computing for debugging and aux loss purposes
+        inputpattn_num_distribution, _, _ = self.compute_num_distribution(pattn)
+
+        new_pattn = self.pattn_for_minmaxNum(pattn, 'max')
+
+        # This is a number-distribution over passage_number_values - unique numbers in the passage
+        number_distribution, _, _ = self.compute_num_distribution(new_pattn)
+
+        grounding_mask = (torch.sum(num_grounding_supervision) > 0).float()
+        loss = 0.0
+        if grounding_mask > 0:
+            # Number distribution for input pattn
+            log_probs = torch.log(inputpattn_num_distribution + 1e-40) * num_grounding_supervision
+            log_likelihood = torch.sum(log_probs)  # Want all grounded numbers to be high, hence prod of probs
+            grounding_loss = -1 * grounding_mask * log_likelihood
+            loss += grounding_loss
+
+        debug_value = ""
+        if self._debug:
+            input_attn_numdist = myutils.round_all(myutils.tocpuNPList(inputpattn_num_distribution, 3))
+            number_dist = myutils.round_all(myutils.tocpuNPList(number_distribution), 3)
+            num_grounding_sup = myutils.round_all(myutils.tocpuNPList(num_grounding_supervision), 3)
+            debug_value += f"InputPattnPassageNumber: {input_attn_numdist}"
+            debug_value += f"MaxPassageNumber: {number_dist}"
+            debug_value += f"\nGoldNum: {num_grounding_sup}"
+
+        return PassageNumber(passage_number_dist=number_distribution, loss=loss, debug_value=debug_value)
+
+
+    @predicate_with_side_args(['event_num_groundings'])
+    def min_num(self,
+                passage_attention: PassageAttention,
+                event_num_groundings=None) -> PassageNumber:
+        num_grounding_supervision = event_num_groundings[0]
+
+        pattn = passage_attention._value * self.passage_mask
+        # Computing for debugging and aux loss purposes
+        inputpattn_num_distribution, _, _ = self.compute_num_distribution(pattn)
+
+        new_pattn = self.pattn_for_minmaxNum(pattn, 'min')
+
+        # This is a number-distribution over passage_number_values - unique numbers in the passage
+        number_distribution, _, _ = self.compute_num_distribution(new_pattn)
+
+        grounding_mask = (torch.sum(num_grounding_supervision) > 0).float()
+        loss = 0.0
+        if grounding_mask > 0:
+            # Number distribution for input pattn
+            log_probs = torch.log(inputpattn_num_distribution + 1e-40) * num_grounding_supervision
+            log_likelihood = torch.sum(log_probs)  # Want all grounded numbers to be high, hence prod of probs
+            grounding_loss = -1 * grounding_mask * log_likelihood
+            loss += grounding_loss
+
+        debug_value = ""
+        if self._debug:
+            input_attn_numdist = myutils.round_all(myutils.tocpuNPList(inputpattn_num_distribution, 3))
+            number_dist = myutils.round_all(myutils.tocpuNPList(number_distribution), 3)
+            num_grounding_sup = myutils.round_all(myutils.tocpuNPList(num_grounding_supervision), 3)
+            debug_value += f"InputPattnPassageNumber: {input_attn_numdist}"
+            debug_value += f"MinPassageNumber: {number_dist}"
+            debug_value += f"\nGoldNum: {num_grounding_sup}"
+
+        return PassageNumber(passage_number_dist=number_distribution, loss=loss, debug_value=debug_value)
+
+
+    def pattn_for_minmaxNum(self,
+                            pattn: torch.FloatTensor,
+                            max_min: str) -> Tuple[torch.FloatTensor, torch.FloatTensor]:
+        """ Re-distribute the passage-attention based on a max number-token distribution
+            The idea here is to find a `max-number-token` passage attention, i.e. given a distribution over
+            passage-tokens, and for each token a distribution over numbers, find the passage-attention that contains,
+            for each token, the probability that the number-associated with that token is the max.
+
+            The output passage-distribution can be used compute an expected-number-distribution, which is the
+            expected value under the distribution over max-events. For eg, "How many yards was the longest TD"
+            Given the passage-attention for "TD", return the computed attention for P("longest TD").
+
+            This is a little tricky to compute; the high level steps are:
+            1. Compute an expected token-number-distribution. (this is a masked passage-length attention)
+            2. Arrange the token-number-probs in an ascending order for the max
+            3. Compute the max-distribution and re-arrange the numbers in order
+            4. Re-map the token-number probs into a masked vector.
+            5. ....
+
+            If we know the number-grounding-supervision for the input passage-attention events, we can also compute
+            an auxiliary loss here.
+        """
+        # Shape: (passage_length, passage_length) -- each row is a number-token-distribution
+        pattn_times_numbertokenprobs = self.passage_passage_token2num_alignment * pattn.unsqueeze(1)
+
+        # Shape: (passage_length, num_of_number_tokens) -- These are now in sorted order
+        pattn_weighted_numbertoken_probs = pattn_times_numbertokenprobs[:, self.passage_number_sortedtokenidxs]
+
+        # Shape: (num_of_number_tokens, ) -- the probability of the number tokens in sorted order
+        only_expected_numbertoken_probs = pattn_weighted_numbertoken_probs.sum(0)
+        if max_min == 'max':
+            only_numbertoken_minmaxprobs_sorted = self.max_number_distribution(only_expected_numbertoken_probs)
+        elif max_min == 'min':
+            only_numbertoken_minmaxprobs_sorted = self.min_number_distribution(only_expected_numbertoken_probs)
+        else:
+            only_numbertoken_minmaxprobs_sorted = None
+            raise NotImplementedError
+
+        # For each (token i, number j), using pattn_weighted_numbertoken_probs[i, j] as the weight,
+        # Total weight for numbertoken as pattn_weighted_numbertoken_probs.sum(0), redistribute the minmax-number-prob
+        # to all tokens
+        # Shape: (1, num_of_number_tokens)
+        total_weight_to_numbertoken = pattn_weighted_numbertoken_probs.sum(0, keepdim=True)
+        # Shape: (passage_length, num_of_number_tokens) - each entry here is (pattn * numberprob * number-max-prob)
+        maxprob_times_pattn_numbertokenprob = (pattn_weighted_numbertoken_probs *
+                                               only_numbertoken_minmaxprobs_sorted.unsqueeze(0))
+        # Divide each entry above by \sum_tokens pattn * numberprob --
+        # This is the new-distributed weight of number-max-prob on the i-th token, j-th number.
+        # Now marginalize over numbers, to get the new-passage-attention
+        new_pattn = (maxprob_times_pattn_numbertokenprob / total_weight_to_numbertoken).sum(1)
+
+        return new_pattn
+
 
 
 if __name__=='__main__':
