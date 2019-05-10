@@ -1051,16 +1051,19 @@ class DROPReader(DatasetReader):
 
     @staticmethod
     def count_find_logicalforms(**kwargs)  -> Tuple[List[str], List[str]]:
-        find_num_lfs, _ = DROPReader.findnum_logicalforms()
-        find_num_lf = find_num_lfs[0]
-        gold_lf = f"(numberDistribution2Count {find_num_lf})"
+        # find_num_lfs, _ = DROPReader.findnum_logicalforms()
+        # find_num_lf = find_num_lfs[0]
+        # gold_lf = f"(numberDistribution2Count {find_num_lf})"
+        gold_lf = "(passageAttn2Count find_PassageAttention)"
         return [gold_lf], ['count_number']
 
     @staticmethod
     def count_filterfind_logicalforms(**kwargs) -> Tuple[List[str], List[str]]:
-        findfilter_num_lfs, _ = DROPReader.filterfindnum_logicalforms()
-        findfilter_num_lf = findfilter_num_lfs[0]
-        gold_lf = f"(numberDistribution2Count {findfilter_num_lf})"
+        # findfilter_num_lfs, _ = DROPReader.filterfindnum_logicalforms()
+        # findfilter_num_lf = findfilter_num_lfs[0]
+        # gold_lf = f"(numberDistribution2Count {findfilter_num_lf})"
+        filter_passageattn_lf = DROPReader.filter_passageattn_lf()
+        gold_lf = f"(passageAttn2Count {filter_passageattn_lf})"
         return [gold_lf], ['count_number']
 
 

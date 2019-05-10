@@ -231,7 +231,7 @@ local compareff_inputdim =
             "type": "gru",
             "input_size": 4,
             "hidden_size": 20,
-            "num_layers": 3,
+            "num_layers": 2,
             "bidirectional": true,
         },
 
@@ -254,10 +254,10 @@ local compareff_inputdim =
 
         "initializers":
         [
-            ["passage_attention_to_count|passage_count_predictor",
+            ["passage_attention_to_count|passage_count_hidden2logits",
                  {
                      "type": "pretrained",
-                     "weights_file_path": "./resources/semqa/checkpoints/savedmodels/num2count_vstd/best.th"
+                     "weights_file_path": "./resources/semqa/checkpoints/drop_pattn2count/T_gru/Isize_4/Hsize_20/Layers_2/S_100/t600_v600/best.th"
                  },
             ],
             [".*_text_field_embedder.*", "prevent"]

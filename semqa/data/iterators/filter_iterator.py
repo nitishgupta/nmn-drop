@@ -50,17 +50,10 @@ class DataFilterIterator(DataIterator):
     def _create_batches(self, instances: Iterable[Instance], shuffle: bool) -> Iterable[Batch]:
         # First break the dataset into memory-sized lists:
         for instance_list in self._memory_sized_lists(instances):
-            # print('\n')
-            # print(len(instance_list))
-            # print(self._epochs)
-            # print('\n')
-            # exit()
-
             instances_w_epoch_num = 0
             for instance in instances:
                 if 'epoch_num' in instance.fields:
                     instances_w_epoch_num += 1
-
 
             print(f"\nInstances: {len(instance_list)}")
 
@@ -82,13 +75,8 @@ class DataFilterIterator(DataIterator):
 
             strongly_supervised_first = False
             # CURRICULUM = None
-            # CURRICULUM = [constants.YARDS_longest_qtype, constants.YARDS_findnum_qtype, constants.YARDS_shortest_qtype]
             NO_CURRICULUM = [constants.COUNT_filter_find_qtype, constants.MAX_filter_find_qtype,
                              constants.MIN_filter_find_qtype, constants.NUM_filter_find_qtype]
-            # CURRICULUM = [constants.DATECOMP_QTYPE, constants.NUMCOMP_QTYPE, constants.YARDS_findnum_qtype,
-            #               constants.SYN_NUMGROUND_qtype, constants.SYN_COUNT_qtype]
-            # CURRICULUM = [constants.DATECOMP_QTYPE, constants.NUMCOMP_QTYPE, constants.YARDS_findnum_qtype,
-            #               constants.COUNT_qtype, constants.SYN_NUMGROUND_qtype, constants.SYN_COUNT_qtype]
 
             filtered_instance_list = []
             if self.filter_instances:

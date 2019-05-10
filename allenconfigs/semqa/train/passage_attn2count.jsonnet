@@ -1,15 +1,26 @@
-local utils = import 'utils.libsonnet';
-
+local utils = import "utils.libsonnet";
 
 {
   "dataset_reader": {
       "type": "passage_attn2count_reader",
-      "min_passage_length": 200,
-      "max_passage_length": 400,
-      "max_span_length": 10,
-      "num_training_samples": 2000,
-      "normalized": utils.boolparser(std.extVar("NORM")),
-      "withnoise": utils.boolparser(std.extVar("NOISE")),
+      "min_passage_length": 100,
+      "max_passage_length": 600,
+      "min_span_length": 5,
+      "max_span_length": 15,
+      "samples_per_bucket_count": 2000,
+      "normalized": true,
+      "withnoise": true,
+  },
+
+  "validation_dataset_reader": {
+      "type": "passage_attn2count_reader",
+      "min_passage_length": 100,
+      "max_passage_length": 600,
+      "min_span_length": 5,
+      "max_span_length": 15,
+      "samples_per_bucket_count": 500,
+      "normalized": true,
+      "withnoise": true,
   },
 
   "train_data_path": std.extVar("TRAINING_DATA_FILE"),
@@ -31,7 +42,7 @@ local utils = import 'utils.libsonnet';
   "iterator": {
     "type": "basic",
     "batch_size": std.extVar("BS"),
-    "max_instances_in_memory": std.extVar("BS")
+    "max_instances_in_memory": 1000000,
   },
 
   "trainer": {

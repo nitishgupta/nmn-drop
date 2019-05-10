@@ -3,8 +3,8 @@
 export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
-# DATASET_NAME=date_num/datepaq_numcq_hmvy_ydiff_countqa
-DATASET_NAME=num/hmyw_count_filter
+DATASET_NAME=date_num/date_numcq_hmvy_cnt_filter
+# DATASET_NAME=num/hmyw_count_filter
 
 DATASET_DIR=./resources/data/drop_s/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
@@ -34,7 +34,7 @@ export WORDEMB_FILE="https://s3-us-west-2.amazonaws.com/allennlp/datasets/glove/
 export BIDAF_MODEL_TAR='https://s3-us-west-2.amazonaws.com/allennlp/models/bidaf-model-2017.09.15-charpad.tar.gz'
 export BIDAF_WORDEMB_FILE="https://s3-us-west-2.amazonaws.com/allennlp/datasets/glove/glove.6B.100d.txt.gz"
 
-export MODELTYPE=modeled
+export MODELTYPE=encoded
 export COUNT_FIXED=true
 
 export DENLOSS=true
@@ -67,11 +67,11 @@ export DEBUG=false
 CHECKPOINT_ROOT=./resources/semqa/checkpoints
 SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/${DATASET_NAME}
 MODEL_DIR=drop_parser
-PD_1=TOKENS_${TOKENIDX}/ED_${WEMB_DIM}/RG_${RG}/MODELTYPE_${MODELTYPE}
+PD_1=TOKENS_${TOKENIDX}/ED_${WEMB_DIM}/RG_${RG}/MODELTYPE_${MODELTYPE}/CNTFIX_${COUNT_FIXED}
 PD_2=SUPEPOCHS_${SUPEPOCHS}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/${PD_2}/S_${SEED}/SigmFilter
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/${PD_2}/S_${SEED}/PattnCount
 
-SERIALIZATION_DIR=./resources/semqa/checkpoints/test/hmywcount_mod_sgfilter_filterlater5_cntfix
+# SERIALIZATION_DIR=./resources/semqa/checkpoints/test/hmywcount_mod_sgfilter_filterlater5_cntfix
 # SERIALIZATION_DIR=./resources/semqa/checkpoints/test/test
 
 #######################################################################################################################

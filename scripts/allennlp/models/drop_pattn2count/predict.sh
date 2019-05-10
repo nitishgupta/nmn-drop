@@ -2,11 +2,6 @@
 
 export TMPDIR=/srv/local/data/nitishg/tmp
 
-### DATASET PATHS -- should be same across models for same dataset
-DATASET_DIR=./resources/data/drop/date_subset
-TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
-VALFILE=${DATASET_DIR}/drop_dataset_dev.json
-
 # PACKAGE TO BE INCLUDED WHICH HOUSES ALL THE CODE
 INCLUDE_PACKAGE=semqa
 
@@ -14,48 +9,41 @@ INCLUDE_PACKAGE=semqa
 export GPU=0
 
 # All parameters here are used to fetch the correct serialization_dir
-export TOKENIDX="qanet"
-
-export GOLDACTIONS=true
-
 export BS=8
 export DROPOUT=0.2
 
-export DEBUG=false
+DATASET_DIR=./resources/data/drop_s/synthetic/pattn2count
+TRAINFILE=${DATASET_DIR}/train.json
+VALFILE=${DATASET_DIR}/dev.json
+
+TEST_DATA=${VALFILE}
 
 ####    SERIALIZATION DIR --- Check for checkpoint_root/task/dataset/model/parameters/
-CHECKPOINT_ROOT=./resources/semqa/checkpoints
-SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/date_num
-MODEL_DIR=drop_parser
-PARAMETERS_DIR1=BS_${BS}/Drop_${DROPOUT}/TOKENS_${TOKENIDX}/GOLDAC_${GOLDACTIONS}
-# PARAMETERS_DIR2=AUXGPLOSS_${AUXGPLOSS}/ATTCOV_${ATTCOVLOSS}/PTREX_${PTREX}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PARAMETERS_DIR1}_ep_rawsim_attperf   #/${PARAMETERS_DIR2}
-
-
-# PREDICTION DATASET
-PREDICT_OUTPUT_DIR=${SERIALIZATION_DIR}/predictions
-mkdir ${PREDICT_OUTPUT_DIR}
-
-#*****************    PREDICTION FILENAME   *****************
-PRED_FILENAME=dev_predictions.txt
-
-TESTFILE=${VALFILE}
-MODEL_TAR=${SERIALIZATION_DIR}/model.tar.gz
-PREDICTION_FILE=${PREDICT_OUTPUT_DIR}/${PRED_FILENAME}
-PREDICTOR=drop_parser_predictor
+MODEL_DIR=./resources/semqa/checkpoints/drop_pattn2count/T_gru/Isize_4/Hsize_20/Layers_2/S_100/t600_v600
+MODEL_TAR=${MODEL_DIR}/model.tar.gz
+PREDICTION_DIR=${MODEL_DIR}/predictions
+mkdir ${PREDICTION_DIR}
+PREDICTION_FILE=${PREDICTION_DIR}/preds.txt
+EVALUATION_FILE=${PREDICTION_DIR}/eval.txt
 
 #######################################################################################################################
 
+allennlp evaluate --output-file ${EVALUATION_FILE} \
+                  --cuda-device ${GPU} \
+                  --include-package ${INCLUDE_PACKAGE} \
+                  ${MODEL_TAR} ${TEST_DATA}
+
+
 
 allennlp predict --output-file ${PREDICTION_FILE} \
-                 --predictor ${PREDICTOR} \
+                 --predictor pattn2count_predictor \
                  --cuda-device ${GPU} \
                  --include-package ${INCLUDE_PACKAGE} \
                  --silent \
                  --batch-size 1 \
                  --use-dataset-reader \
-                 --overrides "{ "model": {"debug": ${DEBUG}} }" \
-                 ${MODEL_TAR} ${TESTFILE}
-
+                 --overrides "{"dataset_reader": { "samples_per_bucket_count": 5}}" \
+                 ${MODEL_TAR} ${TEST_DATA}
+#
 
 echo -e "Predictions file saved at: ${PREDICTION_FILE}"

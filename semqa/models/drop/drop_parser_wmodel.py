@@ -61,7 +61,8 @@ class DROPSemanticWModelParser(DROPParserBase):
                  modeling_layer: Seq2SeqEncoder,
                  passage_attention_to_span: Seq2SeqEncoder,
                  question_attention_to_span: Seq2SeqEncoder,
-                 passage_attention_to_count: Seq2VecEncoder,
+                 passage_attention_to_count: Seq2SeqEncoder,
+                 # passage_attention_to_count: Seq2VecEncoder,
                  beam_size: int,
                  # decoder_beam_search: ConstrainedBeamSearch,
                  max_decoding_steps: int,
@@ -152,6 +153,8 @@ class DROPSemanticWModelParser(DROPParserBase):
         self.passage_attention_to_count = passage_attention_to_count
         self.passage_count_predictor = torch.nn.Linear(self.passage_attention_to_count.get_output_dim(),
                                                        self.num_counts, bias=False)
+        self.passage_count_hidden2logits = torch.nn.Linear(self.passage_attention_to_count.get_output_dim(),
+                                                           1, bias=True)
 
         # self.passage_count_predictor.bias.data.zero_()
         # self.passage_count_predictor.bias.requires_grad = False
@@ -162,6 +165,7 @@ class DROPSemanticWModelParser(DROPParserBase):
                                                        question_attention_to_span=question_attention_to_span,
                                                        passage_attention_to_count=self.passage_attention_to_count,
                                                        passage_count_predictor=self.passage_count_predictor,
+                                                       passage_count_hidden2logits=self.passage_count_hidden2logits,
                                                        dropout=dropout)
 
         self.modelloss_metric = Average()
@@ -187,9 +191,11 @@ class DROPSemanticWModelParser(DROPParserBase):
                 parameter.requires_grad = False
 
         # # # Fix parameters for Counting
+        count_parameter_names = ['passage_attention_to_count', 'passage_count_hidden2logits',
+                                 'passage_count_predictor']
         if countfixed:
             for name, parameter in self.named_parameters():
-                if 'passage_attention_to_count' in name or 'passage_count_predictor' in name:
+                if any(span in name for span in count_parameter_names):
                     parameter.requires_grad = False
 
 
@@ -397,8 +403,9 @@ class DROPSemanticWModelParser(DROPParserBase):
                                                      passage_tokenidx2dateidx_mask,
                                                      inwindow_mask, outwindow_mask)
 
-            count_loss = self.number2count_auxloss(passage_number_values=passage_number_values,
-                                                   device_id=device_id)
+            # count_loss = self.number2count_auxloss(passage_number_values=passage_number_values,
+            #                                        device_id=device_id)
+            count_loss = 0.0
             aux_win_loss = num_aux_loss + date_aux_loss + count_loss
 
         else:
@@ -616,7 +623,6 @@ class DROPSemanticWModelParser(DROPParserBase):
         batch_denotations, batch_denotation_types = self._get_denotations(batch_actionseqs,
                                                                           languages,
                                                                           batch_actionseq_sideargs)
-
         output_dict = {}
         # Computing losses if gold answers are given
         if answer_program_start_types is not None:

@@ -23,8 +23,9 @@ class ExecutorParameters(torch.nn.Module, Registrable):
                  passage_encoding_dim: int,
                  passage_attention_to_span: Seq2SeqEncoder,
                  question_attention_to_span: Seq2SeqEncoder,
-                 passage_attention_to_count: Seq2VecEncoder,
+                 passage_attention_to_count: Seq2SeqEncoder,
                  passage_count_predictor=None,
+                 passage_count_hidden2logits=None,
                  dropout: float = 0.0):
         super().__init__()
 
@@ -42,6 +43,8 @@ class ExecutorParameters(torch.nn.Module, Registrable):
         # self.passage_count_predictor = torch.nn.Linear(self.passage_attention_to_count.get_output_dim(),
         #                                                self.num_counts)
         self.passage_count_predictor = passage_count_predictor
+        # Linear from self.passage_attention_to_count.output_dim --> 1
+        self.passage_count_hidden2logits = passage_count_hidden2logits
 
         self.dotprod_matrix_attn = DotProductMatrixAttention()
 

@@ -350,6 +350,8 @@ class DropLanguage(DomainLanguage):
         self.passagnum_differences_mat = allenutil.move_to_device(torch.FloatTensor(passagenum_differences_mat),
                                                                   cuda_device=self.device_id)
 
+        self.countvals = allenutil.move_to_device(torch.FloatTensor(range(0, 10)), cuda_device=self.device_id)
+
         if self._debug:
             num_date_tokens = self.passage_datetokens_mask_float.sum()
             plen = self.passage_mask.sum()
@@ -1138,24 +1140,39 @@ class DropLanguage(DomainLanguage):
         # Shape: (passage_length, num_scaling_factors)
         scaled_passage_attentions = torch.stack(scaled_attentions, dim=1)
 
-        # Shape: (hidden_dim, )
+        # Shape: (passage_length, hidden_dim)
         count_hidden_repr = self.parameters.passage_attention_to_count(scaled_passage_attentions.unsqueeze(0),
                                                                        self.passage_mask.unsqueeze(0)).squeeze(0)
 
-        # Shape: (num_counts, )
-        passage_span_logits = self.parameters.passage_count_predictor(count_hidden_repr)
+        # Shape: (passage_length, 1)
+        passage_token_logits = self.parameters.passage_count_hidden2logits(count_hidden_repr)
+        # Shape: (passage_length)
+        passage_token_logits = passage_token_logits.squeeze(1)
 
-        count_distribution = torch.softmax(passage_span_logits, dim=0)
+        passage_token_sigmoids = torch.sigmoid(passage_token_logits)
+        passage_token_sigmoids = passage_token_sigmoids * self.passage_mask
+
+        count_mean = torch.sum(passage_token_sigmoids)
+        variance = 0.5
+
+        # Shape: (num_count_values, )
+        l2_by_vsquared = torch.pow(self.countvals - count_mean, 2) / (2 * variance * variance)
+        exp_val = torch.exp(-1 * l2_by_vsquared) + 1e-30
+        count_distribution = exp_val / (torch.sum(exp_val))
+
+        # print(count_mean)
+        # print(count_distribution)
 
         loss = 0
         # loss += passage_attention.loss
 
         debug_value = ""
         if self._debug:
-            count = myutils.round_all(myutils.tocpuNPList(count_distribution), 3)
-            _, pattn_vis_most = dlutils.listTokensVis(passage_attn, self.metadata["passage_tokens"])
-            debug_value += f"CountDist: {count}"
-            debug_value += f"\nPattn: {pattn_vis_most}"
+            countdist = myutils.round_all(myutils.tocpuNPList(count_distribution), 3)
+            psigms, pattn_vis_most = dlutils.listTokensVis(passage_token_sigmoids, self.metadata["passage_tokens"])
+            debug_value += f"CountDist: {countdist}"
+            debug_value += f"CountMean: {count_mean}"
+            debug_value += f"\nPSigms: {psigms}"
 
         return CountNumber(count_number_dist=count_distribution,
                            loss=loss,
@@ -1331,39 +1348,39 @@ class DropLanguage(DomainLanguage):
                              debug_value=debug_value)
 
 
-    @predicate
-    def numberDistribution2Count(self, number_distribution: PassageNumber) -> CountNumber:
-        number_distribution_vector = number_distribution._value
-
-        scaled_attentions = [number_distribution_vector * sf for sf in self.parameters.passage_attention_scalingvals]
-        # Shape: (passage_length, num_scaling_factors)
-        stacked_scaled_attentions = torch.stack(scaled_attentions, dim=1)
-
-        # We need a mask vector for the RNN of shape (num_of_passage_values, )
-        mask_vector = stacked_scaled_attentions.new_ones(self.num_passage_nums)
-
-        # Shape: (hidden_dim, )
-        count_hidden_repr = self.parameters.passage_attention_to_count(stacked_scaled_attentions.unsqueeze(0),
-                                                                       mask_vector.unsqueeze(0)).squeeze(0)
-
-        # Shape: (num_counts, )
-        count_logits = self.parameters.passage_count_predictor(count_hidden_repr)
-
-        count_distribution = torch.softmax(count_logits, dim=0)
-
-        loss = 0
-        # loss += passage_attention.loss
-
-        debug_value = ""
-        if self._debug:
-            count = myutils.round_all(myutils.tocpuNPList(count_distribution), 3)
-            number_distribution = myutils.round_all(myutils.tocpuNPList(number_distribution_vector), 3)
-            debug_value += f"CountDist: {count}"
-            debug_value += f"\nNumDist: {number_distribution}"
-
-        return CountNumber(count_number_dist=count_distribution,
-                           loss=loss,
-                           debug_value=debug_value)
+    # @predicate
+    # def numberDistribution2Count(self, number_distribution: PassageNumber) -> CountNumber:
+    #     number_distribution_vector = number_distribution._value
+    #
+    #     scaled_attentions = [number_distribution_vector * sf for sf in self.parameters.passage_attention_scalingvals]
+    #     # Shape: (passage_length, num_scaling_factors)
+    #     stacked_scaled_attentions = torch.stack(scaled_attentions, dim=1)
+    #
+    #     # We need a mask vector for the RNN of shape (num_of_passage_values, )
+    #     mask_vector = stacked_scaled_attentions.new_ones(self.num_passage_nums)
+    #
+    #     # Shape: (hidden_dim, )
+    #     count_hidden_repr = self.parameters.passage_attention_to_count(stacked_scaled_attentions.unsqueeze(0),
+    #                                                                    mask_vector.unsqueeze(0)).squeeze(0)
+    #
+    #     # Shape: (num_counts, )
+    #     count_logits = self.parameters.passage_count_predictor(count_hidden_repr)
+    #
+    #     count_distribution = torch.softmax(count_logits, dim=0)
+    #
+    #     loss = 0
+    #     # loss += passage_attention.loss
+    #
+    #     debug_value = ""
+    #     if self._debug:
+    #         count = myutils.round_all(myutils.tocpuNPList(count_distribution), 3)
+    #         number_distribution = myutils.round_all(myutils.tocpuNPList(number_distribution_vector), 3)
+    #         debug_value += f"CountDist: {count}"
+    #         debug_value += f"\nNumDist: {number_distribution}"
+    #
+    #     return CountNumber(count_number_dist=count_distribution,
+    #                        loss=loss,
+    #                        debug_value=debug_value)
 
 
 if __name__=='__main__':
