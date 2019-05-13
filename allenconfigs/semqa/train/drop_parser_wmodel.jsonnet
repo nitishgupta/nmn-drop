@@ -245,7 +245,7 @@ local compareff_inputdim =
               ".*",
               {
                   "type": "l2",
-                  "alpha": 1e-07,
+                  "alpha": 1e-7,
               }
           ]
         ],
