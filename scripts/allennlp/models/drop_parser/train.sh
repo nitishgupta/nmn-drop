@@ -3,7 +3,7 @@
 export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
-DATASET_NAME=date_num/date_numcq_hmvy_cnt_filter_500
+DATASET_NAME=date_num/date_numcq_hmvy_cnt_filter_500_no_exec
 # DATASET_NAME=num/hmyw_filter
 
 DATASET_DIR=./resources/data/drop_s/${DATASET_NAME}

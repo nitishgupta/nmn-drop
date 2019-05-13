@@ -790,12 +790,12 @@ class DROPSemanticWModelParser(DROPParserBase):
                         '''
                         if torch.isnan(log_likelihood):
                             logger.info(f"Nan-loss encountered for denotation_log_likelihood")
-                            log_likelihood = 0.0
+                            log_likelihood = allenutil.move_to_device(torch.tensor(0.0), device_id)
                         if torch.isnan(prog_logprob):
                             logger.info(f"Nan-loss encountered for ProgType: {progtype}")
-                            prog_logprob = 0.0
-                        new_instance_progs_logprob_list.append(prog_logprob)
+                            prog_logprob = allenutil.move_to_device(torch.tensor(0.0), device_id)
 
+                        new_instance_progs_logprob_list.append(prog_logprob)
                         instance_log_likelihood_list.append(log_likelihood)
 
                     # Each is the shape of (number_of_progs,)
@@ -1042,8 +1042,8 @@ class DROPSemanticWModelParser(DROPParserBase):
                                          'year_difference': '@start@ -> YearDifference',
                                          'passage_number': '@start@ -> PassageNumber',
                                          'question_span': '@start@ -> QuestionSpanAnswer',
-                                         'count_number': '@start@ -> CountNumber',
-                                         'passagenum_diff': '@start@ -> PassageNumberDifference'}
+                                         'count_number': '@start@ -> CountNumber'}
+                                         #'passagenum_diff': '@start@ -> PassageNumberDifference'}
 
         valid_start_action_ids: List[Set[int]] = []
         for i in range(len(answer_types)):
