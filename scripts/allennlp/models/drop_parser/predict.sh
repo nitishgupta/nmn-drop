@@ -9,16 +9,16 @@ export BEAMSIZE=1
 export DEBUG=true
 
 # SAVED MODEL
-MODEL_DIR=./resources/semqa/checkpoints/drop/date_num/date_numcq_hmvy_cnt_filter/drop_parser/TOKENS_qanet/ED_100/RG_1e-07/MODELTYPE_encoded/CNTFIX_false/SUPEPOCHS_5/S_100/PattnCount
+MODEL_DIR=./resources/semqa/checkpoints/drop/date_num/date_numcq_hmvy_cnt_filter_500_no_exec/drop_parser/TOKENS_qanet/ED_100/RG_1e-07/MODELTYPE_encoded/CNTFIX_false/SUPEPOCHS_5/S_100/NewMinMax_aux_true
 MODEL_TAR=${MODEL_DIR}/model.tar.gz
 PREDICTION_DIR=${MODEL_DIR}/predictions
 mkdir ${PREDICTION_DIR}
 
 # EVALUATION DATASET
 SUBFOLDER=num
-EVAL_DATASET=
 
 for EVAL_DATASET in numcomp_full count_filterqattn hmyw_filter
+# for EVAL_DATASET in datecomp_full year_diff
 do
     DATASET_DIR=./resources/data/drop_s/${SUBFOLDER}/${EVAL_DATASET}
     TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
@@ -33,15 +33,15 @@ do
     #######################################################################################################################
 
 
-#    allennlp predict --output-file ${PREDICTION_FILE} \
-#                     --predictor ${PREDICTOR} \
-#                     --cuda-device ${GPU} \
-#                     --include-package ${INCLUDE_PACKAGE} \
-#                     --silent \
-#                     --batch-size 1 \
-#                     --use-dataset-reader \
-#                     --overrides "{"model": { "beam_size": ${BEAMSIZE}, "debug": ${DEBUG}}}" \
-#                     ${MODEL_TAR} ${TESTFILE}
+    allennlp predict --output-file ${PREDICTION_FILE} \
+                     --predictor ${PREDICTOR} \
+                     --cuda-device ${GPU} \
+                     --include-package ${INCLUDE_PACKAGE} \
+                     --silent \
+                     --batch-size 1 \
+                     --use-dataset-reader \
+                     --overrides "{"model": { "beam_size": ${BEAMSIZE}, "debug": ${DEBUG}}}" \
+                     ${MODEL_TAR} ${TESTFILE}
 
     allennlp evaluate --output-file ${EVALUATION_FILE} \
                       --cuda-device ${GPU} \

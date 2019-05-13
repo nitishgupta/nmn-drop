@@ -83,8 +83,9 @@ class DataFilterIterator(DataIterator):
                 # In Curriculum 1
                 if epoch_num < self.filter_for_epochs:
                     for instance in instance_list:
-                        if not instance["qtypes"].metadata in NO_CURRICULUM:
-                            filtered_instance_list.append(instance)
+                        if any(instance[key].metadata is True for key in self.supervision_keys):
+                            if not instance["qtypes"].metadata in NO_CURRICULUM:
+                                filtered_instance_list.append(instance)
                 else:
                     filtered_instance_list = instance_list
             else:

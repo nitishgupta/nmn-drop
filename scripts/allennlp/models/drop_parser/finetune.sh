@@ -4,7 +4,7 @@ export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
 # DATASET_NAME=num/longest_shortest_yards
-DATASET_NAME=num/yardscount_wqattn
+DATASET_NAME=date_num/date_numcq_hmvy_cnt_filter
 
 DATASET_DIR=./resources/data/drop_s/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
@@ -32,12 +32,10 @@ export WORDEMB_FILE="https://s3-us-west-2.amazonaws.com/allennlp/datasets/glove/
 export BIDAF_MODEL_TAR='https://s3-us-west-2.amazonaws.com/allennlp/models/bidaf-model-2017.09.15-charpad.tar.gz'
 export BIDAF_WORDEMB_FILE="https://s3-us-west-2.amazonaws.com/allennlp/datasets/glove/glove.6B.100d.txt.gz"
 
-# Which kind of similarity to use in Ques-Passage attention - raw / encoded / raw-enc
-export QP_SIM_KEY="enc"
-export SIM_KEY="ma"
+export MODELTYPE=encoded
+export COUNT_FIXED=false
+export AUXLOSS=false
 
-export GOLDACTIONS=false
-export GOLDPROGS=false
 export DENLOSS=true
 export EXCLOSS=true
 export QATTLOSS=true
@@ -50,7 +48,7 @@ export SUPEPOCHS=0
 # export PTREX=false
 # export PTRWTS="./resources/semqa/checkpoints/hpqa/b_wsame/hpqa_parser/BS_4/OPT_adam/LR_0.001/Drop_0.2/TOKENS_glove/FUNC_snli/SIDEARG_true/GOLDAC_true/AUXGPLOSS_false/QENTLOSS_false/ATTCOV_false/PTREX_false/best.th"
 
-export BS=4
+export BS=8
 export DROPOUT=0.2
 
 export LR=0.001
@@ -60,7 +58,7 @@ export SEED=100
 
 export BEAMSIZE=4
 export MAX_DECODE_STEP=14
-export EPOCHS=25
+export EPOCHS=20
 
 export DEBUG=false
 
@@ -68,11 +66,9 @@ export DEBUG=false
 CHECKPOINT_ROOT=./resources/semqa/checkpoints
 SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/${DATASET_NAME}
 MODEL_DIR=drop_parser
-PD_1=BS_${BS}/LR_${LR}/Drop_${DROPOUT}/TOKENS_${TOKENIDX}/ED_${WEMB_DIM}/RG_${RG}/GACT_${GOLDACTIONS}/GPROGS_${GOLDPROGS}
-PD_2=QPSIMKEY_${QP_SIM_KEY}/QAL_${DENLOSS}/EXL_${EXCLOSS}/QATL_${QATTLOSS}/MML_${MMLLOSS}/SUPFIRST_${SUPFIRST}/SUPEPOCHS_${SUPEPOCHS}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/${PD_2}/S_${SEED}/nc5e
-
-SERIALIZATION_DIR=./resources/semqa/checkpoints/savedmodels/dateq_numcq_hmvy_ydiff/ModeledWAuxSup0
+PD_1=TOKENS_${TOKENIDX}/ED_${WEMB_DIM}/RG_${RG}/MODELTYPE_${MODELTYPE}/CNTFIX_${COUNT_FIXED}
+PD_2=SUPEPOCHS_${SUPEPOCHS}
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/${PD_2}/S_${SEED}/NewMinMax_aux_${AUXLOSS}
 
 #######################################################################################################################
 
@@ -80,7 +76,7 @@ SERIALIZATION_DIR=./resources/semqa/checkpoints/savedmodels/dateq_numcq_hmvy_ydi
 #                                    ${INCLUDE_PACKAGE} \
 #                                    ${SERIALIZATION_DIR}
 
-RESUME_SER_DIR=${SERIALIZATION_DIR}/CountQatt_finetune
-MODEL_TAR_GZ=${SERIALIZATION_DIR}/model.tar.gz
+RESUME_SER_DIR=./resources/semqa/checkpoints/drop/date_num/date_numcq_hmvy_cnt_filter/drop_parser/TOKENS_qanet/ED_100/RG_1e-07/MODELTYPE_encoded/CNTFIX_false/SUPEPOCHS_5/S_100/NewMinMax_aux_false/Resume
+MODEL_TAR_GZ=./resources/semqa/checkpoints/drop/date_num/date_numcq_hmvy_cnt_filter/drop_parser/TOKENS_qanet/ED_100/RG_1e-07/MODELTYPE_encoded/CNTFIX_false/SUPEPOCHS_5/S_100/NewMinMax_aux_false/model.tar.gz
 
 allennlp fine-tune --extend-vocab -c ${CONFIGFILE} --include-package ${INCLUDE_PACKAGE} -s ${RESUME_SER_DIR} -m ${MODEL_TAR_GZ}

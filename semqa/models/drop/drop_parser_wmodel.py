@@ -682,6 +682,10 @@ class DROPSemanticWModelParser(DROPParserBase):
                     self.mmlloss_metric(mml_loss.item())
                 total_aux_loss += mml_loss
 
+            if torch.isnan(total_aux_loss):
+                logger.info(f"TotalAuxLoss is nan.")
+                total_aux_loss = 0.0
+
             denotation_loss = allenutil.move_to_device(torch.tensor(0.0), device_id)
             batch_denotation_loss = allenutil.move_to_device(torch.tensor(0.0), device_id)
             if self.denotation_loss:
@@ -776,6 +780,9 @@ class DROPSemanticWModelParser(DROPParserBase):
                                 print(denotation.end_logits)
                                 print(denotation._value)
                         '''
+                        if torch.isnan(log_likelihood):
+                            logger.info(f"Nan-loss encountered for ProgType: {progtype}")
+                            log_likelihood = 0.0
 
                         instance_log_likelihood_list.append(log_likelihood)
 
@@ -787,6 +794,9 @@ class DROPSemanticWModelParser(DROPParserBase):
                     instance_marginal_log_likelihood = allenutil.logsumexp(allprogs_log_marginal_likelihoods)
                     # Added sum to remove empty-dim
                     instance_marginal_log_likelihood = torch.sum(instance_marginal_log_likelihood)
+                    if torch.isnan(instance_marginal_log_likelihood):
+                        logger.info(f"Nan-loss encountered for instance_marginal_log_likelihood")
+                        instance_marginal_log_likelihood = 0.0
                     denotation_loss += -1.0 * instance_marginal_log_likelihood
 
                 batch_denotation_loss = denotation_loss / batch_size

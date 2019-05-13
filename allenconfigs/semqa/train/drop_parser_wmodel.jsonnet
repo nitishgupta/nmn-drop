@@ -209,8 +209,6 @@ local compareff_inputdim =
             "bidirectional": true
         },
 
-        "auxwinloss": true,
-
         "passage_attention_to_span": {
             "type": "gru",
             "input_size": 4,
@@ -262,6 +260,8 @@ local compareff_inputdim =
             ],
             [".*_text_field_embedder.*", "prevent"]
         ],
+
+        "auxwinloss": utils.boolparser(std.extVar("AUXLOSS")),
 
         "countfixed": utils.boolparser(std.extVar("COUNT_FIXED")),
 

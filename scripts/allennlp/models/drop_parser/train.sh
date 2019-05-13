@@ -34,8 +34,9 @@ export WORDEMB_FILE="https://s3-us-west-2.amazonaws.com/allennlp/datasets/glove/
 export BIDAF_MODEL_TAR='https://s3-us-west-2.amazonaws.com/allennlp/models/bidaf-model-2017.09.15-charpad.tar.gz'
 export BIDAF_WORDEMB_FILE="https://s3-us-west-2.amazonaws.com/allennlp/datasets/glove/glove.6B.100d.txt.gz"
 
-export MODELTYPE=modeled
+export MODELTYPE=encoded
 export COUNT_FIXED=false
+export AUXLOSS=false
 
 export DENLOSS=true
 export EXCLOSS=true
@@ -54,7 +55,7 @@ export RG=1e-07
 
 export SEED=100
 
-export BEAMSIZE=4
+export BEAMSIZE=8
 export MAX_DECODE_STEP=14
 export EPOCHS=60
 
@@ -66,7 +67,7 @@ SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/${DATASET_NAME}
 MODEL_DIR=drop_parser
 PD_1=TOKENS_${TOKENIDX}/ED_${WEMB_DIM}/RG_${RG}/MODELTYPE_${MODELTYPE}/CNTFIX_${COUNT_FIXED}
 PD_2=SUPEPOCHS_${SUPEPOCHS}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/${PD_2}/S_${SEED}/NewMinMax
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/${PD_2}/S_${SEED}/NewMinMax_aux_${AUXLOSS}
 
 # SERIALIZATION_DIR=./resources/semqa/checkpoints/test/hmywcount_mod_sgfilter_filterlater5_cntfix
 # SERIALIZATION_DIR=./resources/semqa/checkpoints/test/test

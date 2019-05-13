@@ -471,6 +471,7 @@ class DropLanguage(DomainLanguage):
         question_passage_attention = self.question_passage_attention * question_attention.unsqueeze(1)
 
         passage_attention = question_passage_attention.sum(0)
+        passage_attention = torch.clamp(passage_attention, min=1e-10, max=1 - 1e-10)
 
         debug_value = ""
         if self._debug:
@@ -533,6 +534,7 @@ class DropLanguage(DomainLanguage):
         original_filter_attn = filter_attn * passage_attn
 
         filtered_passage_attention = original_filter_attn / torch.sum(original_filter_attn)
+        filtered_passage_attention = torch.clamp(filtered_passage_attention, min=1e-10, max=1 - 1e-10)
 
         debug_value = ""
         if self._debug:
@@ -608,7 +610,7 @@ class DropLanguage(DomainLanguage):
         date_distribution = passage_attention.new_zeros(self.num_passage_dates)
         date_distribution.scatter_add_(0, masked_passage_tokenidx2dateidx, passage_date_token_probs)
 
-        date_distribution = torch.clamp(date_distribution, min=1e-20, max=1 - 1e-20)
+        date_distribution = torch.clamp(date_distribution, min=1e-10, max=1 - 1e-10)
 
         date_distribution_entropy = -1 * torch.sum(date_distribution * torch.log(date_distribution + 1e-40))
 
@@ -670,7 +672,7 @@ class DropLanguage(DomainLanguage):
         num_distribution = passage_attention.new_zeros(self.num_passage_nums)
         num_distribution.scatter_add_(0, masked_passage_tokenidx2numidx, passage_number_token_probs)
 
-        num_distribution = torch.clamp(num_distribution, min=1e-20, max=1 - 1e-20)
+        num_distribution = torch.clamp(num_distribution, min=1e-10, max=1 - 1e-10)
 
         num_distribution_entropy = -1 * torch.sum(num_distribution * torch.log(num_distribution + 1e-40))
 
@@ -702,7 +704,7 @@ class DropLanguage(DomainLanguage):
         # print(f"{year_differences_dist} {year_differences_dist.sum()}")
         # print()
 
-        year_differences_dist = torch.clamp(year_differences_dist, min=1e-20, max=1 - 1e-20)
+        year_differences_dist = torch.clamp(year_differences_dist, min=1e-10, max=1 - 1e-10)
 
         return year_differences_dist
 
@@ -733,11 +735,9 @@ class DropLanguage(DomainLanguage):
         # print(f"{year_differences_dist} {year_differences_dist.sum()}")
         # print()
 
-        passagenumber_differences_dist = torch.clamp(passagenumber_differences_dist, min=1e-20, max=1 - 1e-20)
+        passagenumber_differences_dist = torch.clamp(passagenumber_differences_dist, min=1e-10, max=1 - 1e-10)
 
         return passagenumber_differences_dist
-
-
 
     def expected_date_comparison(self, date_distribution_1, date_distribution_2, comparison):
         """ Compute the boolean probability that date_1 > date_2 given distributions over passage_dates for each
@@ -759,7 +759,7 @@ class DropLanguage(DomainLanguage):
             raise NotImplementedError
 
         expected_bool = (comparison_mat * joint_dist).sum()
-
+        expected_bool = torch.clamp(expected_bool, min=1e-10, max=1 - 1e-10)
         return expected_bool
 
     def expected_num_comparison(self, distribution_1, distribution_2, comparison):
@@ -782,6 +782,7 @@ class DropLanguage(DomainLanguage):
             raise NotImplementedError
 
         expected_bool = (comparison_mat * joint_dist).sum()
+        expected_bool = torch.clamp(expected_bool, min=1e-10, max=1 - 1e-10)
         return expected_bool
 
 
@@ -1166,6 +1167,8 @@ class DropLanguage(DomainLanguage):
         exp_val = torch.exp(-1 * l2_by_vsquared) + 1e-30
         count_distribution = exp_val / (torch.sum(exp_val))
 
+        count_distribution = torch.clamp(count_distribution, min=1e-10, max=1 - 1e-10)
+
         # print(count_mean)
         # print(count_distribution)
 
@@ -1273,7 +1276,7 @@ class DropLanguage(DomainLanguage):
         cum_dist = num_dist.cumsum(0)
         cum_dist_n = cum_dist ** self.max_samples
         maximum_distribution = cum_dist_n - torch.cat([cum_dist_n.new_zeros(1), cum_dist_n[:-1]])
-        # maximum_distribution = torch.clamp(maximum_distribution, min=1e-10, max=1 - 1e-10)
+        maximum_distribution = torch.clamp(maximum_distribution, min=1e-10, max=1 - 1e-10)
         return maximum_distribution
 
     def min_number_distribution(self, num_dist: torch.FloatTensor):
@@ -1283,55 +1286,55 @@ class DropLanguage(DomainLanguage):
         inverse_cumdist_n = inverse_cumdist ** self.max_samples
         inverse_cumdist_n_shifted = torch.cat([inverse_cumdist_n[1:], inverse_cumdist_n.new_zeros(1)])
         minimum_distribution = inverse_cumdist_n - inverse_cumdist_n_shifted
-        # minimum_distribution = torch.clamp(minimum_distribution, min=1e-10, max=1 - 1e-10)
+        minimum_distribution = torch.clamp(minimum_distribution, min=1e-10, max=1 - 1e-10)
         return minimum_distribution
 
-    @predicate
-    def max_PassageNumber(self, number_distribution: PassageNumber) -> PassageNumber:
-        num_dist = number_distribution._value
+    # @predicate
+    # def max_PassageNumber(self, number_distribution: PassageNumber) -> PassageNumber:
+    #     num_dist = number_distribution._value
+    #
+    #     cum_dist = num_dist.cumsum(0)
+    #     cum_dist_n = cum_dist ** self.max_samples
+    #     maximum_distribution = cum_dist_n - torch.cat([cum_dist_n.new_zeros(1), cum_dist_n[:-1]])
+    #
+    #     loss = number_distribution.loss
+    #
+    #     maximum_distribution = torch.clamp(maximum_distribution, min=1e-10, max=1 - 1e-10)
+    #
+    #     debug_value = ""
+    #     if self._debug:
+    #         input_dist = myutils.round_all(myutils.tocpuNPList(num_dist), 3)
+    #         output_dist = myutils.round_all(myutils.tocpuNPList(maximum_distribution), 3)
+    #         debug_value += f"InputNumDist: {input_dist}"
+    #         debug_value += f"\nMaxDist: {output_dist}"
+    #
+    #     return PassageNumber(passage_number_dist=maximum_distribution, loss=loss, debug_value=debug_value)
 
-        cum_dist = num_dist.cumsum(0)
-        cum_dist_n = cum_dist ** self.max_samples
-        maximum_distribution = cum_dist_n - torch.cat([cum_dist_n.new_zeros(1), cum_dist_n[:-1]])
-
-        loss = number_distribution.loss
-
-        maximum_distribution = torch.clamp(maximum_distribution, min=1e-10, max=1 - 1e-10)
-
-        debug_value = ""
-        if self._debug:
-            input_dist = myutils.round_all(myutils.tocpuNPList(num_dist), 3)
-            output_dist = myutils.round_all(myutils.tocpuNPList(maximum_distribution), 3)
-            debug_value += f"InputNumDist: {input_dist}"
-            debug_value += f"\nMaxDist: {output_dist}"
-
-        return PassageNumber(passage_number_dist=maximum_distribution, loss=loss, debug_value=debug_value)
-
-    @predicate
-    def min_PassageNumber(self, number_distribution: PassageNumber) -> PassageNumber:
-        num_dist = number_distribution._value
-
-        cumulative_distribution_function = num_dist.cumsum(0)
-        # P(x>=i) = 1 - (P(x<=i) - P(x=i))
-        inverse_cumdist = 1 - cumulative_distribution_function + num_dist
-
-        inverse_cumdist_n = inverse_cumdist ** self.max_samples
-
-        inverse_cumdist_n_shifted = torch.cat([inverse_cumdist_n[1:], inverse_cumdist_n.new_zeros(1)])
-        minimum_distribution = inverse_cumdist_n - inverse_cumdist_n_shifted
-
-        loss = number_distribution.loss
-
-        minimum_distribution = torch.clamp(minimum_distribution, min=1e-10, max=1 - 1e-10)
-
-        debug_value = ""
-        if self._debug:
-            input_dist = myutils.round_all(myutils.tocpuNPList(num_dist), 3)
-            output_dist = myutils.round_all(myutils.tocpuNPList(minimum_distribution), 3)
-            debug_value += f"InputNumDist: {input_dist}"
-            debug_value += f"\nMinDist: {output_dist}"
-
-        return PassageNumber(passage_number_dist=minimum_distribution, loss=loss, debug_value=debug_value)
+    # @predicate
+    # def min_PassageNumber(self, number_distribution: PassageNumber) -> PassageNumber:
+    #     num_dist = number_distribution._value
+    #
+    #     cumulative_distribution_function = num_dist.cumsum(0)
+    #     # P(x>=i) = 1 - (P(x<=i) - P(x=i))
+    #     inverse_cumdist = 1 - cumulative_distribution_function + num_dist
+    #
+    #     inverse_cumdist_n = inverse_cumdist ** self.max_samples
+    #
+    #     inverse_cumdist_n_shifted = torch.cat([inverse_cumdist_n[1:], inverse_cumdist_n.new_zeros(1)])
+    #     minimum_distribution = inverse_cumdist_n - inverse_cumdist_n_shifted
+    #
+    #     loss = number_distribution.loss
+    #
+    #     minimum_distribution = torch.clamp(minimum_distribution, min=1e-10, max=1 - 1e-10)
+    #
+    #     debug_value = ""
+    #     if self._debug:
+    #         input_dist = myutils.round_all(myutils.tocpuNPList(num_dist), 3)
+    #         output_dist = myutils.round_all(myutils.tocpuNPList(minimum_distribution), 3)
+    #         debug_value += f"InputNumDist: {input_dist}"
+    #         debug_value += f"\nMinDist: {output_dist}"
+    #
+    #     return PassageNumber(passage_number_dist=minimum_distribution, loss=loss, debug_value=debug_value)
 
 
     @predicate_with_side_args(['event_num_groundings'])
@@ -1398,7 +1401,7 @@ class DropLanguage(DomainLanguage):
 
         debug_value = ""
         if self._debug:
-            input_attn_numdist = myutils.round_all(myutils.tocpuNPList(inputpattn_num_distribution, 3))
+            input_attn_numdist = myutils.round_all(myutils.tocpuNPList(inputpattn_num_distribution), 3)
             number_dist = myutils.round_all(myutils.tocpuNPList(number_distribution), 3)
             num_grounding_sup = myutils.round_all(myutils.tocpuNPList(num_grounding_supervision), 3)
             debug_value += f"InputPattnPassageNumber: {input_attn_numdist}"
@@ -1434,7 +1437,7 @@ class DropLanguage(DomainLanguage):
 
         debug_value = ""
         if self._debug:
-            input_attn_numdist = myutils.round_all(myutils.tocpuNPList(inputpattn_num_distribution, 3))
+            input_attn_numdist = myutils.round_all(myutils.tocpuNPList(inputpattn_num_distribution), 3)
             number_dist = myutils.round_all(myutils.tocpuNPList(number_distribution), 3)
             num_grounding_sup = myutils.round_all(myutils.tocpuNPList(num_grounding_supervision), 3)
             debug_value += f"InputPattnPassageNumber: {input_attn_numdist}"
@@ -1494,6 +1497,8 @@ class DropLanguage(DomainLanguage):
         # This is the new-distributed weight of number-max-prob on the i-th token, j-th number.
         # Now marginalize over numbers, to get the new-passage-attention
         new_pattn = (maxprob_times_pattn_numbertokenprob / total_weight_to_numbertoken).sum(1)
+
+        new_pattn = torch.clamp(new_pattn, min=1e-10, max=1 - 1e-10)
 
         return new_pattn
 

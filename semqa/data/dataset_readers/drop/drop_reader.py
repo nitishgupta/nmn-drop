@@ -1064,7 +1064,7 @@ class DROPReader(DatasetReader):
     @staticmethod
     def maxnum_filterfind_logicalforms(**kwargs) -> Tuple[List[str], List[str]]:
         # findfilter_num_lfs, _ = DROPReader.filterfindnum_logicalforms()
-        # findfilter_num_lf = findfilter_num_lfs[0]
+        # findfilter_num_lf = findfmax_PassageNumberilter_num_lfs[0]
         # gold_lf = f"(max_PassageNumber {findfilter_num_lf})"
         filter_passage_attention_lf = DROPReader.filter_passageattn_lf()
         gold_lf = f"(max_num {filter_passage_attention_lf})"
