@@ -4,7 +4,7 @@ export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
 # DATASET_NAME=num/longest_shortest_yards
-DATASET_NAME=date_num/date_numcq_hmvy_cnt_filter
+DATASET_NAME=date_num/date_numcq_hmvy_cnt_filter_no_exec
 
 DATASET_DIR=./resources/data/drop_s/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
@@ -76,7 +76,7 @@ SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/${PD_2}/S_${SEE
 #                                    ${INCLUDE_PACKAGE} \
 #                                    ${SERIALIZATION_DIR}
 
-RESUME_SER_DIR=./resources/semqa/checkpoints/drop/date_num/date_numcq_hmvy_cnt_filter/drop_parser/TOKENS_qanet/ED_100/RG_1e-07/MODELTYPE_encoded/CNTFIX_false/SUPEPOCHS_5/S_100/NewMinMax_aux_false/Resume
-MODEL_TAR_GZ=./resources/semqa/checkpoints/drop/date_num/date_numcq_hmvy_cnt_filter/drop_parser/TOKENS_qanet/ED_100/RG_1e-07/MODELTYPE_encoded/CNTFIX_false/SUPEPOCHS_5/S_100/NewMinMax_aux_false/model.tar.gz
+RESUME_SER_DIR=./resources/semqa/checkpoints/drop/date_num/date_numcq_hmvy_cnt_filter_no_exec/drop_parser/TOKENS_qanet/ED_100/RG_1e-07/MODELTYPE_encoded/CNTFIX_false/SUPEPOCHS_5/S_100/NewMinMax_aux_false/Resume
+MODEL_TAR_GZ=./resources/semqa/checkpoints/drop/date_num/date_numcq_hmvy_cnt_filter_no_exec/drop_parser/TOKENS_qanet/ED_100/RG_1e-07/MODELTYPE_encoded/CNTFIX_false/SUPEPOCHS_5/S_100/NewMinMax_aux_false/model.tar.gz
 
 allennlp fine-tune --extend-vocab -c ${CONFIGFILE} --include-package ${INCLUDE_PACKAGE} -s ${RESUME_SER_DIR} -m ${MODEL_TAR_GZ}

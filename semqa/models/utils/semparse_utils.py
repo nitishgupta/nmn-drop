@@ -14,7 +14,6 @@ def _convert_finalstates_to_actions(best_final_states: Dict[int, List[StateType]
                                     batch_size: int) -> Tuple[List[List[List[int]]],
                                                               List[List[List[str]]],
                                                               List[List[torch.Tensor]],
-                                                              List[torch.FloatTensor],
                                                               List[List[List[Dict]]]]:
 
     (instanceidx2actionseq_idxs,
@@ -58,7 +57,6 @@ def _get_actionseq_strings(possible_actions: List[List[ProductionRule]],
                            b2debuginfos: Dict[int, List[List[Dict]]] = None) -> Tuple[List[List[List[int]]],
                                                                                       List[List[List[str]]],
                                                                                       List[List[torch.Tensor]],
-                                                                                      List[torch.FloatTensor],
                                                                                       List[List[List[Dict]]]]:
     """
     Takes a list of possible actions and indices of decoded actions into those possible actions
@@ -86,8 +84,9 @@ def _get_actionseq_strings(possible_actions: List[List[ProductionRule]],
             instance_debuginfos = b2debuginfos[i] if i in b2debuginfos else []
             all_debuginfos.append(instance_debuginfos)
 
-    batch_actionseq_probs = _convert_actionscores_to_probs(batch_actionseq_scores=all_action_scores)
-    return all_action_indices, all_action_strings, all_action_scores, batch_actionseq_probs, all_debuginfos
+    # batch_actionseq_probs = _convert_actionscores_to_probs(batch_actionseq_scores=all_action_scores)
+    # return all_action_indices, all_action_strings, all_action_scores, batch_actionseq_probs, all_debuginfos
+    return all_action_indices, all_action_strings, all_action_scores, all_debuginfos
 
 
 def _convert_actionscores_to_probs(batch_actionseq_scores: List[List[torch.Tensor]]) -> List[torch.FloatTensor]:

@@ -587,17 +587,17 @@ class DROPSemanticWModelParser(DROPParserBase):
         # batch_actionidxs: List[List[List[int]]]: All action sequence indices for each instance in the batch
         # batch_actionseqs: List[List[List[str]]]: All decoded action sequences for each instance in the batch
         # batch_actionseq_scores: List[List[torch.Tensor]]: Score for each program of each instance
-        # batch_actionseq_probs: List[torch.FloatTensor]: Tensor containing normalized_prog_probs for each instance
+        # batch_actionseq_probs: List[torch.FloatTensor]: Tensor containing normalized_prog_probs for each instance - no longer
         # batch_actionseq_sideargs: List[List[List[Dict]]]: List of side_args for each program of each instance
         # The actions here should be in the exact same order as passed when creating the initial_grammar_state ...
         # since the action_ids are assigned based on the order passed there.
         (batch_actionidxs,
          batch_actionseqs,
          batch_actionseq_scores,
-         batch_actionseq_probs,
          batch_actionseq_sideargs) = semparse_utils._convert_finalstates_to_actions(best_final_states=best_final_states,
                                                                                     possible_actions=actions,
                                                                                     batch_size=batch_size)
+
         # Adding Date-Comparison supervised event groundings to relevant actions
         max_passage_len = encoded_passage.size()[1]
         self.passage_attention_to_sidearg(qtypes, batch_actionseqs, batch_actionseq_sideargs, pattn_supervised,
@@ -647,12 +647,14 @@ class DROPSemanticWModelParser(DROPParserBase):
 
             if self.excloss:
                 exec_loss = 0.0
+                batch_exec_loss = 0.0
                 execloss_normalizer = 0.0
                 for ins_dens in batch_denotations:
                     for den in ins_dens:
                         execloss_normalizer += 1.0
                         exec_loss += den.loss
-                batch_exec_loss = exec_loss / execloss_normalizer
+                if execloss_normalizer > 0:
+                    batch_exec_loss = exec_loss / execloss_normalizer
                 # This check is made explicit here since not all batches have this loss, hence a 0.0 value
                 # only bloats the denominator in the metric. This is also done for other losses in below
                 if batch_exec_loss != 0.0:
@@ -698,10 +700,16 @@ class DROPSemanticWModelParser(DROPParserBase):
                     instance_prog_denotations, instance_prog_types = batch_denotations[i], batch_denotation_types[i]
                     instance_progs_logprob_list = batch_actionseq_scores[i]
 
+                    # This instance does not have completed programs that were found in beam-search
+                    if len(instance_prog_denotations) == 0:
+                        continue
+
                     instance_log_likelihood_list = []
+                    new_instance_progs_logprob_list = []
                     for progidx in range(len(instance_prog_denotations)):
                         denotation = instance_prog_denotations[progidx]
                         progtype = instance_prog_types[progidx]
+                        prog_logprob = instance_progs_logprob_list[progidx]
 
                         if progtype == "PassageSpanAnswer":
                             # Tuple of start, end log_probs
@@ -781,14 +789,19 @@ class DROPSemanticWModelParser(DROPParserBase):
                                 print(denotation._value)
                         '''
                         if torch.isnan(log_likelihood):
-                            logger.info(f"Nan-loss encountered for ProgType: {progtype}")
+                            logger.info(f"Nan-loss encountered for denotation_log_likelihood")
                             log_likelihood = 0.0
+                        if torch.isnan(prog_logprob):
+                            logger.info(f"Nan-loss encountered for ProgType: {progtype}")
+                            prog_logprob = 0.0
+                        new_instance_progs_logprob_list.append(prog_logprob)
 
                         instance_log_likelihood_list.append(log_likelihood)
 
                     # Each is the shape of (number_of_progs,)
                     instance_denotation_log_likelihoods = torch.stack(instance_log_likelihood_list, dim=-1)
-                    instance_progs_log_probs = torch.stack(instance_progs_logprob_list, dim=-1)
+                    # instance_progs_log_probs = torch.stack(instance_progs_logprob_list, dim=-1)
+                    instance_progs_log_probs = torch.stack(new_instance_progs_logprob_list, dim=-1)
 
                     allprogs_log_marginal_likelihoods = instance_denotation_log_likelihoods + instance_progs_log_probs
                     instance_marginal_log_likelihood = allenutil.logsumexp(allprogs_log_marginal_likelihoods)
@@ -796,8 +809,14 @@ class DROPSemanticWModelParser(DROPParserBase):
                     instance_marginal_log_likelihood = torch.sum(instance_marginal_log_likelihood)
                     if torch.isnan(instance_marginal_log_likelihood):
                         logger.info(f"Nan-loss encountered for instance_marginal_log_likelihood")
+                        logger.info(f"Prog log probs: {instance_progs_log_probs}")
+                        logger.info(f"Instance denotation likelihoods: {instance_denotation_log_likelihoods}")
+
                         instance_marginal_log_likelihood = 0.0
                     denotation_loss += -1.0 * instance_marginal_log_likelihood
+
+                    if torch.isnan(denotation_loss):
+                        denotation_loss = 0.0
 
                 batch_denotation_loss = denotation_loss / batch_size
 
@@ -824,7 +843,7 @@ class DROPSemanticWModelParser(DROPParserBase):
                 instance_prog_denotations, instance_prog_types = batch_denotations[i], batch_denotation_types[i]
                 instance_progs_logprob_list = batch_actionseq_scores[i]
 
-                all_instance_progs_predicted_answer_strs: List[str] = []
+                all_instance_progs_predicted_answer_strs: List[str] = []    # List of answers from diff instance progs
                 for progidx in range(len(instance_prog_denotations)):
                     denotation = instance_prog_denotations[progidx]
                     progtype = instance_prog_types[progidx]
@@ -895,7 +914,10 @@ class DROPSemanticWModelParser(DROPParserBase):
                         raise NotImplementedError
 
                     all_instance_progs_predicted_answer_strs.append(predicted_answer)
-                    # Since the programs are sorted by decreasing scores, we can directly take the first pred answer
+                # If no program was found in beam-search
+                if len(all_instance_progs_predicted_answer_strs) == 0:
+                    all_instance_progs_predicted_answer_strs.append('')
+                # Since the programs are sorted by decreasing scores, we can directly take the first pred answer
                 instance_predicted_answer = all_instance_progs_predicted_answer_strs[0]
                 output_dict["predicted_answer"].append(instance_predicted_answer)
                 output_dict["all_predicted_answers"].append(all_instance_progs_predicted_answer_strs)
@@ -1562,11 +1584,15 @@ class DROPSemanticWModelParser(DROPParserBase):
             if i in supervised_instances:
                 idx = supervised_instances.index(i)
                 state_value = supervised_final_states[idx]
+                final_states[i] = state_value
             else:
                 idx = unsupervised_instances.index(i)
-                state_value = unsupervised_final_states[idx]
-
-            final_states[i] = state_value
+                # Unsupervised instances go through beam search and not always is a program found for them
+                # If idx does not exist in unsupervised_final_states, don't add in final_states
+                # Only add a instance_idx if it exists in final states -- not all beam-searches result in valid-paths
+                if idx in unsupervised_final_states:
+                    state_value = unsupervised_final_states[idx]
+                    final_states[i] = state_value
 
         return final_states
 

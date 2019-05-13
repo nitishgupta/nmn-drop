@@ -3,7 +3,7 @@
 export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
-DATASET_NAME=date_num/date_numcq_hmvy_cnt_filter
+DATASET_NAME=date_num/date_numcq_hmvy_cnt_filter_500
 # DATASET_NAME=num/hmyw_filter
 
 DATASET_DIR=./resources/data/drop_s/${DATASET_NAME}
@@ -36,7 +36,7 @@ export BIDAF_WORDEMB_FILE="https://s3-us-west-2.amazonaws.com/allennlp/datasets/
 
 export MODELTYPE=encoded
 export COUNT_FIXED=false
-export AUXLOSS=false
+export AUXLOSS=true
 
 export DENLOSS=true
 export EXCLOSS=true
@@ -53,9 +53,9 @@ export DROPOUT=0.2
 export LR=0.001
 export RG=1e-07
 
-export SEED=100
+export SEED=1
 
-export BEAMSIZE=8
+export BEAMSIZE=4
 export MAX_DECODE_STEP=14
 export EPOCHS=60
 
