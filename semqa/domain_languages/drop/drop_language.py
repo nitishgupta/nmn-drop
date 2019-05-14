@@ -1,3 +1,4 @@
+import logging
 from typing import Dict, List, Tuple, Any
 import numpy as np
 import torch
@@ -13,6 +14,7 @@ from semqa.domain_languages.drop.execution_parameters import ExecutorParameters
 from semqa.domain_languages import domain_language_utils as dlutils
 import utils.util as myutils
 
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 class Date:
     def __init__(self, year: int, month: int, day: int) -> None:
@@ -1161,6 +1163,8 @@ class DropLanguage(DomainLanguage):
 
         count_mean = torch.sum(passage_token_sigmoids)
         variance = 0.5
+
+        logger.info(f"CountMean: {count_mean}")
 
         # Shape: (num_count_values, )
         l2_by_vsquared = torch.pow(self.countvals - count_mean, 2) / (2 * variance * variance)

@@ -3,8 +3,7 @@
 export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
-DATASET_NAME=date_num/date_numcq_hmvy_cnt_filter_500_no_exec
-# DATASET_NAME=num/hmyw_filter
+DATASET_NAME=sample
 
 DATASET_DIR=./resources/data/drop_s/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
@@ -36,7 +35,7 @@ export BIDAF_WORDEMB_FILE="https://s3-us-west-2.amazonaws.com/allennlp/datasets/
 
 export MODELTYPE=encoded
 export COUNT_FIXED=false
-export AUXLOSS=true
+export AUXLOSS=false
 
 export DENLOSS=true
 export EXCLOSS=true
@@ -45,32 +44,24 @@ export MMLLOSS=true
 
 # Whether strong supervison instances should be trained on first, if yes for how many epochs
 export SUPFIRST=true
-export SUPEPOCHS=5
+export SUPEPOCHS=0
 
-export BS=8
+export BS=4
 export DROPOUT=0.2
 
 export LR=0.001
 export RG=1e-07
 
-export SEED=10
+export SEED=1
 
 export BEAMSIZE=4
-export MAX_DECODE_STEP=14
+export MAX_DECODE_STEP=1
 export EPOCHS=60
 
 export DEBUG=false
 
 ####    SERIALIZATION DIR --- Check for checkpoint_root/task/dataset/model/parameters/
-CHECKPOINT_ROOT=./resources/semqa/checkpoints
-SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/${DATASET_NAME}
-MODEL_DIR=drop_parser
-PD_1=TOKENS_${TOKENIDX}/ED_${WEMB_DIM}/RG_${RG}/MODELTYPE_${MODELTYPE}/CNTFIX_${COUNT_FIXED}
-PD_2=SUPEPOCHS_${SUPEPOCHS}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/${PD_2}/S_${SEED}/NewMinMax_aux_${AUXLOSS}
-
-# SERIALIZATION_DIR=./resources/semqa/checkpoints/test/hmywcount_mod_sgfilter_filterlater5_cntfix
-# SERIALIZATION_DIR=./resources/semqa/checkpoints/test/test
+SERIALIZATION_DIR=./resources/semqa/checkpoints/test/sampletest
 
 #######################################################################################################################
 

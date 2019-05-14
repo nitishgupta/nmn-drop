@@ -16,7 +16,6 @@ from allennlp.data.dataset_readers.reading_comprehension.util import IGNORED_TOK
 from allennlp.data.fields import Field, TextField, MetadataField, LabelField, ListField, \
     SequenceLabelField, SpanField, IndexField, ProductionRuleField, ArrayField
 
-from semqa.domain_languages.drop_old.drop_language import DropLanguage, Date, get_empty_language_object
 from collections import defaultdict
 
 from datasets.drop import constants

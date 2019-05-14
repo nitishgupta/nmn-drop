@@ -3,9 +3,7 @@ from flaky import flaky
 
 from allennlp.common.testing import ModelTestCase
 
-from semqa.data.dataset_readers.drop import drop_reader_old
-from semqa.models.drop import drop_parser_old
-from semqa.domain_languages.drop_old.drop_language import DropLanguage, Date
+from semqa.domain_languages.drop.drop_language import DropLanguage, Date
 
 class DROPSemanticParserTest(ModelTestCase):
     def setUp(self):

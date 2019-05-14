@@ -1,5 +1,6 @@
 import json
 import logging
+import random
 import itertools
 import numpy as np
 from typing import Dict, List, Union, Tuple, Any
@@ -15,11 +16,9 @@ from allennlp.data.dataset_readers.reading_comprehension.util import IGNORED_TOK
 from allennlp.data.fields import Field, TextField, MetadataField, LabelField, ListField, \
     SequenceLabelField, SpanField, IndexField, ProductionRuleField, ArrayField
 
-from semqa.domain_languages.drop_old.drop_language import DropLanguage, Date, get_empty_language_object
-
+from semqa.domain_languages.drop_new.drop_language import DropLanguage, Date, get_empty_language_object
 from datasets.drop import constants
 
-# from reading_comprehension.utils import split_tokens_by_hyphen
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -31,8 +30,8 @@ WORD_NUMBER_MAP = {"zero": 0, "one": 1, "two": 2, "three": 3, "four": 4,
                    "sixteen": 16, "seventeen": 17, "eighteen": 18, "nineteen": 19}
 
 
-@DatasetReader.register("drop_reader_old")
-class DROPReaderOld(DatasetReader):
+@DatasetReader.register("drop_reader_new")
+class DROPReaderNew(DatasetReader):
     def __init__(self,
                  lazy: bool = True,
                  tokenizer: Tokenizer = None,
@@ -42,7 +41,9 @@ class DROPReaderOld(DatasetReader):
                  passage_length_limit: int = None,
                  question_length_limit: int = None,
                  only_strongly_supervised: bool = False,
-                 skip_instances=False) -> None:
+                 skip_instances=False,
+                 skip_due_to_gold_programs=False,
+                 convert_spananswer_to_num=False) -> None:
         super().__init__(lazy)
         self._tokenizer = tokenizer
         self._token_indexers = token_indexers or {"tokens": SingleIdTokenIndexer()}
@@ -52,11 +53,14 @@ class DROPReaderOld(DatasetReader):
         self.question_length_limit = question_length_limit
         self.only_strongly_supervised = only_strongly_supervised
         self.skip_instances = skip_instances
-        self.skipped_instances = 0
+        self.skip_due_to_gold_programs = skip_due_to_gold_programs
+        self.convert_spananswer_to_num = convert_spananswer_to_num
+        self.skip_count = 0
+        self.skip_due_to_gold_not_in_answer = 0
 
     @overrides
     def _read(self, file_path: str):
-        self.skipped_instances = 0
+        self.skip_count = 0
         # pylint: disable=logging-fstring-interpolation
         # if `file_path` is a URL, redirect to the cache
         file_path = cached_path(file_path)
@@ -67,6 +71,8 @@ class DROPReaderOld(DatasetReader):
         instances, skip_count = [], 0
         max_passage_len = self.passage_length_limit
         max_question_len = self.question_length_limit
+        total_qas = 0
+        instances_read = 0
         for passage_id, passage_info in dataset.items():
             original_passage_text = passage_info[constants.cleaned_passage]
             passage_text = passage_info[constants.tokenized_passage]
@@ -82,6 +88,7 @@ class DROPReaderOld(DatasetReader):
 
 
             for qa in passage_info[constants.qa_pairs]:
+                total_qas += 1
                 question_id = qa[constants.query_id]
                 original_ques_text = qa[constants.cleaned_question]
                 question_text = qa[constants.tokenized_question]
@@ -129,7 +136,19 @@ class DROPReaderOld(DatasetReader):
                         if constants.qspan_dategrounding_supervision in qa:
                             date_grounding_supervision = qa[constants.qspan_dategrounding_supervision]
                         if constants.qspan_numgrounding_supervision in qa:
+                            # This can be a 1- or 2- tuple of number groundings
                             num_grounding_supervision = qa[constants.qspan_numgrounding_supervision]
+
+                passage_attn_supervision = None
+                pattn_supervised = False
+                if constants.pattn_supervised in qa:
+                    pattn_supervised = qa[constants.pattn_supervised]
+                    if constants.passage_attn_supervision in qa:
+                        passage_attn_supervision = qa[constants.passage_attn_supervision]
+
+                synthetic_numground_metadata = None
+                if constants.SYN_NUMGROUND_METADATA in qa:
+                    synthetic_numground_metadata = qa[constants.SYN_NUMGROUND_METADATA]
 
                 strongly_supervised = program_supervised and qattn_supervised and execution_supervised
 
@@ -154,10 +173,13 @@ class DROPReaderOld(DatasetReader):
                                                  program_supervised,
                                                  qattn_supervised,
                                                  execution_supervised,
+                                                 pattn_supervised,
                                                  strongly_supervised,
                                                  ques_attn_supervision,
                                                  date_grounding_supervision,
                                                  num_grounding_supervision,
+                                                 passage_attn_supervision,
+                                                 synthetic_numground_metadata,
                                                  answer_type,
                                                  answer_passage_spans,
                                                  answer_question_spans,
@@ -172,6 +194,7 @@ class DROPReaderOld(DatasetReader):
                         instance = None
 
                 if instance is not None:
+                    instances_read += 1
                     yield instance
 
         #         if instance is not None:
@@ -180,7 +203,9 @@ class DROPReaderOld(DatasetReader):
         #             skip_count += 1
         # logger.info(f"Skipped {skip_count} questions, kept {len(instances)} questions.")
         # return instances
-
+        logger.info(f"Total QAs: {total_qas}. Instances read: {instances_read}")
+        logger.info(f"Instances Skipped: {self.skip_count}")
+        logger.info(f"Instances skipped due to gold-answer not in gold_program_types: {self.skip_due_to_gold_not_in_answer}")
 
     @overrides
     def text_to_instance(self,
@@ -200,10 +225,13 @@ class DROPReaderOld(DatasetReader):
                          program_supervised: bool,
                          qattn_supervised: bool,
                          execution_supervised: bool,
+                         pattn_supervised: bool,
                          strongly_supervised: bool,
                          ques_attn_supervision: Tuple[List[float]],
                          date_grounding_supervision: Tuple[List[int], List[int]],
                          num_grounding_supervision: Tuple[List[int], List[int]],
+                         passage_attn_supervision: List[float],
+                         synthetic_numground_metadata: List[Tuple[int, int]],
                          answer_type: str,
                          answer_passage_spans: List[Tuple[int, int]],
                          answer_question_spans: List[Tuple[int, int]],
@@ -234,12 +262,14 @@ class DROPReaderOld(DatasetReader):
              p_num_mens, p_num_entidxs, p_num_normvals,
              answer_passage_spans,
              date_grounding_supervision,
-             num_grounding_supervision) = self.prune_for_passage_len(max_passage_len,
-                                                                     p_date_mens, p_date_entidxs, p_date_normvals,
-                                                                     p_num_mens, p_num_entidxs, p_num_normvals,
-                                                                     answer_passage_spans,
-                                                                     date_grounding_supervision,
-                                                                     num_grounding_supervision)
+             num_grounding_supervision,
+             passage_attn_supervision) = self.prune_for_passage_len(max_passage_len,
+                                                                    p_date_mens, p_date_entidxs, p_date_normvals,
+                                                                    p_num_mens, p_num_entidxs, p_num_normvals,
+                                                                    answer_passage_spans,
+                                                                    date_grounding_supervision,
+                                                                    num_grounding_supervision,
+                                                                    passage_attn_supervision)
         if max_question_len is not None:
             question_tokens = question_tokens[: max_question_len]
             (answer_question_spans,
@@ -267,14 +297,16 @@ class DROPReaderOld(DatasetReader):
         fields["passage"] = TextField(passage_tokens, self._token_indexers)
         fields["question"] = TextField(question_tokens, self._token_indexers)
 
-        # TODO(nitish): Both numbers and passage values also need to be pruned based on passagelen.
-        # TODO(nitish): Currently, there might be values that don't appear in the passage (after pruning)
         ##  Passage Number
         # The normalized values in processed dataset are floats even if the passage had ints. Converting them back ..
         p_num_normvals = [int(x) if int(x) == x else x for x in p_num_normvals]
         passage_number_entidxs = p_num_entidxs      # same length as p_num_mens, containing num_grounding for the mens
         passage_number_values = p_num_normvals
         passage_number_indices = [tokenidx for (_, tokenidx, _) in p_num_mens]
+        # These are number-token idxs in an order so that their values are sorted
+        sorted_passagenumber_indices = self.get_numberindices_in_sorted_order(passage_number_values,
+                                                                              passage_number_indices,
+                                                                              passage_number_entidxs)
 
         # List of passage_len containing number_entidx for each token (-1 otherwise)
         passage_number_idx2entidx = [-1 for _ in range(len(passage_tokens))]
@@ -284,10 +316,12 @@ class DROPReaderOld(DatasetReader):
         else:
             # No numbers found in the passage - making a fake number at the 0th token
             passage_number_idx2entidx[0] = 0
+            sorted_passagenumber_indices = [0]
         if not passage_number_values:
             passage_number_values.append(-1)
         fields["passageidx2numberidx"] = ArrayField(np.array(passage_number_idx2entidx), padding_value=-1)
         fields["passage_number_values"] = MetadataField(passage_number_values)
+        fields["passage_number_sortedtokenidxs"] = MetadataField(sorted_passagenumber_indices)
 
         ##  Passage Dates
         passage_date_entidxs = p_date_entidxs
@@ -314,13 +348,23 @@ class DROPReaderOld(DatasetReader):
         fields["year_differences"] = MetadataField(year_differences)
         fields["year_differences_mat"] = MetadataField(year_differences_mat)
 
+        passage_number_differences, passage_number_diff_mat = self.get_passagenumber_difference_candidates(
+                                                                                            passage_number_values)
+        fields["passagenumber_difference_values"] = MetadataField(passage_number_differences)
+        fields["passagenumber_differences_mat"] = MetadataField(passage_number_diff_mat)
+
+        count_values = list(range(10))
+        fields["count_values"] = MetadataField(count_values)
+
         metadata.update({"passage_token_offsets": passage_offsets,
                          "question_token_offsets": question_offsets,
                          "question_tokens": [token.text for token in question_tokens],
                          "passage_tokens": [token.text for token in passage_tokens],
                          "passage_date_values": passage_date_strvals,
                          "passage_number_values": passage_number_values,
-                         "passage_year_diffs": year_differences
+                         "passage_year_diffs": year_differences,
+                         "passagenum_diffs": passage_number_differences,
+                         "count_values": count_values
                          # "number_tokens": [token.text for token in number_tokens],
                          # "number_indices": number_indices
                         })
@@ -331,7 +375,9 @@ class DROPReaderOld(DatasetReader):
         fields["program_supervised"] = MetadataField(program_supervised)
         fields["qattn_supervised"] = MetadataField(qattn_supervised)
         fields["execution_supervised"] = MetadataField(execution_supervised)
+        fields["pattn_supervised"] = MetadataField(pattn_supervised)
         fields["qtypes"] = MetadataField(qtype)
+        fields["synthetic_numground_metadata"] = MetadataField(synthetic_numground_metadata)
 
         # Question Attention Supervision
         if ques_attn_supervision:
@@ -341,6 +387,12 @@ class DROPReaderOld(DatasetReader):
             empty_question_attention = [0.0] * qlen
             empty_question_attention_tuple = [empty_question_attention]
             fields["qattn_supervision"] = ArrayField(np.array(empty_question_attention_tuple), padding_value=0)
+
+        if passage_attn_supervision:
+            fields["passage_attn_supervision"] = ArrayField(np.array(passage_attn_supervision), padding_value=0)
+        else:
+            empty_passage_attention = [0.0] * len(passage_tokens)
+            fields["passage_attn_supervision"] = ArrayField(np.array(empty_passage_attention), padding_value=0)
 
         # Date-comparison - Date Grounding Supervision
         if date_grounding_supervision:
@@ -363,11 +415,14 @@ class DROPReaderOld(DatasetReader):
 
         # Tuple[List[List[int]], List[List[int]]]
         (gold_action_seqs,
-         gold_actionseq_masks) = self.get_gold_action_seqs(program_supervised=program_supervised,
-                                                           qtype=qtype,
-                                                           question_tokens=question_text.split(' '),
-                                                           language=language,
-                                                           action2idx_map=action2idx_map)
+         gold_actionseq_masks,
+         gold_program_start_types,
+         program_supervised) = self.get_gold_action_seqs(program_supervised=program_supervised,
+                                                         qtype=qtype,
+                                                         question_tokens=question_text.split(' '),
+                                                         language=language,
+                                                         action2idx_map=action2idx_map)
+        fields["program_supervised"] = MetadataField(program_supervised)
         fields["gold_action_seqs"] = MetadataField((gold_action_seqs, gold_actionseq_masks))
 
         ########     ANSWER FIELDS      ###################
@@ -388,7 +443,7 @@ class DROPReaderOld(DatasetReader):
             # This list contains the possible-start-types for programs that can yield the correct answer
             # For example, if the answer is a number but also in passage, this will contain two keys
             # If the answer is a number, we'll find which kind and that program-start-type will be added here
-            answer_program_start_types = []
+            answer_program_start_types: List[str] = []
 
             # We've pre-parsed the span types to passage / question spans
 
@@ -417,32 +472,102 @@ class DROPReaderOld(DatasetReader):
             fields["answer_as_question_spans"] = ListField(question_span_fields)
 
             # Number answers
+            number_answer_str = answer_annotation["number"]
+            if not number_answer_str:
+                # Answer as number string does not exist.
+                if self.convert_spananswer_to_num:
+                    # Try to convert "X" or "X-yard(s)" into number(X)
+                    span_answer_text = answer_annotation["spans"][0]
+                    try:
+                        span_answer_number = float(span_answer_text)
+                    except:
+                        span_answer_number = None
+                    if span_answer_number is None:
+                        split_hyphen = span_answer_text.split('-')
+                        if len(split_hyphen) == 2:
+                            try:
+                                span_answer_number = float(split_hyphen[0])
+                            except:
+                                span_answer_number = None
+                        else:
+                            span_answer_number = None
+                    if span_answer_number is not None:
+                        answer_number = int(span_answer_number) if int(span_answer_number) == span_answer_number \
+                                                                                                else span_answer_number
+                    else:
+                        answer_number = None
+                else:
+                    answer_number = None
+            else:
+                answer_number = float(number_answer_str)
+                answer_number = int(answer_number) if int(answer_number) == answer_number else answer_number
+
             ans_as_passage_number = [0] * len(passage_number_values)
             ans_as_year_difference = [0] * len(year_differences)
-            if answer_type == "number":
-                answer_text = answer_annotation["number"]
-                answer_number = float(answer_text)
+            answer_as_passagenum_difference = [0] * len(passage_number_differences)
+            answer_as_count = [0] * len(count_values)
+            # if answer_type == "number":
+            if answer_number is not None:
+                # answer_text = answer_annotation["number"]
+                # answer_number = float(answer_text)
+                # answer_number = int(answer_number) if int(answer_number) == answer_number else answer_number
                 # Number lists below are mix of floats and ints. Type of answer_number doesn't matter
 
                 # Passage-number answer
                 if answer_number in passage_number_values:
                     answer_program_start_types.append("passage_number")
-                    answer_number = int(answer_number) if int(answer_number) == answer_number else answer_number
                     ans_as_passage_number_idx = passage_number_values.index(answer_number)
                     ans_as_passage_number[ans_as_passage_number_idx] = 1
 
                 # Year-difference answer
                 if answer_number in year_differences:
-                    answer_number = int(answer_number) if int(answer_number) == answer_number else answer_number
                     answer_program_start_types.append("year_difference")
                     ans_as_year_difference_idx = year_differences.index(answer_number)
                     ans_as_year_difference[ans_as_year_difference_idx] = 1
 
+                '''
+                # PassageNum-difference Answer
+                if answer_number in passage_number_differences:
+                    answer_program_start_types.append("passagenum_diff")
+                    ans_as_passagenum_diff_idx = passage_number_differences.index(answer_number)
+                    answer_as_passagenum_difference[ans_as_passagenum_diff_idx] = 1
+                '''
+
+                # Count answer
+                if answer_number in count_values:
+                    answer_program_start_types.append("count_number")
+                    answer_count_idx = count_values.index(answer_number)
+                    answer_as_count[answer_count_idx] = 1
+
+
             fields["answer_as_passage_number"] = MetadataField(ans_as_passage_number)
             fields["answer_as_passage_number"] = MetadataField(ans_as_passage_number)
             fields["answer_as_year_difference"] = MetadataField(ans_as_year_difference)
+            fields["answer_as_passagenum_difference"] = MetadataField(answer_as_passagenum_difference)
+            fields["answer_as_count"] = MetadataField(answer_as_count)
 
             fields["answer_program_start_types"] = MetadataField(answer_program_start_types)
+
+
+            # If we already have gold program(s), removing program_start_types that don't come from these gold_programs
+
+
+
+            # print(f"AnswerTypes: {answer_program_start_types}")
+            # print(f"New AnswerTypes: {new_answer_program_start_types}")
+
+            if self.skip_due_to_gold_programs:
+                if program_supervised:
+                    new_answer_program_start_types = []
+                    for answer_program_type in answer_program_start_types:
+                        if answer_program_type in gold_program_start_types:
+                            new_answer_program_start_types.append(answer_program_type)
+                else:
+                    new_answer_program_start_types = answer_program_start_types
+                # Answer exists as other programs but not for gold-program
+                if len(answer_program_start_types) != 0 and len(new_answer_program_start_types) == 0:
+                    self.skip_due_to_gold_not_in_answer += 1
+                answer_program_start_types = new_answer_program_start_types
 
             # if len(answer_program_start_types) == 0:
             #     print(original_ques_text)
@@ -450,12 +575,13 @@ class DROPReaderOld(DatasetReader):
             #     print(answer_annotation)
             #     print(f"PassageNumVals:{passage_number_values}")
             #     print(f"PassageDates:{passage_date_strvals}")
+            #     print(f"PassageNumDiffs: {passage_number_differences}")
             #     print(f"YearDiffs:{year_differences}")
 
             if self.skip_instances:
                 if len(answer_program_start_types) == 0:
-                    self.skipped_instances += 1
-                    print(f"Skipped instances: {self.skipped_instances}")
+                    self.skip_count += 1
+                    # print(f"Skipped instances: {self.skipped_instances}")
                     # print("\nNo answer grounding")
                     # print(original_ques_text)
                     # print(original_passage_text)
@@ -472,6 +598,18 @@ class DROPReaderOld(DatasetReader):
             return None
         '''
 
+        '''
+        attention, count_answer, mask = self.make_count_instance(passage_text.split(' '))
+        attention = [x + abs(random.gauss(0, 0.001)) for x in attention]
+        attention_sum = sum(attention)
+        attention = [float(x) / attention_sum for x in attention]
+        count_answer_vec = [0] * 10
+        count_answer_vec[count_answer] = 1
+        fields["aux_passage_attention"] = ArrayField(np.array(attention), padding_value=0.0)
+        fields["aux_answer_as_count"] = ArrayField(np.array(count_answer_vec))
+        fields["aux_count_mask"] = ArrayField(np.array(mask))
+        '''
+
         fields["metadata"] = MetadataField(metadata)
         return Instance(fields)
 
@@ -482,7 +620,8 @@ class DROPReaderOld(DatasetReader):
                               p_num_mens, p_num_entidxs, p_num_normvals,
                               answer_passage_spans,
                               date_grounding_supervision,
-                              num_grounding_supervision):
+                              num_grounding_supervision,
+                              passage_attn_supervision):
 
         """ Prunes the passage and related data for a maximum length
 
@@ -495,6 +634,8 @@ class DROPReaderOld(DatasetReader):
 
             date_grounding_supervision, num_grounding_supervision -- both these are the length of original dates/nums
             we need to find the new value by pruning and mapping old ent idxs to new ones.
+
+            passage_attn_supervision: if not None, is a list the length of the passage
         """
         pruned_date_mens = []       # New passage date mens
         pruned_old_dateidxs = []
@@ -552,10 +693,15 @@ class DROPReaderOld(DatasetReader):
 
         new_answer_passage_spans = [span for span in answer_passage_spans if span[1] < max_passage_len]
 
+        if passage_attn_supervision is not None and len(passage_attn_supervision) > max_passage_len:
+            new_passage_attn_supervision = passage_attn_supervision[0:max_passage_len]
+        else:
+            new_passage_attn_supervision = passage_attn_supervision
+
         return (pruned_date_mens, new_date_entidxs, new_date_values,
                 pruned_num_mens, new_num_idxs, new_num_values,
                 new_answer_passage_spans,
-                new_dategrounding_supervision, new_numgrounding_supervision)
+                new_dategrounding_supervision, new_numgrounding_supervision, new_passage_attn_supervision)
 
     def prune_for_question_len(self, max_question_len, answer_question_spans, ques_attn_supervision):
         new_answer_question_spans = [span for span in answer_question_spans if span[1] < max_question_len]
@@ -740,6 +886,55 @@ class DROPReaderOld(DatasetReader):
 
 
     @staticmethod
+    def get_passagenumber_difference_candidates(passage_num_values: List[float]) -> Tuple[List[float], np.array]:
+        """ List of numbers indicating all-possible non-negative subtractions between the passage-numbers
+
+            Parameters:
+            -----------
+            passage_num_values: List[float]
+                Sorted list of passage numbers
+            Returns:
+            --------
+            passage_number_differences:
+                List[float] These are the possible differences between passage numbers.
+            passagenumber_difference_mat: Binary np.array of shape (PN, PN, d)
+                Entry (i, j, k) == 1 denotes that PN[i] - PN[j] == passage_number_differences[k]
+        """
+        num_passage_numbers = len(passage_num_values)
+        # Adding zero-first since it'll definitely be added and makes sanity-checking easy
+        passage_number_differences: List[int] = [0]
+
+        for (num1, num2) in itertools.product(passage_num_values, repeat=2):
+            number_diff = num1 - num2
+            if number_diff >= 0:
+                if number_diff not in passage_number_differences:
+                    passage_number_differences.append(number_diff)
+
+        num_of_passagenum_differences = len(passage_number_differences)
+        # Making year_difference_mat
+        passage_number_diff_mat = np.zeros(shape=(num_passage_numbers, num_passage_numbers,
+                                                  num_of_passagenum_differences),
+                                       dtype=int)
+        for ((num_idx1, num1), (num_idx2, num2)) in itertools.product(enumerate(passage_num_values), repeat=2):
+            number_diff = num1 - num2
+            if number_diff >= 0:
+                num_diff_idx = passage_number_differences.index(number_diff)  # We know this will not fail
+                passage_number_diff_mat[num_idx1, num_idx2, num_diff_idx] = 1
+
+        return passage_number_differences, passage_number_diff_mat
+
+    @staticmethod
+    def get_numberindices_in_sorted_order(number_values, number_token_indices, passage_number_entidxs):
+        """ Returns the number_token_indices in an order so that their values are sorted in increasing order """
+        # These are the number-values the number-tokens
+        number_token_numbervalues = [number_values[x] for x in passage_number_entidxs]
+
+        number_tokenidx_values = list(zip(number_token_indices, number_token_numbervalues))
+        sorted_numberidx_value_tuples = sorted(number_tokenidx_values, key=lambda x: x[1])
+        sorted_number_indices, _ = zip(*sorted_numberidx_value_tuples)
+        return sorted_number_indices
+
+    @staticmethod
     def get_candidate_additions(numbers_in_passage: List[int],
                                 number_indices: List[int]) -> Dict[int, List[Tuple[int, int]]]:
         candidate_additions = defaultdict(list)
@@ -766,24 +961,35 @@ class DROPReaderOld(DatasetReader):
                              qtype: str,
                              question_tokens: List[str],
                              language: DropLanguage,
-                             action2idx_map: Dict[str, int]) -> Tuple[List[List[int]], List[List[int]]]:
+                             action2idx_map: Dict[str, int]) -> Tuple[List[List[int]], List[List[int]],
+                                                                      List[str], bool]:
 
-        qtype_to_lffunc = {constants.DATECOMP_QTYPE: self.get_gold_logicalforms_datecomp,
-                           constants.NUMCOMP_QTYPE: self.get_gold_logicalforms_numcomp,
-                           constants.YARDS_longest_qtype: self.get_gold_logicalforms_yardslongest,
-                           constants.YARDS_shortest_qtype: self.get_gold_logicalforms_yardsshortest}
+        qtype_to_lffunc = {constants.DATECOMP_QTYPE: self.datecomp_logicalforms,
+                           constants.NUMCOMP_QTYPE: self.numcomp_logicalforms,
+                           constants.NUM_find_qtype: self.findnum_logicalforms,
+                           constants.NUM_filter_find_qtype: self.filterfindnum_logicalforms,
+                           constants.MIN_find_qtype: self.minnum_find_logicalforms,
+                           constants.MIN_filter_find_qtype: self.minnum_filterfind_logicalforms,
+                           constants.MAX_find_qtype: self.maxnum_find_logicalforms,
+                           constants.MAX_filter_find_qtype: self.maxnum_filterfind_logicalforms,
+                           constants.COUNT_find_qtype: self.count_find_logicalforms,
+                           constants.COUNT_filter_find_qtype: self.count_filterfind_logicalforms}
 
         gold_actionseq_idxs: List[List[int]] = []
         gold_actionseq_mask: List[List[int]] = []
+        gold_start_types: List[str] = []
 
         if not program_supervised:
             gold_actionseq_idxs.append([0])
             gold_actionseq_mask.append([0])
-            return gold_actionseq_idxs, gold_actionseq_mask
+            gold_start_types.append('UNK')
+            return gold_actionseq_idxs, gold_actionseq_mask, gold_start_types, program_supervised
 
         if qtype in qtype_to_lffunc:
-            gold_logical_forms: List[str] = qtype_to_lffunc[qtype](question_tokens=question_tokens,
-                                                                   language=language)
+            # Tuple[List[str], List[str]]
+            (gold_logical_forms, gold_start_types) = qtype_to_lffunc[qtype](question_tokens=question_tokens,
+                                                                            language=language,
+                                                                            qtype=qtype)
             assert len(gold_logical_forms) >= 1, f"No logical forms found for: {question_tokens}"
             for logical_form in gold_logical_forms:
                 gold_actions: List[str] = language.logical_form_to_action_sequence(logical_form)
@@ -792,25 +998,113 @@ class DROPReaderOld(DatasetReader):
                 gold_actionseq_idxs.append(actionseq_idxs)
                 gold_actionseq_mask.append(actionseq_mask)
         else:
+            program_supervised = False
             gold_actionseq_idxs.append([0])
             gold_actionseq_mask.append([0])
+            gold_start_types.append('UNK')
+            logger.error(f"Tried get gold logical form for: {qtype}")
 
-        return gold_actionseq_idxs, gold_actionseq_mask
+        return gold_actionseq_idxs, gold_actionseq_mask, gold_start_types, program_supervised
+
+    @staticmethod
+    def filter_passageattn_lf() -> str:
+        gold_lf = "(filter_PassageAttention find_PassageAttention)"
+        return gold_lf
+
+    @staticmethod
+    def findnum_logicalforms(**kwargs) -> Tuple[List[str], List[str]]:
+        gold_lf = "(find_PassageNumber find_PassageAttention)"
+        return [gold_lf], ['passage_number']
+
+    @staticmethod
+    def filterfindnum_logicalforms(**kwargs) -> Tuple[List[str], List[str]]:
+        filter_passage_attention_lf = DROPReaderNew.filter_passageattn_lf()
+        gold_lf = f"(find_PassageNumber {filter_passage_attention_lf})"
+        return [gold_lf], ['passage_number']
+
+    @staticmethod
+    def minnum_find_logicalforms(**kwargs) -> Tuple[List[str], List[str]]:
+        gold_lf = f"(find_PassageNumber (minNumPattn find_PassageAttention))"
+        return [gold_lf], ['passage_number']
+
+    @staticmethod
+    def minnum_filterfind_logicalforms(**kwargs) -> Tuple[List[str], List[str]]:
+        filter_passage_attention_lf = DROPReaderNew.filter_passageattn_lf()
+        gold_lf = f"(find_PassageNumber (minNumPattn {filter_passage_attention_lf}))"
+        return [gold_lf], ['passage_number']
+
+    @staticmethod
+    def maxnum_find_logicalforms(**kwargs) -> Tuple[List[str], List[str]]:
+        gold_lf = f"(find_PassageNumber (maxNumPattn find_PassageAttention))"
+        return [gold_lf], ['passage_number']
+
+    @staticmethod
+    def maxnum_filterfind_logicalforms(**kwargs) -> Tuple[List[str], List[str]]:
+        filter_passage_attention_lf = DROPReaderNew.filter_passageattn_lf()
+        gold_lf = f"(find_PassageNumber (maxNumPattn {filter_passage_attention_lf}))"
+        return [gold_lf], ['passage_number']
+
+    @staticmethod
+    def count_find_logicalforms(**kwargs)  -> Tuple[List[str], List[str]]:
+        gold_lf = "(passageAttn2Count find_PassageAttention)"
+        return [gold_lf], ['count_number']
+
+    @staticmethod
+    def count_filterfind_logicalforms(**kwargs) -> Tuple[List[str], List[str]]:
+        filter_passageattn_lf = DROPReaderNew.filter_passageattn_lf()
+        gold_lf = f"(passageAttn2Count {filter_passageattn_lf})"
+        return [gold_lf], ['count_number']
 
 
     @staticmethod
-    def get_gold_logicalforms_yardsshortest(**kwargs):
+    def numdiff_logicalforms(**kwargs) -> Tuple[List[str], List[str]]:
+        qtype = kwargs['qtype']
+        # Qtype of form: diff_maxmin_qtype
+        numtypes = qtype.split('_')[1]
+        first_num = numtypes[0:3] # first 3 chars
+        second_num = numtypes[3:6]  # last 3 chars
+
+        max_num_program = "(max_PassageNumber (find_PassageNumber find_PassageAttention))"
+        min_num_program = "(min_PassageNumber (find_PassageNumber find_PassageAttention))"
+        find_num_program = "(find_PassageNumber find_PassageAttention)"
+
+        if first_num == 'max':
+            first_num_prog = max_num_program
+        elif first_num == 'min':
+            first_num_prog = min_num_program
+        elif first_num == 'num':
+            first_num_prog = find_num_program
+        else:
+            raise NotImplementedError
+
+        if second_num == 'max':
+            second_num_prog = max_num_program
+        elif second_num == 'min':
+            second_num_prog = min_num_program
+        elif second_num == 'num':
+            second_num_prog = find_num_program
+        else:
+            raise NotImplementedError
+
+        # "(passagenumber_difference first_num_prog second_num_program)"
+        gold_lf = f"(passagenumber_difference {first_num_prog} {second_num_prog})"
+
+        return [gold_lf], ['passagenum_diff']
+
+
+    @staticmethod
+    def yardsshortest_logicalforms(**kwargs) -> Tuple[List[str], List[str]]:
         gold_lf = "(min_PassageNumber (find_PassageNumber find_PassageAttention))"
-        return [gold_lf]
+        return [gold_lf], ['passage_number']
 
     @staticmethod
-    def get_gold_logicalforms_yardslongest(**kwargs):
+    def yardslongest_logicalforms(**kwargs) -> Tuple[List[str], List[str]]:
         gold_lf = "(max_PassageNumber (find_PassageNumber find_PassageAttention))"
-        return [gold_lf]
+        return [gold_lf], ['passage_number']
 
 
     @staticmethod
-    def get_gold_logicalforms_datecomp(**kwargs) -> List[str]:
+    def datecomp_logicalforms(**kwargs) -> Tuple[List[str], List[str]]:
         question_tokens: List[str] = kwargs['question_tokens']
         language: DropLanguage = kwargs['language']
         # "(find_passageSpanAnswer (compare_date_greater_than find_PassageAttention find_PassageAttention))"
@@ -842,15 +1136,18 @@ class DROPReaderOld(DatasetReader):
             operator_action = greater_than
 
         gold_logical_forms = []
+        gold_start_types = []
         if '@start@ -> PassageSpanAnswer' in language.all_possible_productions():
             gold_logical_forms.append(f"{psa_start}{operator_action}{lf2}")
+            gold_start_types.append('passage_span')     # from drop_parser.get_valid_start_actionids
         if '@start@ -> QuestionSpanAnswer' in language.all_possible_productions():
             gold_logical_forms.append(f"{qsa_start}{operator_action}{lf2}")
+            gold_start_types.append('question_span')  # from drop_parser.get_valid_start_actionids
 
-        return gold_logical_forms
+        return gold_logical_forms, gold_start_types
 
     @staticmethod
-    def get_gold_logicalforms_numcomp(**kwargs) -> List[str]:
+    def numcomp_logicalforms(**kwargs) -> Tuple[List[str], List[str]]:
         question_tokens: List[str] = kwargs['question_tokens']
         language: DropLanguage = kwargs['language']
         # "(find_passageSpanAnswer (compare_date_greater_than find_PassageAttention find_PassageAttention))"
@@ -883,11 +1180,92 @@ class DROPReaderOld(DatasetReader):
             operator_action = greater_than
 
         gold_logical_forms = []
+        gold_start_types = []
         if '@start@ -> PassageSpanAnswer' in language.all_possible_productions():
             gold_logical_forms.append(f"{psa_start}{operator_action}{lf2}")
+            gold_start_types.append('passage_span')  # from drop_parser.get_valid_start_actionids
         if '@start@ -> QuestionSpanAnswer' in language.all_possible_productions():
             gold_logical_forms.append(f"{qsa_start}{operator_action}{lf2}")
+            gold_start_types.append('question_span')  # from drop_parser.get_valid_start_actionids
 
-        return gold_logical_forms
+        return gold_logical_forms, gold_start_types
+
+
+    def make_count_instance(self, passage_tokens: List[str]):
+        ''' output an attention, count_answer, mask. Mask is when we don;t find relevant spans '''
+
+        # We would like to count these spans
+        relevant_spans = ['TD pass', 'TD run', 'touchdown pass', 'field goal', 'touchdown run']
+        num_relevant_spans = len(relevant_spans)
+
+        attention = [0.0] * len(passage_tokens)
+
+        # With 10% prob select no span
+        count_zero_prob = random.random()
+        if count_zero_prob < 0.1:
+            return (attention, 0, 1)
+
+
+        # Choose a particular type of span from relevant ones and find it's starting positions
+        tries = 0
+        starting_positions_in_passage = []
+        while len(starting_positions_in_passage) == 0 and tries < 5:
+            choosen_span = random.randint(0, num_relevant_spans - 1)
+            span_tokens = relevant_spans[choosen_span].split(' ')
+            starting_positions_in_passage = self.contains(span_tokens, passage_tokens)
+            tries += 1
+
+        # even after 5 tries, span to count not found. Return masked attention
+        if len(starting_positions_in_passage) == 0:
+            return attention, 0, 0
+
+        # # TO save from infinite loop
+        # count_zero_prob = random.random()
+        # if count_zero_prob < 0.1:
+        #     return attention, 0
+
+        if len(starting_positions_in_passage) == 1:
+            count = len(starting_positions_in_passage)
+            starting_position = starting_positions_in_passage[0]
+            attention[starting_position] = 1.0
+            attention[starting_position + 1] = 1.0
+
+        else:
+            num_of_spans_found = len(starting_positions_in_passage)
+            # Choose a subset of the starting_positions
+            random.shuffle(starting_positions_in_passage)
+            num_spans = random.randint(2, num_of_spans_found)
+            num_spans = min(num_spans, 9)
+
+            count = num_spans
+
+            spread_len = random.randint(1, 3)
+
+            chosen_starting_positions = starting_positions_in_passage[0:num_spans]
+            for starting_position in chosen_starting_positions:
+                attention[starting_position] = 1.0
+                attention[starting_position + 1] = 1.0
+                for i in range(1, spread_len+1):
+                    prev_idx = starting_position - i
+                    if prev_idx >= 0:
+                        attention[prev_idx] = 0.5
+                    next_idx = starting_position + 1 + i
+                    if next_idx < len(passage_tokens):
+                        attention[next_idx] = 0.5
+
+        return attention, count, 1
+
+    def contains(self, small, big):
+        starting_positions = []
+        for i in range(len(big) - len(small) + 1):
+            start = True
+            for j in range(len(small)):
+                if big[i + j] != small[j]:
+                    start = False
+                    break
+            if start:
+                starting_positions.append(i)
+        return starting_positions
+
 
 

@@ -1,35 +1,19 @@
 import logging
 from typing import List, Dict, Any, Tuple, Optional, Set
-import math
-import copy
 
 from overrides import overrides
 
 import torch
 
-from allennlp.data.fields.production_rule_field import ProductionRule
 from allennlp.data.vocabulary import Vocabulary
 from allennlp.models.model import Model
-from allennlp.modules.time_distributed import TimeDistributed
-from allennlp.modules import Highway, Attention, TextFieldEmbedder, Seq2SeqEncoder, FeedForward
-from allennlp.nn import Activation
-from allennlp.modules.matrix_attention import MatrixAttention, DotProductMatrixAttention
-from allennlp.state_machines.states import GrammarBasedState
+from allennlp.modules import Seq2SeqEncoder
 import allennlp.nn.util as allenutil
-from allennlp.nn import InitializerApplicator, RegularizerApplicator
+from allennlp.nn import InitializerApplicator
 from allennlp.models.reading_comprehension.util import get_best_span
 
-from semqa.state_machines.constrained_beam_search import ConstrainedBeamSearch
-from semqa.state_machines.transition_functions.linking_transition_func_emb import LinkingTransitionFunctionEmbeddings
-from allennlp.training.metrics import Average, DropEmAndF1
-from semqa.models.utils.bidaf_utils import PretrainedBidafModelUtils
-from semqa.models.utils import semparse_utils
+from allennlp.training.metrics import Average
 
-from semqa.models.drop.drop_parser_base import DROPParserBase
-from semqa.domain_languages.drop_old import DropLanguage, Date, ExecutorParameters, QuestionSpanAnswer, PassageSpanAnswer
-
-import datasets.drop.constants as dropconstants
-import utils.util as myutils
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 

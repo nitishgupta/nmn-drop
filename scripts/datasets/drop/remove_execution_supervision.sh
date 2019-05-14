@@ -4,7 +4,7 @@ ROOT_DIR=./resources/data/drop_s
 
 NOEXEC=no_exec
 
-INPUT_DATASET=date_numcq_hmvy_cnt_filter_500
+INPUT_DATASET=date_numcq_hmvy_cnt_rel
 
 INPUT_DIR=${ROOT_DIR}/date_num/${INPUT_DATASET}
 OUTPUT_DIR=${ROOT_DIR}/date_num/${INPUT_DATASET}_${NOEXEC}

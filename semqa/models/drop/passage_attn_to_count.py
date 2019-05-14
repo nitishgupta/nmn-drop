@@ -12,13 +12,9 @@ from allennlp.data.vocabulary import Vocabulary
 from allennlp.models.model import Model
 import allennlp.nn.util as allenutil
 from allennlp.nn import InitializerApplicator
-from allennlp.models.reading_comprehension.util import get_best_span
-from allennlp.modules.seq2vec_encoders import Seq2VecEncoder
 from allennlp.modules.seq2seq_encoders import Seq2SeqEncoder
 
 from allennlp.training.metrics import Average
-import datasets.drop.constants as dropconstants
-import utils.util as myutils
 
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
