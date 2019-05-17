@@ -536,7 +536,7 @@ class DropLanguage(DomainLanguage):
                                                                        self.metadata["question_tokens"])
             debug_value += f"Qattn: {qattn_vis_complete}"
             r_attn_vis, _ = dlutils.listTokensVis(relocate_attn, self.metadata["passage_tokens"])
-            debug_value += f"\nFilterAttn: {r_attn_vis}"
+            debug_value += f"\nRelocateAttn: {r_attn_vis}"
 
         return PassageAttention_answer(relocate_attn, loss=loss, debug_value=debug_value)
 
@@ -1329,7 +1329,10 @@ class DropLanguage(DomainLanguage):
         debug_value = ""
         if self._debug:
             number_dist = myutils.round_all(myutils.tocpuNPList(number_distribution), 3)
-            num_grounding_sup = myutils.round_all(myutils.tocpuNPList(number_grounding_supervision), 3)
+            if number_grounding_supervision is not None:
+                num_grounding_sup = myutils.round_all(myutils.tocpuNPList(number_grounding_supervision), 3)
+            else:
+                num_grounding_sup = None
             _, pattn_vis_most = dlutils.listTokensVis(passage_attn, self.metadata["passage_tokens"])
             debug_value += f"PassageNumber: {number_dist}"
             debug_value += f"\nPattn: {pattn_vis_most}"
@@ -1439,7 +1442,10 @@ class DropLanguage(DomainLanguage):
         debug_value = ""
         if self._debug:
             input_attn_numdist = myutils.round_all(myutils.tocpuNPList(inputpattn_num_distribution), 3)
-            num_grounding_sup = myutils.round_all(myutils.tocpuNPList(num_grounding_supervision), 3)
+            if num_grounding_supervision is not None:
+                num_grounding_sup = myutils.round_all(myutils.tocpuNPList(num_grounding_supervision), 3)
+            else:
+                num_grounding_sup = None
             min_pattn_comp, _ = dlutils.listTokensVis(min_num_pattn, self.metadata["passage_tokens"])
             debug_value += f"InputPattnPassageNumber: {input_attn_numdist}"
             debug_value += f"\nGoldNum: {num_grounding_sup}"
@@ -1475,7 +1481,10 @@ class DropLanguage(DomainLanguage):
         debug_value = ""
         if self._debug:
             input_attn_numdist = myutils.round_all(myutils.tocpuNPList(inputpattn_num_distribution), 3)
-            num_grounding_sup = myutils.round_all(myutils.tocpuNPList(num_grounding_supervision), 3)
+            if num_grounding_supervision is not None:
+                num_grounding_sup = myutils.round_all(myutils.tocpuNPList(num_grounding_supervision), 3)
+            else:
+                num_grounding_sup = None
             max_pattn_comp, _ = dlutils.listTokensVis(max_num_pattn, self.metadata["passage_tokens"])
             debug_value += f"InputPattnPassageNumber: {input_attn_numdist}"
             debug_value += f"\nGoldNum: {num_grounding_sup}"

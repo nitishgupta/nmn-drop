@@ -117,6 +117,12 @@ DIFF_MINMIN_qtype = "diff_minmin_qtype"
 COUNT_find_qtype = "count_find_qtype"
 COUNT_filter_find_qtype = "count_filterfind_qtype"
 
+# Relocate question prog type
+RELOC_find_qtype = "relocate_find_qtype"
+RELOC_filterfind_qtype = "relocate_filterfind_qtype"
+RELOC_maxfind_qtype = "relocate_maxfind_qtype"
+RELOC_minfind_qtype = "relocate_minfind_qtype"
+
 # Synthetic questions
 passage_attn_supervision = "passage_attn_supervision"     # passage-attention
 
