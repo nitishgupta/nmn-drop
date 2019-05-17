@@ -121,7 +121,9 @@ COUNT_filter_find_qtype = "count_filterfind_qtype"
 RELOC_find_qtype = "relocate_find_qtype"
 RELOC_filterfind_qtype = "relocate_filterfind_qtype"
 RELOC_maxfind_qtype = "relocate_maxfind_qtype"
+RELOC_maxfilterfind_qtype = "relocate_maxfilterfind_qtype"
 RELOC_minfind_qtype = "relocate_minfind_qtype"
+RELOC_minfilterfind_qtype = "relocate_minfilterfind_qtype"
 
 # Synthetic questions
 passage_attn_supervision = "passage_attn_supervision"     # passage-attention

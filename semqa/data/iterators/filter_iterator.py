@@ -75,8 +75,9 @@ class DataFilterIterator(DataIterator):
 
             strongly_supervised_first = False
             # CURRICULUM = None
-            NO_CURRICULUM = [constants.COUNT_filter_find_qtype, constants.MAX_filter_find_qtype,
-                             constants.MIN_filter_find_qtype, constants.NUM_filter_find_qtype]
+            # NO_CURRICULUM = [constants.COUNT_filter_find_qtype, constants.MAX_filter_find_qtype,
+            #                  constants.MIN_filter_find_qtype, constants.NUM_filter_find_qtype]
+            NO_CURRICULUM = []
 
             filtered_instance_list = []
             if self.filter_instances:

@@ -973,7 +973,13 @@ class DROPReaderNew(DatasetReader):
                            constants.MAX_find_qtype: self.maxnum_find_logicalforms,
                            constants.MAX_filter_find_qtype: self.maxnum_filterfind_logicalforms,
                            constants.COUNT_find_qtype: self.count_find_logicalforms,
-                           constants.COUNT_filter_find_qtype: self.count_filterfind_logicalforms}
+                           constants.COUNT_filter_find_qtype: self.count_filterfind_logicalforms,
+                           constants.RELOC_find_qtype: self.relocate_logicalforms,
+                           constants.RELOC_filterfind_qtype: self.relocate_logicalforms,
+                           constants.RELOC_maxfind_qtype: self.relocate_logicalforms,
+                           constants.RELOC_maxfilterfind_qtype: self.relocate_logicalforms,
+                           constants.RELOC_minfind_qtype: self.relocate_logicalforms,
+                           constants.RELOC_minfilterfind_qtype: self.relocate_logicalforms}
 
         gold_actionseq_idxs: List[List[int]] = []
         gold_actionseq_mask: List[List[int]] = []
@@ -1054,6 +1060,42 @@ class DROPReaderNew(DatasetReader):
         filter_passageattn_lf = DROPReaderNew.filter_passageattn_lf()
         gold_lf = f"(passageAttn2Count {filter_passageattn_lf})"
         return [gold_lf], ['count_number']
+
+
+    @staticmethod
+    def relocate_logicalforms(**kwargs) -> Tuple[List[str], List[str]]:
+        qtype = kwargs['qtype']
+        # Could be one of
+        # 'relocate_filterfind_qtype', 'relocate_minfind_qtype', 'relocate_maxfind_qtype',
+        # 'relocate_maxfilterfind_qtype', 'relocate_find_qtype', 'relocate_minfilterfind_qtype'
+
+        find = "find_PassageAttention"
+        filterfind = "(filter_PassageAttention find_PassageAttention)"
+        maxfind = "(maxNumPattn find_PassageAttention)"
+        maxfilterfind = f"(maxNumPattn {filterfind})"
+        minfind = "(minNumPattn find_PassageAttention)"
+        minfilterfind = f"(minNumPattn {filterfind})"
+
+        outer_leftside = "(find_passageSpanAnswer (relocate_PassageAttention "
+        outer_rightside = "))"
+
+        if qtype == constants.RELOC_find_qtype:
+            gold_lf = outer_leftside + find + outer_rightside
+        elif qtype == constants.RELOC_filterfind_qtype:
+            gold_lf = outer_leftside + filterfind + outer_rightside
+        elif qtype == constants.RELOC_maxfind_qtype:
+            gold_lf = outer_leftside + maxfind + outer_rightside
+        elif qtype == constants.RELOC_maxfilterfind_qtype:
+            gold_lf = outer_leftside + maxfilterfind + outer_rightside
+        elif qtype == constants.RELOC_minfind_qtype:
+            gold_lf = outer_leftside + minfind + outer_rightside
+        elif qtype == constants.RELOC_minfilterfind_qtype:
+            gold_lf = outer_leftside + minfilterfind + outer_rightside
+        else:
+            raise NotImplementedError
+
+        return [gold_lf], ['passage_span']
+
 
 
     @staticmethod

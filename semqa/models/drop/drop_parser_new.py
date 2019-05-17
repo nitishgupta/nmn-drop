@@ -620,14 +620,12 @@ class DROPParserNew(DROPParserBase):
         # # For printing predicted - programs
         # for idx, instance_progs in enumerate(batch_actionseqs):
         #     print(f"InstanceIdx:{idx}")
-        #     print(execution_supervised)
-        #     print(program_supervised)
         #     print(metadata[idx]["question_tokens"])
         #     scores = batch_actionseq_scores[idx]
         #     for prog, score in zip(instance_progs, scores):
-        #         print(prog)
         #         print(f"{languages[idx].action_sequence_to_logical_form(prog)} : {score}")
         #         # print(f"{prog} : {score}")
+        # print()
 
         # List[List[Any]], List[List[str]]: Denotations and their types for all instances
         batch_denotations, batch_denotation_types = self._get_denotations(batch_actionseqs,
@@ -659,14 +657,14 @@ class DROPParserNew(DROPParserBase):
                     self.excloss_metric(batch_exec_loss.item())
                 total_aux_loss += batch_exec_loss
 
-            # Num-grounding Loss on synthetic data
-            synthetic_numground_loss = self.synthetic_num_grounding_loss(qtypes,
-                                                                         synthetic_numground_metadata,
-                                                                         passage_passage_token2num_similarity,
-                                                                         passageidx2numberidx)
-            total_aux_loss += synthetic_numground_loss
-            if synthetic_numground_loss != 0:
-                self.excloss_metric(synthetic_numground_loss.item())
+            # # Num-grounding Loss on synthetic data -- DEPRECATED
+            # synthetic_numground_loss = self.synthetic_num_grounding_loss(qtypes,
+            #                                                              synthetic_numground_metadata,
+            #                                                              passage_passage_token2num_similarity,
+            #                                                              passageidx2numberidx)
+            # total_aux_loss += synthetic_numground_loss
+            # if synthetic_numground_loss != 0:
+            #     self.excloss_metric(synthetic_numground_loss.item())
 
             if self.qattloss:
                 # Compute Question Attention Supervision auxiliary loss
@@ -1121,10 +1119,15 @@ class DROPParserNew(DROPParserBase):
         """
         find_passage_attention = 'PassageAttention -> find_PassageAttention'
         filter_passage_attention = '<PassageAttention:PassageAttention> -> filter_PassageAttention'
+        relocate_passage_attention = '<PassageAttention:PassageAttention_answer> -> relocate_PassageAttention'
 
         single_find_passage_attention_list = [find_passage_attention]
         double_find_passage_attentions_list = [find_passage_attention, find_passage_attention]
         filter_find_passage_attention_list = [filter_passage_attention, find_passage_attention]
+        relocate_find_passage_attention_list = [relocate_passage_attention, find_passage_attention]
+        relocate_filterfind_passage_attention_list = [relocate_passage_attention,
+                                                      filter_passage_attention,
+                                                      find_passage_attention]
 
         qtypes_w_findPA = [dropconstants.NUM_find_qtype, dropconstants.MAX_find_qtype, dropconstants.MIN_find_qtype,
                            dropconstants.COUNT_find_qtype,
@@ -1136,27 +1139,24 @@ class DROPParserNew(DROPParserBase):
 
         qtypes_w_two_findPA = [dropconstants.DATECOMP_QTYPE, dropconstants.NUMCOMP_QTYPE]
 
+        qtypes_w_relocatefindPA = [dropconstants.RELOC_find_qtype, dropconstants.RELOC_maxfind_qtype,
+                                   dropconstants.RELOC_minfind_qtype]
+        qtypes_w_relocate_filterfindPA = [dropconstants.RELOC_filterfind_qtype, dropconstants.RELOC_maxfilterfind_qtype,
+                                          dropconstants.RELOC_minfilterfind_qtype]
+
+
         qtype2relevant_actions_list = {}
 
         for qtype in qtypes_w_findPA:
             qtype2relevant_actions_list[qtype] = single_find_passage_attention_list
         for qtype in qtypes_w_two_findPA:
             qtype2relevant_actions_list[qtype] = double_find_passage_attentions_list
-            for qtype in qtypes_w_filterfindPA:
-                qtype2relevant_actions_list[qtype] = filter_find_passage_attention_list
-
-            # qtype2relevant_actions_list = \
-        #        {
-        #            dropconstants.DATECOMP_QTYPE: ['PassageAttention -> find_PassageAttention',
-        #                                           'PassageAttention -> find_PassageAttention'],
-        #            dropconstants.NUMCOMP_QTYPE: ['PassageAttention -> find_PassageAttention',
-        #                                          'PassageAttention -> find_PassageAttention'],
-        #            dropconstants.YARDS_longest_qtype: ['PassageAttention -> find_PassageAttention'],
-        #            dropconstants.YARDS_shortest_qtype: ['PassageAttention -> find_PassageAttention'],
-        #            dropconstants.YARDS_findnum_qtype: ['PassageAttention -> find_PassageAttention'],
-        #            dropconstants.COUNT_find_qtype: ['PassageAttention -> find_PassageAttention'],
-        #            dropconstants.NUM_find_qtype: ['PassageAttention -> find_PassageAttention'],
-        #        }
+        for qtype in qtypes_w_filterfindPA:
+            qtype2relevant_actions_list[qtype] = filter_find_passage_attention_list
+        for qtype in qtypes_w_relocatefindPA:
+            qtype2relevant_actions_list[qtype] = relocate_find_passage_attention_list
+        for qtype in qtypes_w_relocate_filterfindPA:
+            qtype2relevant_actions_list[qtype] = relocate_filterfind_passage_attention_list
 
         loss = 0.0
         normalizer = 0
@@ -1169,6 +1169,7 @@ class DROPParserNew(DROPParserBase):
             qtype = qtypes[ins_idx]
             if qtype not in qtype2relevant_actions_list:
                 continue
+
             instance_programs = batch_actionseqs[ins_idx]
             instance_prog_sideargs = batch_actionseq_sideargs[ins_idx]
             # Shape: (R, question_length)

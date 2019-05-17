@@ -9,7 +9,7 @@ export BEAMSIZE=1
 export DEBUG=true
 
 # SAVED MODEL
-MODEL_DIR=./resources/semqa/checkpoints/drop/date_num/date_numcq_hmvy_cnt_rel_500/drop_parser/TOKENS_qanet/ED_100/RG_1e-07/MODELTYPE_encoded/CNTFIX_false/aux_true/SUPEPOCHS_5/S_100/NewModel
+MODEL_DIR=./resources/semqa/checkpoints/drop/num/hmyw_relprog/drop_parser/TOKENS_qanet/ED_100/RG_1e-07/MODELTYPE_encoded/CNTFIX_false/aux_true/SUPEPOCHS_0/S_10/NewModel
 MODEL_TAR=${MODEL_DIR}/model.tar.gz
 PREDICTION_DIR=${MODEL_DIR}/predictions
 mkdir ${PREDICTION_DIR}
@@ -17,7 +17,8 @@ mkdir ${PREDICTION_DIR}
 # EVALUATION DATASET
 SUBFOLDER=num
 
-for EVAL_DATASET in numcomp_full count_filterqattn hmyw_filter who_relocate
+for EVAL_DATASET in who_relocate
+# for EVAL_DATASET in numcomp_full count_filterqattn hmyw_filter who_relocate
 # for EVAL_DATASET in datecomp_full year_diff
 do
     DATASET_DIR=./resources/data/drop_s/${SUBFOLDER}/${EVAL_DATASET}

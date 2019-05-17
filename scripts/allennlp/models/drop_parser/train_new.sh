@@ -3,7 +3,7 @@
 export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
-DATASET_NAME=date_num/date_numcq_hmvy_cnt_rel_500
+DATASET_NAME=date_num/date_numcq_hmvy_cnt_relprog_500_no_exec
 
 DATASET_DIR=./resources/data/drop_s/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
@@ -35,7 +35,7 @@ export BIDAF_WORDEMB_FILE="https://s3-us-west-2.amazonaws.com/allennlp/datasets/
 
 export MODELTYPE=encoded
 export COUNT_FIXED=false
-export AUXLOSS=false
+export AUXLOSS=true
 
 export DENLOSS=true
 export EXCLOSS=true

@@ -4,8 +4,8 @@ ROOT_DIR=./resources/data/drop_s
 
 ANNOTATION_FOR_PARAS=500
 
-INPUT_DIR=${ROOT_DIR}/date_num/date_numcq_hmvy_cnt_rel
-OUTPUT_DIR=${ROOT_DIR}/date_num/date_numcq_hmvy_cnt_rel_${ANNOTATION_FOR_PARAS}
+INPUT_DIR=${ROOT_DIR}/date_num/date_numcq_hmvy_cnt_relprog
+OUTPUT_DIR=${ROOT_DIR}/date_num/date_numcq_hmvy_cnt_relprog_${ANNOTATION_FOR_PARAS}
 
 mkdir ${OUTPUT_DIR}
 
