@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-#ROOT_DIR=./resources/data/hotpotqa
+#ROOT_DIR=./resources/data/hotpotqa_model
 #RAW_JSON_DIR=${ROOT_DIR}/raw
 #
 #TRAIN_JSON=hotpot_train_v1.json

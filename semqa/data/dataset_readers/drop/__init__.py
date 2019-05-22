@@ -1,1 +1,0 @@
-from semqa.data.dataset_readers.drop.drop_reader import DROPReader

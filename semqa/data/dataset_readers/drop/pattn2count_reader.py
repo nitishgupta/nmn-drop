@@ -1,26 +1,12 @@
-import json
 import random
 import logging
-import itertools
 import numpy as np
-from typing import Dict, List, Union, Tuple, Any
-from collections import defaultdict
+from typing import List
 from overrides import overrides
-from allennlp.common.file_utils import cached_path
+from collections import defaultdict
 from allennlp.data.dataset_readers.dataset_reader import DatasetReader
 from allennlp.data.instance import Instance
-from allennlp.data.dataset_readers.reading_comprehension.util import make_reading_comprehension_instance
-from allennlp.data.token_indexers import SingleIdTokenIndexer, TokenIndexer
-from allennlp.data.tokenizers import Token, Tokenizer, WordTokenizer
-from allennlp.data.dataset_readers.reading_comprehension.util import IGNORED_TOKENS, STRIPPED_CHARACTERS
-from allennlp.data.fields import Field, TextField, MetadataField, LabelField, ListField, \
-    SequenceLabelField, SpanField, IndexField, ProductionRuleField, ArrayField
-
-from collections import defaultdict
-
-from datasets.drop import constants
-
-# from reading_comprehension.utils import split_tokens_by_hyphen
+from allennlp.data.fields import MetadataField, LabelField, ArrayField
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 

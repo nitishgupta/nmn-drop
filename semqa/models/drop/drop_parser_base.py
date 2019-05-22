@@ -1,23 +1,18 @@
 import logging
 from typing import Dict, List, Tuple, Any, TypeVar, Optional
-
 from overrides import overrides
-
 import torch
 
 from allennlp.data.fields.production_rule_field import ProductionRule
 from allennlp.data.vocabulary import Vocabulary
 from allennlp.models.model import Model
-from allennlp.modules import TextFieldEmbedder, Seq2SeqEncoder, Embedding, FeedForward
-from allennlp.nn import util
-from allennlp.state_machines.states import GrammarBasedState, GrammarStatelet, RnnStatelet, State
+from allennlp.modules import TextFieldEmbedder, Embedding
+from allennlp.state_machines.states import GrammarStatelet, RnnStatelet, State
 from allennlp.training.metrics import Average
-from allennlp.modules.span_extractors.span_extractor import SpanExtractor
 import allennlp.common.util as alcommon_utils
-from allennlp.nn import InitializerApplicator, RegularizerApplicator
+from allennlp.nn import RegularizerApplicator
 
 import semqa.domain_languages.domain_language_utils as dl_utils
-from semqa.domain_languages.drop.execution_parameters import ExecutorParameters
 from semqa.domain_languages.drop.drop_language import DropLanguage
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -25,6 +20,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 StateType = TypeVar('StateType', bound=State)
 
 START_SYMBOL = alcommon_utils.START_SYMBOL
+
 
 class DROPParserBase(Model):
     """ DROP Parser BaseClass """

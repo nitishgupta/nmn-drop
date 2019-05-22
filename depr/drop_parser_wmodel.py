@@ -2,7 +2,10 @@ import logging
 from typing import List, Dict, Any, Tuple, Optional, Set, Union
 import numpy as np
 import random
+
 from overrides import overrides
+
+import json
 
 import torch
 import torch.nn.functional as F
@@ -10,7 +13,8 @@ import torch.nn.functional as F
 from allennlp.data.fields.production_rule_field import ProductionRule
 from allennlp.data.vocabulary import Vocabulary
 from allennlp.models.model import Model
-from allennlp.modules import Highway, Attention, TextFieldEmbedder, Seq2SeqEncoder
+from allennlp.modules import Highway, Attention, TextFieldEmbedder, Seq2SeqEncoder, Seq2VecEncoder
+from allennlp.modules.text_field_embedders.basic_text_field_embedder import BasicTextFieldEmbedder
 from allennlp.nn import Activation
 from allennlp.modules.matrix_attention import MatrixAttention, DotProductMatrixAttention, LinearMatrixAttention
 from allennlp.state_machines.states import GrammarBasedState
@@ -23,15 +27,17 @@ from allennlp.state_machines import BeamSearch
 from allennlp.state_machines import ConstrainedBeamSearch
 from semqa.state_machines.constrained_beam_search import ConstrainedBeamSearch as MyConstrainedBeamSearch
 from allennlp.training.metrics import Average, DropEmAndF1
+from semqa.models.utils.bidaf_utils import PretrainedBidafModelUtils
 from semqa.models.utils import semparse_utils
+from allennlp.modules.matrix_attention import (MatrixAttention, BilinearMatrixAttention)
 
 from semqa.models.drop.drop_parser_base import DROPParserBase
-from semqa.domain_languages.drop import (DropLanguage, Date,
-                                         QuestionSpanAnswer, PassageSpanAnswer, YearDifference, PassageNumber,
-                                         CountNumber, PassageNumberDifference)
-from semqa.domain_languages.drop import ExecutorParameters
+from semqa.domain_languages.drop_lang_depr import (DropLanguage, Date, ExecutorParameters,
+                                                   QuestionSpanAnswer, PassageSpanAnswer, YearDifference, PassageNumber,
+                                                   CountNumber, PassageNumberDifference)
 
 import datasets.drop.constants as dropconstants
+import utils.util as myutils
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -39,8 +45,12 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 GOLD_BOOL_LF = ("(bool_and (bool_qent_qstr ", ") (bool_qent_qstr", "))")
 
 
-@Model.register("drop_parser")
-class DROPParser(DROPParserBase):
+# num_attentions_f = open('num.json', 'w')
+# date_attentions_f = open('date.json', 'w')
+
+
+@Model.register("drop_parser_wmodel")
+class DROPSemanticWModelParser(DROPParserBase):
     def __init__(self,
                  vocab: Vocabulary,
                  action_embedding_dim: int,
@@ -52,7 +62,9 @@ class DROPParser(DROPParserBase):
                  passage_attention_to_span: Seq2SeqEncoder,
                  question_attention_to_span: Seq2SeqEncoder,
                  passage_attention_to_count: Seq2SeqEncoder,
+                 # passage_attention_to_count: Seq2VecEncoder,
                  beam_size: int,
+                 # decoder_beam_search: ConstrainedBeamSearch,
                  max_decoding_steps: int,
                  modeltype: str = "modeled",     # or encoded
                  countfixed: bool = False,
@@ -67,11 +79,11 @@ class DROPParser(DROPParserBase):
                  initializers: InitializerApplicator = InitializerApplicator(),
                  regularizer: Optional[RegularizerApplicator] = None) -> None:
 
-        super(DROPParser, self).__init__(vocab=vocab,
-                                         action_embedding_dim=action_embedding_dim,
-                                         dropout=dropout,
-                                         debug=debug,
-                                         regularizer=regularizer)
+        super(DROPSemanticWModelParser, self).__init__(vocab=vocab,
+                                                       action_embedding_dim=action_embedding_dim,
+                                                       dropout=dropout,
+                                                       debug=debug,
+                                                       regularizer=regularizer)
 
 
         question_encoding_dim = phrase_layer.get_output_dim()
@@ -606,14 +618,18 @@ class DROPParser(DROPParserBase):
 
 
         # # For printing predicted - programs
+        # print("\n\n")
         # for idx, instance_progs in enumerate(batch_actionseqs):
         #     print(f"InstanceIdx:{idx}")
+        #     print(execution_supervised)
+        #     print(program_supervised)
         #     print(metadata[idx]["question_tokens"])
         #     scores = batch_actionseq_scores[idx]
         #     for prog, score in zip(instance_progs, scores):
+        #         print(prog)
         #         print(f"{languages[idx].action_sequence_to_logical_form(prog)} : {score}")
         #         # print(f"{prog} : {score}")
-        # print()
+        #     print("\n")
 
         # List[List[Any]], List[List[str]]: Denotations and their types for all instances
         batch_denotations, batch_denotation_types = self._get_denotations(batch_actionseqs,
@@ -645,14 +661,14 @@ class DROPParser(DROPParserBase):
                     self.excloss_metric(batch_exec_loss.item())
                 total_aux_loss += batch_exec_loss
 
-            # # Num-grounding Loss on synthetic data -- DEPRECATED
-            # synthetic_numground_loss = self.synthetic_num_grounding_loss(qtypes,
-            #                                                              synthetic_numground_metadata,
-            #                                                              passage_passage_token2num_similarity,
-            #                                                              passageidx2numberidx)
-            # total_aux_loss += synthetic_numground_loss
-            # if synthetic_numground_loss != 0:
-            #     self.excloss_metric(synthetic_numground_loss.item())
+            # Num-grounding Loss on synthetic data
+            synthetic_numground_loss = self.synthetic_num_grounding_loss(qtypes,
+                                                                         synthetic_numground_metadata,
+                                                                         passage_passage_token2num_similarity,
+                                                                         passageidx2numberidx)
+            total_aux_loss += synthetic_numground_loss
+            if synthetic_numground_loss != 0:
+                self.excloss_metric(synthetic_numground_loss.item())
 
             if self.qattloss:
                 # Compute Question Attention Supervision auxiliary loss
@@ -1107,15 +1123,10 @@ class DROPParser(DROPParserBase):
         """
         find_passage_attention = 'PassageAttention -> find_PassageAttention'
         filter_passage_attention = '<PassageAttention:PassageAttention> -> filter_PassageAttention'
-        relocate_passage_attention = '<PassageAttention:PassageAttention_answer> -> relocate_PassageAttention'
 
         single_find_passage_attention_list = [find_passage_attention]
         double_find_passage_attentions_list = [find_passage_attention, find_passage_attention]
         filter_find_passage_attention_list = [filter_passage_attention, find_passage_attention]
-        relocate_find_passage_attention_list = [relocate_passage_attention, find_passage_attention]
-        relocate_filterfind_passage_attention_list = [relocate_passage_attention,
-                                                      filter_passage_attention,
-                                                      find_passage_attention]
 
         qtypes_w_findPA = [dropconstants.NUM_find_qtype, dropconstants.MAX_find_qtype, dropconstants.MIN_find_qtype,
                            dropconstants.COUNT_find_qtype,
@@ -1127,24 +1138,27 @@ class DROPParser(DROPParserBase):
 
         qtypes_w_two_findPA = [dropconstants.DATECOMP_QTYPE, dropconstants.NUMCOMP_QTYPE]
 
-        qtypes_w_relocatefindPA = [dropconstants.RELOC_find_qtype, dropconstants.RELOC_maxfind_qtype,
-                                   dropconstants.RELOC_minfind_qtype]
-        qtypes_w_relocate_filterfindPA = [dropconstants.RELOC_filterfind_qtype, dropconstants.RELOC_maxfilterfind_qtype,
-                                          dropconstants.RELOC_minfilterfind_qtype]
-
-
         qtype2relevant_actions_list = {}
 
         for qtype in qtypes_w_findPA:
             qtype2relevant_actions_list[qtype] = single_find_passage_attention_list
         for qtype in qtypes_w_two_findPA:
             qtype2relevant_actions_list[qtype] = double_find_passage_attentions_list
-        for qtype in qtypes_w_filterfindPA:
-            qtype2relevant_actions_list[qtype] = filter_find_passage_attention_list
-        for qtype in qtypes_w_relocatefindPA:
-            qtype2relevant_actions_list[qtype] = relocate_find_passage_attention_list
-        for qtype in qtypes_w_relocate_filterfindPA:
-            qtype2relevant_actions_list[qtype] = relocate_filterfind_passage_attention_list
+            for qtype in qtypes_w_filterfindPA:
+                qtype2relevant_actions_list[qtype] = filter_find_passage_attention_list
+
+            # qtype2relevant_actions_list = \
+        #        {
+        #            dropconstants.DATECOMP_QTYPE: ['PassageAttention -> find_PassageAttention',
+        #                                           'PassageAttention -> find_PassageAttention'],
+        #            dropconstants.NUMCOMP_QTYPE: ['PassageAttention -> find_PassageAttention',
+        #                                          'PassageAttention -> find_PassageAttention'],
+        #            dropconstants.YARDS_longest_qtype: ['PassageAttention -> find_PassageAttention'],
+        #            dropconstants.YARDS_shortest_qtype: ['PassageAttention -> find_PassageAttention'],
+        #            dropconstants.YARDS_findnum_qtype: ['PassageAttention -> find_PassageAttention'],
+        #            dropconstants.COUNT_find_qtype: ['PassageAttention -> find_PassageAttention'],
+        #            dropconstants.NUM_find_qtype: ['PassageAttention -> find_PassageAttention'],
+        #        }
 
         loss = 0.0
         normalizer = 0
@@ -1157,7 +1171,6 @@ class DROPParser(DROPParserBase):
             qtype = qtypes[ins_idx]
             if qtype not in qtype2relevant_actions_list:
                 continue
-
             instance_programs = batch_actionseqs[ins_idx]
             instance_prog_sideargs = batch_actionseq_sideargs[ins_idx]
             # Shape: (R, question_length)
@@ -1333,39 +1346,25 @@ class DROPParser(DROPParserBase):
         """
         """ batch_event_num_groundings: For each question, a 1- or 2--tuple containing the correct num-grounding for the
             two events mentioned in the question.
-            
-            Currently, for each qtype, we only have supervision for one of the actions, hence this function works
-            (The tuple contains both groundings for the same action)
-            If we need somthing like qattn, where multiple supervisions are provided, things will have to change
         """
-        # Reusing the function written for dates -- should work fine
         # List[Tuple[torch.Tensor, torch.Tensor]]
+        # Resuing the function written for dates -- should work fine
         q_event_num_groundings = self.get_gold_question_event_date_grounding(numcomp_qspan_num_groundings,
                                                                              device_id)
-        numcomp_action_gt = '<PassageAttention,PassageAttention:PassageAttention_answer> -> compare_num_greater_than'
-        numcomp_action_lt = '<PassageAttention,PassageAttention:PassageAttention_answer> -> compare_num_greater_than'
-        findnum_action = '<PassageAttention:PassageNumber> -> find_PassageNumber'
-        maxNumPattn_action = '<PassageAttention:PassageAttention> -> maxNumPattn'
-        minNumPattn_action = '<PassageAttention:PassageAttention> -> minNumPattn'
 
-        qtype2relevant_actions_list = {
-                                        dropconstants.NUMCOMP_QTYPE: [numcomp_action_gt, numcomp_action_lt],
-                                        dropconstants.NUM_find_qtype: [findnum_action],
-                                        dropconstants.NUM_filter_find_qtype: [findnum_action],
-                                        dropconstants.MAX_find_qtype: [maxNumPattn_action],
-                                        dropconstants.MAX_filter_find_qtype: [maxNumPattn_action],
-                                        dropconstants.MIN_find_qtype: [minNumPattn_action],
-                                        dropconstants.MIN_filter_find_qtype: [minNumPattn_action],
-                                      }
+        relevant_action1 = '<PassageAttention,PassageAttention:PassageAttention_answer> -> compare_num_greater_than'
+        relevant_action2 = '<PassageAttention,PassageAttention:PassageAttention_answer> -> compare_num_lesser_than'
+        relevant_action3 = '<PassageAttention:PassageNumber> -> find_PassageNumber'
+        relevant_action4 = '<PassageAttention:PassageNumber> -> max_num'
+        relevant_action5 = '<PassageAttention:PassageNumber> -> min_num'
+
+        relevant_actions = [relevant_action1, relevant_action2, relevant_action3,
+                            relevant_action4, relevant_action5]
 
         for ins_idx in range(len(batch_actionseqs)):
             instance_programs = batch_actionseqs[ins_idx]
             instance_prog_sideargs = batch_actionseq_sideargs[ins_idx]
             event_num_groundings = q_event_num_groundings[ins_idx]
-            qtype = qtypes[ins_idx]    # Could be UNK
-            if qtype not in qtype2relevant_actions_list:
-                continue
-            relevant_actions = qtype2relevant_actions_list[qtype]
             for program, side_args in zip(instance_programs, instance_prog_sideargs):
                 for action, sidearg_dict in zip(program, side_args):
                     if action in relevant_actions:

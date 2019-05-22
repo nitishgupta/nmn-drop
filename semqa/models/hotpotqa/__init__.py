@@ -1,3 +1,0 @@
-from semqa.models.hotpotqa.hotpotqa_parser_base import HotpotQAParserBase
-from semqa.models.hotpotqa.hotpotqa_semantic_parser import HotpotQASemanticParser
-from semqa.models.hotpotqa.bidaf import BidafModel

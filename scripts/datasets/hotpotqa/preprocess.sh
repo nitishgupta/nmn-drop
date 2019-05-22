@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-#ROOT_DIR=/srv/local/data/nitishg/data/hotpotqa
+#ROOT_DIR=/srv/local/data/nitishg/data/hotpotqa_model
 #RAW_JSON_DIR=${ROOT_DIR}/raw
 #TOKENIZED_DIR=${ROOT_DIR}/tokenized
 #PROCESSED_DIR=${ROOT_DIR}/processed

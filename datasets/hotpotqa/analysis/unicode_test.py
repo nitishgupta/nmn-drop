@@ -1,13 +1,13 @@
 import json
 import datasets.hotpotqa.utils.constants as constants
 
-f = open('/srv/local/data/nitishg/data/hotpotqa/raw/hotpot_train_v1.json', 'r')
+f = open('/srv/local/data/nitishg/data/hotpotqa_model/raw/hotpot_train_v1.json', 'r')
 
 json_objs = json.load(f)
 
 f.close()
 
-outf = open('/srv/local/data/nitishg/data/hotpotqa/raw/sample.json', 'w')
+outf = open('/srv/local/data/nitishg/data/hotpotqa_model/raw/sample.json', 'w')
 
 relevant = []
 

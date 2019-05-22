@@ -2,16 +2,16 @@ from typing import List, Union
 
 from overrides import overrides
 
-from allennlp.common.util import JsonDict, sanitize, group_by_count
+from allennlp.common.util import JsonDict, sanitize
 from allennlp.data import DatasetReader, Instance
 from allennlp.models import Model
 from allennlp.predictors.predictor import Predictor
-import datasets.hotpotqa.utils.constants as hpconstants
 import utils.util as myutils
 
 from allennlp.tools.squad_eval import metric_max_over_ground_truths
 from allennlp.tools.drop_eval import (get_metrics as drop_em_and_f1,
                                       answer_json_to_strings)
+
 
 def f1metric(prediction: Union[str, List], ground_truths: List):  # type: ignore
     """

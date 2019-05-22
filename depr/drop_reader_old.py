@@ -9,14 +9,18 @@ from overrides import overrides
 from allennlp.common.file_utils import cached_path
 from allennlp.data.dataset_readers.dataset_reader import DatasetReader
 from allennlp.data.instance import Instance
+from allennlp.data.dataset_readers.reading_comprehension.util import make_reading_comprehension_instance
 from allennlp.data.token_indexers import SingleIdTokenIndexer, TokenIndexer
-from allennlp.data.tokenizers import Token, Tokenizer
+from allennlp.data.tokenizers import Token, Tokenizer, WordTokenizer
 from allennlp.data.dataset_readers.reading_comprehension.util import IGNORED_TOKENS, STRIPPED_CHARACTERS
-from allennlp.data.fields import Field, TextField, MetadataField, ListField, SpanField, ProductionRuleField, ArrayField
+from allennlp.data.fields import Field, TextField, MetadataField, LabelField, ListField, \
+    SequenceLabelField, SpanField, IndexField, ProductionRuleField, ArrayField
 
-from semqa.domain_languages.drop.drop_language import DropLanguage, Date, get_empty_language_object
+from semqa.domain_languages.drop_lang_depr.drop_language import DropLanguage, Date, get_empty_language_object
+
 from datasets.drop import constants
 
+# from reading_comprehension.utils import split_tokens_by_hyphen
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -28,8 +32,8 @@ WORD_NUMBER_MAP = {"zero": 0, "one": 1, "two": 2, "three": 3, "four": 4,
                    "sixteen": 16, "seventeen": 17, "eighteen": 18, "nineteen": 19}
 
 
-@DatasetReader.register("drop_reader")
-class DROPReaderNew(DatasetReader):
+@DatasetReader.register("drop_reader_old")
+class DROPReader(DatasetReader):
     def __init__(self,
                  lazy: bool = True,
                  tokenizer: Tokenizer = None,
@@ -430,14 +434,13 @@ class DROPReaderNew(DatasetReader):
 
             # Using the first one for training (really, there's only one)
             answer_annotation = answer_annotations[0]
-
-            # answer_type = "UNK"
-            # if answer_annotation["spans"]:
-            #     answer_type = "spans"
-            # elif answer_annotation["number"]:
-            #     answer_type = "number"
-            # else:
-            #     raise NotImplementedError
+            answer_type = "UNK"
+            if answer_annotation["spans"]:
+                answer_type = "spans"
+            elif answer_annotation["number"]:
+                answer_type = "number"
+            else:
+                raise NotImplementedError
 
             # This list contains the possible-start-types for programs that can yield the correct answer
             # For example, if the answer is a number but also in passage, this will contain two keys
@@ -476,9 +479,8 @@ class DROPReaderNew(DatasetReader):
                 # Answer as number string does not exist.
                 if self.convert_spananswer_to_num:
                     # Try to convert "X" or "X-yard(s)" into number(X)
-                    # span_answer_text = answer_annotation["spans"][0]
+                    span_answer_text = answer_annotation["spans"][0]
                     try:
-                        span_answer_text = answer_annotation["spans"][0]
                         span_answer_number = float(span_answer_text)
                     except:
                         span_answer_number = None
@@ -966,20 +968,28 @@ class DROPReaderNew(DatasetReader):
 
         qtype_to_lffunc = {constants.DATECOMP_QTYPE: self.datecomp_logicalforms,
                            constants.NUMCOMP_QTYPE: self.numcomp_logicalforms,
+                           constants.YARDS_longest_qtype: self.yardslongest_logicalforms,
+                           constants.YARDS_shortest_qtype: self.yardsshortest_logicalforms,
+                           constants.YARDS_findnum_qtype: self.findnum_logicalforms,
                            constants.NUM_find_qtype: self.findnum_logicalforms,
                            constants.NUM_filter_find_qtype: self.filterfindnum_logicalforms,
                            constants.MIN_find_qtype: self.minnum_find_logicalforms,
                            constants.MIN_filter_find_qtype: self.minnum_filterfind_logicalforms,
                            constants.MAX_find_qtype: self.maxnum_find_logicalforms,
                            constants.MAX_filter_find_qtype: self.maxnum_filterfind_logicalforms,
+                           constants.DIFF_MAXMIN_qtype: self.numdiff_logicalforms,
+                           constants.DIFF_MAXNUM_qtype: self.numdiff_logicalforms,
+                           constants.DIFF_MAXMAX_qtype: self.numdiff_logicalforms,
+                           constants.DIFF_NUMMAX_qtype: self.numdiff_logicalforms,
+                           constants.DIFF_NUMMIN_qtype: self.numdiff_logicalforms,
+                           constants.DIFF_NUMNUM_qtype: self.numdiff_logicalforms,
+                           constants.DIFF_MINMAX_qtype: self.numdiff_logicalforms,
+                           constants.DIFF_MINNUM_qtype: self.numdiff_logicalforms,
+                           constants.DIFF_MINMIN_qtype: self.numdiff_logicalforms,
                            constants.COUNT_find_qtype: self.count_find_logicalforms,
                            constants.COUNT_filter_find_qtype: self.count_filterfind_logicalforms,
-                           constants.RELOC_find_qtype: self.relocate_logicalforms,
-                           constants.RELOC_filterfind_qtype: self.relocate_logicalforms,
-                           constants.RELOC_maxfind_qtype: self.relocate_logicalforms,
-                           constants.RELOC_maxfilterfind_qtype: self.relocate_logicalforms,
-                           constants.RELOC_minfind_qtype: self.relocate_logicalforms,
-                           constants.RELOC_minfilterfind_qtype: self.relocate_logicalforms}
+                           constants.SYN_COUNT_qtype: self.count_find_logicalforms,
+                           constants.SYN_NUMGROUND_qtype: self.findnum_logicalforms}
 
         gold_actionseq_idxs: List[List[int]] = []
         gold_actionseq_mask: List[List[int]] = []
@@ -1024,78 +1034,60 @@ class DROPReaderNew(DatasetReader):
 
     @staticmethod
     def filterfindnum_logicalforms(**kwargs) -> Tuple[List[str], List[str]]:
-        filter_passage_attention_lf = DROPReaderNew.filter_passageattn_lf()
+        filter_passage_attention_lf = DROPReader.filter_passageattn_lf()
         gold_lf = f"(find_PassageNumber {filter_passage_attention_lf})"
         return [gold_lf], ['passage_number']
 
     @staticmethod
     def minnum_find_logicalforms(**kwargs) -> Tuple[List[str], List[str]]:
-        gold_lf = f"(find_PassageNumber (minNumPattn find_PassageAttention))"
+        # find_num_lfs, _ = DROPReader.findnum_logicalforms()
+        # find_num_lf = find_num_lfs[0]
+        # gold_lf = f"(min_PassageNumber {find_num_lf})"
+        gold_lf = f"(min_num find_PassageAttention)"
         return [gold_lf], ['passage_number']
 
     @staticmethod
     def minnum_filterfind_logicalforms(**kwargs) -> Tuple[List[str], List[str]]:
-        filter_passage_attention_lf = DROPReaderNew.filter_passageattn_lf()
-        gold_lf = f"(find_PassageNumber (minNumPattn {filter_passage_attention_lf}))"
+        # findfilter_num_lfs, _ = DROPReader.filterfindnum_logicalforms()
+        # findfilter_num_lf = findfilter_num_lfs[0]
+        # gold_lf = f"(min_PassageNumber {findfilter_num_lf})"
+        filter_passage_attention_lf = DROPReader.filter_passageattn_lf()
+        gold_lf = f"(min_num {filter_passage_attention_lf})"
         return [gold_lf], ['passage_number']
 
     @staticmethod
     def maxnum_find_logicalforms(**kwargs) -> Tuple[List[str], List[str]]:
-        gold_lf = f"(find_PassageNumber (maxNumPattn find_PassageAttention))"
+        # find_num_lfs, _ = DROPReader.findnum_logicalforms()
+        # find_num_lf = find_num_lfs[0]
+        # gold_lf = f"(max_PassageNumber {find_num_lf})"
+        gold_lf = f"(max_num find_PassageAttention)"
         return [gold_lf], ['passage_number']
 
     @staticmethod
     def maxnum_filterfind_logicalforms(**kwargs) -> Tuple[List[str], List[str]]:
-        filter_passage_attention_lf = DROPReaderNew.filter_passageattn_lf()
-        gold_lf = f"(find_PassageNumber (maxNumPattn {filter_passage_attention_lf}))"
+        # findfilter_num_lfs, _ = DROPReader.filterfindnum_logicalforms()
+        # findfilter_num_lf = findfmax_PassageNumberilter_num_lfs[0]
+        # gold_lf = f"(max_PassageNumber {findfilter_num_lf})"
+        filter_passage_attention_lf = DROPReader.filter_passageattn_lf()
+        gold_lf = f"(max_num {filter_passage_attention_lf})"
         return [gold_lf], ['passage_number']
 
     @staticmethod
     def count_find_logicalforms(**kwargs)  -> Tuple[List[str], List[str]]:
+        # find_num_lfs, _ = DROPReader.findnum_logicalforms()
+        # find_num_lf = find_num_lfs[0]
+        # gold_lf = f"(numberDistribution2Count {find_num_lf})"
         gold_lf = "(passageAttn2Count find_PassageAttention)"
         return [gold_lf], ['count_number']
 
     @staticmethod
     def count_filterfind_logicalforms(**kwargs) -> Tuple[List[str], List[str]]:
-        filter_passageattn_lf = DROPReaderNew.filter_passageattn_lf()
+        # findfilter_num_lfs, _ = DROPReader.filterfindnum_logicalforms()
+        # findfilter_num_lf = findfilter_num_lfs[0]
+        # gold_lf = f"(numberDistribution2Count {findfilter_num_lf})"
+        filter_passageattn_lf = DROPReader.filter_passageattn_lf()
         gold_lf = f"(passageAttn2Count {filter_passageattn_lf})"
         return [gold_lf], ['count_number']
-
-
-    @staticmethod
-    def relocate_logicalforms(**kwargs) -> Tuple[List[str], List[str]]:
-        qtype = kwargs['qtype']
-        # Could be one of
-        # 'relocate_filterfind_qtype', 'relocate_minfind_qtype', 'relocate_maxfind_qtype',
-        # 'relocate_maxfilterfind_qtype', 'relocate_find_qtype', 'relocate_minfilterfind_qtype'
-
-        find = "find_PassageAttention"
-        filterfind = "(filter_PassageAttention find_PassageAttention)"
-        maxfind = "(maxNumPattn find_PassageAttention)"
-        maxfilterfind = f"(maxNumPattn {filterfind})"
-        minfind = "(minNumPattn find_PassageAttention)"
-        minfilterfind = f"(minNumPattn {filterfind})"
-
-        outer_leftside = "(find_passageSpanAnswer (relocate_PassageAttention "
-        outer_rightside = "))"
-
-        if qtype == constants.RELOC_find_qtype:
-            gold_lf = outer_leftside + find + outer_rightside
-        elif qtype == constants.RELOC_filterfind_qtype:
-            gold_lf = outer_leftside + filterfind + outer_rightside
-        elif qtype == constants.RELOC_maxfind_qtype:
-            gold_lf = outer_leftside + maxfind + outer_rightside
-        elif qtype == constants.RELOC_maxfilterfind_qtype:
-            gold_lf = outer_leftside + maxfilterfind + outer_rightside
-        elif qtype == constants.RELOC_minfind_qtype:
-            gold_lf = outer_leftside + minfind + outer_rightside
-        elif qtype == constants.RELOC_minfilterfind_qtype:
-            gold_lf = outer_leftside + minfilterfind + outer_rightside
-        else:
-            raise NotImplementedError
-
-        return [gold_lf], ['passage_span']
-
 
 
     @staticmethod

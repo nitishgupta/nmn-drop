@@ -18,7 +18,7 @@ def grouper(n, iterable, padvalue=None):
 
 
 def onlyGoldContexts(jsonobj):
-    """ Takes a hotpotqa jsonobj instance, and returns a jsonobj which only contains gold_contexts """
+    """ Takes a hotpotqa_model jsonobj instance, and returns a jsonobj which only contains gold_contexts """
 
     new_doc = copy.deepcopy(jsonobj)
 
