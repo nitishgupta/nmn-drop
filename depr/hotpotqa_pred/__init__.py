@@ -1,1 +1,0 @@
-from depr.hotpotqa_pred.hotpotqa_predictor import HotpotQAPredictor

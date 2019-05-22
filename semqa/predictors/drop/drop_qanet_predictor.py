@@ -7,7 +7,6 @@ from allennlp.data import DatasetReader, Instance
 from allennlp.models import Model
 from allennlp.predictors.predictor import Predictor
 import datasets.hotpotqa.utils.constants as hpconstants
-import utils.util as myutils
 
 from allennlp.tools.squad_eval import metric_max_over_ground_truths
 from allennlp.tools.drop_eval import (get_metrics as drop_em_and_f1,

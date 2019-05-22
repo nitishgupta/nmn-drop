@@ -1,1 +1,0 @@
-from depr.hotpotqa_model.hotpotqa_parser_base import HotpotQAParserBase
