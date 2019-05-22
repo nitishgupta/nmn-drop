@@ -432,13 +432,14 @@ class DROPReaderNew(DatasetReader):
 
             # Using the first one for training (really, there's only one)
             answer_annotation = answer_annotations[0]
-            answer_type = "UNK"
-            if answer_annotation["spans"]:
-                answer_type = "spans"
-            elif answer_annotation["number"]:
-                answer_type = "number"
-            else:
-                raise NotImplementedError
+
+            # answer_type = "UNK"
+            # if answer_annotation["spans"]:
+            #     answer_type = "spans"
+            # elif answer_annotation["number"]:
+            #     answer_type = "number"
+            # else:
+            #     raise NotImplementedError
 
             # This list contains the possible-start-types for programs that can yield the correct answer
             # For example, if the answer is a number but also in passage, this will contain two keys
@@ -477,8 +478,9 @@ class DROPReaderNew(DatasetReader):
                 # Answer as number string does not exist.
                 if self.convert_spananswer_to_num:
                     # Try to convert "X" or "X-yard(s)" into number(X)
-                    span_answer_text = answer_annotation["spans"][0]
+                    # span_answer_text = answer_annotation["spans"][0]
                     try:
+                        span_answer_text = answer_annotation["spans"][0]
                         span_answer_number = float(span_answer_text)
                     except:
                         span_answer_number = None

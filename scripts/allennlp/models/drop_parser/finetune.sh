@@ -4,7 +4,7 @@ export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
 # DATASET_NAME=num/longest_shortest_yards
-DATASET_NAME=date_num/date_numcq_hmvy_cnt_filter_no_exec
+DATASET_NAME=date_num/date_numcq_hmvy_cnt_relprog_500
 
 DATASET_DIR=./resources/data/drop_s/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
@@ -56,9 +56,9 @@ export RG=1e-4
 
 export SEED=100
 
-export BEAMSIZE=4
+export BEAMSIZE=1
 export MAX_DECODE_STEP=14
-export EPOCHS=20
+export EPOCHS=30
 
 export DEBUG=false
 
@@ -66,9 +66,9 @@ export DEBUG=false
 CHECKPOINT_ROOT=./resources/semqa/checkpoints
 SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/${DATASET_NAME}
 MODEL_DIR=drop_parser
-PD_1=TOKENS_${TOKENIDX}/ED_${WEMB_DIM}/RG_${RG}/MODELTYPE_${MODELTYPE}/CNTFIX_${COUNT_FIXED}
+PD_1=TOKENS_${TOKENIDX}/ED_${WEMB_DIM}/RG_${RG}/MODELTYPE_${MODELTYPE}/CNTFIX_${COUNT_FIXED}/aux_${AUXLOSS}
 PD_2=SUPEPOCHS_${SUPEPOCHS}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/${PD_2}/S_${SEED}/NewMinMax_aux_${AUXLOSS}
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/${PD_2}/S_${SEED}/NewModelBM1
 
 #######################################################################################################################
 
@@ -76,7 +76,9 @@ SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/${PD_2}/S_${SEE
 #                                    ${INCLUDE_PACKAGE} \
 #                                    ${SERIALIZATION_DIR}
 
-RESUME_SER_DIR=./resources/semqa/checkpoints/drop/date_num/date_numcq_hmvy_cnt_filter_no_exec/drop_parser/TOKENS_qanet/ED_100/RG_1e-07/MODELTYPE_encoded/CNTFIX_false/SUPEPOCHS_5/S_100/NewMinMax_aux_false/Resume
-MODEL_TAR_GZ=./resources/semqa/checkpoints/drop/date_num/date_numcq_hmvy_cnt_filter_no_exec/drop_parser/TOKENS_qanet/ED_100/RG_1e-07/MODELTYPE_encoded/CNTFIX_false/SUPEPOCHS_5/S_100/NewMinMax_aux_false/model.tar.gz
+MDIR=./resources/semqa/checkpoints/drop/date_num/date_numcq_hmvy_cnt_relprog_500/drop_parser/TOKENS_qanet/ED_100/RG_1e-07/MODELTYPE_encoded/CNTFIX_false/aux_true/SUPEPOCHS_5/S_100/NewModel
+
+RESUME_SER_DIR=${MDIR}/BM1_Resume
+MODEL_TAR_GZ=${MDIR}/model.tar.gz
 
 allennlp fine-tune --extend-vocab -c ${CONFIGFILE} --include-package ${INCLUDE_PACKAGE} -s ${RESUME_SER_DIR} -m ${MODEL_TAR_GZ}

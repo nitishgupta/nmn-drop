@@ -9,17 +9,16 @@ export BEAMSIZE=1
 export DEBUG=true
 
 # SAVED MODEL
-MODEL_DIR=./resources/semqa/checkpoints/drop/num/hmyw_relprog/drop_parser/TOKENS_qanet/ED_100/RG_1e-07/MODELTYPE_encoded/CNTFIX_false/aux_true/SUPEPOCHS_0/S_10/NewModel
+MODEL_DIR=./resources/semqa/checkpoints/drop/date_num/date_numcq_hmvy_cnt_relprog_500_no_exec/drop_parser/TOKENS_qanet/ED_100/RG_1e-07/MODELTYPE_encoded/CNTFIX_false/aux_true/SUPEPOCHS_5/S_10/CModelBM1
 MODEL_TAR=${MODEL_DIR}/model.tar.gz
 PREDICTION_DIR=${MODEL_DIR}/predictions
 mkdir ${PREDICTION_DIR}
 
 # EVALUATION DATASET
-SUBFOLDER=num
+SUBFOLDER=alldatasets
 
-for EVAL_DATASET in who_relocate
-# for EVAL_DATASET in numcomp_full count_filterqattn hmyw_filter who_relocate
-# for EVAL_DATASET in datecomp_full year_diff
+for EVAL_DATASET in datecomp_full year_diff count_filterqattn hmyw_filter relocate_wprog numcomp_full
+# for EVAL_DATASET in count_filterqattn
 do
     DATASET_DIR=./resources/data/drop_s/${SUBFOLDER}/${EVAL_DATASET}
     TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
@@ -31,7 +30,7 @@ do
     EVALUATION_FILE=${PREDICTION_DIR}/${EVAL_DATASET}_dev_eval.txt
     PREDICTOR=drop_parser_predictor
 
-    #######################################################################################################################
+    ###################################################################################################################
 
 
     allennlp predict --output-file ${PREDICTION_FILE} \
@@ -42,7 +41,7 @@ do
                      --batch-size 1 \
                      --use-dataset-reader \
                      --overrides "{"model": { "beam_size": ${BEAMSIZE}, "debug": ${DEBUG}}}" \
-                     ${MODEL_TAR} ${TESTFILE}
+                    ${MODEL_TAR} ${TESTFILE}
 
     allennlp evaluate --output-file ${EVALUATION_FILE} \
                       --cuda-device ${GPU} \

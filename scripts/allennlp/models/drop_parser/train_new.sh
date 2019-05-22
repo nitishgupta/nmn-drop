@@ -35,7 +35,7 @@ export BIDAF_WORDEMB_FILE="https://s3-us-west-2.amazonaws.com/allennlp/datasets/
 
 export MODELTYPE=encoded
 export COUNT_FIXED=false
-export AUXLOSS=true
+export AUXLOSS=false
 
 export DENLOSS=true
 export EXCLOSS=true
@@ -52,9 +52,9 @@ export DROPOUT=0.2
 export LR=0.001
 export RG=1e-07
 
-export SEED=10
+export SEED=1
 
-export BEAMSIZE=4
+export BEAMSIZE=1
 export MAX_DECODE_STEP=14
 export EPOCHS=60
 
@@ -66,7 +66,7 @@ SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/${DATASET_NAME}
 MODEL_DIR=drop_parser
 PD_1=TOKENS_${TOKENIDX}/ED_${WEMB_DIM}/RG_${RG}/MODELTYPE_${MODELTYPE}/CNTFIX_${COUNT_FIXED}/aux_${AUXLOSS}
 PD_2=SUPEPOCHS_${SUPEPOCHS}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/${PD_2}/S_${SEED}/NewModel
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/${PD_2}/S_${SEED}/CModelBM1
 
 # SERIALIZATION_DIR=./resources/semqa/checkpoints/test/test_new_hmyw_rel5
 
