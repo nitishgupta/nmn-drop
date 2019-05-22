@@ -4,7 +4,6 @@ import random
 import os
 from collections import defaultdict
 import datasets.drop.constants as constants
-from utils import util
 import argparse
 
 random.seed(100)

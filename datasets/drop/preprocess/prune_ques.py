@@ -1,18 +1,7 @@
-import os
-import sys
-import copy
-import time
 import json
-import string
 import argparse
-from collections import defaultdict
-from typing import List, Tuple, Dict, Union
 
-from utils import util, spacyutils
 from datasets.drop import constants
-from datasets.drop.preprocess import ner_process
-
-import multiprocessing
 
 DATE_COMPARISON = ["which happened", "which event", "what happened first", "what happened second",
                    "what happened later", "what happened last", "what event happened", "what event came"]

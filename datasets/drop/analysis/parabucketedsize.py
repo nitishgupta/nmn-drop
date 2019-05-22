@@ -1,10 +1,7 @@
 import os
 import json
-import copy
 import argparse
 import datasets.drop.constants as constants
-from collections import defaultdict
-from utils.util import round_all
 
 
 def readDataset(input_json):

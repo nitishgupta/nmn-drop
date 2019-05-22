@@ -1,23 +1,10 @@
 import os
-import sys
-import copy
-import time
 import json
-import string
 import argparse
-from collections import defaultdict
-from typing import List, Tuple, Dict, Union
 
-from utils import util, spacyutils
 from datasets.drop import constants
-from datasets.drop.preprocess import ner_process
-
-import multiprocessing
 
 NUMBER_COMPARISON = ["were there more", "were there fewer", "which age group", "which group"]
-# NUMBER_COMPARISON = ["which group"] # Passed with single OR
-# NUMBER_COMPARISON = ["were there more", "were there fewer"]  # - remove football questions
-# NUMBER_COMPARISON = ["which age group"] -- works fine with single OR; others are most / least kind of questions
 
 
 def number_comparison_filter(question: str):

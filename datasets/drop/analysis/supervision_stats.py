@@ -1,11 +1,8 @@
 import os
 import json
-import copy
 import argparse
 import datasets.drop.constants as constants
 from collections import defaultdict
-from utils.util import round_all
-
 
 
 SUPERVISION_KEYS = [constants.program_supervised, constants.qattn_supervised, constants.exection_supervised]

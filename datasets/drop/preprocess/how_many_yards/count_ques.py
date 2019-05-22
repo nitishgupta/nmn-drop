@@ -1,11 +1,7 @@
-from typing import List, Dict, Tuple
+from typing import List
 import json
 from nltk.corpus import stopwords
 import os
-import copy
-import torch
-from allennlp.models.reading_comprehension.util import get_best_span
-import allennlp.nn.util as allenutil
 from collections import defaultdict
 import datasets.drop.constants as constants
 import argparse

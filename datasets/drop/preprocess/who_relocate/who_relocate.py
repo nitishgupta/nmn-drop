@@ -1,7 +1,6 @@
 from typing import List, Dict, Tuple
 import json
 import os
-from collections import defaultdict
 import datasets.drop.constants as constants
 import argparse
 

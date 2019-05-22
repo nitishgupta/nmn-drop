@@ -23,7 +23,7 @@ spacy_nlp = spacyutils.getSpacyNLP()
 spacy_whitespacetokenizer = spacyutils.getWhiteTokenizerSpacyNLP()
 
 ANSWER_TYPE_NOT_FOUND = 0
-#
+
 # def split_on_hyphens(text: str):
 #     """ Adds spaces around hyphens in text. """
 #     text = util.pruneMultipleSpaces(" - ".join(text.split("-")))

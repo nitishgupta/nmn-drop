@@ -1,18 +1,8 @@
-import os
-import sys
-import copy
-import time
 import json
-import string
 import argparse
 from collections import defaultdict
-from typing import List, Tuple, Dict, Union
 
-from utils import util, spacyutils
 from datasets.drop import constants
-from datasets.drop.preprocess import ner_process
-
-import multiprocessing
 
 
 def answerTypeAnalysis(input_json: str) -> None:

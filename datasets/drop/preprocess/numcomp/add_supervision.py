@@ -1,18 +1,11 @@
 import os
-import sys
-import copy
-import time
 import json
-import string
 import argparse
 from collections import defaultdict
 from typing import List, Tuple, Dict, Union
 
 from nltk.corpus import stopwords
-
-from utils import util, spacyutils
 from datasets.drop import constants
-from datasets.drop.preprocess import ner_process
 
 NUMBER_COMPARISON = ["were there more", "were there fewer", "which age group", "which group"]
 
