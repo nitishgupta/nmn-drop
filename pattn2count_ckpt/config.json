@@ -1,0 +1,63 @@
+{
+    "dataset_reader": {
+        "type": "passage_attn2count_reader",
+        "max_passage_length": 600,
+        "max_span_length": 15,
+        "min_passage_length": 100,
+        "min_span_length": 5,
+        "normalized": true,
+        "samples_per_bucket_count": 2000,
+        "withnoise": true
+    },
+    "iterator": {
+        "type": "basic",
+        "batch_size": "16",
+        "max_instances_in_memory": 80000
+    },
+    "model": {
+        "type": "drop_pattn2count",
+        "passage_attention_to_count": {
+            "type": "gru",
+            "bidirectional": true,
+            "dropout": 0,
+            "hidden_size": 20,
+            "input_size": 4,
+            "num_layers": 2
+        }
+    },
+    "train_data_path": "./resources/data/drop_s/synthetic/pattn2count/train.json",
+    "validation_data_path": "./resources/data/drop_s/synthetic/pattn2count/dev.json",
+    "trainer": {
+        "cuda_device": 0,
+        "grad_norm": 5,
+        "moving_average": {
+            "type": "exponential",
+            "decay": 0.9999
+        },
+        "num_epochs": 40,
+        "num_serialized_models_to_keep": 1,
+        "optimizer": {
+            "type": "adam",
+            "betas": [
+                0.8,
+                0.999
+            ],
+            "eps": 1e-07,
+            "lr": 0.001
+        },
+        "patience": 5,
+        "shuffle": true,
+        "summary_interval": 100,
+        "validation_metric": "+acc"
+    },
+    "validation_dataset_reader": {
+        "type": "passage_attn2count_reader",
+        "max_passage_length": 600,
+        "max_span_length": 15,
+        "min_passage_length": 100,
+        "min_span_length": 5,
+        "normalized": true,
+        "samples_per_bucket_count": 5,
+        "withnoise": true
+    }
+}
