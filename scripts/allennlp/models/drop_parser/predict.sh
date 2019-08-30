@@ -1,7 +1,5 @@
 #!/usr/bin/env
 
-export TMPDIR=/srv/local/data/nitishg/tmp
-
 # PACKAGE TO BE INCLUDED WHICH HOUSES ALL THE CODE
 INCLUDE_PACKAGE=semqa
 export GPU=0

@@ -35,7 +35,7 @@ export BIDAF_WORDEMB_FILE="https://s3-us-west-2.amazonaws.com/allennlp/datasets/
 
 export MODELTYPE=encoded
 export COUNT_FIXED=false
-export AUXLOSS=false
+export AUXLOSS=true
 
 export DENLOSS=true
 export EXCLOSS=true
@@ -68,7 +68,7 @@ PD_1=TOKENS_${TOKENIDX}/ED_${WEMB_DIM}/RG_${RG}/MODELTYPE_${MODELTYPE}/CNTFIX_${
 PD_2=SUPEPOCHS_${SUPEPOCHS}
 SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/${PD_2}/S_${SEED}/CModelBM1
 
-SERIALIZATION_DIR=./resources/semqa/checkpoints/test/sample
+SERIALIZATION_DIR=./resources/semqa/checkpoints/test/test_new
 
 #######################################################################################################################
 
