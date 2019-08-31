@@ -267,8 +267,6 @@ class DROPParser(DROPParserBase):
         # Shape: (batch_size, passage_length, encoding_dim)
         encoded_passage = self._dropout(self._phrase_layer(projected_embedded_passage, passage_mask))
 
-        # encoded_passage_number = self._dropout(self.passage_number_encoder(projected_embedded_passage, passage_mask))
-
         if self._debug:
             rawemb_passage_norm = self.compute_avg_norm(rawemb_passage)
             print(f"Raw embedded passage Norm: {rawemb_passage_norm}")

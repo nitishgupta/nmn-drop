@@ -73,19 +73,16 @@ class DataFilterIterator(DataIterator):
 
             print(f"QType: {qtype_dict}")
 
+            # These QType instances will not be kept in the first curriculum even if supervised
             NO_CURRICULUM = [constants.COUNT_filter_find_qtype, constants.MAX_filter_find_qtype,
                              constants.MIN_filter_find_qtype, constants.NUM_filter_find_qtype]
 
             filtered_instance_list = []
-            if self.filter_instances:
-                # In Curriculum 1
-                if epoch_num < self.filter_for_epochs:
-                    for instance in instance_list:
-                        if any(instance[key].metadata is True for key in self.supervision_keys):
-                            if not instance["qtypes"].metadata in NO_CURRICULUM:
-                                filtered_instance_list.append(instance)
-                else:
-                    filtered_instance_list = instance_list
+            if self.filter_instances and epoch_num < self.filter_for_epochs:
+                for instance in instance_list:
+                    if (any(instance[key].metadata is True for key in self.supervision_keys) and
+                            not instance["qtypes"].metadata in NO_CURRICULUM):
+                        filtered_instance_list.append(instance)
             else:
                 filtered_instance_list = instance_list
 

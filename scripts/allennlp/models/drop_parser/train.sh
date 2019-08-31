@@ -3,9 +3,9 @@
 export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
-DATASET_NAME=date_num/date_numcq_hmvy_cnt_relprog_500_no_exec
+DATASET_NAME=date_num/date_numcq_hmvy_cnt_relprog_500
 
-DATASET_DIR=./resources/data/drop_s/${DATASET_NAME}
+DATASET_DIR=./resources/data/drop/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
 VALFILE=${DATASET_DIR}/drop_dataset_dev.json
 
@@ -68,7 +68,7 @@ PD_1=TOKENS_${TOKENIDX}/ED_${WEMB_DIM}/RG_${RG}/MODELTYPE_${MODELTYPE}/CNTFIX_${
 PD_2=SUPEPOCHS_${SUPEPOCHS}
 SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/${PD_2}/S_${SEED}/CModelBM1
 
-SERIALIZATION_DIR=./resources/semqa/checkpoints/test/test_new
+SERIALIZATION_DIR=./resources/semqa/checkpoints/test
 
 #######################################################################################################################
 

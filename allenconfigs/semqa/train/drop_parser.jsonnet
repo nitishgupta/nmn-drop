@@ -255,7 +255,7 @@ local compareff_inputdim =
             ["passage_attention_to_count|passage_count_hidden2logits",
                  {
                      "type": "pretrained",
-                     "weights_file_path": "./resources/semqa/checkpoints/drop_pattn2count/T_gru/Isize_4/Hsize_20/Layers_2/S_100/t600_v600/best.th"
+                     "weights_file_path": "./pattn2count_ckpt/best.th"
                  },
             ],
             [".*_text_field_embedder.*", "prevent"]

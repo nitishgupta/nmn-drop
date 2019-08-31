@@ -137,6 +137,7 @@ class DROPReaderNew(DatasetReader):
                             # This can be a 1- or 2- tuple of number groundings
                             num_grounding_supervision = qa[constants.qspan_numgrounding_supervision]
 
+                # passage_att_supervision is probably never used
                 passage_attn_supervision = None
                 pattn_supervised = False
                 if constants.pattn_supervised in qa:
@@ -277,23 +278,19 @@ class DROPReaderNew(DatasetReader):
         metadata = {
             "original_passage": original_passage_text,
             "original_question": original_ques_text,
-            # "original_numbers": numbers_in_passage,
             "passage_id": passage_id,
             "question_id": question_id,
-            # "candidate_additions": candidate_additions,
-            # "candidate_subtractions": candidate_subtractions
         }
 
         fields = {}
 
         fields["actions"] = action_field
-        # fields["languages"] = language_field
-        passage_offsets = [(token.idx, token.idx + len(token.text)) for token in passage_tokens]
-        question_offsets = [(token.idx, token.idx + len(token.text)) for token in question_tokens]
 
-        # This is separate so we can reference it later with a known type.
         fields["passage"] = TextField(passage_tokens, self._token_indexers)
         fields["question"] = TextField(question_tokens, self._token_indexers)
+        # List of (start, end) char offsets for each passage and question token
+        passage_offsets = [(token.idx, token.idx + len(token.text)) for token in passage_tokens]
+        question_offsets = [(token.idx, token.idx + len(token.text)) for token in question_tokens]
 
         ##  Passage Number
         # The normalized values in processed dataset are floats even if the passage had ints. Converting them back ..
@@ -539,8 +536,6 @@ class DROPReaderNew(DatasetReader):
                     answer_count_idx = count_values.index(answer_number)
                     answer_as_count[answer_count_idx] = 1
 
-
-            fields["answer_as_passage_number"] = MetadataField(ans_as_passage_number)
             fields["answer_as_passage_number"] = MetadataField(ans_as_passage_number)
             fields["answer_as_year_difference"] = MetadataField(ans_as_year_difference)
             fields["answer_as_passagenum_difference"] = MetadataField(answer_as_passagenum_difference)
@@ -548,11 +543,7 @@ class DROPReaderNew(DatasetReader):
 
             fields["answer_program_start_types"] = MetadataField(answer_program_start_types)
 
-
             # If we already have gold program(s), removing program_start_types that don't come from these gold_programs
-
-
-
             # print(f"AnswerTypes: {answer_program_start_types}")
             # print(f"New AnswerTypes: {new_answer_program_start_types}")
 
@@ -925,7 +916,18 @@ class DROPReaderNew(DatasetReader):
 
     @staticmethod
     def get_numberindices_in_sorted_order(number_values, number_token_indices, passage_number_entidxs):
-        """ Returns the number_token_indices in an order so that their values are sorted in increasing order """
+        """ Returns the number_token_indices in an order so that their values are sorted in increasing order.
+
+        For example,
+        number_values: [4, 1, 5]
+        number_token_indices: [10, 15, 20, 25]
+        passage_number_entidxs: [2, 0, 1, 0]
+
+        Underlying values for indices are: [5, 4, 1, 4]
+
+        Output sorted_number_indices: [20, 15, 25, 10]
+        with underlying values: [1, 4, 4, 5]
+        """
         # These are the number-values the number-tokens
         number_token_numbervalues = [number_values[x] for x in passage_number_entidxs]
 
