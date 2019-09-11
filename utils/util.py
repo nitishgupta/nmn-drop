@@ -6,13 +6,14 @@ from typing import Dict, List, Any, Tuple
 
 stopwords = None
 
+
 def makedir(dirpath: str):
     if not os.path.exists(dirpath):
         print(f"Making directory: {dirpath}")
         os.makedirs(dirpath)
 
 
-def countList(input_list: List[Any], depth: int=1) -> int:
+def count_list(input_list: List[Any], depth: int=1) -> int:
     """
     Count the number of elements in a nested list
     :param input_list: nested list
@@ -24,7 +25,7 @@ def countList(input_list: List[Any], depth: int=1) -> int:
         return len(input_list)
 
     else:
-        return sum([countList(l, depth - 1) for l in input_list])
+        return sum([count_list(l, depth - 1) for l in input_list])
 
 
 def pruneMultipleSpaces(sentence: str):
@@ -232,14 +233,14 @@ def _KnuthMorrisPratt(text, pattern):
 
 def normalizeD1byD2(dict1, dict2):
     d = {}
-    for k,v in dict1.items():
+    for k, v in dict1.items():
         d[k] = float(v)/float(dict2[k])
     return d
 
 
 def normalizeDictbyK(dict1, constant):
     d = {}
-    for k,v in dict1.items():
+    for k, v in dict1.items():
         d[k] = float(v)/constant
     return d
 
@@ -304,6 +305,7 @@ def tocpuNPList(var):
         return var
     return var.detach().cpu().numpy().tolist()
 
+
 def mergeSpansAndRemoveOverlap(orig_spans, new_spans, srt_idx, end_idx, exclusive=True):
     ''' Merge a list of spans in another given list resulting in non-overlapping spans.
     Assumes that both span lists are independently non-overlapping.
@@ -316,6 +318,7 @@ def mergeSpansAndRemoveOverlap(orig_spans, new_spans, srt_idx, end_idx, exclusiv
     new_spans: New spans. Same as above
     srt_idx: Index of span_srt in the span tuple
     end_idx: Index of span_end in the span tuple
+    exclusive: Bool flag to indicate if the span end in exclusive or inclusive
 
     Returns:
     --------

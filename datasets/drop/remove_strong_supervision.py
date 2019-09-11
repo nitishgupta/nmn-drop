@@ -20,6 +20,20 @@ def readDataset(input_json):
     return dataset
 
 
+
+def make_supervision_dict(dataset, supervision_keys):
+    total_num_qa = 0
+    supervision_dict = defaultdict(int)
+    for passage_idx, passage_info in dataset.items():
+        total_num_qa += len(passage_info[constants.qa_pairs])
+        for qa in passage_info[constants.qa_pairs]:
+            for key in supervision_keys:
+                if key in qa:
+                    supervision_dict[key] += 1 if qa[key] else 0
+
+    return supervision_dict
+
+
 def removeDateCompPassageWeakAnnotations(dataset, annotation_for_numpassages):
     """ Given a dataset containing date-comparison questions that are heuristically strongly annotated
         and the number of passages that need to remain strongly annotated, we remove the strong annotations for other
@@ -41,21 +55,14 @@ def removeDateCompPassageWeakAnnotations(dataset, annotation_for_numpassages):
 
     total_num_qa = 0
 
-    supervision_dict = defaultdict(int)
     supervision_keys = [constants.program_supervised, constants.qattn_supervised, constants.exection_supervised,
                         constants.strongly_supervised]
 
+    orig_supervision_dict = make_supervision_dict(dataset, supervision_keys)
+
     for passage_idx, passage_info in dataset.items():
         total_num_qa += len(passage_info[constants.qa_pairs])
-
-        # These passages will remain supervised
-        if passage_idx in choosen_passage_idxs:
-            for qa in passage_info[constants.qa_pairs]:
-                for key in supervision_keys:
-                    if key in qa:
-                        supervision_dict[key] += 1 if qa[key] else 0
-
-        else:
+        if passage_idx not in choosen_passage_idxs:
             # Removing the strong annotations for all QAs in this passage
             for qa in passage_info[constants.qa_pairs]:
                 # Setting all keys for supervised = False
@@ -64,10 +71,14 @@ def removeDateCompPassageWeakAnnotations(dataset, annotation_for_numpassages):
                 if constants.qtype in qa:
                     qa.pop(constants.qtype)
 
+
+    pruned_supervision_dict = make_supervision_dict(dataset, supervision_keys)
+
     print()
     print(f"TotalNumPassages: {total_num_passages}  Passages remaining annotated: {annotation_for_numpassages}")
     print(f"Num of original question: {total_num_qa}")
-    print(f"Supervision Dict: {supervision_dict}")
+    print(f"Original Supervision Dict: {orig_supervision_dict}")
+    print(f"Supervision Dict: {pruned_supervision_dict}")
 
     return dataset
 

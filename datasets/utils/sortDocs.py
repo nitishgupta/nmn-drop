@@ -55,7 +55,7 @@ def _getdocweights(docs: List[Dict], sort_keys: List[str], depths: List[int], co
         docw = 1 if combination == "x*y" else 0
         for key, depth in zip(sort_keys, depths):
             val = doc[key]
-            len = util.countList(input_list=val, depth=depth)
+            len = util.count_list(input_list=val, depth=depth)
             if combination == "x*y":
                 docw *= len
             elif combination == "x+y":

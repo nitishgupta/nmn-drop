@@ -462,7 +462,7 @@ def augmentDateComparisonData(dataset):
     print(original_operator_dist)
     print(f"Num of question after augmentation: {num_qa_augment}")
     print(augment_operator_dist)
-    print(f"Supervision Dsitrbition: {supervision_distribution}")
+    print(f"Supervision Distribution: {supervision_distribution}")
 
     return new_dataset
 

@@ -289,7 +289,7 @@ local compareff_inputdim =
 
 
     "trainer": {
-        "num_serialized_models_to_keep": 10,
+        "num_serialized_models_to_keep": 2,
         "grad_norm": 5,
         "patience": 20,
         "cuda_device": utils.parse_number(std.extVar("GPU")),

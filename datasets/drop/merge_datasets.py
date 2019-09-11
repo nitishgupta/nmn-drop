@@ -22,7 +22,6 @@ def count_supervision_types(passage_dict):
     return supervision_dict
 
 
-
 def mergeDatasets(input_json1: str, input_json2: str, output_json: str) -> None:
     """ Merge DROP datasets from two different files.
         First make a union list of passages.

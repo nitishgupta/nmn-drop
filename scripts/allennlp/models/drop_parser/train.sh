@@ -1,6 +1,6 @@
 #!/usr/bin/env
 
-export TMPDIR=/srv/local/data/nitishg/tmp
+# export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
 DATASET_NAME=date_num/date_numcq_hmvy_cnt_relprog_500
@@ -52,7 +52,7 @@ export DROPOUT=0.2
 export LR=0.001
 export RG=1e-07
 
-export SEED=1
+export SEED=10
 
 export BEAMSIZE=1
 export MAX_DECODE_STEP=14
@@ -66,12 +66,17 @@ SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/${DATASET_NAME}
 MODEL_DIR=drop_parser
 PD_1=TOKENS_${TOKENIDX}/ED_${WEMB_DIM}/RG_${RG}/MODELTYPE_${MODELTYPE}/CNTFIX_${COUNT_FIXED}/aux_${AUXLOSS}
 PD_2=SUPEPOCHS_${SUPEPOCHS}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/${PD_2}/S_${SEED}/CModelBM1
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/${PD_2}/S_${SEED}/AuxRelocateLoss15
 
-SERIALIZATION_DIR=./resources/semqa/checkpoints/test
+# SERIALIZATION_DIR=./resources/semqa/checkpoints/test
 
 #######################################################################################################################
 
 bash scripts/allennlp/base/train.sh ${CONFIGFILE} \
                                     ${INCLUDE_PACKAGE} \
                                     ${SERIALIZATION_DIR}
+
+
+
+
+

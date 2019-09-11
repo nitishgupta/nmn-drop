@@ -1,9 +1,9 @@
 #!/usr/bin/env
 
-export TMPDIR=/srv/local/data/nitishg/tmp
+# export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
-DATASET_NAME=date_num/date_numcq_hmvy_cnt_relprog_500
+DATASET_NAME=date_num/date_yd_num_hmyw_cnt_rel_500
 
 DATASET_DIR=./resources/data/drop/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
@@ -13,7 +13,6 @@ VALFILE=${DATASET_DIR}/drop_dataset_dev.json
 INCLUDE_PACKAGE=semqa
 
 ### TRAINING MODEL CONFIG -- should be same across datasets for the same model
-# CONFIGFILE=allenconfigs/semqa/train/drop_parser_wmodel.jsonnet
 CONFIGFILE=allenconfigs/semqa/train/drop_parser_bert.jsonnet
 
 export DATASET_READER="drop_reader_bert"
@@ -41,7 +40,7 @@ export DROPOUT=0.2
 
 export LR=0.001
 
-export SEED=10
+export SEED=100
 
 export BEAMSIZE=1
 export MAX_DECODE_STEP=14
@@ -54,7 +53,7 @@ CHECKPOINT_ROOT=./resources/semqa/checkpoints
 SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/${DATASET_NAME}
 MODEL_DIR=drop_parser_bert
 PD_1=CNTFIX_${COUNT_FIXED}/aux_${AUXLOSS}/SUPEPOCHS_${SUPEPOCHS}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}/BertModel
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}/BertModelRelAux15_2x
 
 # SERIALIZATION_DIR=./resources/semqa/checkpoints/test
 

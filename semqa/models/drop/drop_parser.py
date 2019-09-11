@@ -1655,6 +1655,7 @@ class DROPParser(DROPParserBase):
         upper_mask = upper_range_vector <= upper_un
 
         # Final-mask that we require
+        # Shape: (passage_length, passage_length); (passage_length, passage_length)
         inwindow_mask = (lower_mask == upper_mask).float()
         outwindow_mask = (lower_mask != upper_mask).float()
 
@@ -1695,7 +1696,7 @@ class DROPParser(DROPParserBase):
         # Shape: (batch_size, passage_length)
         sum_inwindow_probs = inwindow_probs.sum(2)
         mask_sum = (inwindow_mask.sum(2) > 0).float()
-        # Image a row where mask = 0, there sum of probs will be zero and we need to compute masked_log
+        # Imagine a row where mask = 0, there sum of probs will be zero and we need to compute masked_log
         masked_sum_inwindow_probs = allenutil.replace_masked_values(sum_inwindow_probs, mask_sum, replace_with=1e-40)
         log_sum_inwindow_probs = torch.log(masked_sum_inwindow_probs + 1e-40) * mask_sum
         inwindow_likelihood = torch.sum(log_sum_inwindow_probs)
