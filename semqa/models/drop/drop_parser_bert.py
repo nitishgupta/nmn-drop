@@ -416,7 +416,7 @@ class DROPParserBERT(DROPParserBase):
         """ Aux Loss """
         if self.auxwinloss:
             inwindow_mask, outwindow_mask = self.masking_blockdiagonal(batch_size, passage_length,
-                                                                       10, device_id)
+                                                                       15, device_id)
             num_aux_loss = self.window_loss_numdate(passage_passage_token2num_similarity,
                                                     passage_tokenidx2numidx_mask,
                                                     inwindow_mask, outwindow_mask)
