@@ -125,6 +125,9 @@ RELOC_maxfilterfind_qtype = "relocate_maxfilterfind_qtype"
 RELOC_minfind_qtype = "relocate_minfind_qtype"
 RELOC_minfilterfind_qtype = "relocate_minfilterfind_qtype"
 
+# YEAR Diff question types
+YEARDIFF_SE_qtype = "yeardiff_find_qtype"
+
 # Synthetic questions
 passage_attn_supervision = "passage_attn_supervision"     # passage-attention
 

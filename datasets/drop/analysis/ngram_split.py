@@ -178,6 +178,9 @@ if __name__ == '__main__':
     dev_json = args.dev_json
     outputdir_root = args.outputdir
 
+    if not os.path.exists(outputdir_root):
+        os.makedirs(outputdir_root, exist_ok=True)
+
     train_json_filename = 'drop_dataset_train.json'
     dev_json_filename = 'drop_dataset_dev.json'
 

@@ -1,9 +1,7 @@
 import os
 import json
-import copy
 import argparse
 from collections import defaultdict
-from typing import List, Tuple, Dict, Union
 import random
 
 random.seed(100)
@@ -21,15 +19,22 @@ def readDataset(input_json):
 
 
 
-def make_supervision_dict(dataset, supervision_keys):
+def make_supervision_dict(dataset):
+    basic_keys = [constants.program_supervised, constants.qattn_supervised, constants.exection_supervised]
     total_num_qa = 0
     supervision_dict = defaultdict(int)
     for passage_idx, passage_info in dataset.items():
         total_num_qa += len(passage_info[constants.qa_pairs])
         for qa in passage_info[constants.qa_pairs]:
-            for key in supervision_keys:
+            all_basic_true = False
+            for key in basic_keys:
                 if key in qa:
                     supervision_dict[key] += 1 if qa[key] else 0
+                    all_basic_true = True if qa[key] else False
+                else:
+                    all_basic_true = False
+            if all_basic_true:
+                supervision_dict[constants.strongly_supervised] += 1
 
     return supervision_dict
 
@@ -58,7 +63,7 @@ def removeDateCompPassageWeakAnnotations(dataset, annotation_for_numpassages):
     supervision_keys = [constants.program_supervised, constants.qattn_supervised, constants.exection_supervised,
                         constants.strongly_supervised]
 
-    orig_supervision_dict = make_supervision_dict(dataset, supervision_keys)
+    orig_supervision_dict = make_supervision_dict(dataset)
 
     for passage_idx, passage_info in dataset.items():
         total_num_qa += len(passage_info[constants.qa_pairs])
@@ -72,7 +77,7 @@ def removeDateCompPassageWeakAnnotations(dataset, annotation_for_numpassages):
                     qa.pop(constants.qtype)
 
 
-    pruned_supervision_dict = make_supervision_dict(dataset, supervision_keys)
+    pruned_supervision_dict = make_supervision_dict(dataset)
 
     print()
     print(f"TotalNumPassages: {total_num_passages}  Passages remaining annotated: {annotation_for_numpassages}")
