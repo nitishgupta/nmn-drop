@@ -126,7 +126,8 @@ RELOC_minfind_qtype = "relocate_minfind_qtype"
 RELOC_minfilterfind_qtype = "relocate_minfilterfind_qtype"
 
 # YEAR Diff question types
-YEARDIFF_SE_qtype = "yeardiff_find_qtype"
+YEARDIFF_SE_qtype = "yeardiff_find_qtype"        # Single event
+YEARDIFF_TE_qtype = "yeardiff_find2_qtype"       # Two Events
 
 # Synthetic questions
 passage_attn_supervision = "passage_attn_supervision"     # passage-attention

@@ -4,9 +4,9 @@ ROOT_DIR=./resources/data/drop
 
 DIR1=date/datecomp_full
 
-DIR2=date/year_diff_new
+DIR2=date/year_diff_new2
 
-OUTDIR=date/datefull_yd_new
+OUTDIR=date/datefull_yd_new2
 
 
 python -m datasets.drop.merge_datasets --dir1 ${ROOT_DIR}/${DIR1} \

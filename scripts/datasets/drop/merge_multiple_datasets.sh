@@ -3,7 +3,7 @@
 ROOT_DIR=./resources/data/drop
 
 DATECOMP=date/datecomp_full
-YEAR_DIFF=date/year_diff
+YEAR_DIFF=date/year_diff_new2
 NUMCOMP=num/numcomp_full
 HMYW=num/how_many_yards_was
 COUNT=num/count
@@ -12,7 +12,7 @@ RELOCATE=num/who_relocate
 
 DATE_NUM_DIR=${ROOT_DIR}/date_num
 
-OUTPUT_DIR=${DATE_NUM_DIR}/date_yd_num_hmyw_cnt_rel
+OUTPUT_DIR=${DATE_NUM_DIR}/date_ydnew2_num_hmyw_cnt_rel
 
 python -m datasets.drop.merge_datasets --dir1 ${ROOT_DIR}/${DATECOMP} \
                                        --dir2 ${ROOT_DIR}/${YEAR_DIFF} \

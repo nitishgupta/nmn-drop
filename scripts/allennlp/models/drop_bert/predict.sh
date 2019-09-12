@@ -7,7 +7,7 @@ export BEAMSIZE=1
 export DEBUG=true
 
 # SAVED MODEL
-MODEL_DIR=./resources/semqa/checkpoints/drop/date/datefull_yd/drop_parser_bert/CNTFIX_false/aux_true/SUPEPOCHS_5/S_100/BertModel15RelAux15_2x
+MODEL_DIR=./resources/semqa/checkpoints/drop/date/datefull_yd_new2/drop_parser_bert/CNTFIX_false/aux_true/SUPEPOCHS_5/S_1000/BertModel15RelAux15_2x
 MODEL_TAR=${MODEL_DIR}/model.tar.gz
 PREDICTION_DIR=${MODEL_DIR}/predictions
 mkdir ${PREDICTION_DIR}

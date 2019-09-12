@@ -59,6 +59,10 @@ def prune_YearDiffQues(dataset):
                     question_answer[constants.qtype] = constants.YEARDIFF_SE_qtype
                     question_answer[constants.program_supervised] = True
                     qtype_dist[constants.YEARDIFF_SE_qtype] += 1
+                else:
+                    question_answer[constants.qtype] = constants.YEARDIFF_TE_qtype
+                    question_answer[constants.program_supervised] = True
+                    qtype_dist[constants.YEARDIFF_TE_qtype] += 1
 
                 new_qa_pairs.append(question_answer)
 

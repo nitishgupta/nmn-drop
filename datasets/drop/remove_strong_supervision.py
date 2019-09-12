@@ -21,11 +21,15 @@ def readDataset(input_json):
 
 def make_supervision_dict(dataset):
     basic_keys = [constants.program_supervised, constants.qattn_supervised, constants.exection_supervised]
+    qtype_dict = defaultdict(int)
     total_num_qa = 0
     supervision_dict = defaultdict(int)
     for passage_idx, passage_info in dataset.items():
         total_num_qa += len(passage_info[constants.qa_pairs])
         for qa in passage_info[constants.qa_pairs]:
+            if constants.qtype in qa:
+                qtype_dict[qa[constants.qtype]] += 1
+
             all_basic_true = False
             for key in basic_keys:
                 if key in qa:
@@ -36,7 +40,7 @@ def make_supervision_dict(dataset):
             if all_basic_true:
                 supervision_dict[constants.strongly_supervised] += 1
 
-    return supervision_dict
+    return supervision_dict, qtype_dict
 
 
 def removeDateCompPassageWeakAnnotations(dataset, annotation_for_numpassages):
@@ -63,7 +67,7 @@ def removeDateCompPassageWeakAnnotations(dataset, annotation_for_numpassages):
     supervision_keys = [constants.program_supervised, constants.qattn_supervised, constants.exection_supervised,
                         constants.strongly_supervised]
 
-    orig_supervision_dict = make_supervision_dict(dataset)
+    orig_supervision_dict, orig_qtype_dict = make_supervision_dict(dataset)
 
     for passage_idx, passage_info in dataset.items():
         total_num_qa += len(passage_info[constants.qa_pairs])
@@ -77,13 +81,14 @@ def removeDateCompPassageWeakAnnotations(dataset, annotation_for_numpassages):
                     qa.pop(constants.qtype)
 
 
-    pruned_supervision_dict = make_supervision_dict(dataset)
+    pruned_supervision_dict, pruned_qtype_dict = make_supervision_dict(dataset)
 
     print()
     print(f"TotalNumPassages: {total_num_passages}  Passages remaining annotated: {annotation_for_numpassages}")
     print(f"Num of original question: {total_num_qa}")
     print(f"Original Supervision Dict: {orig_supervision_dict}")
     print(f"Supervision Dict: {pruned_supervision_dict}")
+    print(f"Ques Type Dict: {pruned_qtype_dict}")
 
     return dataset
 
