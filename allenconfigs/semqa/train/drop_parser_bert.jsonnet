@@ -21,6 +21,7 @@ local utils = import 'utils.libsonnet';
         "type": std.extVar("DATASET_READER"),
         "lazy": false,
         "skip_instances": false,
+        "skip_due_to_gold_programs": false,
         "question_length_limit": 50,
         "pretrained_model": "bert-base-uncased",
         "token_indexers": {

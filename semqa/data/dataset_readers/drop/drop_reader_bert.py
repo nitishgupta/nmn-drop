@@ -1097,7 +1097,8 @@ class DROPReaderNew(DatasetReader):
                            constants.RELOC_maxfind_qtype: self.relocate_logicalforms,
                            constants.RELOC_maxfilterfind_qtype: self.relocate_logicalforms,
                            constants.RELOC_minfind_qtype: self.relocate_logicalforms,
-                           constants.RELOC_minfilterfind_qtype: self.relocate_logicalforms}
+                           constants.RELOC_minfilterfind_qtype: self.relocate_logicalforms,
+                           constants.YEARDIFF_SE_qtype: self.yeardiff_singleevent_logicalforms,}
 
         gold_actionseq_idxs: List[List[int]] = []
         gold_actionseq_mask: List[List[int]] = []
@@ -1213,6 +1214,17 @@ class DROPReaderNew(DatasetReader):
             raise NotImplementedError
 
         return [gold_lf], ['passage_span']
+
+    @staticmethod
+    def yeardiff_singleevent_logicalforms(**kwargs) -> Tuple[List[str], List[str]]:
+        qtype = kwargs['qtype']
+        # Could be one of
+        # 'relocate_filterfind_qtype', 'relocate_minfind_qtype', 'relocate_maxfind_qtype',
+        # 'relocate_maxfilterfind_qtype', 'relocate_find_qtype', 'relocate_minfilterfind_qtype'
+
+        gold_lf = "(year_difference_single_event find_PassageAttention)"
+
+        return [gold_lf], ['year_difference']
 
 
 

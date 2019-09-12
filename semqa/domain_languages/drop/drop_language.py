@@ -214,6 +214,8 @@ def get_empty_language_object():
                                 question_passage_attention=None,
                                 passage_question_attention=None,
                                 passage_token2date_alignment=None,
+                                passage_token2startdate_alignment=None,
+                                passage_token2enddate_alignment=None,
                                 passage_token2num_alignment=None,
                                 parameters=None,
                                 start_types=None)
@@ -255,6 +257,8 @@ class DropLanguage(DomainLanguage):
                  question_passage_attention: Tensor,
                  passage_question_attention: Tensor,
                  passage_token2date_alignment: Tensor,
+                 passage_token2startdate_alignment: Tensor,
+                 passage_token2enddate_alignment: Tensor,
                  passage_token2num_alignment: Tensor,
                  parameters: ExecutorParameters,
                  modeled_passage: Tensor = None,
@@ -318,6 +322,8 @@ class DropLanguage(DomainLanguage):
         self.passage_question_attention = passage_question_attention
         # Shape: (passage_length, passage_length)
         self.passage_passage_token2date_alignment = passage_token2date_alignment
+        self.passage_passage_token2startdate_alignment = passage_token2startdate_alignment
+        self.passage_passage_token2enddate_alignment = passage_token2enddate_alignment
         self.passage_passage_token2num_alignment = passage_token2num_alignment
         initialization_returns = self.initialize()
         self.date_lt_mat = initialization_returns["date_lt_mat"]
@@ -542,7 +548,7 @@ class DropLanguage(DomainLanguage):
         return PassageAttention_answer(relocate_attn, loss=loss, debug_value=debug_value)
 
     # New Date Distribtion
-    def compute_date_scores(self, passage_attention: Tensor):
+    def compute_date_scores(self, passage_attention: Tensor, date_type: str = None):
         ''' Given a passage over passage token2date attention (normalized), and an additional passage attention
             for token importance, compute a distribution over (unique) dates in the passage.
 
@@ -557,7 +563,14 @@ class DropLanguage(DomainLanguage):
         #                                                          mask=self.passage_datetokens_mask_float.unsqueeze(0),
         #                                                          memory_efficient=True)
 
-        passage_date_alignment_matrix = self.passage_passage_token2date_alignment
+        if date_type is None:
+            passage_date_alignment_matrix = self.passage_passage_token2date_alignment
+        elif date_type == "start":
+            passage_date_alignment_matrix = self.passage_passage_token2startdate_alignment
+        elif date_type == "end":
+            passage_date_alignment_matrix = self.passage_passage_token2enddate_alignment
+        else:
+            raise NotImplementedError
 
         attn_weighted_date_aligment_matrix = passage_date_alignment_matrix * passage_attention.unsqueeze(1)
         # Shape: (passage_length, )
@@ -1086,6 +1099,43 @@ class DropLanguage(DomainLanguage):
                            f"\nPattn2: {pattn_vis_most_2}\n Date2: {date2}"
 
         return YearDifference(year_difference_dist=year_difference_dist, loss=loss, debug_value=debug_value)
+
+    @predicate
+    def year_difference_single_event(self,
+                                     passage_attn: PassageAttention) -> YearDifference:
+        ''' Given a single passage span, find its start and end dates, then return the difference in years '''
+
+        passage_attention = passage_attn._value * self.passage_mask
+
+        # DATE_1 is end since the difference is computed as DATE_1 - DATE_2
+        date_distribution_1, _, d1_dist_entropy = self.compute_date_scores(passage_attention, date_type="end")
+        date_distribution_2, _, d2_dist_entropy = self.compute_date_scores(passage_attention, date_type="start")
+
+        # Shape: (number_of_year_differences, )
+        year_difference_dist = self.expected_date_year_difference(date_distribution_1, date_distribution_2)
+
+        loss = 0.0
+        loss += passage_attn.loss
+        # If we want to use an auxiliary entropy loss
+        # loss += d1_dist_entropy + d2_dist_entropy
+
+        debug_value = ""
+        if self._debug:
+            _, pattn_vis_most_1 = dlutils.listTokensVis(passage_attention,
+                                                        self.metadata["passage_tokens"])
+            most_attended_spans = dlutils.mostAttendedSpans(passage_attention, self.metadata["passage_tokens"])
+
+            date1 = myutils.round_all(myutils.tocpuNPList(date_distribution_1), 3)
+            date2 = myutils.round_all(myutils.tocpuNPList(date_distribution_2), 3)
+            year_diff_dist = myutils.round_all(myutils.tocpuNPList(year_difference_dist), 3)
+
+            debug_value += f"YearDiffDist: {year_diff_dist}\n" + \
+                           f"\nPattn1: {pattn_vis_most_1}" + \
+                           f"\nMostAttendedSpans: {most_attended_spans}" + \
+                           f"\n Date1: {date1}\n Date2: {date2}"
+
+        return YearDifference(year_difference_dist=year_difference_dist, loss=loss, debug_value=debug_value)
+
 
     @predicate
     def find_passageSpanAnswer(self, passage_attention: PassageAttention_answer) -> PassageSpanAnswer:

@@ -57,6 +57,12 @@ class ExecutorParameters(torch.nn.Module, Registrable):
         self.passage_to_date_attention: MatrixAttention = BilinearMatrixAttention(matrix_1_dim=passage_encoding_dim,
                                                                                   matrix_2_dim=passage_encoding_dim)
 
+        self.passage_to_start_date_attention: MatrixAttention = BilinearMatrixAttention(
+            matrix_1_dim=passage_encoding_dim, matrix_2_dim=passage_encoding_dim)
+
+        self.passage_to_end_date_attention: MatrixAttention = BilinearMatrixAttention(
+            matrix_1_dim=passage_encoding_dim, matrix_2_dim=passage_encoding_dim)
+
         # This computes a passage_to_passage attention, hopefully, for each token, putting a weight on date tokens
         # that are related to it.
         self.passage_to_num_attention: MatrixAttention = BilinearMatrixAttention(matrix_1_dim=passage_encoding_dim,
