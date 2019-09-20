@@ -3,6 +3,7 @@ import json
 import argparse
 from collections import defaultdict
 import random
+from utils import util
 
 random.seed(100)
 
@@ -17,6 +18,16 @@ def readDataset(input_json):
         dataset = json.load(f)
     return dataset
 
+
+def count_num_exec_sup(dataset, choosed_pids):
+    num_exec_sup = 0
+    for passage_idx in choosed_pids:
+        passage_info = dataset[passage_idx]
+        for qa in passage_info[constants.qa_pairs]:
+            if constants.exection_supervised in qa:
+                if qa[constants.exection_supervised]:
+                    num_exec_sup += 1
+    return num_exec_sup
 
 
 def make_supervision_dict(dataset):
@@ -43,6 +54,26 @@ def make_supervision_dict(dataset):
     return supervision_dict, qtype_dict
 
 
+def most_exectution_supervised_paras(dataset, annotation_for_numpassages):
+    passageid2numexecsup = {}
+    for passage_idx, passage_info in dataset.items():
+        num_exec_sup = 0
+        # Removing the strong annotations for all QAs in this passage
+        for qa in passage_info[constants.qa_pairs]:
+            if constants.exection_supervised in qa:
+                if qa[constants.exection_supervised]:
+                    num_exec_sup += 1
+        passageid2numexecsup[passage_idx] = num_exec_sup
+
+    sorted_pid2numexecsup = util.sortDictByValue(passageid2numexecsup, decreasing=True)
+
+    top_pids = [x[0] for x in sorted_pid2numexecsup]
+
+    choosen_passage_idxs = top_pids[0:annotation_for_numpassages]
+
+    return choosen_passage_idxs
+
+
 def removeDateCompPassageWeakAnnotations(dataset, annotation_for_numpassages):
     """ Given a dataset containing date-comparison questions that are heuristically strongly annotated
         and the number of passages that need to remain strongly annotated, we remove the strong annotations for other
@@ -59,8 +90,12 @@ def removeDateCompPassageWeakAnnotations(dataset, annotation_for_numpassages):
         annotation_for_numpassages = total_num_passages
 
     passage_idxs = list(dataset.keys())
-    random.shuffle(passage_idxs)
-    choosen_passage_idxs = passage_idxs[0:annotation_for_numpassages]
+    num_exec_sup = 0
+    while num_exec_sup < annotation_for_numpassages + 320:
+        random.shuffle(passage_idxs)
+        choosen_passage_idxs = passage_idxs[0:annotation_for_numpassages]
+        num_exec_sup = count_num_exec_sup(dataset, choosen_passage_idxs)
+    # choosen_passage_idxs = most_exectution_supervised_paras(dataset, annotation_for_numpassages)
 
     total_num_qa = 0
 

@@ -12,21 +12,71 @@ YEAR_DIFF_NGRAMS = ["how many years after the", "how many years did it", "how ma
 # "how many years passed between" -- two events
 # "how many years after the" - year-diff between 2 events
 
-# "how many years was" - single event if doesn't contain "from" (high precision filter)
+# "how many years was" - single event if doesn't contain "from" or "between" (high precision filter)
 # "how many years did it" - single event if it doesn't contain the word "from"
 # "how many years did the" - single event
 
-
+# YD-RE
 def is_single_event_yeardiff_question(question_lower: str):
-    single_event_ques: bool = False
-    if ("how many years was" in question_lower or "how many years did it" in question_lower):
+    single_event_ques: bool = None
+    if "how many years was" in question_lower:
+        if "how many years was it between" in question_lower or "how many years was it from" in question_lower:
+            single_event_ques = False
+        else:
+            single_event_ques = True
+
+    # If "from" doesn't exist then surely single_event; o/w don't know
+    if "how many years did it" in question_lower:
         if "from" not in question_lower:
             single_event_ques = True
 
     if "how many years did the" in question_lower:
         single_event_ques = True
 
+    if "how many years passed between" in question_lower or "how many years after the" in question_lower:
+        single_event_ques = False
+
     return single_event_ques
+
+# NEW 2 V2
+# def is_single_event_yeardiff_question(question_lower: str):
+#     single_event_ques: bool = None
+#     if "how many years was" in question_lower:
+#         if "from" not in question_lower:
+#             single_event_ques = True
+#
+#     # If "from" doesn't exist then surely single_event; o/w don't know
+#     if "how many years did it" in question_lower:
+#         if "from" not in question_lower:
+#             single_event_ques = True
+#
+#     if "how many years did the" in question_lower:
+#         single_event_ques = True
+#
+#     if "how many years passed between" in question_lower or "how many years after the" in question_lower:
+#         single_event_ques = False
+#
+#     return single_event_ques
+
+# New 2 V3
+# def is_single_event_yeardiff_question(question_lower: str):
+#     single_event_ques: bool = False
+#     if "how many years was" in question_lower:
+#         if "from" not in question_lower:
+#             single_event_ques = True
+#
+#     # If "from" doesn't exist then surely single_event; o/w don't know
+#     if "how many years did it" in question_lower:
+#         if "from" not in question_lower:
+#             single_event_ques = True
+#
+#     if "how many years did the" in question_lower:
+#         single_event_ques = True
+#
+#     if "how many years passed between" in question_lower or "how many years after the" in question_lower:
+#         single_event_ques = False
+#
+#     return single_event_ques
 
 
 def readDataset(input_json):
@@ -55,14 +105,16 @@ def prune_YearDiffQues(dataset):
 
             if any(span in question_lower for span in YEAR_DIFF_NGRAMS):
                 single_event_ques: bool = is_single_event_yeardiff_question(question_lower)
-                if single_event_ques:
-                    question_answer[constants.qtype] = constants.YEARDIFF_SE_qtype
-                    question_answer[constants.program_supervised] = True
-                    qtype_dist[constants.YEARDIFF_SE_qtype] += 1
-                else:
-                    question_answer[constants.qtype] = constants.YEARDIFF_TE_qtype
-                    question_answer[constants.program_supervised] = True
-                    qtype_dist[constants.YEARDIFF_TE_qtype] += 1
+                # Return value of None means un-identifiable type
+                if single_event_ques is not None:
+                    if single_event_ques:
+                        question_answer[constants.qtype] = constants.YEARDIFF_SE_qtype
+                        question_answer[constants.program_supervised] = True
+                        qtype_dist[constants.YEARDIFF_SE_qtype] += 1
+                    else:
+                        question_answer[constants.qtype] = constants.YEARDIFF_TE_qtype
+                        question_answer[constants.program_supervised] = True
+                        qtype_dist[constants.YEARDIFF_TE_qtype] += 1
 
                 new_qa_pairs.append(question_answer)
 

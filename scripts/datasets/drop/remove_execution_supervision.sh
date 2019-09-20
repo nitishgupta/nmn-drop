@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 
-ROOT_DIR=./resources/data/drop_s
+ROOT_DIR=./resources/data/drop
 
 NOEXEC=no_exec
 
-INPUT_DATASET=date_numcq_hmvy_cnt_relprog_500
+INPUT_DATASET=date_ydNEW_num_hmyw_cnt_rel_600
 
 INPUT_DIR=${ROOT_DIR}/date_num/${INPUT_DATASET}
-OUTPUT_DIR=${ROOT_DIR}/date_num/${INPUT_DATASET}_${NOEXEC}
+OUTPUT_DIR=${ROOT_DIR}/date_num/${INPUT_DATASET}_NOEXC
 
 mkdir ${OUTPUT_DIR}
 

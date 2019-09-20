@@ -88,6 +88,7 @@ def print_qtext_lf(qids, qid2qtext, qid2lf):
 
 def print_qtext_bothlfs(qids, qid2qtext, qid2lf1, qid2lf2):
     for i, qid in enumerate(qids):
+        print("qid: {}".format(qid))
         print("{}: {}\n{}\n{}\n".format(i, qid2qtext[qid], qid2lf1[qid], qid2lf2[qid]))
 
 
@@ -149,8 +150,8 @@ def error_overlap_statistics(file1, file2):
     c1_nc2_lf_diff = diff_in_lfs(correct1_incorrect2_qids, qid2lf1, qid2lf2)
     nc1_c2_lf_diff = diff_in_lfs(incorrect1_correct2_qids, qid2lf1, qid2lf2)
 
-    print("Correct in Model 1, Incorrect in Model 2")
-    print_qtext_bothlfs(correct1_incorrect2_qids, qid2qtext2, qid2lf1, qid2lf2)
+    # print("Correct in Model 1, Incorrect in Model 2")
+    # print_qtext_bothlfs(correct1_incorrect2_qids, qid2qtext2, qid2lf1, qid2lf2)
 
     print("Incorrect in Model 1, Correct in Model 2")
     print_qtext_bothlfs(incorrect1_correct2_qids, qid2qtext1, qid2lf1, qid2lf2)
@@ -194,11 +195,10 @@ if __name__ == '__main__':
                   "TOKENS_qanet/ED_100/RG_1e-07/MODELTYPE_encoded/CNTFIX_false/aux_true/SUPEPOCHS_5/" \
                   "S_10/CModelBM1" + "/predictions"
 
-    OurBERTmodel = "/scratch1/nitishg/semqa/checkpoints/drop/date_num/date_numcq_hmvy_cnt_relprog_500/" \
-                   "drop_parser_bert/CNTFIX_false/aux_true/SUPEPOCHS_5/" \
-                   "S_10/BertModelRelAux15" + "/predictions"
+    OurBERTmodel = "/scratch1/nitishg/semqa/checkpoints/drop/date_num/date_ydNEW_num_hmyw_cnt_rel_600/S_1000/" \
+                   "BertModel15RelAux15_2x" + "/predictions"
 
-    NABERTmodel = ("/home1/n/nitishg/code/drop-bert/checkpoints/nabert-plus-template/mydata/predictions")
+    NABERTmodel = ("/scratch1/nitishg/semqa/checkpoints/drop-bert/mydata_ydre_relre/S_1/predictions")
 
 
     numcomp = "numcomp_full_dev_analysis.tsv"
@@ -207,8 +207,8 @@ if __name__ == '__main__':
     year_diff = "year_diff_dev_analysis.tsv"
 
     ###
-    model1 = OurBERTmodel
-    model2 = NABERTmodel
+    model1 = OurBERTmodel       # Should be the weaker model
+    model2 = NABERTmodel        # Should be stronger model
     dataset = count
 
     file1 = os.path.join(model1, dataset)

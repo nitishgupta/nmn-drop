@@ -3,18 +3,20 @@
 # export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
-DATASET_NAME=date_num/date_ydnew2_num_hmyw_cnt_rel_600
+DATASET_NAME=date_num/date_ydNEW_num_hmyw_cnt_rel_600
 # DATASET_NAME=date/datefull_yd_new2
 
 DATASET_DIR=./resources/data/drop/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
-VALFILE=${DATASET_DIR}/drop_dataset_dev.json
+# VALFILE=${DATASET_DIR}/drop_dataset_dev.json
+VALFILE=${DATASET_DIR}/drop_dataset_mydev.json
+TESTFILE=${DATASET_DIR}/drop_dataset_mytest.json
 
 # PACKAGE TO BE INCLUDED WHICH HOUSES ALL THE CODE
 INCLUDE_PACKAGE=semqa
 
 ### TRAINING MODEL CONFIG -- should be same across datasets for the same model
-CONFIGFILE=allenconfigs/semqa/train/drop_parser_bert.jsonnet
+CONFIGFILE=allenconfigs/semqa/train/drop_parser_bert_test.jsonnet
 
 export DATASET_READER="drop_reader_bert"
 
@@ -23,6 +25,7 @@ export GPU=0
 
 export TRAINING_DATA_FILE=${TRAINFILE}
 export VAL_DATA_FILE=${VALFILE}
+export TEST_DATA_FILE=${TESTFILE}
 
 export COUNT_FIXED=false
 export AUXLOSS=true
@@ -45,7 +48,7 @@ export SEED=1000
 
 export BEAMSIZE=1
 export MAX_DECODE_STEP=14
-export EPOCHS=60
+export EPOCHS=40
 
 export DEBUG=false
 
@@ -53,8 +56,8 @@ export DEBUG=false
 CHECKPOINT_ROOT=./resources/semqa/checkpoints
 SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/${DATASET_NAME}
 MODEL_DIR=drop_parser_bert
-PD_1=CNTFIX_${COUNT_FIXED}/aux_${AUXLOSS}/SUPEPOCHS_${SUPEPOCHS}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}/BertModel15RelAux15_2x
+PD_1=CNTFIX_${COUNT_FIXED}/EXCLOSS_${EXCLOSS}/MMLLOSS_${MMLLOSS}/aux_${AUXLOSS}/SUPEPOCHS_${SUPEPOCHS}
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}/BertModel_wTest
 
 # SERIALIZATION_DIR=./resources/semqa/checkpoints/test
 

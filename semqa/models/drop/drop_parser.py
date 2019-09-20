@@ -342,20 +342,19 @@ class DROPParser(DROPParserBase):
             raise NotImplementedError
 
         # Shape: (batch_size, passage_length, passage_length)
-        passage_passage_token2date_similarity = self._executor_parameters.passage_to_date_attention(modeled_passage,
-                                                                                                    modeled_passage)
-        passage_passage_token2date_similarity = passage_passage_token2date_similarity * passage_mask.unsqueeze(1)
-        passage_passage_token2date_similarity = passage_passage_token2date_similarity * passage_mask.unsqueeze(2)
+        passage_passage_token2date_alignment = self.compute_token_date_alignments(
+            modeled_passage=modeled_passage, passage_mask=passage_mask, passageidx2dateidx=passageidx2dateidx,
+            passage_to_date_attention_params=self._executor_parameters.passage_to_date_attention)
 
-        # Shape: (batch_size, passage_length) -- masking for number tokens in the passage
-        passage_tokenidx2dateidx_mask = (passageidx2dateidx > -1).float()
-        # Shape: (batch_size, passage_length, passage_length)
-        passage_passage_token2date_similarity = (passage_passage_token2date_similarity *
-                                                 passage_tokenidx2dateidx_mask.unsqueeze(1))
-        # Shape: (batch_size, passage_length, passage_length)
-        pasage_passage_token2date_aligment = allenutil.masked_softmax(passage_passage_token2date_similarity,
-                                                                      mask=passage_tokenidx2dateidx_mask.unsqueeze(1),
-                                                                      memory_efficient=True)
+        passage_passage_token2startdate_alignment = self.compute_token_date_alignments(
+            modeled_passage=modeled_passage, passage_mask=passage_mask, passageidx2dateidx=passageidx2dateidx,
+            passage_to_date_attention_params=self._executor_parameters.passage_to_start_date_attention)
+
+        passage_passage_token2enddate_alignment = self.compute_token_date_alignments(
+            modeled_passage=modeled_passage, passage_mask=passage_mask, passageidx2dateidx=passageidx2dateidx,
+            passage_to_date_attention_params=self._executor_parameters.passage_to_end_date_attention)
+
+        passage_tokenidx2dateidx_mask = (passageidx2numberidx > -1).float()
 
         # Shape: (batch_size, passage_length, passage_length)
         # passage_passage_token2num_similarity = self._executor_parameters.passage_to_num_attention(encoded_passage,
@@ -390,18 +389,26 @@ class DROPParser(DROPParserBase):
         if self.auxwinloss:
             inwindow_mask, outwindow_mask = self.masking_blockdiagonal(batch_size, passage_length,
                                                                        10, device_id)
-            num_aux_loss = self.window_loss_numdate(passage_passage_token2num_similarity,
+            num_aux_loss = self.window_loss_numdate(passage_passage_token2num_alignment,
                                                     passage_tokenidx2numidx_mask,
                                                     inwindow_mask, outwindow_mask)
 
-            date_aux_loss = self.window_loss_numdate(passage_passage_token2date_similarity,
+            date_aux_loss = self.window_loss_numdate(passage_passage_token2date_alignment,
                                                      passage_tokenidx2dateidx_mask,
                                                      inwindow_mask, outwindow_mask)
+
+            start_date_aux_loss = self.window_loss_numdate(passage_passage_token2startdate_alignment,
+                                                           passage_tokenidx2dateidx_mask,
+                                                           inwindow_mask, outwindow_mask)
+
+            end_date_aux_loss = self.window_loss_numdate(passage_passage_token2enddate_alignment,
+                                                         passage_tokenidx2dateidx_mask,
+                                                         inwindow_mask, outwindow_mask)
 
             # count_loss = self.number2count_auxloss(passage_number_values=passage_number_values,
             #                                        device_id=device_id)
             count_loss = 0.0
-            aux_win_loss = num_aux_loss + date_aux_loss + count_loss
+            aux_win_loss = num_aux_loss + date_aux_loss + count_loss + start_date_aux_loss + end_date_aux_loss
 
         else:
             aux_win_loss = 0.0
@@ -422,9 +429,11 @@ class DROPParser(DROPParserBase):
         passage_mask_aslist = [passage_mask[i] for i in range(batch_size)]
         q2p_attention_aslist = [question_passage_attention[i] for i in range(batch_size)]
         p2q_attention_aslist = [passage_question_attention[i] for i in range(batch_size)]
-        p2pdate_similarity_aslist = [passage_passage_token2date_similarity[i] for i in range(batch_size)]
-        p2pnum_similarity_aslist = [passage_passage_token2num_similarity[i] for i in range(batch_size)]
-        p2pdate_alignment_aslist = [pasage_passage_token2date_aligment[i] for i in range(batch_size)]
+        # p2pdate_similarity_aslist = [passage_passage_token2date_similarity[i] for i in range(batch_size)]
+        # p2pnum_similarity_aslist = [passage_passage_token2num_similarity[i] for i in range(batch_size)]
+        p2pdate_alignment_aslist = [passage_passage_token2date_alignment[i] for i in range(batch_size)]
+        p2pstartdate_alignment_aslist = [passage_passage_token2startdate_alignment[i] for i in range(batch_size)]
+        p2penddate_alignment_aslist = [passage_passage_token2enddate_alignment[i] for i in range(batch_size)]
         p2pnum_alignment_aslist = [passage_passage_token2num_alignment[i] for i in range(batch_size)]
         # passage_token2datetoken_sim_aslist = [passage_token2datetoken_similarity[i] for i in range(batch_size)]
 
@@ -452,6 +461,8 @@ class DROPParser(DROPParserBase):
                                   question_passage_attention=q2p_attention_aslist[i],
                                   passage_question_attention=p2q_attention_aslist[i],
                                   passage_token2date_alignment=p2pdate_alignment_aslist[i],
+                                  passage_token2startdate_alignment=p2pstartdate_alignment_aslist[i],
+                                  passage_token2enddate_alignment=p2penddate_alignment_aslist[i],
                                   passage_token2num_alignment=p2pnum_alignment_aslist[i],
                                   parameters=self._executor_parameters,
                                   start_types=None,  # batch_start_types[i],
@@ -919,6 +930,45 @@ class DROPParser(DROPParserBase):
                 output_dict["languages"] = languages
 
         return output_dict
+
+
+    def compute_token_date_alignments(self, modeled_passage, passage_mask, passageidx2dateidx,
+                                      passage_to_date_attention_params):
+        """Compute the passage_token-to-passage_date alignment matrix.
+
+        Args:
+        -----
+            modeled_passage: (batch_size, passage_length, hidden_dim)
+                Contextual passage repr.
+            passage_mask: (batch_size, passage_length)
+                Passage mask
+            passageidx2dateidx: (batch_size, passage_length)
+                For date-tokens, the index of the date-entity it belongs to, o/w masked with value = -1
+            passage_to_date_attention_params: Some matrix-attention parameterization for computing the alignment matrix
+
+        Returns:
+        --------
+            pasage_passage_token2date_aligment: (batch_size, passage_length, passage_length)
+                Alignment matrix from passage_token (dim=1) to passage_date (dim=2)
+                Should be masked in dim=2 for tokens that are not date-tokens
+        """
+        # ### Passage Token - Date Alignment
+        # Shape: (batch_size, passage_length, passage_length)
+        passage_passage_token2date_similarity = passage_to_date_attention_params(modeled_passage, modeled_passage)
+        passage_passage_token2date_similarity = passage_passage_token2date_similarity * passage_mask.unsqueeze(1)
+        passage_passage_token2date_similarity = passage_passage_token2date_similarity * passage_mask.unsqueeze(2)
+
+        # Shape: (batch_size, passage_length) -- masking for number tokens in the passage
+        passage_tokenidx2dateidx_mask = (passageidx2dateidx > -1).float()
+        # Shape: (batch_size, passage_length, passage_length)
+        passage_passage_token2date_similarity = (passage_passage_token2date_similarity *
+                                                 passage_tokenidx2dateidx_mask.unsqueeze(1))
+        # Shape: (batch_size, passage_length, passage_length)
+        pasage_passage_token2date_aligment = allenutil.masked_softmax(passage_passage_token2date_similarity,
+                                                                      mask=passage_tokenidx2dateidx_mask.unsqueeze(1),
+                                                                      memory_efficient=True)
+        return pasage_passage_token2date_aligment
+
 
     def compute_avg_norm(self, tensor):
         dim0_size = tensor.size()[0]
@@ -1662,7 +1712,7 @@ class DROPParser(DROPParserBase):
         return inwindow_mask, outwindow_mask
 
 
-    def window_loss_numdate(self, passage_passage_similarity_scores, passage_tokenidx_mask,
+    def window_loss_numdate(self, passage_passage_alignment, passage_tokenidx_mask,
                             inwindow_mask, outwindow_mask):
         """
         The idea is to first softmax the similarity_scores to get a distribution over the date/num tokens from each
@@ -1687,11 +1737,13 @@ class DROPParser(DROPParserBase):
             Opposite of inwindow_mask. For each row x, the colums are 1 outside of a window around x
         """
         # (batch_size, passage_length, passage_length)
-        passage_passage_alignment_matrix = allenutil.masked_softmax(passage_passage_similarity_scores,
-                                                                    passage_tokenidx_mask.unsqueeze(1),
-                                                                    memory_efficient=True)
+        # passage_passage_alignment_matrix = allenutil.masked_softmax(passage_passage_similarity_scores,
+        #                                                             passage_tokenidx_mask.unsqueeze(1),
+        #                                                             memory_efficient=True)
+
+
         inwindow_mask = inwindow_mask.unsqueeze(0) * passage_tokenidx_mask.unsqueeze(1)
-        inwindow_probs = passage_passage_alignment_matrix * inwindow_mask
+        inwindow_probs = passage_passage_alignment * inwindow_mask
         # This signifies that each token can distribute it's prob to nearby-date/num in anyway
         # Shape: (batch_size, passage_length)
         sum_inwindow_probs = inwindow_probs.sum(2)
@@ -1709,7 +1761,7 @@ class DROPParser(DROPParserBase):
         # For tokens outside the window, increase entropy of the distribution. i.e. -\sum p*log(p)
         # Since we'd like to distribute the weight equally to things outside the window
         # Shape: (batch_size, passage_length, passage_length)
-        outwindow_probs = passage_passage_alignment_matrix * outwindow_mask
+        outwindow_probs = passage_passage_alignment * outwindow_mask
 
         masked_outwindow_probs = allenutil.replace_masked_values(outwindow_probs, outwindow_mask, replace_with=1e-40)
         outwindow_probs_log = torch.log(masked_outwindow_probs + 1e-40) * outwindow_mask

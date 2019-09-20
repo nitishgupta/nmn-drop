@@ -1,6 +1,6 @@
 import json
 
-input_dir = "./resources/data/drop/date_num/date_numcq_hmvy_cnt_relprog_500/"
+input_dir = "./resources/data/drop/date_num/date_ydnew2_num_hmyw_cnt_rel_500/"
 output_dir = input_dir
 
 def readDataset(input_json):
