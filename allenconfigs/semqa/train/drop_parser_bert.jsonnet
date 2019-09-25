@@ -34,6 +34,7 @@ local utils = import 'utils.libsonnet';
 
     "train_data_path": std.extVar("TRAINING_DATA_FILE"),
     "validation_data_path": std.extVar("VAL_DATA_FILE"),
+    "test_data_path": std.extVar("TEST_DATA_FILE"),
 
     "model": {
         "type": "drop_parser_bert",

@@ -16,7 +16,7 @@ INCLUDE_PACKAGE=semqa
 
 ### TRAINING MODEL CONFIG -- should be same across datasets for the same model
 # CONFIGFILE=allenconfigs/semqa/train/drop_parser_wmodel.jsonnet
-CONFIGFILE=allenconfigs/semqa/train/drop_parser_test.jsonnet
+CONFIGFILE=allenconfigs/semqa/train/drop_parser.jsonnet
 
 export TOKENIDX="qanet"
 

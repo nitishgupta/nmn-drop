@@ -16,7 +16,7 @@ TESTFILE=${DATASET_DIR}/drop_dataset_mytest.json
 INCLUDE_PACKAGE=semqa
 
 ### TRAINING MODEL CONFIG -- should be same across datasets for the same model
-CONFIGFILE=allenconfigs/semqa/train/drop_parser_bert_test.jsonnet
+CONFIGFILE=allenconfigs/semqa/train/drop_parser_bert.jsonnet
 
 export DATASET_READER="drop_reader_bert"
 
