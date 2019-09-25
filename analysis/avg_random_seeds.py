@@ -9,7 +9,7 @@ For eg. SERIALIZATION_PATH/S_1/BertModel/, SERIALIZATION_PATH/S_2/BertModel/, et
 From inside each model folder this script expects a predictions folder. 
 '''
 # SERIALIZATION_PATH="./resources/semqa/checkpoints/drop-bert/mydata_ydNEW_rel"
-SERIALIZATION_PATH="./resources/semqa/checkpoints/drop/date_num/date_ydNEW_num_hmyw_cnt_rel_600/drop_parser_bert/CNTFIX_false/EXCLOSS_true/MMLLOSS_true/aux_true/SUPEPOCHS_5"
+SERIALIZATION_PATH="./resources/semqa/checkpoints/drop-bert-tg/mydata_ydNEW_rel"
 
 print("\nSERIALIZATION PATH: {}".format(SERIALIZATION_PATH))
 
@@ -23,6 +23,8 @@ seedpath2valem = {}
 for seedpath in paths:
     metrics_glob_path = os.path.join(seedpath, "metrics_epoch_??.json")
     metrics_paths = glob.glob(metrics_glob_path)
+    if not metrics_paths:
+        continue
     latest_metric_path = sorted(metrics_paths, reverse=True)[0]
     metric_dict = json.load(open(latest_metric_path))
     best_f1 = metric_dict["best_validation_f1"]
@@ -34,20 +36,21 @@ for seedpath in paths:
 num_seeds = len(seedpath2valf1)
 print("Total number of seeds: {}".format(num_seeds))
 
-print("Latest Metric Val F1")
-for k, v in seedpath2valf1.items():
-    print("{} : {}".format(k, v))
+if num_seeds > 0:
+    print("Latest Metric Val F1")
+    for k, v in seedpath2valf1.items():
+        print("{} : {}".format(k, v))
 
-print("Latest Metric Test EM")
-for k, v in seedpath2valem.items():
-    print("{} : {}".format(k, v))
+    print("Latest Metric Test EM")
+    for k, v in seedpath2valem.items():
+        print("{} : {}".format(k, v))
 
-avg_val_f1 = sum(x[1] for x in seedpath2valf1.items())/len(seedpath2valf1)
-avg_val_em = sum(x[1] for x in seedpath2valem.items())/len(seedpath2valem)
+    avg_val_f1 = sum(x[1] for x in seedpath2valf1.items())/len(seedpath2valf1)
+    avg_val_em = sum(x[1] for x in seedpath2valem.items())/len(seedpath2valem)
 
-print("Avg F1: {}".format(avg_val_f1))
-print("Avg EM: {}".format(avg_val_em))
-print()
+    print("Avg F1: {}".format(avg_val_f1))
+    print("Avg EM: {}".format(avg_val_em))
+    print()
 
 seedpath2datasetf1 = {}
 seedpath2datasetem = {}
@@ -69,6 +72,8 @@ for seedpath in paths:
     seedpath2datasetf1[seedpath] = datasetname2f1
     seedpath2datasetem[seedpath] = datasetname2em
 
+
+num_seeds = len(seedpath2datasetf1)
 
 avg_dataset_f1_perf = defaultdict(float)
 avg_dataset_em_perf = defaultdict(float)

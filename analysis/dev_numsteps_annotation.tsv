@@ -1,0 +1,418 @@
+7a85860d-53ae-4572-9504-e4e1a47406d1	How many field goals were made in the game?	2	find fields goals; count	
+12e9162d-af52-4a45-95e4-2bb20a1502fb	Who kicked the first field goal of the game?	3	find first field goal; who kicked	
+fdbba149-5b89-42f0-a151-de9506111ae7	How many years after the 10-year-10-month-and-10-day agreement was reached did it take for Edward to be crowned King of England?	5	find event 1; find date 1; find event 2; find date 2; subtract	
+508a6f11-0968-4418-aa84-c277f05e7575	How many years did it take for the Kamkowski Tatutes to be lifted?	4	find event; find 2 start and end; subtract	
+cc80390d-dec5-45a5-84eb-264272240c81	How many years after the Karnkowski Statutes from 1570 were passed were they lifted?	5		
+54624e55-5fbd-4a3a-83cf-6c2ca217e43e	How many rushing touchdowns were scored in the game?	2		
+d557ce7b-6192-421a-8da5-6c1f77be7b50	How many field goals did Mike Nugent kick in the fourth quarter?	4	FGs in 4th q; ones by Mike; count	
+60b2de54-6aba-4860-8115-797994cd409d	Who scored the longest rushing touchdown of the game?	4	find TDs; their lengths; longest; who scored	
+993e7c0f-1507-4f25-adb8-d6db9b64dc2c	Who threw the longest touchdown pass of the game?	4		
+cca72bef-7312-4e5b-967c-f419bb47a0a2	Who threw the longest touchdown?	4		
+33dcf3a1-bb7f-43f5-963d-8f5380cd1b9d	Who scored the two longest touchdown runs?	4		
+bdc71131-527a-49e1-98f6-f1063bc0d45d	How many yards was the longest field goal in the game?	3	find FGs; find lengths; longest	
+df4d5425-3859-4c80-8cca-2c2e4b3adcf7	How many yards was Neil Rackers's longest field goal?	4	find FGS; by Neil; find lengths; longest	
+4fd064c1-0a10-483e-a2b0-18c3867cce40	How many yards was the longest passing touchdown?	3		
+25e390dd-4b69-4a92-b50a-ee918038abd9	Which happened first, the building of the hospital in Thailand, or Pallu's trip to France?	5	find event1; date 1; find event 2; date 2; compare	
+25e390dd-4b69-4a92-b50a-ee918038abd9-dc-event-switch	Which happened first , Pallu 's trip to France , or the building of the hospital in Thailand ?	5		
+a11d35e0-013f-4f62-a741-0453027be652	How many years after the missionaries arrived in Ayutthaya did the build the Seminary of Saint Joseph?	5		
+87b77080-44cc-460c-b757-5e3235706e19	How many years after the Seminary of Saint Joseph was built did Louis Laneau named head of the Roman Catholic mission?	5		
+795f2238-1cd1-4889-bda6-a98f13c7da47	How many years did it take to build a seminary in Ayutthaya?	4		
+b50bf6f4-6892-4baf-9833-71f4bc7ddce5	How many years did it take after arriving for the seminary to be built in Ayutthaya?	5		
+3e75e78d-9d05-4fb6-8be7-6a68c25c67ce	How many yards was the longest field goal?	3		
+6bae7199-de94-4870-b572-c7ebf3e6c4f3	How many yards was the longest field goal?	3		
+9f8cd721-ae32-4d42-99f0-6044fc8b7c25	How many touchdowns were scored in the first half?	3	find TDs; ones in 1st half; count	
+92dbe40b-9799-41bf-b5a8-681bb19d6c27	How many touchdowns were scored in the first half?	3		
+237eb092-7a72-465c-b858-8f428144150e	How many field goals were made in the 2nd quarter?	3		
+0c82124c-3761-42cd-b203-a9d7cf4be4c7	How many field goals did Matt Stover kick under 40 yards?	5	FGs; by Matt; their length; under 40; count	
+ee492468-7157-4f24-8e6b-35485db85b83	Who scored the first touchdown of the game?	3		
+df0dff90-54d0-4778-9dbb-c557497fcb6c	How many yards was the first touchdown pass?	3		
+82289719-2e65-4d50-8e6b-897127f89ad5	How many yards was the longest touchdown pass?	3		
+6fb7c2c8-7b04-4b09-8255-4a843b006277	How many field goals did Akers have?	3		
+63276960-9079-4141-bd25-9b1829ef81b5	Which player scored the first touchdown of the game?	3		
+d1991c5c-87f6-4d8a-b2bd-1e42097f5a82	For how many years was Janice Pennington employed as a "Barkers Beauties" model?	4		
+708405cf-096e-43b3-baa3-0eeeeec1f135	Which group had more active military personnel, the military specialists or the civil servants?	5	find group1; find their num; find group2; find num; compare	
+96176218-7856-4aca-81e6-37b967a7839b	Which group had less active military personnel, officers or soldiers?	5		
+a5a47d9f-e175-485c-8cc2-b0665e05ec53	Which personnel were there more of in the Croatian Armed Forces, officers or non-commissioned officers?	5		
+aac5cec9-5361-48d5-a5a4-84733b0dd1d1	How many years was the crimes tracked by New York Police Department 1990-2003?	4		
+84853441-8f08-44fb-bd78-6d63b562619e	Were there more robberies in Harlem in 1981 or 1990?	5		
+ee01fce4-796f-420e-905f-931bc49ba48b	Were there more robberies in 2000 or in 2010?	5	????? Should this and others be 3 -- can we directly say find num	
+e03b7261-9e04-42c5-b72e-bf42dddb9a28	How many years was Baldwin de Burg the Count of Edessa?	4		
+88e32112-9876-45f6-9f0b-8da889db0cd5	How many years was Baldwin de Burg the Count of Edessa for?	4		
+663b5eca-7023-43dc-966d-7231abc252a9	How many years was Baldwin de Burg nephew of Baldwin I of Jerusalem and Count of Edessa?	4		
+2452f92c-4460-478f-8ac0-5558a0db9bfb	How many yards was the first field goal?	3		
+138b35a3-5bc1-40d6-be3c-3b7be1dfa5ab	How many field goals did Bironas kick in the second quarter?	4		
+190741ed-4f65-4fd8-98e4-a609046fcccf	How many field goals did Bironas kick in the first quarter?	4		
+acb01589-a06b-4865-a78a-064b2dce838c	How many field goals did Bironas kick in the first half?	4		
+a929d4a2-7659-4aad-86a7-6eecf9324d8c	How many field goals did Vinatieri kick in the third quarter?	4		
+50615917-af5a-415f-bd18-41b6c4cd78e4	How many field goals did Vinatieri kick in the second half?	4		
+79c7f80e-6c67-4710-8d2b-d1db507814cc	How many field goals did Rob Bironas make?	3		
+c90796d7-8548-454e-a55f-c8ce5431379c	How many yards was the longest touchdown reception?	3		
+5a015b45-d082-456d-9992-339be8248625	How many years did the Regency exist	4		
+aa2b1a49-60e5-431f-8b4f-a5879406579a	How many years was Hungary a client state	4		
+e8b67d25-2c18-43c0-8a72-34d85170b4e0	How many years did the Kingdom of Hungary exist?	4		
+aeca8dc0-58a1-49fc-ba62-138c02a31415	How many years did the Second Hungarian Republic last?	4		
+1c915af2-074a-4848-be41-4c74a66f0ae2	How many years did the Regency exist?	4		
+ea60b9d0-8040-4b26-b832-22755cc362f6	For how many years was Hungary considered to be a client state of Germany by some historians?	4		
+a14e13ee-3abc-4a0e-9275-d83cd7c4a625	How many years after the Second Hungarian Republic was established was the Hungarian People's Republic founded?	5		
+e5aab9fe-011d-4cc2-adeb-d5700922fae9	What happened first: Northern Seven Years' War or Treaty of Stettin?	5		
+e5aab9fe-011d-4cc2-adeb-d5700922fae9-dc-event-switch	What happened first : Treaty of Stettin or Northern Seven Years ' War ?	5		
+e5aab9fe-011d-4cc2-adeb-d5700922fae9-dc-qop-switch	What happened later : Northern Seven Years ' War or Treaty of Stettin ?	5		
+e5aab9fe-011d-4cc2-adeb-d5700922fae9-dc-event-switch-dc-qop-switch	What happened later : Treaty of Stettin or Northern Seven Years ' War ?	5		
+78c07580-b3a4-452b-8ff7-1b3aea735e68	What happened second: Northern Seven Years' War or Treaty of Stettin?	5		
+78c07580-b3a4-452b-8ff7-1b3aea735e68-dc-event-switch	What happened second : Treaty of Stettin or Northern Seven Years ' War ?	5		
+78c07580-b3a4-452b-8ff7-1b3aea735e68-dc-qop-switch	What happened first : Northern Seven Years ' War or Treaty of Stettin ?	5		
+78c07580-b3a4-452b-8ff7-1b3aea735e68-dc-event-switch-dc-qop-switch	What happened first : Treaty of Stettin or Northern Seven Years ' War ?	5		
+ee5a777c-de12-4684-be63-1de33a3301e5	How many years did the Northern Seven Years' War last?	4		
+43f13e89-52aa-4f06-ad15-12171484f54f	How many years passed between the surrender to Swedish forces and the bombardment of Reval by sea?	5		
+66c679a9-eb1f-4534-a30f-2f3357d31fe0	How many passes did Matthew Stafford not complete?	4	passes; by matt; not complete; count	
+b14c141c-9f99-4c44-9c5a-cd7f8de03d31	What happened first, the end of the rebellion of the city of Danzig or Maximilian's II death?	5		
+b14c141c-9f99-4c44-9c5a-cd7f8de03d31-dc-event-switch	What happened first , Maximilian 's II death or the end of the rebellion of the city of Danzig ?	5		
+cfa50aae-0f90-44ba-9559-0ec89ce44896	How many years did the revolt of Danzig last?	4		
+327bd1cc-efe8-4f30-94dc-190e4ab788d8	How many years did the Danzig revolt last?	4		
+44b7cf5b-9dd3-4658-bcea-f223eac140c0	How many years did the rebellion of the city of Danzig last?	4		
+8962d656-a831-49be-a3a5-555abbcce70a	How many years was the rebellion of the city of Danzig 1575 and 1577?	4		
+4efaed4e-da7a-4af4-bb4d-992a51f0f5e7	How many years did the Danzig rebellion last?	4		
+73e2bf01-e86a-40bd-b6ef-6b4e20529aa9	How many years did the Danzig rebellion last?	4		
+495b1d5f-c434-49f0-8cf3-3a1a39e31a17	How many years did the Armenian-Cypriot community take to build?	4		
+8a37478a-c2cb-4b49-971b-973c4cc5bc0f	How many years was it between the Greco-Turkish War and when the Eastern Legion started training?	5		
+b770a533-e54a-4ab6-b2e0-f42dbc36f9cf	How many years was it between the Greco-Turkish War and when the Eastern Legion finished training?	5		
+50dba6fc-a1b7-41fa-82e7-9aa482fd94cb	How many years was the Eastern Legion trained in Monarga?	4		
+c10dc4e4-5959-4ae6-b2e7-7a497d540b5f	what happened first, the crisis deepened or they defeats suffered in the revolutions?	5		
+c10dc4e4-5959-4ae6-b2e7-7a497d540b5f-dc-event-switch	what happened first , they defeats suffered in the revolutions or the crisis deepened ?	5		
+42a143ae-c572-4b8c-b1cc-4544e470ba73	How many years was there where nobody fought?	4		
+a8caa28a-01ba-40a3-8e14-b396260afe00	How many years after the revolution of 1890 did the next revolution follow for the Radical Civic Union?	5		
+bad55f11-2dec-4811-9c9e-ff379f71f4a4	How many yards was the first TD pass of the game?	3		
+e0fc0fab-3576-455b-9459-e868a605a99a	How many yards was the games longest field goal?	3		
+a9772fed-a6dc-4f65-b128-79d7cc582d5e	How many touchdowns did the Broncos score in the first half?	4	TDs; first half; by broncos; count	
+e9e9892f-61cb-45d5-94cc-ffc4fc647e82	How many touchdowns were scored in the first quarter?	3		
+150bdb04-695a-4528-a2d4-4418508c1cfa	Who threw the shortest touchdown pass of the game?	4		
+ff38c574-0e42-4a1f-89fb-05ac0f82c6cd	Which happened first, the closing of the military mission or Soviet Union approaching Mengistu with aid?	5		
+c852a55c-f571-43f2-ae1c-0858e7bcc2fc	What event happened first, separatist struck government outposts or Mengistu was accused of infiltrating into Somali?	5		
+1d96b4a4-f313-46e3-938f-06bb63844e5d	How many years passed between Emperor Haile Selassie being overthrown and the Derg announcing the new head of state?	5		
+8f6fca59-9775-4523-a802-006fe1ac9135	How many years after the period of turmoil for the Dergs did the announcement of Mengistu Haile Mariam as head of state take place to try and restore order?	5		
+905a7b66-3d5e-4c50-a2e6-8a1db21ddb68	Which group is bigger that resided in the county according to the 2000 census: people or households?	5		
+2c8d3d0c-23eb-4d15-9c66-0e9567f1e58b	Which group is smaller that resided in the county according to the 2000 census: people or households?	5		
+00329d90-40db-480e-ab33-02db7fdb3b22	Which group is larger that resided in the county according to the 2000 census: people or families?	5		
+1d569e76-0fff-4a15-92c8-e68252fe89ae	Which group is smaller that resided in the county according to the 2000 census: people or families?	5		
+1c767649-4207-43e4-a18e-7120a4b3c9c4	Which group is bigger that resided in the county according to the 2000 census: households or families?	5		
+a2ed2e0a-6c33-4fbd-b9a4-e533276f70de	Which group is larger for the county according to the census: people or households?	5		
+b6cdc5bc-ca17-476c-b0e0-4a057fa328d0	Which group is smaller for the county according to the census: people or households?	5		
+e0bf021c-bf22-4612-8dde-af6c36ed5906	Which group is larger for the county according to the census: people or families?	5		
+205b0d70-82cd-4dff-8045-acd0550f2dc6	Which group is smaller for the county according to the census: people or families?	5		
+3bc7b737-4a3a-4f2c-8b97-cfa057eacf7c	Which group is larger for the county according to the census: households or families?	5		
+a36f0fa5-fc2b-4f9c-8154-05ce3c5234df	Which group is smaller for the county according to the census: households or families?	5		
+349f53ed-9b1b-4b26-99c1-74acf0539db2	Which group is larger according to the census: people or households?	5		
+85154100-9532-4777-8477-6748f452cef4	Which group is smaller according to the census: people or households?	5		
+320559ac-a7b3-4bb2-b0e3-d4ca5e999090	Which group is larger according to the census: people or families?	5		
+e3d09866-3b1c-4549-ad83-ab5a2242719f	Which group is smaller according to the census: people or families?	5		
+a76d390d-4b34-46b5-a51f-f6f66f2fc49f	Which group is larger according to the census: households or families?	5		
+3becab3c-97eb-4860-86d3-e08d3bc3ce62	Which group is smaller according to the census: households or families?	5		
+b4c96ede-a865-4529-8793-2803f224f272	Which group from the census is larger: White or African American?	5		
+47f21f05-3919-4290-9ba9-003dd25b6fdd	Which group from the census is smaller: White or African American?	5		
+1642500a-f34c-404e-931f-a2b43db14ba2	What happened first: inheritance treaty or the Emperor took back control?	5		
+1642500a-f34c-404e-931f-a2b43db14ba2-dc-event-switch	What happened first : the Emperor took back control or inheritance treaty ?	5	K	
+1642500a-f34c-404e-931f-a2b43db14ba2-dc-qop-switch	What happened later : inheritance treaty or the Emperor took back control ?	5		
+1642500a-f34c-404e-931f-a2b43db14ba2-dc-event-switch-dc-qop-switch	What happened last : the Emperor took back control or inheritance treaty ?	5		
+3eed8c16-904b-42fd-94ce-86ce878a0938	What happened second: inheritance treaty or the Emperor took back control?	5		
+3eed8c16-904b-42fd-94ce-86ce878a0938-dc-event-switch	What happened second : the Emperor took back control or inheritance treaty ?	5		
+3eed8c16-904b-42fd-94ce-86ce878a0938-dc-qop-switch	What happened earlier : inheritance treaty or the Emperor took back control ?	5		
+3eed8c16-904b-42fd-94ce-86ce878a0938-dc-event-switch-dc-qop-switch	What happened earlier : the Emperor took back control or inheritance treaty ?	5		
+9b1e4b5e-e298-45f1-96cf-784fb666780f	What event happened second, the Battle of White Mountain or Joachim III Frederick inheriting the Silesian Duchy of Jägerndorf?	5		
+9b1e4b5e-e298-45f1-96cf-784fb666780f-dc-event-switch	What event happened second , Joachim III Frederick inheriting the Silesian Duchy of Jägerndorf or the Battle of White Mountain ?	5		
+69739a9a-7b45-4d96-9bfb-2c110c7a7edc	How many years after the Battle of White Mountain was won did the Emperor take back control of Schwiebus?	5		
+10cde81d-e30c-4b05-97fb-a45bbeaa2f08	How many years after the 1537 inheritance treaty did Frederick William lay claim to the Silesian principalities?	5		
+ef732aa1-1bdd-4183-9223-dc6452681ad9	How many years after the inheritance treaty between the Silesian duke  and the Hohenzollern Prince-Elector did the Piast line end	5		
+77f91443-c9f3-4a20-b779-ca7e01ed786a	Which age groups made up 25% or more of the population?	3		
+2ea71e17-fb3d-4d52-bc5a-5ea0bb2320f6	Were there more females or males in the population?	5		
+457e46b1-34da-47b5-a4dc-884bfc193918	Which age group is larger: under age 18 or 18 to 24?	5		
+312e9185-5990-4f2c-ba7c-68b1bef94783	Which age group is smaller: under age 18 or 18 to 24?	5		
+4ff4f53c-96ec-4af4-ac00-72f9196bdb3c	Which age group is larger: 25 to 44 or 45 to 64?	5		
+8a60f9fe-3f98-4a2a-a69e-7b4b3f6f3483	Which age group is smaller: 25 to 44 or 45 to 64?	5		
+bdd34ef1-19e4-4baf-b763-0a346e870471	Which groups made up 25% or more of the population each?	3		
+229ecbba-7e9c-4769-9a75-5cc92b1f6f7a	Were there more males or females?	5		
+dd5a3b63-8bdf-4da0-96be-c6d59054fd09	How many yards was the longest touchdown pass?	3		
+41b4fc83-6647-44b1-8f48-c3f8804b9b18	How many yards was the longest first half field goal?	4		
+be9d53b8-4874-4d86-a9d4-98667b5e1ec0	How many yards was Donovan McNabb's longest rushing TD?	4		
+b1fd0380-79ad-4fe7-a2e3-02302e8d2d06	How many yards was Dave Rayner second field goal of the first half?	5		
+27f9de7a-a3bd-4680-b3fc-70e2957f01a2	How many field goals did the Packers score in the first half?	4		
+deac9b7d-8867-490b-aa22-fad8d0f89dfd	Who caught the games longest TD pass?	4		
+0bb6ba0f-807f-44da-aa0d-bb21e7b48fe0	Which event happened first, when king Chulalongkorn enacted two decrees banning the capture and sale of Kha slaves or when Siam abolished the tributes collected from vassal states?	5		
+0bb6ba0f-807f-44da-aa0d-bb21e7b48fe0-dc-event-switch	Which event happened first , when Siam abolished the tributes collected from vassal states or when king Chulalongkorn enacted two decrees banning the capture and sale of Kha slaves ?	5		
+494e05ab-2fb0-4c24-93ef-0b8020815798	Which happened first, the Treaty of Huế or the banning Kha slave capture?	5		
+494e05ab-2fb0-4c24-93ef-0b8020815798-dc-qop-switch	Which happened later , the Treaty of Huế or the banning Kha slave capture ?	5		
+69b29d2c-b028-48e8-a54f-fb866dd9fc69	How many years was the time span where king Chulalongkorn enacted two decrees banning the capture and sale of Kha slaves?	5		
+2a9f603b-e806-4786-bf51-d87a59cd2937	How many yards was the longest rushing touchdown?	3		
+77996544-b6f8-4182-8875-9716a585acae	Who caught the third quarter touchdown?	3		
+1b405641-bd2a-44b1-8573-56158a6a3834	Which player scored the first points of the game?	3		
+ce0eb7d2-af07-43b2-a939-779fbda33877	Who caught the Seahawks first TD?	4		
+e9a17f71-94ee-4031-af88-e9a3e116b575	Who kicked the shortest field goal of the game?	4		
+a3b60c8a-e5cc-421a-90a2-e4ac5b036c1b	Which were there more of, Cuban troops or Soviet advisors?	5		
+3fa8b460-d519-4cf7-aac0-cdf8f7ca884e	Which were there more of, Soviet advisors or brigades?	5		
+51a3ebf0-1892-468c-b3e5-30db3614a09a	How many years did the Census Bureaus American Community Survey last?	4		
+8336e32e-56fd-45af-adbe-69b5f746f2c7	Were there more males or females in the department?	5		
+fe57214a-5e62-45cd-836f-55d3dfa90f3b	How many years was the time span where women entering the U.S. workforce represented a nearly 8 percentage point increase in the overall LFPR?	4	8 perce	
+29708a89-5223-4edd-be24-1128b7b7695b	How many field goals were made in this game?	2		
+eb9cd224-4836-45fc-8adc-15b4a66cdef3	Who scored the first touchdown of the game?	3		
+d52ba158-62a8-4e73-b04d-f0c69426ecf6	Who scored the first points of the game?	3		
+2e8baded-df2d-4548-aced-7e80e08013ce	Who scored the first points of the second half?	4		
+870a66da-55ab-48c6-870a-7e3abac88339	How many field goals were kicked in total by both teams?	2	fg, count	
+2c7b8dd6-1b4b-4a4f-ab75-846ee3d0fbb5	How many passes did Peyton Manning throw?	3		
+145982dd-a747-4d5f-83c1-a5accb48bb4e	How many touchdown passes did Manning throw in the third quarter?	4		
+765ffe7f-79dd-49d5-a846-60fd173b0a03	How many interceptions did Peyton Manning have?	3		
+ce1d3c21-c1ff-45cc-a2fa-25e308046251	Who scored the fourth touchdown in the second half for the Colts?	5		
+12272dee-d8a6-43ff-9b9e-678cd654a596	Who kicked the longest field goal in the first quarter, Adam Vinatieri or Shayne Graham?	5		
+9c89d33b-bd0d-4021-8c63-ea86199c32af	Which group was smaller, the 25 to 44 year olds or the 45 to 64 year olds?	5		
+266cdcb0-515b-48d1-8601-a039ff83397b	Which group did KDP attack last, the PKK or the PUK?	5		
+bc92d717-4f2b-46d5-b300-ad0483b36ff4	How many yards was the longest field goal?	3		
+ec8f6dd6-10a4-4740-b75b-2512f4dbde40	How many yards was the longest field goal?	3		
+aa772df6-e1dd-4934-89b4-8d30c8f42aee	How many yards was the longest field goal?	3		
+3d5d2d31-ed0a-42ff-8609-44d9e35dc8e2	How many field goals did Bryant kick in the second quarter?	4		
+9f20e98d-9f71-46a2-bae2-a1eaeca16d3b	How many field goals did Bironas kick in the second half?	4		
+5c54f391-33cd-49a0-9df8-3ee01f39cff2	How many field goals did Bironas kick in the third quarter?	4		
+d167d8d2-4501-4f47-bdd7-7e386f21dd1f	How many field goals did Bryant kick in the second half?	4		
+17bce584-ed0e-4f6c-b26a-8f4eca6fd4b3	How many field goals did Bryant kick in the fourth quarter?	4		
+0c224f26-80b1-4215-820e-a36b021dddf4	Who threw the longest touchdown pass?	4		
+b49f14fd-e072-49f4-ada1-2d669821eee3	How many years did it take for Ghost in the Machine to go from 2x platinum to 3x platinum?	4		
+06672b18-6872-4768-88e2-35eef370e195	How many field goals were made in this game?	2		
+8faa69f1-7265-417c-ab23-d8ff208534f0	How many field goals were kicked in the first half?	3		
+acc895d6-b9c5-4a2b-a08c-c8d99532d521	Which player scored the last touchdown of the game?	3		
+73e66dd1-a24f-4181-b710-6aeb0fb3df4e	How many yards was the longest field goal?	3		
+df8509d2-cf40-4db5-9f69-607aa8052809	How many yards was the difference between the longest and shortest field goals?	5	? field goal, numbers, longest, shortest, diff, 7 if we have to do fg to number separately	
+cbf71212-323b-42d5-b047-529817de3db5	How many passes did JaMarcus Russell not complete?	3		
+0495420f-6d2c-452a-8dfc-cda645ee02b6	Which happened first, the Diet of Worms, or the Protestation at Speyer?	5		
+0495420f-6d2c-452a-8dfc-cda645ee02b6-dc-event-switch	Which happened first , the Protestation at Speyer , or the Diet of Worms ?	5		
+0495420f-6d2c-452a-8dfc-cda645ee02b6-dc-qop-switch	Which happened later , the Diet of Worms , or the Protestation at Speyer ?	5		
+0495420f-6d2c-452a-8dfc-cda645ee02b6-dc-event-switch-dc-qop-switch	Which happened second , the Protestation at Speyer , or the Diet of Worms ?	5		
+bcb2b367-f09b-4610-831e-973ba02c833d	Which happened first, the establishment of the Schmalkaldic League, or the Treaty of Crépy?	5		
+bcb2b367-f09b-4610-831e-973ba02c833d-dc-event-switch	Which happened first , the Treaty of Crépy , or the establishment of the Schmalkaldic League ?	5		
+bcb2b367-f09b-4610-831e-973ba02c833d-dc-qop-switch	Which happened later , the establishment of the Schmalkaldic League , or the Treaty of Crépy ?	5		
+bcb2b367-f09b-4610-831e-973ba02c833d-dc-event-switch-dc-qop-switch	Which happened later , the Treaty of Crépy , or the establishment of the Schmalkaldic League ?	5		
+8293caf0-5c95-44ef-8c22-11ad5fd7595e	How many years after the Protestation at Speyer did the Lutheran Augsburg Confession take place?	5		
+8cc1ddae-fc57-452f-8bc9-e5f03b5b2146	How many years did it take to sign the Treaty of Crépy after the Lutheran Augsburg Confession?	5		
+990f66c5-866b-4eb2-8a4c-3fecc1142c29	How many years did it take the services sector to rebound after the 2002 decrease?	4		
+6a764941-9eab-4958-a752-e0959efa8aba	How many years did it take for the services sector to rebound?	4		
+3db27df5-447f-4dfe-9ce6-f2b8e4b98210	How many years did they have a moderate growth?	4		
+d32085fe-2164-4637-8bc3-dca2c12be34b	How many years did the services sector had a moderate growth rate from 1990 to 2003?	3		
+5fc870c4-6215-4e64-841f-28fa33a39a03	How many touchdown passes did Kitna throw from 20 or more yards out?	5		
+54db511c-f83d-43ef-8b54-dc43db2909fd	How many field goals did Robbie Gould make in the 4th quarter?	4		
+2512bb1d-419b-452f-a1d3-039e3e8f32a3	How many touchdown passes did Roy Williams catch?	3		
+c6bce289-1649-47cf-93df-29ebd80d41ed	How many field goals were over 30 yards?	4		
+bfe2eda8-d627-4248-962c-a230ada106db	Who threw the first touchdown pass of the game?	3	touchdowns, first, who	
+27904f61-76f3-4157-9ff6-6176894ed9b8	Who threw the shortest touchdown pass of the game?	4	touchdowns, numbers, shortest, who	
+a1599628-5d77-4ca8-8af8-9eb50aea0dcb	Which age group is larger: under the age of 18 or 18 to 24?	5	group, size, group, size, compare	
+26a798d0-52ad-488c-9108-1f960fe00dda	Which age group is smaller: under the age of 18 or 18 to 24?	5	group, size, group, size, compare	
+16119e2c-987e-471a-90f1-3336036e6919	Which age group is larger: 25 to 44 or 45 to 64?	5	group, size, group, size, compare	
+3b1c98e0-bf3a-4459-a4a4-de719bafaf58	Which age group is smaller: 25 to 44 or 45 to 64?	5	group, size, group, size, compare	
+82f46e72-35f2-49a8-9011-435ab27d762c	Which age group is larger: under the age of 18 or 18 to 24?	5	group, size, group, size, compare	
+7c22ec8f-3aa0-4e97-aed4-906bc09fe708	Which age group is smaller: under the age of 18 or 18 to 24?	5	group, size, group, size, compare	
+905408ca-1ed9-420e-94f7-3e6507584a43	Which age group is larger: 25 to 44 or 45 to 64?	5	group, size, group, size, compare	
+9e3e9531-ffaa-4cbf-b6d4-29f0de2e8324	Which age group is smaller: 25 to 44 or 45 to 64?	5	group, size, group, size, compare	
+71b60f81-9bc2-4e86-b539-4f92536d894c	How many yards was the longest field goal?	3	field goals, numbers, longest, yards	
+fb5602f4-6d35-4b1e-aba6-65ae22285e76	How many yards was the longest touchdown pass?	3		
+8a33c8eb-bba2-4e84-be54-695453bbe628	How many yards was the longest touchdown pass?	3		
+b280d75b-f39b-4f4d-8e39-b212601c10bc	How many yards was the only successful field goal?	4		
+b6d7ee97-174f-40d3-a1a2-940102ccfd98	How many interceptions did Andre Dyson have?	3	interceptions, andre dyson, count	
+470574bf-0f0f-471d-80fb-9208d8931e8a	How many field goals did Nugent miss?	4	fgs, nugent, miss, count	?
+6f7af5a2-535d-4fb9-8921-7810067d87c5	How many field goals did Nugent miss?	4		
+dd72eec0-1cfa-4e6b-98f7-67b5fd21aeca	Were there more people that were economically active that were unable to work or more people that were economically active that were unemployed?	6	activate, unemployed, unable to work, number, number, compare	?
+7ffd22a7-d24f-4cf3-aa1f-011ceb26a1da	What happened first Alexander invaded Pauravas or Menander I Soter invaded the Punjab?	5	find, find, date, date, compare	
+7ffd22a7-d24f-4cf3-aa1f-011ceb26a1da-dc-event-switch	What happened first Menander I Soter invaded the Punjab or Alexander invaded Pauravas ?	5		
+7c0eb83a-508e-4245-ad49-4a48c34f80a0	How many years after the Indo-Greek Kingdom was formed did the most renowned leader, Menander I Soter, die?	5		
+007e528f-bf7c-488b-8545-4bbbf2b198d1	How many years after the area was ruled by the Maurya Empire was the Maurya presence consolidated in the Indo-Greek Kingdom?	5		
+771d3f4d-2896-41e5-b6c1-1befb96309f3	How many yards was the longest field goal?	3		
+cfbfd3ef-5c4c-4c87-82c0-6191ffcfd3b8	How many yards was Carney's shortest field goal?	5		
+5ce35670-1ab8-41df-80c8-16355d099915	How many yards was the longest run?	3		
+fea65fc2-f438-4612-8f43-5ef53af94769	How many field goals did Carney make in the game?	3		
+0f725def-084d-4516-9b66-eb08c5e5b3d1	How many field goals did John Carney make?	3		
+22d26e2c-6bc5-438b-8021-4c660d2df163	How many field goals did Carney kick in the first half?	4		
+f5575f5a-a5db-4f50-b6b5-a72b5e618f3d	How many years did the First Indochina War last?	4		
+bffb1d74-47df-4b14-ae49-d106a60f7365	How many years did the Yogoslav Wars last?	4		
+c76616a5-84db-4854-a66c-a05dad0f3533	How many years was the Western Sahara War?	4		
+24c98643-73e5-446c-87a1-e39b4af201f4	How many years did the First Indochina war last?	4		
+a1c41a1d-9b7a-4e05-9481-dbc9fce200b8	How many years did the First Indochina War last?	4		
+bca3aae8-062a-4e19-9398-3706a465a631	How many years after the assassination of the Portuguese king was the revolution?	5		
+9cc7996f-c18d-465d-ad5b-46c07927f4c9	How many years after the Portuguese revolution was their Constitution approved?	5		
+12c678de-0bb4-46cd-ada2-6257bbdcaf0e	How many years after the 5 October revolution was the Constitution approved?	5		
+79c24186-ad95-42b9-aea6-1dec9c3d4b73	Were there more pupils in the primary classes or the lower secondary classes?	5		
+39068385-2360-4032-afc8-e44d525b4ea9	How many touchdown passes did Manning throw?	3		
+78200270-8841-41fb-b752-7a951f15920b	How many field goals did Matt Prater make?	3		
+2ec17699-473c-465f-bd6d-4d1e027b1f46	Who scored the first touchdown of the game?	3		
+aad77009-c159-4266-8e15-11ce5e9775ac	Who threw the first touchdown pass of the game?	3		
+68b370d6-4f0a-466a-83db-5013af543228	Were there more people under the age of 29 or over the age of 60?	5		
+d06dff8c-f730-4a3b-b6f7-af4957c830ee	Were there more people between 20 and 40 or between 40 and 60?	5		
+90fe8520-d67a-4d5a-a766-6554ae136e37	How many years did the SNA-WSLF forces attempt to capture Harar?	4		
+f5dfeec8-2b5d-4bfa-8e2b-b32ab729f353	How many yards was Hansons longest field goal?	5		
+5084c07f-738c-459a-886b-fc891d3e90cb	How many yards was the shortest touchdown run?	4		
+6036315c-f711-4a69-8968-7a829ea20b33	How many yards was the longest field goal?	4		
+5fc944f0-42ba-48ce-ac5b-1fc712a0ad29	How many field goals were kicked during the game?	2		
+5dc832bf-c43f-429b-856b-b4d27f5adc8b	How many touchdowns were scored in the game?	2		
+ba6bb894-8e10-483d-a6ae-3162c38dbbea	How many rushing touchdowns were scored in the game?	2		
+16b50f1f-1a95-479e-8ee6-a0fbfc7c93cc	How many touchdown passes did Tony Romo throw in the game?	3		
+6c8d2d34-2b7d-4c8a-89a3-aa3f89746ce2	How many touchdowns were scored in the second half?	3		
+5351d216-8f79-4a0f-b7b3-fd4053a34d5b	Who scored the most touchdowns?	3	aggregation	
+59cbdd70-8892-4ec2-946b-247ae1c0416e	Who caught the 16-yard touchdown pass?	3		
+22b46688-7627-491c-bcff-c75e9b74fffe	Which player scored the longest rushing TD?	4		
+393c3041-4360-4380-90f9-1c2f7036d407	Who kicked the furthest field goal?	3		
+f8e9fb99-b292-416e-83cc-ff896c401ae4	Which player scored the last touchdown of the game?	3		
+570561ee-6d2d-4b7f-a5d2-854345fc437d	How many yards was the only touchdown pass?	2		
+6c50de51-df35-4821-8233-e0605071a752	How many field goals were kicked in total between both teams?	2		
+ca15da34-89e4-47a6-9042-d07d57ecdca1	Which player scored the last points of the game?	3		
+ae1b3c47-31d5-4f87-868f-c862a14b50cb	How many yards was Neil Racker's field goal?	3		
+fa2dfad7-59f6-48d7-a27e-a8cf110d636e	How many yards was the longest touchdown run?	3		
+7ffeaeb8-7045-4d32-812b-08da64863a66	How many yards was Scaub's shortest touchdown pass?	5		
+f76f512b-7699-4fad-a547-6293b18474a7	How many rushing touchdowns were scored in the game?	2	rushing td, count (not sure whether rushing td needs a filter? are all tds rushing tds?)	
+f1a69a0f-70dd-47fd-a826-d32c32682b2f	Who scored the longest rushing touchdown of the game?	4		
+6c8000cb-87c3-4fbe-8b2b-8efc5248df7a	Who threw the longest touchdown pass of the game?	4		
+817609c8-61c2-4bc0-a13a-886537dcf03a	Which happened first, Killigrew getting married to Catherine or Killigrew getting married to Jaél de Peigne?	5		
+817609c8-61c2-4bc0-a13a-886537dcf03a-dc-event-switch	Which happened first , Killigrew getting married to Jaél de Peigne or Killigrew getting married to Catherine ?	5		
+5a90f823-fefa-4ef4-8ebe-a624be8b1f60	How many years was it after her first marriage did Jaél de Peigne marry for the second time?	5		
+3af750b3-e036-4628-a74a-9665ced01726	How many years was George Downham married to Jaél de Peigne before his death?	5		
+20b6d312-bf38-4916-88cf-c494ed89040d	How many years passed between Jaél de Peigne's marriage to George Downham and her death?	5		
+4e9ee497-ac3d-4b30-8e9a-583861904771	How many years passed between Jaél de Peigne's first marriage and her death?	5		
+9a8e7153-25a0-46d4-a823-eed4c96237c0	Which group from the census is larger: English or Germans?	5		
+fd6a8e24-2ada-4b21-8203-777f6e4382dc	Which group from the census is smaller: English or Germans?	5		
+49dfa91c-adc9-48a9-9c72-d6f3a47a9d8a	Which group from the census is larger: Germans or Irish?	5		
+5b7909bf-3b7b-4943-8aa8-88a3ac0bbf96	Which group from the census is smaller: Germans or Irish?	5		
+cf5d2f0e-c7cb-4a04-bf33-ecebdabc9791	Which group from the census is larger: Irish or danish?	5		
+dad09a75-79c9-418f-8192-3024339e528b	Which group from the census is smaller: Irish or danish?	5		
+af50c1de-5421-4876-8440-49ece865197e	Which group from the census is larger: White or Native American?	5		
+b085fbc2-2196-41f5-8459-5ed527045431	Which group from the census is smaller: White or Native American?	5		
+e797ac10-5bd8-4658-ac0c-bdc9c681029c	Which group from the census is larger: White or Pacific Islander?	5		
+f4d11827-6b6a-485a-8c24-d4d12bbbc90a	Which group from the census is smaller: White or Pacific Islander?	5		
+94676733-4c30-46b0-a5cb-fb55313ee371	Which group from the census is larger: African American or Asian?	5		
+13d890a8-a3fe-4ed6-b5f1-3d309f276497	Which group from the census is smaller: African American or Asian?	5		
+0ea95b40-3b53-47b3-bf19-5e83baa2bf4e	Which group from the census is larger: White or African American?	5		
+a54a865d-d841-467a-b651-841b0ad61f64	Which group from the census is smaller: White or African American?	5		
+7aeefccd-9d22-4325-aa99-621bfa5e857e	Which group from the census is larger: Asian or Native American?	5		
+7407cd4a-b763-4d61-8258-e4bb5fd3e074	Which group from the census is smaller: Asian or Native American?	5		
+6ca2a6ce-c3af-4af1-844a-2195bf0db931	Were there more households or families in the county?	5		
+26378bc3-22ff-45fa-947d-43c648e5684c	Were there more African Americans or Asians?	5		
+8b9e9d5f-84d2-468b-8662-67380b9504db	Were there more Native Americans or Pacific Islanders?	5		
+0b4a2c76-180d-436c-948b-4cf659b39058	Were there more Latinos or English?	5		
+1f179129-4685-4d93-9859-3527fa6ce58d	Were there fewer Danish or Irish people?	5		
+336dc52b-b44b-4056-84f0-4a7095822c50	Were there fewer German or fewer English people?	5		
+56e30ca4-d347-497a-a8a7-92cefa644d6d	Which happened later, the introduction of the Treaty of Amiens or the first Kandyan War?	5		
+56e30ca4-d347-497a-a8a7-92cefa644d6d-dc-event-switch	Which happened later , the first Kandyan War or the introduction of the Treaty of Amiens ?	5		
+aad371c3-2238-4656-b07e-4c022ba8569b	Which happened first, British occupation of the coastal areas of Sri Lanka, or the Treaty of Amiens?	5		
+aad371c3-2238-4656-b07e-4c022ba8569b-dc-event-switch	Which happened first , the Treaty of Amiens , or British occupation of the coastal areas of Sri Lanka ?	5		
+aad371c3-2238-4656-b07e-4c022ba8569b-dc-qop-switch	Which happened last , British occupation of the coastal areas of Sri Lanka , or the Treaty of Amiens ?	5		
+aad371c3-2238-4656-b07e-4c022ba8569b-dc-event-switch-dc-qop-switch	Which happened last , the Treaty of Amiens , or British occupation of the coastal areas of Sri Lanka ?	5		
+6cedf5a1-68c0-45cb-b3ed-3049e035f461	What happened first, the Treaty of Amiens, or the invasion of the Kingdom of Kandy?	5		
+6cedf5a1-68c0-45cb-b3ed-3049e035f461-dc-event-switch	What happened first , the invasion of the Kingdom of Kandy , or the Treaty of Amiens ?	5		
+6cb4a3ab-cbab-4bd9-8abc-225cf2968793	Which happened first, the Treaty of Amiens, or the invasion of the Kingdom of Kandy?	5		
+6cb4a3ab-cbab-4bd9-8abc-225cf2968793-dc-event-switch	Which happened first , the invasion of the Kingdom of Kandy , or the Treaty of Amiens ?	5		
+1a9cbd37-52bb-473e-886e-7605f7ba1a7b	Which happened first, the second Kandyan War, or Sri Lankan independence?	5		
+1a9cbd37-52bb-473e-886e-7605f7ba1a7b-dc-event-switch	Which happened first , Sri Lankan independence , or the second Kandyan War ?	5		
+1a9cbd37-52bb-473e-886e-7605f7ba1a7b-dc-qop-switch	Which happened second , the second Kandyan War , or Sri Lankan independence ?	5		
+1a9cbd37-52bb-473e-886e-7605f7ba1a7b-dc-event-switch-dc-qop-switch	Which happened later , Sri Lankan independence , or the second Kandyan War ?	5		
+f3ef64e5-3d2a-49ad-821f-25265f4f0e5e	How many years after the first Kandyan War did the second Kandyan War happen?	5		
+d046ac29-0b94-4d79-a5f4-7b081d0e68ed	How many years after the British occupied Sri Lanka was the Treaty of Amiens signed?	5		
+9bf3d91f-cb0c-4978-809c-536dc52b1c38	Which happened first, the 27th SEA Games or the 2015 Southeast Asian Games?	5		
+9bf3d91f-cb0c-4978-809c-536dc52b1c38-dc-event-switch	Which happened first , the 2015 Southeast Asian Games or the 27th SEA Games ?	5		
+9bf3d91f-cb0c-4978-809c-536dc52b1c38-dc-qop-switch	Which happened later , the 27th SEA Games or the 2015 Southeast Asian Games ?	5		
+9bf3d91f-cb0c-4978-809c-536dc52b1c38-dc-event-switch-dc-qop-switch	Which happened second , the 2015 Southeast Asian Games or the 27th SEA Games ?	5		
+00329ae1-ff9a-48a4-bc8a-cff500eb7580	How many yards was the longest scoring play of the first quarter?	4		
+087e82c9-dbb3-470c-9672-687374e4b28b	How many rushing touchdowns were scored from less than 5 yards?	4	touchdowns, distance, less than 5, count	
+4e690422-b7d9-4d30-a546-cdf943d7c01f	Who kicked the longest field goal of the first half?	5		
+2bafb424-6b4b-41a4-ab92-da703b36b3c4	Which happened later, the death of Mirwais or the Battle of Gulnabad?	5		
+2bafb424-6b4b-41a4-ab92-da703b36b3c4-dc-event-switch	Which happened later , the Battle of Gulnabad or the death of Mirwais ?	5		
+dbba759b-242e-4113-ae22-b2f7e31af430	Which happened later, the capture of Kerman or the Battle of Gulnabad?	5		
+dbba759b-242e-4113-ae22-b2f7e31af430-dc-event-switch	Which happened later , the Battle of Gulnabad or the capture of Kerman ?	5		
+7192b30b-5c10-47a1-b0c2-78a562a2e38f	How many years did the Hotaks rule	4		
+6e376ef9-3395-49d7-944a-62b47f0b382d	What happened first, the Russian advance into Poland-Lithuania or the Swedish invasion of Poland?	5		
+f548401d-a665-42b2-b20f-2ee88cc01872	What happened first: kingdom of Sweden invading Poland or Vyhovsky defeating Trubetskoy's army?	5		
+f548401d-a665-42b2-b20f-2ee88cc01872-dc-event-switch	What happened first : Vyhovsky defeating Trubetskoy 's army or kingdom of Sweden invading Poland ?	5		
+6b4aa770-c038-4343-9e21-61abf6257fa2	What happened second: kingdom of Sweden invading Poland or Vyhovsky defeating Trubetskoy's army?	5		
+6b4aa770-c038-4343-9e21-61abf6257fa2-dc-qop-switch	What happened earlier : kingdom of Sweden invading Poland or Vyhovsky defeating Trubetskoy 's army ?	5		
+20e698e1-9c93-4524-a5fd-08c7cc9b51a8	How many years did the Russo-Swedish war go on?	4		
+775c49ab-37b3-49a4-b26b-652142f4a615	How many years did the Russo-Swedish War last?	4		
+d1c21001-ef7a-4d83-8249-325eb252aed5	How many years did the Russo-Swedish War last?	4		
+8e34a961-c660-4a5c-8ec1-5166b9dac698	What happened first: China launched four invasions or a truce?	5		
+8e34a961-c660-4a5c-8ec1-5166b9dac698-dc-event-switch	What happened first : a truce or China launched four invasions ?	5		
+8e34a961-c660-4a5c-8ec1-5166b9dac698-dc-qop-switch	What happened second : China launched four invasions or a truce ?	5		
+8e34a961-c660-4a5c-8ec1-5166b9dac698-dc-event-switch-dc-qop-switch	What happened second : a truce or China launched four invasions ?	5		
+c0d41f72-4986-4073-8580-e25e317d2ec6	What happened second: China launched four invasions or a truce?	5		
+c0d41f72-4986-4073-8580-e25e317d2ec6-dc-event-switch	What happened second : a truce or China launched four invasions ?	5		
+c0d41f72-4986-4073-8580-e25e317d2ec6-dc-qop-switch	What happened earlier : China launched four invasions or a truce ?	5		
+c0d41f72-4986-4073-8580-e25e317d2ec6-dc-event-switch-dc-qop-switch	What happened earlier : a truce or China launched four invasions ?	5		
+4f4b79ac-d230-4065-bdeb-b769351fdadc	How many years did the second invasion of the Burmese Troops  1766-1767 last?	3		
+9c8b5c4e-d91a-45dd-ad85-bac67d0d8b60	How many years did the invasions of Burma last?	4		
+31182c98-e949-4810-9a61-f65bfc460210	How many years was the time span where China launched four invasions of Burma?	4		
+78c55f85-7f01-43d9-bca6-a4fc8dba1c06	What happened first: Vaudreuil and Montcalm were minimally resupplied or New France having a poor harvest?	5		
+78c55f85-7f01-43d9-bca6-a4fc8dba1c06-dc-event-switch	What happened first : New France having a poor harvest or Vaudreuil and Montcalm were minimally resupplied ?	5		
+78c55f85-7f01-43d9-bca6-a4fc8dba1c06-dc-qop-switch	What happened last : Vaudreuil and Montcalm were minimally resupplied or New France having a poor harvest ?	5		
+78c55f85-7f01-43d9-bca6-a4fc8dba1c06-dc-event-switch-dc-qop-switch	What happened last : New France having a poor harvest or Vaudreuil and Montcalm were minimally resupplied ?	5		
+d9fa093c-6b65-4f3b-b869-dff6d1eb7b5f	What happened second: Vaudreuil and Montcalm were minimally resupplied or New France having a poor harvest?	5		
+d9fa093c-6b65-4f3b-b869-dff6d1eb7b5f-dc-event-switch	What happened second : New France having a poor harvest or Vaudreuil and Montcalm were minimally resupplied ?	5		
+1d6d90f3-ce62-458d-a9c0-81eca5af2898	What happened first: exacerbated by a poor harvest or stay away from trading?	5		
+1d6d90f3-ce62-458d-a9c0-81eca5af2898-dc-event-switch	What happened first : stay away from trading or exacerbated by a poor harvest ?	5		
+1d6d90f3-ce62-458d-a9c0-81eca5af2898-dc-qop-switch	What happened second : exacerbated by a poor harvest or stay away from trading ?	5		
+1d6d90f3-ce62-458d-a9c0-81eca5af2898-dc-event-switch-dc-qop-switch	What happened later : stay away from trading or exacerbated by a poor harvest ?	5		
+186c85ca-8ba5-413e-bd4e-b978efd6d9d2	What happened second: exacerbated by a poor harvest or stay away from trading?	5		
+186c85ca-8ba5-413e-bd4e-b978efd6d9d2-dc-event-switch	What happened second : stay away from trading or exacerbated by a poor harvest ?	5		
+186c85ca-8ba5-413e-bd4e-b978efd6d9d2-dc-qop-switch	What happened first : exacerbated by a poor harvest or stay away from trading ?	5		
+186c85ca-8ba5-413e-bd4e-b978efd6d9d2-dc-event-switch-dc-qop-switch	What happened first : stay away from trading or exacerbated by a poor harvest ?	5		
+d512aa81-1559-41a8-8e28-2343546bd7d2	Which group had more soldiers, Poles or Tatars?	5		
+9802228f-6f61-4132-88cc-80f68a66093c	How many yards was the shortest touchdown run?	3		
+ee81fe68-d7a7-444e-8625-ee256ecd0fbf	How many yards was the longest touchdown run?	3		
+cee7787d-6158-4bb4-96b6-6d020e0ded70	How many yards was the longest touchdown run?	3		
+59f1a521-0f69-4c4c-9f9e-858b3b15ea19	How many yards was the shortest touchdown pass?	3		
+7aff4b5f-474b-475e-a455-05b674aa40b7	How many yards was the longest field goal?	3		
+c8e54715-e05c-460e-96e9-d20bc928d86a	How many yards was the shortest field goal?	3		
+ce9f3131-1a60-4922-95e4-e19cba3d4e33	How many field goals were in this game?	2		
+2b3e75ef-871f-4d1b-b682-32f19616f1ef	What happened first: government ventured to eliminate hierarchy or the Cheka was created?	5		
+2b3e75ef-871f-4d1b-b682-32f19616f1ef-dc-event-switch	What happened first : the Cheka was created or government ventured to eliminate hierarchy ?	5		
+2b3e75ef-871f-4d1b-b682-32f19616f1ef-dc-qop-switch	What happened second : government ventured to eliminate hierarchy or the Cheka was created ?	5		
+2b3e75ef-871f-4d1b-b682-32f19616f1ef-dc-event-switch-dc-qop-switch	What happened last : the Cheka was created or government ventured to eliminate hierarchy ?	5		
+920531b5-0c47-4f5b-9288-a6858c2ebbf3	What happened second: government ventured to eliminate hierarchy or the Cheka was created?	5		
+920531b5-0c47-4f5b-9288-a6858c2ebbf3-dc-event-switch	What happened second : the Cheka was created or government ventured to eliminate hierarchy ?	5		
+920531b5-0c47-4f5b-9288-a6858c2ebbf3-dc-qop-switch	What happened first : government ventured to eliminate hierarchy or the Cheka was created ?	5		
+920531b5-0c47-4f5b-9288-a6858c2ebbf3-dc-event-switch-dc-qop-switch	What happened earlier : the Cheka was created or government ventured to eliminate hierarchy ?	5		
+6bb88e32-e5dc-45db-ad5f-f7b5fe8f3dc4	Which happened first, the failed assassination attempt on Lenin, or the Red Terror?	5		
+6bb88e32-e5dc-45db-ad5f-f7b5fe8f3dc4-dc-event-switch	Which happened first , the Red Terror , or the failed assassination attempt on Lenin ?	5		
+6bb88e32-e5dc-45db-ad5f-f7b5fe8f3dc4-dc-qop-switch	Which happened last , the failed assassination attempt on Lenin , or the Red Terror ?	5		
+6bb88e32-e5dc-45db-ad5f-f7b5fe8f3dc4-dc-event-switch-dc-qop-switch	Which happened last , the Red Terror , or the failed assassination attempt on Lenin ?	5		
+ef865307-550e-4e7f-9583-7e6ab7334bfd	Which event happened first, the Constituent Assembly being elected, or the elimination of hierarchy in the army?	5		
+73da5295-559b-430e-8cb3-d6e9234bfd88	Which event happened first, the start of the Red Terror, or the failed assassination attempt on Lenin's life?	5		
+73da5295-559b-430e-8cb3-d6e9234bfd88-dc-event-switch	Which event happened first , the failed assassination attempt on Lenin 's life , or the start of the Red Terror ?	5		
+475d4d31-45a0-44f5-8d88-eba6fa346e71	Were there more Turks or Bosniaks in Skopje in 2002?	6		
+a8884c7e-c30b-4fbe-8d90-c9c3b1f9c4c4	Were there more Serbs or Vlachs in Skopje in 2002?	6		
+806017ea-fe47-4515-a485-319ca782f07b	Which group has a larger percentage in Skojpe, Albanians or Macedonians?	5		
+15aaeea0-bab7-43fd-b7a5-7086dc2a9039	Which group has a smaller percentage in Skojpe, the Serbs or the Roma?	5		
+972f937c-07e5-45f4-bc26-c8f26844d2cf	Were there more Turks or Bosniaks in Skopje in 2002?	6		
+f0d6ae96-174d-4bc6-9c89-7b743a98f1ae	Which group from the census in Skopje is larger: Macedonians or Albanians?	5		
+c21e735b-3913-4422-bddb-3065cc66e39b	Which group from the census in Skopje is smaller: Macedonians or Albanians?	5		
+ded2caab-35b3-4c4e-a53e-f79a7ce00112	Which group from the census in Skopje is larger: Macedonians or Serbs?	5		
+91141a11-5e0c-4d4e-9e79-175f8ad8c2a4	Which group from the census in Skopje is smaller: Macedonians or Serbs?	5		
+667b8972-f95e-4ce9-bd11-ec0a071fcc95	Which group from the census in Skopje is larger: Macedonians or Turks?	5		
+5daefd35-2aca-4c15-a3e4-7886ab22c463	Which group from the census in Skopje is smaller: Macedonians or Turks?	5		
+f3ab0dde-260a-498a-9452-7357343c88ff	Which group from the census in Skopje is larger: Macedonians or Bosniaks?	5		
+410bb5ec-eb16-40aa-a375-08c6062be0ef	Which group from the census in Skopje is smaller: Macedonians or Bosniaks?	5		
+39067078-dce3-4a4a-97b4-25746397c31f	Which group from the census in Skopje is smaller: Macedonians or Vlachs?	5		
+378a4f5f-ffd4-47cf-bde6-a607c9494f94	Were there fewer Bosniaks or Vlachs living in Skopje in 2002?	5		
+836c6420-a4ad-46ee-8dfa-0dc7f7e59ba9	In the first wave attack were there more Portuguese soldiers or Lascarins?	6		
+0742195b-064f-4173-8e8d-7e6185a38eab	How many years did the 1st Australian Task Force command all Australian operations?	4		
+33c8c47b-58cc-4623-aeb6-9c1eb8fc01e9	How many years did the 1st Australian Task Force commanded all Australian operations?	4		
+b1f8f71a-bf7f-4332-a0d2-dd57fb4aa7a7	What happened first the city of Nakhchivan being captured, or a cease-fire being signed.	5		
+b1f8f71a-bf7f-4332-a0d2-dd57fb4aa7a7-dc-event-switch	What happened first a cease - fire being signed , or the city of Nakhchivan being captured .	5		
+6e21e6d5-1c37-4827-894e-0ff43d6eb752	Which group is larger for the county according to the census: people or households?	5		
+4c34cc55-2a23-4a1a-9c00-a271b6ca700f	Which group is smaller for the county according to the census: people or households?	5		
+5343d1b7-8b5a-4333-986e-bfef330bf27f	Which group is larger for the county according to the census: people or families?	5		
+1ce186f5-9644-438a-8b99-0ff4bf51a07a	Which group is smaller for the county according to the census: people or families?	5		
+036ba9dd-c2c4-4eb3-ae4d-12f18f670277	Which group is larger for the county according to the census: households or families?	5		
+d68c12eb-e7a7-49d9-8101-57b1fdac4a52	Which group is smaller for the county according to the census: households or families?	5		
+b37e986f-f010-4594-a332-62c10eca78b1	Which group is larger for the county according to the census: people or households?	5		
+1a63fb86-8f06-4f30-a7e2-c34d40ca879b	Which group is smaller for the county according to the census: people or households?	5		
+105f882f-e1fd-48f5-8c70-11b2a412dbe9	Which group is larger for the county according to the census: people or families?	5		
+d8ae2d59-9b96-4ffb-bab0-aeed813c270a	Which group is smaller for the county according to the census: people or families?	5		
+96f3bf35-4bf7-4966-86ab-eb808abe91f1	Which group is larger for the county according to the census: households or families?	5		
+c8316fa9-34af-4417-b089-80a9bbcd0f0b	Which group is smaller for the county according to the census: households or families?	5		
+e6bbc8fa-63e4-46f3-a299-6725b0748a64	How many yards was the longest field goal?	3		
+cc4975e6-b322-492c-a6bd-11d68f60abdf	How many touchdowns were scored in the first quarter?	3		
+5a66c284-ecf7-4fca-a34c-ad20aaa1d518	How many touchdown passes did Luck have in the first half?	4		
+fe36a183-fa89-4829-8c9d-29b84f0b9988	Who scored the first field goal of the game?	3		
+79cf3f45-e6b0-495b-87ab-9afa169ea5b0	How many yards was the longest field goal of the game?	3		
+a39f426f-ec62-433b-8602-0269a02cc514	Who threw the most touchdown passes?	3	aggregation	
+02d53885-3423-4417-a391-99ab78216cf9	Who caught the most touchdown passes?	3		
+2358d5eb-c2cc-4784-9d45-44a766302224	How many years was it between Trunajaya's capture and his death while prisoner of the VOC?	4		
+39527a28-c34d-4117-b30b-ab0dac4ec4c5	How many years did it take for Pangeran Puger to surrender in Plered?	4		

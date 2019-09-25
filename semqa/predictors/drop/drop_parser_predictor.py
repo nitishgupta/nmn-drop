@@ -169,15 +169,14 @@ class DropQANetPredictor(Predictor):
         (exact_match, f1_score) = f1metric(predicted_ans, answer_annotation_dicts)
 
         correct_or_not = "NC"
-        if f1_score > 0.8:
+        if f1_score >= 0.75:
             correct_or_not = "C"
+
+        logical_form = outputs["logical_forms"][0]
 
         out_str += question_id + '\t'
         out_str += question + '\t'
         out_str += correct_or_not + '\t'
-
-        logical_form = outputs["logical_forms"][0]
-
         out_str += logical_form + "\n"
 
         return out_str

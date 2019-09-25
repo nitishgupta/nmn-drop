@@ -10,9 +10,6 @@ random.seed(100)
 from datasets.drop import constants
 
 
-FILES_TO_MERGE = ['drop_dataset_train.json', 'drop_dataset_dev.json']
-
-
 def readDataset(input_json):
     with open(input_json, 'r') as f:
         dataset = json.load(f)
@@ -28,6 +25,32 @@ def count_num_exec_sup(dataset, choosen_pids):
                 if qa[constants.exection_supervised]:
                     num_exec_sup += 1
     return num_exec_sup
+
+
+def compute_pid2supervisioncount(dataset):
+    """Program and Exectution are counted as 1 each."""
+    pid2supexamples = defaultdict(int)
+    for passage_idx, passage_info in dataset.items():
+        num_sup_examples = 0
+        for qa in passage_info[constants.qa_pairs]:
+            if constants.program_supervised in qa:
+                if qa[constants.program_supervised]:
+                    num_sup_examples += 1
+
+            if constants.exection_supervised in qa:
+                if qa[constants.exection_supervised]:
+                    num_sup_examples += 1
+        pid2supexamples[passage_idx] = num_sup_examples
+
+    return pid2supexamples
+
+
+def compute_choosen_pids(pid2supexamples, perc: float):
+    sorted_pid2numsup = util.sortDictByValue(pid2supexamples, decreasing=True)
+    num_pids = len(sorted_pid2numsup)
+    num_choosen_pids = int(perc * num_pids)
+    choosen_pids = [x[0] for x in sorted_pid2numsup[0:num_choosen_pids]]
+    return choosen_pids
 
 
 def make_supervision_dict(dataset):
@@ -54,27 +77,7 @@ def make_supervision_dict(dataset):
     return supervision_dict, qtype_dict
 
 
-# def most_exectution_supervised_paras(dataset, annotation_for_numpassages):
-#     passageid2numexecsup = {}
-#     for passage_idx, passage_info in dataset.items():
-#         num_exec_sup = 0
-#         # Removing the strong annotations for all QAs in this passage
-#         for qa in passage_info[constants.qa_pairs]:
-#             if constants.exection_supervised in qa:
-#                 if qa[constants.exection_supervised]:
-#                     num_exec_sup += 1
-#         passageid2numexecsup[passage_idx] = num_exec_sup
-#
-#     sorted_pid2numexecsup = util.sortDictByValue(passageid2numexecsup, decreasing=True)
-#
-#     top_pids = [x[0] for x in sorted_pid2numexecsup]
-#
-#     choosen_passage_idxs = top_pids[0:annotation_for_numpassages]
-#
-#     return choosen_passage_idxs
-
-
-def removeDateCompPassageWeakAnnotations(dataset, annotation_for_numpassages):
+def sample_dataset(dataset, perc):
     """ Given a dataset containing date-comparison questions that are heuristically strongly annotated
         and the number of passages that need to remain strongly annotated, we remove the strong annotations for other
         passages. These annotations include: question-attention, event-date-groundings, etc.
@@ -86,83 +89,64 @@ def removeDateCompPassageWeakAnnotations(dataset, annotation_for_numpassages):
     """
 
     total_num_passages = len(dataset)
-    if annotation_for_numpassages == -1:
-        annotation_for_numpassages = total_num_passages
+
+    pid2supexamples = compute_pid2supervisioncount(dataset)
+    # choosen_pids = compute_choosen_pids(pid2supexamples, perc)
 
     passage_idxs = list(dataset.keys())
+    num_pids = len(passage_idxs)
+    num_choosen_pids = int(perc * num_pids)
+
     num_exec_sup = 0
-    while num_exec_sup < annotation_for_numpassages + 320:
+    while num_exec_sup < 80:
         random.shuffle(passage_idxs)
-        choosen_passage_idxs = passage_idxs[0:annotation_for_numpassages]
-        num_exec_sup = count_num_exec_sup(dataset, choosen_passage_idxs)
-    # choosen_passage_idxs = most_exectution_supervised_paras(dataset, annotation_for_numpassages)
+        choosen_pids = passage_idxs[0:num_choosen_pids]
+        num_exec_sup = count_num_exec_sup(dataset, choosen_pids)
 
-    total_num_qa = 0
+    # choosen_pids = passage_idxs[0:num_choosen_pids]
 
-    supervision_keys = [constants.program_supervised, constants.qattn_supervised, constants.exection_supervised,
-                        constants.strongly_supervised]
-
-    orig_supervision_dict, orig_qtype_dict = make_supervision_dict(dataset)
-
+    new_dataset = {}
     for passage_idx, passage_info in dataset.items():
-        total_num_qa += len(passage_info[constants.qa_pairs])
-        if passage_idx not in choosen_passage_idxs:
-            # Removing the strong annotations for all QAs in this passage
-            for qa in passage_info[constants.qa_pairs]:
-                # Setting all keys for supervised = False
-                for key in supervision_keys:
-                    qa[key] = False
-                if constants.qtype in qa:
-                    qa.pop(constants.qtype)
+        if passage_idx in choosen_pids:
+            new_dataset[passage_idx] = passage_info
 
-
-    pruned_supervision_dict, pruned_qtype_dict = make_supervision_dict(dataset)
-
+    pruned_supervision_dict, pruned_qtype_dict = make_supervision_dict(new_dataset)
     print()
-    print(f"TotalNumPassages: {total_num_passages}  Passages remaining annotated: {annotation_for_numpassages}")
-    print(f"Num of original question: {total_num_qa}")
-    print(f"Original Supervision Dict: {orig_supervision_dict}")
+    print(f"TotalNumPassages: {total_num_passages}  Passages remaining: {len(new_dataset)}")
     print(f"Supervision Dict: {pruned_supervision_dict}")
     print(f"Ques Type Dict: {pruned_qtype_dict}")
 
-    return dataset
+    return new_dataset
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--input_dir')
     parser.add_argument('--output_dir')
-    parser.add_argument('--annotation_for_numpassages', type=int, required=True)
+    parser.add_argument('--perc', type=float, required=True)
     args = parser.parse_args()
 
     input_dir = args.input_dir
     output_dir = args.output_dir
 
     train_json = 'drop_dataset_train.json'
-    dev_json = 'drop_dataset_dev.json'
 
-    annotation_for_numpassages = args.annotation_for_numpassages
+    perc = args.perc
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
 
     input_trnfp = os.path.join(input_dir, train_json)
-    input_devfp = os.path.join(input_dir, dev_json)
     output_trnfp = os.path.join(output_dir, train_json)
-    output_devfp = os.path.join(output_dir, dev_json)
 
     train_dataset = readDataset(input_trnfp)
-    dev_dataset = readDataset(input_devfp)
 
     print("Training questions .... ")
     print(output_dir)
-    new_train_dataset = removeDateCompPassageWeakAnnotations(train_dataset, annotation_for_numpassages)
+    new_train_dataset = sample_dataset(train_dataset, perc)
     # new_dev_dataset = removeDateCompPassageWeakAnnotations(train_dataset, 0)
 
     with open(output_trnfp, 'w') as f:
         json.dump(new_train_dataset, f, indent=4)
-
-    with open(output_devfp, 'w') as f:
-        json.dump(dev_dataset, f, indent=4)
 
 
 
