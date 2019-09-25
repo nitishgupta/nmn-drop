@@ -1,42 +1,22 @@
-import argparse
-from collections import defaultdict
 import json
 from nltk.corpus import stopwords
 import os
-
 import datasets.drop.constants as constants
+import argparse
+
+""" This script is used to augment date-comparison-data by flipping events in the questions """
+THRESHOLD = 20
+
+STOP_WORDS = set(stopwords.words('english'))
+STOP_WORDS.update(["'s", ","])
+
+FIRST = "first"
+SECOND = "second"
 
 YEAR_DIFF_NGRAMS = ["how many years after the", "how many years did it", "how many years did the",
                     "how many years passed between", "how many years was"]
 
-# "how many years passed between" -- two events
-# "how many years after the" - year-diff between 2 events
-
-# "how many years was" - single event if doesn't contain "from" or "between" (high precision filter)
-# "how many years did it" - single event if it doesn't contain the word "from"
-# "how many years did the" - single event
-
-def is_single_event_yeardiff_question(question_lower: str):
-    single_event_ques: bool = None
-    if "how many years was" in question_lower:
-        if "how many years was it between" in question_lower or "how many years was it from" in question_lower:
-            single_event_ques = False
-        else:
-            single_event_ques = True
-
-    # If "from" doesn't exist then surely single_event; o/w don't know
-    if "how many years did it" in question_lower:
-        if "from" not in question_lower:
-            single_event_ques = True
-
-    if "how many years did the" in question_lower:
-        single_event_ques = True
-
-    if "how many years passed between" in question_lower or "how many years after the" in question_lower:
-        single_event_ques = False
-
-    return single_event_ques
-
+# YEAR_DIFF_NGRAMS = ["how many years after the", "how many years passed between"]
 
 def readDataset(input_json):
     with open(input_json, 'r') as f:
@@ -52,8 +32,6 @@ def prune_YearDiffQues(dataset):
     after_pruning_ques = 0
     num_passages = len(dataset)
 
-    qtype_dist = defaultdict(int)
-
     for passage_id, passage_info in dataset.items():
         new_qa_pairs = []
         for question_answer in passage_info[constants.qa_pairs]:
@@ -63,18 +41,6 @@ def prune_YearDiffQues(dataset):
             question_lower = original_question.lower()
 
             if any(span in question_lower for span in YEAR_DIFF_NGRAMS):
-                single_event_ques: bool = is_single_event_yeardiff_question(question_lower)
-                # Return value of None means un-identifiable type
-                if single_event_ques is not None:
-                    if single_event_ques:
-                        question_answer[constants.qtype] = constants.YEARDIFF_SE_qtype
-                        question_answer[constants.program_supervised] = True
-                        qtype_dist[constants.YEARDIFF_SE_qtype] += 1
-                    else:
-                        question_answer[constants.qtype] = constants.YEARDIFF_TE_qtype
-                        question_answer[constants.program_supervised] = True
-                        qtype_dist[constants.YEARDIFF_TE_qtype] += 1
-
                 new_qa_pairs.append(question_answer)
 
         if len(new_qa_pairs) > 0:
@@ -85,7 +51,6 @@ def prune_YearDiffQues(dataset):
     num_passages_after_prune = len(new_dataset)
     print(f"Passages original:{num_passages}  After Pruning:{num_passages_after_prune}")
     print(f"Questions original:{total_ques}  After pruning:{after_pruning_ques}")
-    print(f"Qtype dict: {qtype_dist}")
 
     return new_dataset
 
