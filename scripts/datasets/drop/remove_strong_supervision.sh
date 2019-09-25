@@ -2,7 +2,7 @@
 
 ROOT_DIR=./resources/data/drop
 
-ANNOTATION_FOR_PARAS=500
+ANNOTATION_FOR_PARAS=600
 
 INPUT_DIR=${ROOT_DIR}/date_num/date_ydre_num_hmyw_cnt_relre
 OUTPUT_DIR=${ROOT_DIR}/date_num/date_ydre_num_hmyw_cnt_relre_${ANNOTATION_FOR_PARAS}
