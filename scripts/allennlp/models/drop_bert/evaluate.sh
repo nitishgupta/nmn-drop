@@ -49,21 +49,8 @@ do
     PREDICTION_FILE=${PREDICTION_DIR}/${EVAL_DATASET}_dev_pred.txt
     VAL_EVALUATION_FILE=${PREDICTION_DIR}/${EVAL_DATASET}_dev_eval.txt
     TEST_EVALUATION_FILE=${PREDICTION_DIR}/${EVAL_DATASET}_test_eval.txt
-    # PREDICTOR=drop_analysis_predictor
-    PREDICTOR=drop_parser_predictor
 
     ###################################################################################################################
-
-    # allennlp predict --output-file ${ANALYSIS_FILE} \
-#    allennlp predict --output-file ${PREDICTION_FILE} \
-#                     --predictor ${PREDICTOR} \
-#                     --cuda-device ${GPU} \
-#                     --include-package ${INCLUDE_PACKAGE} \
-#                     --silent \
-#                     --batch-size 1 \
-#                     --use-dataset-reader \
-#                     --overrides "{"model": { "beam_size": ${BEAMSIZE}, "debug": ${DEBUG}}}" \
-#                    ${MODEL_TAR} ${TESTFILE}
 
     allennlp evaluate --output-file ${VAL_EVALUATION_FILE} \
                       --cuda-device ${GPU} \
