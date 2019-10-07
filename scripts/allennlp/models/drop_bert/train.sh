@@ -42,13 +42,11 @@ export SUPEPOCHS=5
 export BS=4
 export DROPOUT=0.2
 
-export LR=0.001
-
 export SEED=1000
 
 export BEAMSIZE=1
 export MAX_DECODE_STEP=14
-export EPOCHS=40
+export EPOCHS=45
 
 export DEBUG=false
 

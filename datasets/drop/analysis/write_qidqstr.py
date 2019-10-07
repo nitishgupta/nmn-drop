@@ -1,8 +1,8 @@
 import json
 import datasets.drop.constants as constants
 
-dev_infile = "/home1/n/nitishg/code/mhqa/resources/data/drop/preprocess/drop_dataset_dev.json"
-dev_outfile = "/home1/n/nitishg/code/mhqa/resources/data/drop/preprocess/dev_q.txt"
+dev_infile = "/shared/nitishg/data/drop_re/date_num/date_yd_num_hmyw_cnt_whoarg_600/drop_dataset_dev.json"
+dev_outfile = "/shared/nitishg/data/drop_re/date_num/date_yd_num_hmyw_cnt_whoarg_600/dev.txt"
 
 def get_dataset(infile):
     with open(infile) as f:

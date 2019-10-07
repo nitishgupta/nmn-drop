@@ -6,16 +6,11 @@ PREPROCESS_DIR=preprocess
 
 PRUNE_DATECOMP=date/datecomp_prune
 DATECOMP=date/datecomp_full
-
 PRUNE_NUMCOMP=num/numcomp_prune
 NUMCOMP=num/numcomp_full
-
 YEAR_DIFF=date/year_diff
-
 WHO_ARG=num/who_arg
-
 HMYW=num/how_many_yards_was
-
 COUNT=num/count
 
 DATE_NUM_DIR=date_num
@@ -26,8 +21,7 @@ ANNOTATION_FOR_PARAS=600
 DATASET_PRUNED_ANNO=date_num/date_yd_num_hmyw_cnt_whoarg_${ANNOTATION_FOR_PARAS}
 
 # Into my dev and mytest
-PERC_SPLIT=0.2
-
+DEV_TEST_SPLIT_RATIO=0.2
 
 
 # DATE-COMPARISON
@@ -124,17 +118,22 @@ python -m datasets.drop.remove_strong_supervision --input_dir ${ROOT_DIR}/${DATA
 
 cp -r ${ROOT_DIR}/${DATASET_FULL_ANNO}/questype_datasets ${ROOT_DIR}/${DATASET_PRUNED_ANNO}/questype_datasets
 
-
-# Split data into mydev and mytest
-python -m datasets.drop.split_dev --input_dir=${ROOT_DIR}/${DATASET_PRUNED_ANNO} \
-                                  --output_dir=${ROOT_DIR}/${DATASET_PRUNED_ANNO} \
-                                  --perc_split=${PERC_SPLIT}
-
-
-# Split each qtype dev into mydev and mytest based on above split
-python -m datasets.drop.split_qtype_dev --fulldataset_dir=${ROOT_DIR}/${DATASET_PRUNED_ANNO} \
-                                        --root_qtype_datasets_dir=${ROOT_DIR}/${DATASET_PRUNED_ANNO}/questype_datasets
+python -m datasets.drop.split_dev_ratio --fulldataset_dir=${ROOT_DIR}/${DATASET_PRUNED_ANNO} \
+                                        --qtype_dir_name=questype_datasets \
+                                        --split_ratio=${DEV_TEST_SPLIT_RATIO}
 
 
 
-
+## Split data into mydev and mytest
+#python -m datasets.drop.split_dev --input_dir=${ROOT_DIR}/${DATASET_PRUNED_ANNO} \
+#                                  --output_dir=${ROOT_DIR}/${DATASET_PRUNED_ANNO} \
+#                                  --perc_split=${DEV_TEST_SPLIT_RATIO}
+#
+#
+## Split each qtype dev into mydev and mytest based on above split
+#python -m datasets.drop.split_qtype_dev --fulldataset_dir=${ROOT_DIR}/${DATASET_PRUNED_ANNO} \
+#                                        --root_qtype_datasets_dir=${ROOT_DIR}/${DATASET_PRUNED_ANNO}/questype_datasets
+#
+#
+#
+#

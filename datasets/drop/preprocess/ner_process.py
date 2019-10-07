@@ -36,6 +36,7 @@ def parseDateNERS(ner_spans, passage_tokens: List[str]) -> Tuple[List, List, Lis
 
     year_mentions: List[str, Tuple, Tuple] = extract_years_from_text(passage_tokens=passage_tokens)
 
+    # Mention format -- (span_string, (start_idx, end_idx), normalized_value_tuple)
     parsed_dates = merge_datener_with_yearmentions(parsed_dates, year_mentions)
 
     date2idx = {}
@@ -125,7 +126,7 @@ def extract_years_from_text(passage_tokens) -> List[Tuple[str, Tuple, Tuple]]:
     """
     year_date_mentions = []
     for idx, token in enumerate(passage_tokens):
-        if len(token) == 4 or len(token) == 3:
+        if len(token) == 4:   # or len(token) == 3:
             try:
                 int_token = int(token)
                 year_date_mentions.append((token, (idx, idx), (-1, -1, int_token)))

@@ -141,7 +141,6 @@ class DROPReaderNew(DatasetReader):
                     answer_annotations.append(qa["answer"])
                 if "validated_answers" in qa:
                     answer_annotations += qa["validated_answers"]
-                # answer_annotation = question_answer["answer"] if "answer" in question_answer else None
 
                 qtype = "UNK"
                 if constants.qtype in qa and qa[constants.qtype] is not None:
@@ -394,12 +393,10 @@ class DROPReaderNew(DatasetReader):
         passage_number_entidxs = p_num_entidxs      # same length as p_num_mens, containing num_grounding for the mens
         passage_number_values = p_num_normvals
         passage_number_indices = [tokenidx for (_, tokenidx, _) in p_num_mens]
-        passage_number_wp_indices = []
-        # These are number-token idxs in an order so that their values are sorted
-        # sorted_passagenumber_indices = self.get_numberindices_in_sorted_order(passage_number_values,
-        #                                                                       passage_number_indices,
-        #                                                                       passage_number_entidxs)
-
+        sorted_passagenumber_indices = self.get_numberindices_in_sorted_order(passage_number_values,
+                                                                              passage_number_indices,
+                                                                              passage_number_entidxs)
+        sorted_passagenumber_wpindices = [p_tokenidx2wpidx[idx][0] for idx in sorted_passagenumber_indices]
         # List of passage_len containing number_entidx for each token (-1 otherwise)
         # passage_number_idx2entidx = [-1 for _ in range(len(passage_tokens))]
         passage_number_idx2entidx = [-1 for _ in range(len(passage_wps))]
@@ -407,17 +404,24 @@ class DROPReaderNew(DatasetReader):
             for passage_num_tokenidx, number_ent_idx in zip(passage_number_indices, passage_number_entidxs):
                 wp_index = p_tokenidx2wpidx[passage_num_tokenidx][0]
                 passage_number_idx2entidx[wp_index] = number_ent_idx
-                passage_number_wp_indices.append(wp_index)
         else:
             # No numbers found in the passage - making a fake number at the 0th token
             passage_number_idx2entidx[0] = 0
-            passage_number_indices = [0]
-            passage_number_wp_indices = [0]
+            sorted_passagenumber_wpindices = [0]
         if not passage_number_values:
             passage_number_values.append(-1)
+        # Three fields are required --
+        # 1. passageidx2numberidx -- passage_len sized list mapping tokenidx 2 numberidx. The numberidx is the idx of
+        #   the unique number
+        # 2. passage_number_values -- List of unique numbers in the support. Should include numbers in passage plus their
+        #   combination
+        # 3. sorted_passagenumber_wpindices -- passaage_num_token_idxs so that the corresponding nums are sorted.
+        #   This is not all numbers from the combination, but only the ones that appear in the passage; one couldn't
+        #   even make such a list for all num combs. This is used in `pattn_for_minmaxNum` func in Language and it seems
+        #   okay to have this list for only numbers that appear in the passage
         fields["passageidx2numberidx"] = ArrayField(np.array(passage_number_idx2entidx), padding_value=-1)
         fields["passage_number_values"] = MetadataField(passage_number_values)
-        fields["passage_number_sortedtokenidxs"] = MetadataField(passage_number_wp_indices)
+        fields["passage_number_sortedtokenidxs"] = MetadataField(sorted_passagenumber_wpindices)
 
         ##  Passage Dates
         passage_date_entidxs = p_date_entidxs
@@ -513,6 +517,7 @@ class DROPReaderNew(DatasetReader):
             fields["datecomp_ques_event_date_groundings"] = MetadataField(empty_date_grounding_tuple)
 
         # Number Comparison - Passage Number Grounding Supervision
+        # TODO(nitishg): When number-combinations are included this supervision will need to be updated.
         if num_grounding_supervision:
             fields["numcomp_qspan_num_groundings"] = MetadataField(num_grounding_supervision)
         else:

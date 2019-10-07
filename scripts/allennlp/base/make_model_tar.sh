@@ -1,7 +1,8 @@
 #!/usr/bin/env
 
-SERIALIZATION_DIR=./resources/semqa/checkpoints/drop/date_num/date_ydNEW_num_hmyw_cnt_rel_600_NOEXC/drop_parser/TOKENS_qanet/ED_100/RG_1e-07/MODELTYPE_encoded/CNTFIX_false/aux_false/SUPEPOCHS_5/S_1000/GRUModel_wTest
+SERIALIZATION_DIR=./resources/semqa/checkpoints/drop/date_num/date_yd_num_hmyw_cnt_whoarg_600/drop_parser_bert/CNTFIX_false/EXCLOSS_true/MMLLOSS_true/aux_true/SUPEPOCHS_5/S_1000/BertModel_wTest
 WEIGHTS_TH=best.th
+# WEIGHTS_TH=model_state_epoch_32.th
 
 MODEL_ARCHIVE=${SERIALIZATION_DIR}/model.tar.gz
 
