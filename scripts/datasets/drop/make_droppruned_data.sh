@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-ROOT_DIR=/shared/nitishg/data/drop_re
+ROOT_DIR=/shared/nitishg/data/drop_iclr
 
 PREPROCESS_DIR=preprocess
 

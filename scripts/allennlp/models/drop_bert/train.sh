@@ -6,9 +6,8 @@
 DATASET_NAME=date_num/date_yd_num_hmyw_cnt_whoarg_600
 # DATASET_NAME=date/datefull_yd_new2
 
-DATASET_DIR=./resources/data/drop_re/${DATASET_NAME}
+DATASET_DIR=./resources/data/drop_iclr/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
-# VALFILE=${DATASET_DIR}/drop_dataset_dev.json
 VALFILE=${DATASET_DIR}/drop_dataset_mydev.json
 TESTFILE=${DATASET_DIR}/drop_dataset_mytest.json
 
@@ -55,7 +54,7 @@ CHECKPOINT_ROOT=./resources/semqa/checkpoints
 SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/${DATASET_NAME}
 MODEL_DIR=drop_parser_bert
 PD_1=CNTFIX_${COUNT_FIXED}/EXCLOSS_${EXCLOSS}/MMLLOSS_${MMLLOSS}/aux_${AUXLOSS}/SUPEPOCHS_${SUPEPOCHS}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}/BertModel_wTest
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}/BertModel_wTest_ICLR
 
 # SERIALIZATION_DIR=./resources/semqa/checkpoints/test
 
