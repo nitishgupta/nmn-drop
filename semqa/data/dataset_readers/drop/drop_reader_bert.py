@@ -31,25 +31,15 @@ WORD_NUMBER_MAP = {"zero": 0, "one": 1, "two": 2, "three": 3, "four": 4,
                    "sixteen": 16, "seventeen": 17, "eighteen": 18, "nineteen": 19}
 
 
-# @Tokenizer.register("bert-drop")
-# class BertDropTokenizer(Tokenizer):
-#     def __init__(self, pretrained_model: str):
-#         self.tokenizer = BertTokenizer.from_pretrained(pretrained_model)
-#
-#     # @overrides
-#     # def tokenize(self, text: str) -> List[Token]:
-#     #     return [Token(token) for token in self.tokenizer.tokenize(text)]
-#     @overrides
-#     def tokenize(self, text: str) -> List[Token]:
-#         tokens = text.split(" ")
-#         wordpiece_tokens = []
-#         for token in tokens:
-#             wordpiece_tokens.extend(self.tokenizer.tokenize(token))
-#
-#         return wordpiece_tokens
-
-
 def tokenize_bert(bert_tokenizer: BertTokenizer, tokens: List[str]):
+    """Word-piece tokenize input tokens.
+
+    Returns:
+        wordpiece_tokens: List[str] word-pieces
+        tokenidx2wpidxs: List[List[int]] For each original-tokenidx, a list of indices for its corresponding wps
+        wpidx2tokenidx: List[int] Same length as wordpiece_tokens; index of original
+
+    """
     tokenidx2wpidxs: List[List[int]] = []
     wpidx2tokenidx: List[int] = []
     wordpiece_tokens = []

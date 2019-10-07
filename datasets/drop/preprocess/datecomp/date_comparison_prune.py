@@ -25,7 +25,7 @@ def readDataset(input_json):
     return dataset
 
 
-def date_comparison_filter(question: str):
+def is_date_comparison(question: str):
     question_lower = question.lower()
     if any(span in question_lower for span in DATE_COMPARISON_TRIGRAMS):
         return True
@@ -50,14 +50,15 @@ def getQuestionComparisonOperator(question_tokens: List[str]) -> str:
 
 
 def getDateTokenIdxs(p_date_mens: List[Tuple[str, Tuple[int, int], Tuple[int, int, int]]],
-                     p_date_entidxs: List[int]) -> List[int]:
+                     p_date_entidxs: List[int]) -> Tuple[List[int], List[int]]:
+    """List of date token idxs, and list of their date-ent-idxs."""
     # List of token idxs that are dates
     passage_date_tokens = []
     passage_datetoken_entidxs = []
     for date_men, date_idx in zip(p_date_mens, p_date_entidxs):
         (s, e) = date_men[1]
         passage_date_tokens.extend([x for x in range(s, e+1)])
-        passage_datetoken_entidxs.extend([date_idx for x in range(s, e + 1)])
+        passage_datetoken_entidxs.extend([date_idx for _ in range(s, e + 1)])
 
     assert len(passage_date_tokens) == len(passage_datetoken_entidxs)
     return passage_date_tokens, passage_datetoken_entidxs
@@ -108,7 +109,6 @@ def quesEvents(qstr) -> Tuple[Tuple[int, int], Tuple[int, int]]:
 
     assert split_idx != -1, f"{qstr} {split_idx} {or_idx}"
 
-    event1 = tokens[split_idx + 1: or_idx]
     event1_span = (split_idx + 1, or_idx)
 
     return event1_span, event2_span
@@ -129,7 +129,7 @@ def difference_in_successive_terms(l: List[int]):
 
 
 def matchEventToPassage(event_tokens: List[str], passage_tokens: List[str]) -> List[int]:
-    """ Match a given event's tokens and find relevant tokens in the passage. """
+    """ Match a given event's tokens (from ques) to relevant tokens in the passage. """
     relevant_event_tokens = [t.lower() for t in event_tokens if t.lower() not in STOP_WORDS]
 
     relevant_passage_tokenidxs = []
@@ -151,15 +151,8 @@ def matchEventToPassage(event_tokens: List[str], passage_tokens: List[str]) -> L
 
     pruned_relevant_passage_tokenidxs = relevant_passage_tokenidxs[best_start_point:best_start_point + len_event_span]
 
-    """
-    passage_str = ""
-    for idx, token in enumerate(passage_tokens):
-        passage_str += f"{token}|{idx} "
-    print(f"{passage_str}")
-    print(f"{relevant_event_tokens}\n{relevant_passage_tokenidxs}\n{pruned_relevant_passage_tokenidxs}\n")
-    """
-
     return pruned_relevant_passage_tokenidxs
+
 
 def dateInNeighborhood(passage_tokenidxs: List[int], passage_date_tokenidxs: List[int],
                        passage_datetoken_entidxs: List[int], threshold = 20):
@@ -238,7 +231,7 @@ def pruneDateQuestions(dataset):
             question_tokens: List[str] = question_tokenized_text.split(' ')
             answer_annotation = question_answer[constants.answer]
 
-            if not date_comparison_filter(question_tokenized_text):
+            if not is_date_comparison(question_tokenized_text):
                 continue
             if question_answer[constants.answer_type] != constants.SPAN_TYPE:
                 continue
@@ -338,15 +331,6 @@ def pruneDateQuestions(dataset):
 
 
 if __name__=='__main__':
-    # input_dir = "date"
-    # output_dir = "date_prune_weakdate"
-    #
-    # trnfp = f"/srv/local/data/nitishg/data/drop_old/{input_dir}/drop_dataset_train.json"
-    # devfp = f"/srv/local/data/nitishg/data/drop_old/{input_dir}/drop_dataset_dev.json"
-    #
-    # out_trfp = f"/srv/local/data/nitishg/data/drop_old/{output_dir}/drop_dataset_train.json"
-    # out_devfp = f"/srv/local/data/nitishg/data/drop_old/{output_dir}/drop_dataset_dev.json"
-
     parser = argparse.ArgumentParser()
     parser.add_argument('--input_dir')
     parser.add_argument('--output_dir')

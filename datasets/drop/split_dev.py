@@ -8,6 +8,8 @@ from utils import util
 random.seed(100)
 
 
+""" Split the dev data into mydev and mytest. """
+
 def readDataset(input_json):
     with open(input_json, 'r') as f:
         dataset = json.load(f)

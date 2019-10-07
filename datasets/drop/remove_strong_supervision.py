@@ -10,7 +10,10 @@ random.seed(100)
 from datasets.drop import constants
 
 
-FILES_TO_MERGE = ['drop_dataset_train.json', 'drop_dataset_dev.json']
+""" 
+    Remove ALL (program, qattn, execution) Supervised Key for questions from a certain number of paragraphs
+"""
+
 
 
 def readDataset(input_json):
@@ -54,27 +57,7 @@ def make_supervision_dict(dataset):
     return supervision_dict, qtype_dict
 
 
-# def most_exectution_supervised_paras(dataset, annotation_for_numpassages):
-#     passageid2numexecsup = {}
-#     for passage_idx, passage_info in dataset.items():
-#         num_exec_sup = 0
-#         # Removing the strong annotations for all QAs in this passage
-#         for qa in passage_info[constants.qa_pairs]:
-#             if constants.exection_supervised in qa:
-#                 if qa[constants.exection_supervised]:
-#                     num_exec_sup += 1
-#         passageid2numexecsup[passage_idx] = num_exec_sup
-#
-#     sorted_pid2numexecsup = util.sortDictByValue(passageid2numexecsup, decreasing=True)
-#
-#     top_pids = [x[0] for x in sorted_pid2numexecsup]
-#
-#     choosen_passage_idxs = top_pids[0:annotation_for_numpassages]
-#
-#     return choosen_passage_idxs
-
-
-def removeDateCompPassageWeakAnnotations(dataset, annotation_for_numpassages):
+def remove_all_annotations(dataset, annotation_for_numpassages):
     """ Given a dataset containing date-comparison questions that are heuristically strongly annotated
         and the number of passages that need to remain strongly annotated, we remove the strong annotations for other
         passages. These annotations include: question-attention, event-date-groundings, etc.
@@ -90,12 +73,12 @@ def removeDateCompPassageWeakAnnotations(dataset, annotation_for_numpassages):
         annotation_for_numpassages = total_num_passages
 
     passage_idxs = list(dataset.keys())
-    num_exec_sup = 0
-    while num_exec_sup < annotation_for_numpassages + 320:
+    num_qaexec_sup = 0
+    choosen_passage_idxs = None
+    while num_qaexec_sup < annotation_for_numpassages + 320:
         random.shuffle(passage_idxs)
         choosen_passage_idxs = passage_idxs[0:annotation_for_numpassages]
-        num_exec_sup = count_num_exec_sup(dataset, choosen_passage_idxs)
-    # choosen_passage_idxs = most_exectution_supervised_paras(dataset, annotation_for_numpassages)
+        num_qaexec_sup = count_num_exec_sup(dataset, choosen_passage_idxs)
 
     total_num_qa = 0
 
@@ -114,7 +97,6 @@ def removeDateCompPassageWeakAnnotations(dataset, annotation_for_numpassages):
                     qa[key] = False
                 if constants.qtype in qa:
                     qa.pop(constants.qtype)
-
 
     pruned_supervision_dict, pruned_qtype_dict = make_supervision_dict(dataset)
 
@@ -155,7 +137,7 @@ if __name__ == '__main__':
 
     print("Training questions .... ")
     print(output_dir)
-    new_train_dataset = removeDateCompPassageWeakAnnotations(train_dataset, annotation_for_numpassages)
+    new_train_dataset = remove_all_annotations(train_dataset, annotation_for_numpassages)
     # new_dev_dataset = removeDateCompPassageWeakAnnotations(train_dataset, 0)
 
     with open(output_trnfp, 'w') as f:

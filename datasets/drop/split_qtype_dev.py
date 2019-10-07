@@ -9,12 +9,10 @@ from utils import util
 random.seed(100)
 
 
-'''This script splits the dev-set of individual ques type datasets into mydev and mytest based on the split 
-    of the full dataset.
+''' Let's say the full dataset's dev set paragraphs are split in to P_dev and P_test, then this script splits the 
+    individual qtype datasets' dev set into mydev and mytest so that mytest will only contain paras from P_test.  
     
-    
-    Let's say the full dataset's dev set paragraphs are split in to P_dev and P_test, then this script splits the 
-    individual qtype datasets' dev set into mydev and mytest so that metest will only contain paras from P_test.  
+    Each directory inside args.root_qtype_datasets_dir is considered an individual qtype-dataset.
 '''
 
 
@@ -54,7 +52,7 @@ if __name__ == '__main__':
     root_qtype_datasets_dir = args.root_qtype_datasets_dir
 
 
-    QTYPE_DATASET = ['count', 'datecomp_full', 'how_many_yards_was', 'numcomp_full', 'who_relocate_re', 'year_diff_re']
+    QTYPE_DATASET = ['count', 'datecomp_full', 'how_many_yards_was', 'numcomp_full', 'who_arg', 'year_diff']
 
     fulldataset_test_json = os.path.join(fulldataset_dir, 'drop_dataset_mytest.json')
 

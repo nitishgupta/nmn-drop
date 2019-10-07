@@ -35,47 +35,8 @@ def relocate_program_qattn(tokenized_queslower: str):
                                 "longest", "shortest", "?", "kicked", "caught", "threw", "player", "scored",
                                 "of", "in", "game", "most"]
 
-    # if any(span in question_lower for span in ["who threw the", "who caught the", "who kicked the"]):
-    #     # Non-filter question
-    #     if question_lower in ["who threw the longest touchdown ?", "who threw the longest td pass ?",
-    #                           "who threw the longest touchdown pass of the game ?",
-    #                           "who threw the longest touchdown pass ?",
-    #                           "who kicked the longest field goal ?", "who kicked the longest field goal of the game?",
-    #                           "who caught the longest touchdown pass ?",
-    #                           "who caught the longest touchdown pass of the game ?",
-    #                           "who caught the longest pass ?", "who caught the longest pass of the game ?",
-    #                           "who caught the longest td pass?", "who caught the longest td pass of the game ?",
-    #                           ]:
-    #         qtype = constants.RELOC_maxfind_qtype
-    #         reloc_qattn[1] = 1.0
-    #         for i, t in enumerate(question_lower.split(' ')):
-    #             if t in tokens_with_find_attention:
-    #                 find_qattn[i] = 1.0
-    #
-    #     elif question_lower in ["who threw the shortest touchdown ?", "who threw the shortest td pass ?",
-    #                             "who threw the shortest touchdown pass of the game ?",
-    #                             "who threw the shortest touchdown pass ?",
-    #                             "who kicked the shortest field goal ?",
-    #                             "who kicked the shortest field goal of the game ?",
-    #                             "who caught the shortest touchdown pass ?",
-    #                             "who caught the shortest touchdown pass of the game ?",
-    #                             "who caught the shortest pass ?", "who caught the shortest pass of the game ?",
-    #                             "who caught the shortest td pass?", "who caught the shortest td pass of the game ?",
-    #                             ]:
-    #         qtype = constants.RELOC_minfind_qtype
-    #         reloc_qattn[1] = 1.0
-    #         for i, t in enumerate(question_lower.split(' ')):
-    #             if t in tokens_with_find_attention:
-    #                 find_qattn[i] = 1.0
-    #
-    #     else:
-    #         pass
     if any(span in question_lower for span in ["who threw the", "who caught the", "who kicked the", "who scored the",
                                                "which player scored"]):
-    #elif any(span in question_lower for span in ):
-        # These questions are relocate(find), relocate(filter(find)),
-        # relocate(maxnum(find)), or relocate(maxnum(filter(find))))
-
         # first deal with non longest / shortest -- strategy is everything that is not in find or relocate is filter
         reloc_qattn[1] = 1.0
         for i, t in enumerate(question_tokens):

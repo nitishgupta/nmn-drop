@@ -10,10 +10,10 @@ COUNT_DIR=${ROOT_DIR}/num/count
 
 DIFF_DIR=${ROOT_DIR}/num/yardsdifference
 
-python -m datasets.drop.preprocess.how_many_yards.how_many_yards_wfilter  --input_dir ${PREPROCESS_DIR} \
-                                                                          --output_dir ${HOWMANYYARDS_DIR} \
-                                                                          --qattn \
-                                                                          --numground
+python -m datasets.drop.preprocess.how_many_yards.how_many_yards  --input_dir ${PREPROCESS_DIR} \
+                                                                  --output_dir ${HOWMANYYARDS_DIR} \
+                                                                  --qattn \
+                                                                  --numground
 
 
 python -m datasets.drop.preprocess.how_many_yards.count_ques    --input_dir ${PREPROCESS_DIR} \

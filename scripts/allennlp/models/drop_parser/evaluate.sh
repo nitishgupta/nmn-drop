@@ -44,9 +44,6 @@ do
     VALFILE=${DATASET_DIR}/${DATASET_NAME}/${QUESTYPE_SETS_DIR}/${EVAL_DATASET}/drop_dataset_mydev.json
     TESTFILE=${DATASET_DIR}/${DATASET_NAME}/${QUESTYPE_SETS_DIR}/${EVAL_DATASET}/drop_dataset_mytest.json
 
-
-    ANALYSIS_FILE=${PREDICTION_DIR}/${EVAL_DATASET}_dev_analysis.tsv
-    PREDICTION_FILE=${PREDICTION_DIR}/${EVAL_DATASET}_dev_pred.txt
     VAL_EVALUATION_FILE=${PREDICTION_DIR}/${EVAL_DATASET}_dev_eval.txt
     TEST_EVALUATION_FILE=${PREDICTION_DIR}/${EVAL_DATASET}_test_eval.txt
 
@@ -62,6 +59,6 @@ do
                       --include-package ${INCLUDE_PACKAGE} \
                       ${MODEL_TAR} ${TESTFILE}
 
-    echo -e "Predictions file saved at: ${PREDICTION_FILE}"
-    echo -e "Evaluations file saved at: ${EVALUATION_FILE}"
+    echo -e "Dev Evaluations file saved at: ${VAL_EVALUATION_FILE}"
+    echo -e "Test Evaluations file saved at: ${TEST_EVALUATION_FILE}"
 done

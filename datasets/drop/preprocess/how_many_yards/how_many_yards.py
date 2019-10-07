@@ -2,6 +2,7 @@ from typing import List, Dict, Tuple
 import json
 from nltk.corpus import stopwords
 import os
+import copy
 from collections import defaultdict
 import datasets.drop.constants as constants
 import argparse
@@ -18,13 +19,13 @@ def readDataset(input_json):
         dataset = json.load(f)
     return dataset
 
-
+'''
 def get_question_attention(tokenized_question: str) -> List[float]:
     ques_tokens = tokenized_question.split(' ')
     attention = [0] * len(ques_tokens)
 
     # First 4 tokens are `How many yards was` -- no attention
-    # the - if the 5th token
+    # the - if the 5th token -- no attention
     # ?, longest, shortest, second,  -- no attention
     no_attend_tokens = ['second', 'longest', 'shortest', '?']
     for i, token in enumerate(ques_tokens):
@@ -38,7 +39,7 @@ def get_question_attention(tokenized_question: str) -> List[float]:
             attention[i] = 1
 
     return attention
-
+'''
 
 
 def get_number_distribution_supervision(tokenized_question, tokenized_passage, num_answer,
@@ -47,7 +48,7 @@ def get_number_distribution_supervision(tokenized_question, tokenized_passage, n
     passage_tokens = tokenized_passage.split(' ')
     question_tokens = tokenized_question.split(' ')
 
-    # Only supervised longest / shortest questions
+    # Only supervised longest / shortest questions -- cannot do the first / last kind of questions
     if 'longest' not in question_tokens and 'shortest' not in question_tokens:
         return None, None
     if num_answer is None:
@@ -60,7 +61,14 @@ def get_number_distribution_supervision(tokenized_question, tokenized_passage, n
     if 'TD' in attended_tokens:
         attended_tokens.remove('TD')
         attended_tokens.add('touchdown')
-    irrelevant_tokens = ["'", "'s", "of", "the", "game", "games"]
+    if 'goals' in attended_tokens:
+        attended_tokens.remove('goals')
+        attended_tokens.add('goal')
+    if 'touchdowns' in attended_tokens:
+        attended_tokens.remove('touchdowns')
+        attended_tokens.add('touchdown')
+    irrelevant_tokens = ["'", "'s", "of", "the", "game", "games", "in"]
+    # Remove irrelevant tokens from attended-tokens
     for t in irrelevant_tokens:
         if t in attended_tokens:
             attended_tokens.remove(t)
@@ -83,6 +91,12 @@ def get_number_distribution_supervision(tokenized_question, tokenized_passage, n
         surrounding_passage_tokens = set(passage_tokens[starting_tokenidx:ending_tokenidx])
         if 'TD' in surrounding_passage_tokens:
             surrounding_passage_tokens.remove('TD')
+            surrounding_passage_tokens.add('touchdown')
+        if 'goals' in surrounding_passage_tokens:
+            surrounding_passage_tokens.remove('goals')
+            surrounding_passage_tokens.add('goal')
+        if 'touchdowns' in surrounding_passage_tokens:
+            surrounding_passage_tokens.remove('touchdowns')
             surrounding_passage_tokens.add('touchdown')
         intersection_tokens = surrounding_passage_tokens.intersection(attended_tokens)
         if intersection_tokens == attended_tokens:
@@ -117,6 +131,61 @@ def get_number_distribution_supervision(tokenized_question, tokenized_passage, n
     return number_grounding, number_values
 
 
+def get_question_attention(question_tokens: str):
+    tokens_with_find_attention = ["touchdown", "run", "pass", "field", "goal", "passing", "TD", "td", "rushing",
+                                  "kick", "scoring", "drive", "touchdowns", "reception", "interception", "return",
+                                  "goals"]
+    tokens_with_no_attention = ["how", "How", "many", "yards", "was", "the", "longest", "shortest", "?",
+                                "of", "in", "game"]
+    qlen = len(question_tokens)
+    find_qattn = [0.0] * qlen
+    filter_qattn = [0.0] * qlen
+
+    for i, token in enumerate(question_tokens):
+        if token in tokens_with_no_attention:
+            continue
+        if token in tokens_with_find_attention:
+            find_qattn[i] = 1.0
+        else:
+            filter_qattn[i] = 1.0
+
+    if sum(find_qattn) == 0:
+        find_qattn = None
+    if sum(filter_qattn) == 0:
+        filter_qattn = None
+
+    return find_qattn, filter_qattn
+
+
+def qtype_from_findfilter_maxminnum(find_or_filter, longest_shortest_or_num):
+    if longest_shortest_or_num == "longest":
+        if find_or_filter == "find":
+            qtype = constants.MAX_find_qtype
+        elif find_or_filter == "filter":
+            qtype = constants.MAX_filter_find_qtype
+        else:
+            raise NotImplementedError
+
+    elif longest_shortest_or_num == "shortest":
+        if find_or_filter == "find":
+            qtype = constants.MIN_find_qtype
+        elif find_or_filter == "filter":
+            qtype = constants.MIN_filter_find_qtype
+        else:
+            raise NotImplementedError
+
+    elif longest_shortest_or_num == "num":
+        if find_or_filter == "find":
+            qtype = constants.NUM_find_qtype
+        elif find_or_filter == "filter":
+            qtype = constants.NUM_filter_find_qtype
+        else:
+            raise NotImplementedError
+    else:
+        raise NotImplementedError
+
+    return qtype
+
 
 def preprocess_HowManyYardsWasThe_ques(dataset, ques_attn: bool, number_supervision: bool):
     """ This function prunes questions that start with "How many yards was".
@@ -135,19 +204,7 @@ def preprocess_HowManyYardsWasThe_ques(dataset, ques_attn: bool, number_supervis
 
     """
 
-    longest_question_ngram = "how many yards was the longest"
-    shortest_question_ngram = "how many yards was the shortest"
-    second_longest_question_ngram = "how many yards was the second longest"
-    second_shortest_question_ngram = "how many yards was the second shortest"
-
     how_many_yards_was = "how many yards was"
-
-    longest_qtype = constants.YARDS_longest_qtype
-    shortest_qtype = constants.YARDS_shortest_qtype
-    # second_longest_qtype = 'how_many_yards_second_longest'
-    # second_shortest_qtype = 'how_many_yards_second_shortest'
-
-    findnumber_qtype = constants.YARDS_findnum_qtype
 
     new_dataset = {}
     total_ques = 0
@@ -174,65 +231,78 @@ def preprocess_HowManyYardsWasThe_ques(dataset, ques_attn: bool, number_supervis
 
             original_question = question_answer[constants.cleaned_question]
             tokenized_question = question_answer[constants.tokenized_question]
+            ques_lower_tokens = tokenized_question.lower().split(' ')
             question_lower = original_question.lower()
 
+            # Keep questions that contain "how many yards was"
             if how_many_yards_was in question_lower:
-                if longest_question_ngram in question_lower:
-                    question_answer[constants.qtype] = constants.YARDS_longest_qtype
-                    question_answer[constants.program_supervised] = True
-                    qtype_dist[constants.YARDS_longest_qtype] += 1
-                    questions_w_qtypes += 1
 
-                elif shortest_question_ngram in question_lower:
-                    question_answer[constants.qtype] = constants.YARDS_shortest_qtype
-                    question_answer[constants.program_supervised] = True
-                    qtype_dist[constants.YARDS_shortest_qtype] += 1
-                    questions_w_qtypes += 1
-
-                # Skip second longest/shortest questions for now
-                elif second_longest_question_ngram in question_lower:
-                    continue
-                elif second_shortest_question_ngram in question_lower:
+                if "second longest" in question_lower or "second shortest" in question_lower:
                     continue
 
-                # WHP -- a findNumber question unless longest or shortest token in the question
+                # Rest of the questions can be of these kinds:
+                # 1. Find or Filter(Find)
+                # 2. Longest/Shortest/FindNum
+
+                # We will find the ques-attentions for find vs. filter
+                # Using the existence of longest / shortest word we can figure out between Max/Min/Num
+
+                find_qattn, filter_qattn = get_question_attention(question_tokens=ques_lower_tokens)
+
+                find_or_filter = None
+                if find_qattn is None and filter_qattn is None:
+                   pass
+                elif find_qattn is None:
+                    find_qattn = filter_qattn
+                    filter_qattn = None
+                    find_or_filter = "find"
+                elif filter_qattn is None:
+                    find_or_filter = "find"
+                    pass
                 else:
-                    if 'longest' in question_lower:
-                        question_answer[constants.qtype] = constants.YARDS_longest_qtype
-                        question_answer[constants.program_supervised] = True
-                        qtype_dist[longest_qtype] += 1
-                        questions_w_qtypes += 1
-                    elif 'shortest' in question_lower:
-                        question_answer[constants.qtype] = constants.YARDS_shortest_qtype
-                        question_answer[constants.program_supervised] = True
-                        qtype_dist[shortest_qtype] += 1
-                        questions_w_qtypes += 1
-                    else:
-                        question_answer[constants.qtype] = constants.YARDS_findnum_qtype
-                        question_answer[constants.program_supervised] = True
-                        qtype_dist[findnumber_qtype] += 1
-                        questions_w_qtypes += 1
+                    # Both are not None
+                    find_or_filter = "filter"
 
-                num_answer_str = answer['number']
-                num_answer = float(num_answer_str) if num_answer_str else None
+                # Now need to figure out whether it's a findNumber / maxNumber / minNumber
+                longest_shortest_or_num = None
+                if "longest" in tokenized_question:
+                    longest_shortest_or_num = "longest"
+                elif "shortest" in tokenized_question:
+                    longest_shortest_or_num = "shortest"
+                else:
+                    longest_shortest_or_num = "num"
 
-                if ques_attn is True:
-                    ques_attention = get_question_attention(tokenized_question)
+                qtype = qtype_from_findfilter_maxminnum(find_or_filter, longest_shortest_or_num)
 
-                    if sum(ques_attention) > 0:
-                        if number_supervision is True:
-                            number_grounding, number_values = get_number_distribution_supervision(
-                                tokenized_question, tokenized_passage, num_answer,
-                                ques_attention, passage_num_mens, passage_num_entidxs,
-                                passage_num_vals)
-                            if number_grounding is not None:
-                                question_answer[constants.qattn_supervised] = True
-                                question_answer[constants.ques_attention_supervision] = [ques_attention]
-                                question_answer[constants.exection_supervised] = True
-                                question_answer[constants.qspan_numgrounding_supervision] = number_grounding
-                                question_answer[constants.qspan_numvalue_supervision] = number_values
-                                questions_w_numground += 1
-                                questions_w_attn += 1
+                question_answer[constants.qtype] = qtype
+                question_answer[constants.program_supervised] = True
+                qtype_dist[qtype] += 1
+                questions_w_qtypes += 1
+
+                question_answer[constants.qattn_supervised] = True
+                if filter_qattn is not None:
+                    question_answer[constants.ques_attention_supervision] = [filter_qattn, find_qattn]
+                else:
+                    question_answer[constants.ques_attention_supervision] = [find_qattn]
+                questions_w_attn += 1
+
+                if number_supervision is True:
+                    num_answer_str = answer['number']
+                    num_answer = float(num_answer_str) if num_answer_str else None
+
+                    qattn = copy.deepcopy(find_qattn)
+                    if filter_qattn is not None:
+                        qattn = [x + y for (x, y) in zip(qattn, filter_qattn)]
+
+                    number_grounding, number_values = get_number_distribution_supervision(
+                        tokenized_question, tokenized_passage, num_answer,
+                        qattn, passage_num_mens, passage_num_entidxs,
+                        passage_num_vals)
+                    if number_grounding is not None:
+                        question_answer[constants.exection_supervised] = True
+                        question_answer[constants.qspan_numgrounding_supervision] = number_grounding
+                        question_answer[constants.qspan_numvalue_supervision] = number_values
+                        questions_w_numground += 1
 
                 new_qa_pairs.append(question_answer)
 
@@ -300,10 +370,3 @@ if __name__ == '__main__':
         json.dump(new_dev_dataset, f, indent=4)
 
     print("Written HowManyYards datasets")
-
-''' DATASET CREATED THIS WAY
-
-input_dir = "./resources/data/drop_old/analysis/ngram/num/how_many_yards_was_the/"
-output_dir = "./resources/data/drop_old/num/how_many_yards_was_the"
-
-'''

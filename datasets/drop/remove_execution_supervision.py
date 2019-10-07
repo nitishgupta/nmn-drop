@@ -5,13 +5,13 @@ import argparse
 from collections import defaultdict
 from typing import List, Tuple, Dict, Union
 import random
+from datasets.drop import constants
 
 random.seed(100)
 
-from datasets.drop import constants
-
-
-FILES_TO_MERGE = ['drop_dataset_train.json', 'drop_dataset_dev.json']
+""" 
+    Remove Execution Supervised key from each question in the Train data (only)
+"""
 
 
 def readDataset(input_json):

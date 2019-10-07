@@ -3,10 +3,10 @@
 # export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
-DATASET_NAME=date_num/date_ydNEW_num_hmyw_cnt_rel_600_10pr
+DATASET_NAME=date_num/date_yd_num_hmyw_cnt_whoarg_600
 # DATASET_NAME=date/datefull_yd_new2
 
-DATASET_DIR=./resources/data/drop/${DATASET_NAME}
+DATASET_DIR=./resources/data/drop_re/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
 # VALFILE=${DATASET_DIR}/drop_dataset_dev.json
 VALFILE=${DATASET_DIR}/drop_dataset_mydev.json
@@ -44,7 +44,7 @@ export DROPOUT=0.2
 
 export LR=0.001
 
-export SEED=1
+export SEED=1000
 
 export BEAMSIZE=1
 export MAX_DECODE_STEP=14
