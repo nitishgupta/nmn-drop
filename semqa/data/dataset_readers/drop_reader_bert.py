@@ -3,18 +3,21 @@ import logging
 import random
 import itertools
 import numpy as np
-from typing import Dict, List, Union, Tuple, Any
+from typing import Dict, List, Union, Tuple
 from collections import defaultdict
 from overrides import overrides
 from allennlp.common.file_utils import cached_path
 from allennlp.data.dataset_readers.dataset_reader import DatasetReader
 from allennlp.data.instance import Instance
-from allennlp.data.token_indexers import SingleIdTokenIndexer, TokenIndexer
-from allennlp.data.tokenizers import Token, Tokenizer
+from allennlp.data.token_indexers import TokenIndexer
+from allennlp.data.token_indexers.wordpiece_indexer import WordpieceIndexer
+from allennlp.data.tokenizers import Token
 from allennlp.data.dataset_readers.reading_comprehension.util import IGNORED_TOKENS, STRIPPED_CHARACTERS
 from allennlp.data.fields import Field, TextField, MetadataField, ListField, SpanField, ProductionRuleField, ArrayField
 
-from semqa.domain_languages.drop.drop_language import DropLanguage, Date, get_empty_language_object
+from pytorch_pretrained_bert import BertTokenizer
+
+from semqa.domain_languages.drop_language import DropLanguage, Date, get_empty_language_object
 from datasets.drop import constants
 
 
@@ -28,26 +31,65 @@ WORD_NUMBER_MAP = {"zero": 0, "one": 1, "two": 2, "three": 3, "four": 4,
                    "sixteen": 16, "seventeen": 17, "eighteen": 18, "nineteen": 19}
 
 
-@DatasetReader.register("drop_reader")
+def tokenize_bert(bert_tokenizer: BertTokenizer, tokens: List[str]):
+    """Word-piece tokenize input tokens.
+
+    Returns:
+        wordpiece_tokens: List[str] word-pieces
+        tokenidx2wpidxs: List[List[int]] For each original-tokenidx, a list of indices for its corresponding wps
+        wpidx2tokenidx: List[int] Same length as wordpiece_tokens; index of original
+
+    """
+    tokenidx2wpidxs: List[List[int]] = []
+    wpidx2tokenidx: List[int] = []
+    wordpiece_tokens = []
+    for tokenidx, token in enumerate(tokens):
+        wp_idx = len(wordpiece_tokens)
+        wps = bert_tokenizer.tokenize(token)
+        wordpiece_tokens.extend(wps)
+        wpidx2tokenidx.extend([tokenidx] * len(wps))
+        # Word-piece idxs for this token, wp_idx is the idx for the first token, and +i for the number of wps
+        wp_idxs = [wp_idx + i for i, _ in enumerate(wps)]
+        tokenidx2wpidxs.append(wp_idxs)
+
+    assert len(wordpiece_tokens) == len(wpidx2tokenidx)
+    assert len(tokens) == len(tokenidx2wpidxs)
+
+    return wordpiece_tokens, tokenidx2wpidxs, wpidx2tokenidx
+
+
+@TokenIndexer.register("bert-drop")
+class BertDropTokenIndexer(WordpieceIndexer):
+    def __init__(self,
+                 pretrained_model: str,
+                 max_pieces: int = 512) -> None:
+        bert_tokenizer = BertTokenizer.from_pretrained(pretrained_model)
+        super().__init__(vocab=bert_tokenizer.vocab,
+                         wordpiece_tokenizer=bert_tokenizer.wordpiece_tokenizer.tokenize,
+                         max_pieces=max_pieces,
+                         namespace="bert",
+                         separator_token="[SEP]")
+
+
+
+@DatasetReader.register("drop_reader_bert")
 class DROPReaderNew(DatasetReader):
     def __init__(self,
                  lazy: bool = True,
-                 tokenizer: Tokenizer = None,
+                 pretrained_model: str = None,
                  token_indexers: Dict[str, TokenIndexer] = None,
                  relaxed_span_match: bool = True,
                  do_augmentation: bool = True,
-                 passage_length_limit: int = None,
                  question_length_limit: int = None,
                  only_strongly_supervised: bool = False,
                  skip_instances=False,
                  skip_due_to_gold_programs=False,
                  convert_spananswer_to_num=False) -> None:
         super().__init__(lazy)
-        self._tokenizer = tokenizer
-        self._token_indexers = token_indexers or {"tokens": SingleIdTokenIndexer()}
+        self._tokenizer = BertTokenizer.from_pretrained(pretrained_model)
+        self._token_indexers = token_indexers
         self._relaxed_span_match = relaxed_span_match
         self._do_augmentation = do_augmentation
-        self.passage_length_limit = passage_length_limit
         self.question_length_limit = question_length_limit
         self.only_strongly_supervised = only_strongly_supervised
         self.skip_instances = skip_instances
@@ -67,7 +109,6 @@ class DROPReaderNew(DatasetReader):
             dataset = json.load(dataset_file)
         logger.info("Reading the dataset")
         instances, skip_count = [], 0
-        max_passage_len = self.passage_length_limit
         max_question_len = self.question_length_limit
         total_qas = 0
         instances_read = 0
@@ -100,7 +141,6 @@ class DROPReaderNew(DatasetReader):
                     answer_annotations.append(qa["answer"])
                 if "validated_answers" in qa:
                     answer_annotations += qa["validated_answers"]
-                # answer_annotation = question_answer["answer"] if "answer" in question_answer else None
 
                 qtype = "UNK"
                 if constants.qtype in qa and qa[constants.qtype] is not None:
@@ -185,7 +225,6 @@ class DROPReaderNew(DatasetReader):
                                                  question_id,
                                                  passage_id,
                                                  answer_annotations,
-                                                 max_passage_len,
                                                  max_question_len)
 
                 if self.only_strongly_supervised:
@@ -237,8 +276,14 @@ class DROPReaderNew(DatasetReader):
                          question_id: str = None,
                          passage_id: str = None,
                          answer_annotations: List[Dict[str, Union[str, Dict, List]]] = None,
-                         max_passage_len: int = None,
                          max_question_len: int = None) -> Union[Instance, None]:
+
+        metadata = {
+            "original_passage": original_passage_text,
+            "original_question": original_ques_text,
+            "passage_id": passage_id,
+            "question_id": question_id,
+        }
 
         language = get_empty_language_object()
 
@@ -248,82 +293,147 @@ class DROPReaderNew(DatasetReader):
             production_rule_fields.append(field)
         action_field = ListField(production_rule_fields)
 
-        # pylint: disable=arguments-differ
-        passage_tokens = [Token(text=t, idx=t_charidx)
-                          for t, t_charidx in zip(passage_text.split(' '), passage_charidxs)]
+        passage_tokens: List[str] = passage_text.split(" ")
+        question_tokens: List[str] = question_text.split(" ")
 
-        question_tokens = [Token(text=t, idx=t_charidx)
-                           for t, t_charidx in zip(question_text.split(' '), question_charidxs)]
+        # Word-piece tokenize the tokens in Q and P. Get maps;
+        #  tokenidx2wpidx: List[List[int]] map from token idx to list of word-piece indices that correspond to it
+        #  wpidx2tokenidx: List[int] map from word-piece index to original token idx
+        # List[str], List[List[int]], List[int]
+        passage_wps, p_tokenidx2wpidx, p_wpidx2tokenidx = tokenize_bert(self._tokenizer, passage_tokens)
+        question_wps, q_tokenidx2wpidx, q_wpidx2tokenidx = tokenize_bert(self._tokenizer, question_tokens)
 
-        if max_passage_len is not None:
-            passage_tokens = passage_tokens[: max_passage_len]
-            (p_date_mens, p_date_entidxs, p_date_normvals,
-             p_num_mens, p_num_entidxs, p_num_normvals,
-             answer_passage_spans,
-             date_grounding_supervision,
-             num_grounding_supervision,
-             passage_attn_supervision) = self.prune_for_passage_len(max_passage_len,
-                                                                    p_date_mens, p_date_entidxs, p_date_normvals,
-                                                                    p_num_mens, p_num_entidxs, p_num_normvals,
-                                                                    answer_passage_spans,
-                                                                    date_grounding_supervision,
-                                                                    num_grounding_supervision,
-                                                                    passage_attn_supervision)
-        if max_question_len is not None:
-            question_tokens = question_tokens[: max_question_len]
-            (answer_question_spans,
-             ques_attn_supervision) = self.prune_for_question_len(max_question_len, answer_question_spans,
-                                                                  ques_attn_supervision)
+        # Truncate question_wps and wpidx2tokenidx to maximum allowable length
+        question_wps = question_wps[0:max_question_len]
+        q_wpidx2tokenidx = q_wpidx2tokenidx[0:max_question_len]
+        # The last token_idx after truncation
+        max_q_tokenidx = q_wpidx2tokenidx[-1]
+        max_q_token_len = max_q_tokenidx + 1
+        # Truncating the toknenidx2wpidx map to keep max_q_tokenidx as last token
+        # NOTE: Last token's all word-pieces might not be included; take precaution later
+        q_tokenidx2wpidx = q_tokenidx2wpidx[0:max_q_tokenidx+1]
 
-        metadata = {
-            "original_passage": original_passage_text,
-            "original_question": original_ques_text,
-            "passage_id": passage_id,
-            "question_id": question_id,
-        }
+        # Padding question to max length
+        q_wp_len = len(question_wps)
+        q_wp_pad_len = max_question_len - q_wp_len
+        question_wps.extend(["[PAD]"] * q_wp_pad_len)
+        q_wpidx2tokenidx.extend([-1] * q_wp_pad_len)
+
+        question_wps_tokens = [Token(text=t) for t in question_wps]
+
+
+        # Passage_len = Max seq len - CLS - SEP - SEP - Max_Qlen -- Questions will be padded to max length
+        max_passage_len = min(512 - 3 - max_question_len, len(passage_wps))
+        passage_wps = passage_wps[0:max_passage_len]
+        p_wpidx2tokenidx = p_wpidx2tokenidx[0:max_passage_len]
+        max_p_tokenidx = p_wpidx2tokenidx[-1]
+        max_p_token_len = max_p_tokenidx + 1
+        p_tokenidx2wpidx = p_tokenidx2wpidx[0:max_p_tokenidx + 1]
+
+        passage_wps.append("[SEP]")
+        p_wpidx2tokenidx.append(-1)
+
+
+        passage_wps_tokens = [Token(text=t) for t in passage_wps]
+
+        question_passage_tokens = ([Token("[CLS]")] + question_wps_tokens + [Token("[SEP]")] + passage_wps_tokens)
+
+        # # pylint: disable=arguments-differ
+        # passage_tokens = [Token(text=t, idx=t_charidx)
+        #                   for t, t_charidx in zip(passage_text.split(' '), passage_charidxs)]
+        #
+        # question_tokens = [Token(text=t, idx=t_charidx)
+        #                    for t, t_charidx in zip(question_text.split(' '), question_charidxs)]
+
+        (p_date_mens, p_date_entidxs, p_date_normvals,
+         p_num_mens, p_num_entidxs, p_num_normvals,
+         answer_passage_spans,
+         date_grounding_supervision,
+         num_grounding_supervision,
+         passage_attn_supervision) = self.prune_for_passage_len(max_p_token_len,
+                                                                p_date_mens, p_date_entidxs, p_date_normvals,
+                                                                p_num_mens, p_num_entidxs, p_num_normvals,
+                                                                answer_passage_spans,
+                                                                date_grounding_supervision,
+                                                                num_grounding_supervision,
+                                                                passage_attn_supervision)
+
+        (answer_question_spans,
+         ques_attn_supervision) = self.prune_for_question_len(max_q_token_len, answer_question_spans,
+                                                              ques_attn_supervision)
 
         fields = {}
-
         fields["actions"] = action_field
-
-        fields["passage"] = TextField(passage_tokens, self._token_indexers)
-        fields["question"] = TextField(question_tokens, self._token_indexers)
+        fields["question"] = TextField(question_wps_tokens, self._token_indexers)
+        fields["passage"] = TextField(passage_wps_tokens + [Token("[SEP]")], self._token_indexers)
+        fields["question_passage"] = TextField(question_passage_tokens, self._token_indexers)
         # List of (start, end) char offsets for each passage and question token
-        passage_offsets = [(token.idx, token.idx + len(token.text)) for token in passage_tokens]
-        question_offsets = [(token.idx, token.idx + len(token.text)) for token in question_tokens]
+        passage_offsets: List[Tuple[int, int]] = []
 
-        ##  Passage Number
+        for token_idx in p_wpidx2tokenidx:
+            if token_idx >= 0:
+                token_len = len(passage_tokens[token_idx])
+                token_start_charidx = passage_charidxs[token_idx]
+                passage_offsets.append((token_start_charidx, token_start_charidx + token_len))
+            else:
+                passage_offsets.append((0, 0))
+
+        question_offsets: List[Tuple[int, int]] = []
+        for token_idx in q_wpidx2tokenidx:
+            if token_idx >= 0:
+                token_len = len(question_tokens[token_idx])
+                token_start_charidx = question_charidxs[token_idx]
+                question_offsets.append((token_start_charidx, token_start_charidx + token_len))
+            else:
+                question_offsets.append((0, 0))
+
+        # Passage Number
         # The normalized values in processed dataset are floats even if the passage had ints. Converting them back ..
         p_num_normvals = [int(x) if int(x) == x else x for x in p_num_normvals]
         passage_number_entidxs = p_num_entidxs      # same length as p_num_mens, containing num_grounding for the mens
         passage_number_values = p_num_normvals
         passage_number_indices = [tokenidx for (_, tokenidx, _) in p_num_mens]
-        # These are number-token idxs in an order so that their values are sorted
         sorted_passagenumber_indices = self.get_numberindices_in_sorted_order(passage_number_values,
                                                                               passage_number_indices,
                                                                               passage_number_entidxs)
-
+        sorted_passagenumber_wpindices = [p_tokenidx2wpidx[idx][0] for idx in sorted_passagenumber_indices]
         # List of passage_len containing number_entidx for each token (-1 otherwise)
-        passage_number_idx2entidx = [-1 for _ in range(len(passage_tokens))]
+        # passage_number_idx2entidx = [-1 for _ in range(len(passage_tokens))]
+        passage_number_idx2entidx = [-1 for _ in range(len(passage_wps))]
         if passage_number_entidxs:
-            for passage_num_tokenidx, number_idx in zip(passage_number_indices, passage_number_entidxs):
-                passage_number_idx2entidx[passage_num_tokenidx] = number_idx
+            for passage_num_tokenidx, number_ent_idx in zip(passage_number_indices, passage_number_entidxs):
+                wp_index = p_tokenidx2wpidx[passage_num_tokenidx][0]
+                passage_number_idx2entidx[wp_index] = number_ent_idx
         else:
             # No numbers found in the passage - making a fake number at the 0th token
             passage_number_idx2entidx[0] = 0
-            sorted_passagenumber_indices = [0]
+            sorted_passagenumber_wpindices = [0]
         if not passage_number_values:
             passage_number_values.append(-1)
+        # Three fields are required --
+        # 1. passageidx2numberidx -- passage_len sized list mapping tokenidx 2 numberidx. The numberidx is the idx of
+        #   the unique number
+        # 2. passage_number_values -- List of unique numbers in the support. Should include numbers in passage plus their
+        #   combination
+        # 3. sorted_passagenumber_wpindices -- passaage_num_token_idxs so that the corresponding nums are sorted.
+        #   This is not all numbers from the combination, but only the ones that appear in the passage; one couldn't
+        #   even make such a list for all num combs. This is used in `pattn_for_minmaxNum` func in Language and it seems
+        #   okay to have this list for only numbers that appear in the passage
         fields["passageidx2numberidx"] = ArrayField(np.array(passage_number_idx2entidx), padding_value=-1)
         fields["passage_number_values"] = MetadataField(passage_number_values)
-        fields["passage_number_sortedtokenidxs"] = MetadataField(sorted_passagenumber_indices)
+        fields["passage_number_sortedtokenidxs"] = MetadataField(sorted_passagenumber_wpindices)
 
         ##  Passage Dates
         passage_date_entidxs = p_date_entidxs
         passage_date_values = p_date_normvals
-        passage_date_spanidxs = [(x, y) for (_, (x, y), _) in p_date_mens]
+        passage_date_spanidxs: List[Tuple[int, int]] = []
+        for (_, (start_token_idx, end_token_idx), _) in p_date_mens:
+            start_wp_idx = p_tokenidx2wpidx[start_token_idx][0]
+            # Even though the p_tokenidx2wpidx is truncated, the wps might overflow
+            end_wp_idx = min(p_tokenidx2wpidx[end_token_idx][-1], len(passage_wps) - 1)
+            passage_date_spanidxs.append((start_wp_idx, end_wp_idx))
 
-        passage_date_idx2dateidx = [-1 for _ in range(len(passage_tokens))]
+        passage_date_idx2dateidx = [-1 for _ in range(len(passage_wps))]
         if passage_date_spanidxs:
             for passage_date_span, date_idx in zip(passage_date_spanidxs, passage_date_entidxs):
                 (s, e) = passage_date_span
@@ -353,8 +463,8 @@ class DROPReaderNew(DatasetReader):
 
         metadata.update({"passage_token_offsets": passage_offsets,
                          "question_token_offsets": question_offsets,
-                         "question_tokens": [token.text for token in question_tokens],
-                         "passage_tokens": [token.text for token in passage_tokens],
+                         "question_tokens": question_wps,
+                         "passage_tokens": passage_wps,
                          "passage_date_values": passage_date_strvals,
                          "passage_number_values": passage_number_values,
                          "passage_year_diffs": year_differences,
@@ -376,17 +486,26 @@ class DROPReaderNew(DatasetReader):
 
         # Question Attention Supervision
         if ques_attn_supervision:
-            fields["qattn_supervision"] = ArrayField(np.array(ques_attn_supervision), padding_value=0)
+            ques_attn_supervision_wp = []
+            for qattn in ques_attn_supervision:
+                qattn_wp = [0.0] * len(question_wps)
+                for tokenidx, attnval in enumerate(qattn):
+                    wp_idxs = q_tokenidx2wpidx[tokenidx]
+                    for wpidx in wp_idxs:
+                        if wpidx < len(question_wps):
+                            qattn_wp[wpidx] = attnval
+                ques_attn_supervision_wp.append(qattn_wp)
+
+            fields["qattn_supervision"] = ArrayField(np.array(ques_attn_supervision_wp), padding_value=0)
         else:
-            qlen = len(question_tokens)
-            empty_question_attention = [0.0] * qlen
+            empty_question_attention = [0.0] * len(question_wps)
             empty_question_attention_tuple = [empty_question_attention]
             fields["qattn_supervision"] = ArrayField(np.array(empty_question_attention_tuple), padding_value=0)
 
         if passage_attn_supervision:
             fields["passage_attn_supervision"] = ArrayField(np.array(passage_attn_supervision), padding_value=0)
         else:
-            empty_passage_attention = [0.0] * len(passage_tokens)
+            empty_passage_attention = [0.0] * len(passage_wps)
             fields["passage_attn_supervision"] = ArrayField(np.array(empty_passage_attention), padding_value=0)
 
         # Date-comparison - Date Grounding Supervision
@@ -398,6 +517,7 @@ class DROPReaderNew(DatasetReader):
             fields["datecomp_ques_event_date_groundings"] = MetadataField(empty_date_grounding_tuple)
 
         # Number Comparison - Passage Number Grounding Supervision
+        # TODO(nitishg): When number-combinations are included this supervision will need to be updated.
         if num_grounding_supervision:
             fields["numcomp_qspan_num_groundings"] = MetadataField(num_grounding_supervision)
         else:
@@ -428,14 +548,6 @@ class DROPReaderNew(DatasetReader):
             # Using the first one for training (really, there's only one)
             answer_annotation = answer_annotations[0]
 
-            # answer_type = "UNK"
-            # if answer_annotation["spans"]:
-            #     answer_type = "spans"
-            # elif answer_annotation["number"]:
-            #     answer_type = "number"
-            # else:
-            #     raise NotImplementedError
-
             # This list contains the possible-start-types for programs that can yield the correct answer
             # For example, if the answer is a number but also in passage, this will contain two keys
             # If the answer is a number, we'll find which kind and that program-start-type will be added here
@@ -447,8 +559,12 @@ class DROPReaderNew(DatasetReader):
             passage_span_fields = []
             if answer_passage_spans:
                 answer_program_start_types.append("passage_span")
-                passage_span_fields = \
-                    [SpanField(span[0], span[1], fields["passage"]) for span in answer_passage_spans]
+                passage_span_fields = []
+                for (start_token_idx, end_token_idx) in answer_passage_spans:
+                    start_wp_idx = p_tokenidx2wpidx[start_token_idx][0]
+                    # Even though the p_tokenidx2wpidx is truncated, the wps might overflow
+                    end_wp_idx = min(p_tokenidx2wpidx[end_token_idx][-1], len(passage_wps) - 1)
+                    passage_span_fields.append(SpanField(start_wp_idx, end_wp_idx, fields["passage"]))
                 metadata.update({'answer_passage_spans': answer_passage_spans})
             else:
                 passage_span_fields = [SpanField(-1, -1, fields["passage"])]
@@ -505,11 +621,6 @@ class DROPReaderNew(DatasetReader):
             answer_as_count = [0] * len(count_values)
             # if answer_type == "number":
             if answer_number is not None:
-                # answer_text = answer_annotation["number"]
-                # answer_number = float(answer_text)
-                # answer_number = int(answer_number) if int(answer_number) == answer_number else answer_number
-                # Number lists below are mix of floats and ints. Type of answer_number doesn't matter
-
                 # Passage-number answer
                 if answer_number in passage_number_values:
                     answer_program_start_types.append("passage_number")
@@ -1113,6 +1224,7 @@ class DROPReaderNew(DatasetReader):
         gold_lf = "(year_difference find_PassageAttention find_PassageAttention)"
 
         return [gold_lf], ['year_difference']
+
 
     @staticmethod
     def numdiff_logicalforms(**kwargs) -> Tuple[List[str], List[str]]:

@@ -1,4 +1,4 @@
-from semqa.domain_languages.drop.drop_language import get_empty_language_object
+from semqa.domain_languages.drop_language import get_empty_language_object
 
 
 dl = get_empty_language_object()

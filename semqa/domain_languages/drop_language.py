@@ -9,7 +9,7 @@ import allennlp.nn.util as allenutil
 from allennlp.semparse.domain_languages.domain_language import (DomainLanguage, predicate,
                                                                 predicate_with_side_args, ExecutionError)
 
-from semqa.domain_languages.drop.execution_parameters import ExecutorParameters
+from semqa.domain_languages.drop_execution_parameters import ExecutorParameters
 from semqa.domain_languages import domain_language_utils as dlutils
 import utils.util as myutils
 
@@ -209,8 +209,7 @@ def get_empty_language_object():
                                 year_differences=None,
                                 year_differences_mat=None,
                                 count_num_values=None,
-                                passagenum_differences=None,
-                                passagenum_differences_mat=None,
+                                number_difference_mat=None,
                                 question_passage_attention=None,
                                 passage_question_attention=None,
                                 passage_token2date_alignment=None,
@@ -252,8 +251,7 @@ class DropLanguage(DomainLanguage):
                  year_differences: List[int],
                  year_differences_mat: np.array,
                  count_num_values: List[int],
-                 passagenum_differences: List[float],
-                 passagenum_differences_mat: np.array,
+                 number_difference_mat: np.array,
                  question_passage_attention: Tensor,
                  passage_question_attention: Tensor,
                  passage_token2date_alignment: Tensor,
@@ -336,11 +334,13 @@ class DropLanguage(DomainLanguage):
                                                              cuda_device=self.device_id)
         # List[int]
         self.count_num_values = count_num_values
-        # List[int / float] -- Containing possible subtraction values between passage numbers
-        self.passagenum_differences = passagenum_differences
-        # Shape: (num_passage_numbers, num_passage_numbers, num_of_passagenum_differences)
-        self.passagnum_differences_mat = allenutil.move_to_device(torch.FloatTensor(passagenum_differences_mat),
-                                                                  cuda_device=self.device_id)
+        self.number_difference_mat = number_difference_mat
+        """
+        # Shape: (size_number_support, size_number_support, size_number_support) -- (x,y,z) = 1 if x - y == z
+        self.number_difference_mat = allenutil.move_to_device(torch.FloatTensor(number_difference_mat),
+                                                              cuda_device=self.device_id)
+                                                              
+        """
 
         self.countvals = allenutil.move_to_device(torch.FloatTensor(range(0, 10)), cuda_device=self.device_id)
 
@@ -706,35 +706,29 @@ class DropLanguage(DomainLanguage):
 
         return year_differences_dist
 
-    def expected_passagenumber_difference(self,
-                                          passagenumber_dist_1: torch.FloatTensor,
-                                          passagenumber_dist_2: torch.FloatTensor):
+    def expected_number_difference(self,
+                                   number_dist_1: torch.FloatTensor,
+                                   number_dist_2: torch.FloatTensor):
 
-        """ Compute a distribution over possible passagenumber-differences by marginalizing the joint number-dists
-            over the passagenumber_differences_mat
+        """ Compute a distribution over possible number-differences.
+         Compute the expected probability of any number_difference based on the joint probability of numbers whose diff.
+         could lead to this difference value.
+         This is done by marginalizing over the number_difference_mat weighted by the joint joint distribution over
+         number-pairs from dist_1 and dist_2.
 
-            Parameters:
-            -----------
-            passagenumber_dist_1: ``torch.FloatTensor`` Shape: (self.num_passagenumbers, )
-            passagenumber_dist_2: ``torch.FloatTensor`` Shape: (self.num_passagenumbers, )
+        Parameters:
+            number_dist_1: ``torch.FloatTensor`` Shape: (self.num_passagenumbers, )
+            number_dist_2: ``torch.FloatTensor`` Shape: (self.num_passagenumbers, )
         """
 
-        # Shape: (num_passage_dates, num_passage_dates)
-        joint_dist = torch.matmul(passagenumber_dist_1.unsqueeze(1), passagenumber_dist_2.unsqueeze(0))
+        # Shape: (size_num_support, size_num_support)
+        joint_dist = torch.matmul(number_dist_1.unsqueeze(1), number_dist_2.unsqueeze(0))
 
-        # Shape: (num_passagenumber_differences, )
-        passagenumber_differences_dist = torch.sum(self.passagnum_differences_mat * joint_dist.unsqueeze(2), dim=(0, 1))
+        # Shape: (size_num_support)
+        number_difference_dist = torch.sum(self.number_difference_mat * joint_dist.unsqueeze(2), dim=(0, 1))
+        number_difference_dist = torch.clamp(number_difference_dist, min=1e-10, max=1 - 1e-10)
 
-        # if torch.sum(year_differences_dist) > 1.0:
-        # print("year dist")
-        # print(f"{date_distribution_1} {date_distribution_1.sum()}")
-        # print(f"{date_distribution_2} {date_distribution_2.sum()}")
-        # print(f"{year_differences_dist} {year_differences_dist.sum()}")
-        # print()
-
-        passagenumber_differences_dist = torch.clamp(passagenumber_differences_dist, min=1e-10, max=1 - 1e-10)
-
-        return passagenumber_differences_dist
+        return number_difference_dist
 
     def expected_date_comparison(self, date_distribution_1, date_distribution_2, comparison):
         """ Compute the boolean probability that date_1 > date_2 given distributions over passage_dates for each

@@ -3,7 +3,7 @@
 # export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
-DATASET_NAME=date_num/date_yd_num_hmyw_cnt_whoarg_600/questype_datasets/how_many_yards_was
+DATASET_NAME=date_num/date_yd_num_hmyw_cnt_whoarg_600  #/questype_datasets/how_many_yards_was
 # DATASET_NAME=date/datefull_yd_new2
 
 DATASET_DIR=./resources/data/drop_iclr/${DATASET_NAME}
@@ -54,7 +54,7 @@ CHECKPOINT_ROOT=./resources/semqa/checkpoints
 SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/${DATASET_NAME}
 MODEL_DIR=drop_parser_bert
 PD_1=CNTFIX_${COUNT_FIXED}/EXCLOSS_${EXCLOSS}/MMLLOSS_${MMLLOSS}/aux_${AUXLOSS}/SUPEPOCHS_${SUPEPOCHS}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}/NC_BertModel_wTest
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}/NS_MODEL
 
 SERIALIZATION_DIR=./resources/semqa/checkpoints/test
 

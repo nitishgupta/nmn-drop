@@ -3,7 +3,7 @@ import json
 from nltk.corpus import stopwords
 import os
 import datasets.drop.constants as constants
-from semqa.domain_languages.drop.drop_language import Date
+from semqa.domain_languages.drop_language import Date
 import argparse
 
 """ This script is used to augment date-comparison-data by flipping events in the questions """

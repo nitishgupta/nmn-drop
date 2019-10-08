@@ -1,23 +1,20 @@
 import json
 import logging
-import random
 import itertools
 import numpy as np
-from typing import Dict, List, Union, Tuple, Any
-from collections import defaultdict
+from typing import Dict, List, Union, Tuple
 from overrides import overrides
 from allennlp.common.file_utils import cached_path
 from allennlp.data.dataset_readers.dataset_reader import DatasetReader
 from allennlp.data.instance import Instance
-from allennlp.data.token_indexers import SingleIdTokenIndexer, TokenIndexer
+from allennlp.data.token_indexers import TokenIndexer
 from allennlp.data.token_indexers.wordpiece_indexer import WordpieceIndexer
-from allennlp.data.tokenizers import Token, Tokenizer
-from allennlp.data.dataset_readers.reading_comprehension.util import IGNORED_TOKENS, STRIPPED_CHARACTERS
+from allennlp.data.tokenizers import Token
 from allennlp.data.fields import Field, TextField, MetadataField, ListField, SpanField, ProductionRuleField, ArrayField
 
 from pytorch_pretrained_bert import BertTokenizer
 
-from semqa.domain_languages.drop.drop_language import DropLanguage, Date, get_empty_language_object
+from semqa.domain_languages.drop_language import DropLanguage, Date, get_empty_language_object
 from datasets.drop import constants
 
 
@@ -58,7 +55,7 @@ def tokenize_bert(bert_tokenizer: BertTokenizer, tokens: List[str]):
     return wordpiece_tokens, tokenidx2wpidxs, wpidx2tokenidx
 
 
-@TokenIndexer.register("bert-drop")
+@TokenIndexer.register("bert-drop-ncomb")
 class BertDropTokenIndexer(WordpieceIndexer):
     def __init__(self,
                  pretrained_model: str,
@@ -66,13 +63,14 @@ class BertDropTokenIndexer(WordpieceIndexer):
         bert_tokenizer = BertTokenizer.from_pretrained(pretrained_model)
         super().__init__(vocab=bert_tokenizer.vocab,
                          wordpiece_tokenizer=bert_tokenizer.wordpiece_tokenizer.tokenize,
+                         do_lowercase=True,
                          max_pieces=max_pieces,
                          namespace="bert",
                          separator_token="[SEP]")
 
 
 
-@DatasetReader.register("drop_reader_bert")
+@DatasetReader.register("drop_reader_bert_ncomb")
 class DROPReaderNew(DatasetReader):
     def __init__(self,
                  lazy: bool = True,
@@ -97,6 +95,9 @@ class DROPReaderNew(DatasetReader):
         self.convert_spananswer_to_num = convert_spananswer_to_num
         self.skip_count = 0
         self.skip_due_to_gold_not_in_answer = 0
+
+        self.max_passage_nums = 0
+        self.max_num_support = 0
 
     @overrides
     def _read(self, file_path: str):
@@ -245,6 +246,9 @@ class DROPReaderNew(DatasetReader):
         logger.info(f"Instances Skipped: {self.skip_count}")
         logger.info(f"Instances skipped due to gold-answer not in gold_program_types: {self.skip_due_to_gold_not_in_answer}")
 
+        logger.info("Max passage nums: {}   max num supp : {} ".format(self.max_passage_nums, self.max_num_support))
+        exit()
+
     @overrides
     def text_to_instance(self,
                          question_text: str,
@@ -306,14 +310,12 @@ class DROPReaderNew(DatasetReader):
         # Truncate question_wps and wpidx2tokenidx to maximum allowable length
         question_wps = question_wps[0:max_question_len]
         q_wpidx2tokenidx = q_wpidx2tokenidx[0:max_question_len]
-        # The last token_idx after truncation
-        max_q_tokenidx = q_wpidx2tokenidx[-1]
+        max_q_tokenidx = q_wpidx2tokenidx[-1]       # The last token_idx after truncation
         max_q_token_len = max_q_tokenidx + 1
-        # Truncating the toknenidx2wpidx map to keep max_q_tokenidx as last token
         # NOTE: Last token's all word-pieces might not be included; take precaution later
-        q_tokenidx2wpidx = q_tokenidx2wpidx[0:max_q_tokenidx+1]
+        q_tokenidx2wpidx = q_tokenidx2wpidx[0:max_q_token_len]
 
-        # Padding question to max length
+        # Padding question to max length since it makes possible to separate question and passage in the model
         q_wp_len = len(question_wps)
         q_wp_pad_len = max_question_len - q_wp_len
         question_wps.extend(["[PAD]"] * q_wp_pad_len)
@@ -321,29 +323,20 @@ class DROPReaderNew(DatasetReader):
 
         question_wps_tokens = [Token(text=t) for t in question_wps]
 
-
         # Passage_len = Max seq len - CLS - SEP - SEP - Max_Qlen -- Questions will be padded to max length
         max_passage_len = min(512 - 3 - max_question_len, len(passage_wps))
         passage_wps = passage_wps[0:max_passage_len]
         p_wpidx2tokenidx = p_wpidx2tokenidx[0:max_passage_len]
         max_p_tokenidx = p_wpidx2tokenidx[-1]
         max_p_token_len = max_p_tokenidx + 1
-        p_tokenidx2wpidx = p_tokenidx2wpidx[0:max_p_tokenidx + 1]
+        p_tokenidx2wpidx = p_tokenidx2wpidx[0:max_p_token_len]
 
         passage_wps.append("[SEP]")
         p_wpidx2tokenidx.append(-1)
 
-
         passage_wps_tokens = [Token(text=t) for t in passage_wps]
-
+        # This would be in the input to BERT
         question_passage_tokens = ([Token("[CLS]")] + question_wps_tokens + [Token("[SEP]")] + passage_wps_tokens)
-
-        # # pylint: disable=arguments-differ
-        # passage_tokens = [Token(text=t, idx=t_charidx)
-        #                   for t, t_charidx in zip(passage_text.split(' '), passage_charidxs)]
-        #
-        # question_tokens = [Token(text=t, idx=t_charidx)
-        #                    for t, t_charidx in zip(question_text.split(' '), question_charidxs)]
 
         (p_date_mens, p_date_entidxs, p_date_normvals,
          p_num_mens, p_num_entidxs, p_num_normvals,
@@ -367,61 +360,45 @@ class DROPReaderNew(DatasetReader):
         fields["question"] = TextField(question_wps_tokens, self._token_indexers)
         fields["passage"] = TextField(passage_wps_tokens + [Token("[SEP]")], self._token_indexers)
         fields["question_passage"] = TextField(question_passage_tokens, self._token_indexers)
-        # List of (start, end) char offsets for each passage and question token
-        passage_offsets: List[Tuple[int, int]] = []
-
-        for token_idx in p_wpidx2tokenidx:
-            if token_idx >= 0:
-                token_len = len(passage_tokens[token_idx])
-                token_start_charidx = passage_charidxs[token_idx]
-                passage_offsets.append((token_start_charidx, token_start_charidx + token_len))
-            else:
-                passage_offsets.append((0, 0))
-
-        question_offsets: List[Tuple[int, int]] = []
-        for token_idx in q_wpidx2tokenidx:
-            if token_idx >= 0:
-                token_len = len(question_tokens[token_idx])
-                token_start_charidx = question_charidxs[token_idx]
-                question_offsets.append((token_start_charidx, token_start_charidx + token_len))
-            else:
-                question_offsets.append((0, 0))
-
+        # List of (start, end) char offsets for each passage and question word-piece
+        passage_offsets: List[Tuple[int, int]] = self.update_charoffsets(wpidx2tokenidx=p_wpidx2tokenidx,
+                                                                         tokens=passage_tokens,
+                                                                         token_charidxs=passage_charidxs)
+        question_offsets: List[Tuple[int, int]] = self.update_charoffsets(wpidx2tokenidx=q_wpidx2tokenidx,
+                                                                          tokens=question_tokens,
+                                                                          token_charidxs=question_charidxs)
         # Passage Number
-        # The normalized values in processed dataset are floats even if the passage had ints. Converting them back ..
-        p_num_normvals = [int(x) if int(x) == x else x for x in p_num_normvals]
-        passage_number_entidxs = p_num_entidxs      # same length as p_num_mens, containing num_grounding for the mens
-        passage_number_values = p_num_normvals
-        passage_number_indices = [tokenidx for (_, tokenidx, _) in p_num_mens]
-        sorted_passagenumber_indices = self.get_numberindices_in_sorted_order(passage_number_values,
-                                                                              passage_number_indices,
-                                                                              passage_number_entidxs)
-        sorted_passagenumber_wpindices = [p_tokenidx2wpidx[idx][0] for idx in sorted_passagenumber_indices]
-        # List of passage_len containing number_entidx for each token (-1 otherwise)
-        # passage_number_idx2entidx = [-1 for _ in range(len(passage_tokens))]
-        passage_number_idx2entidx = [-1 for _ in range(len(passage_wps))]
-        if passage_number_entidxs:
-            for passage_num_tokenidx, number_ent_idx in zip(passage_number_indices, passage_number_entidxs):
-                wp_index = p_tokenidx2wpidx[passage_num_tokenidx][0]
-                passage_number_idx2entidx[wp_index] = number_ent_idx
-        else:
-            # No numbers found in the passage - making a fake number at the 0th token
-            passage_number_idx2entidx[0] = 0
-            sorted_passagenumber_wpindices = [0]
-        if not passage_number_values:
-            passage_number_values.append(-1)
-        # Three fields are required --
-        # 1. passageidx2numberidx -- passage_len sized list mapping tokenidx 2 numberidx. The numberidx is the idx of
-        #   the unique number
-        # 2. passage_number_values -- List of unique numbers in the support. Should include numbers in passage plus their
-        #   combination
-        # 3. sorted_passagenumber_wpindices -- passaage_num_token_idxs so that the corresponding nums are sorted.
-        #   This is not all numbers from the combination, but only the ones that appear in the passage; one couldn't
-        #   even make such a list for all num combs. This is used in `pattn_for_minmaxNum` func in Language and it seems
-        #   okay to have this list for only numbers that appear in the passage
-        fields["passageidx2numberidx"] = ArrayField(np.array(passage_number_idx2entidx), padding_value=-1)
-        fields["passage_number_values"] = MetadataField(passage_number_values)
-        fields["passage_number_sortedtokenidxs"] = MetadataField(sorted_passagenumber_wpindices)
+        passage_number_values = [int(x) if int(x) == x else x for x in p_num_normvals]
+        # This number support is sorted
+        number_support = self.compute_number_support(numbers=passage_number_values, max_number_of_numbers_to_consider=2)
+
+        self.max_passage_nums = max(len(passage_number_values), self.max_passage_nums)
+        self.max_num_support = max(len(number_support), self.max_num_support)
+
+        if not number_support:
+            number_support = [0]
+        passage_number_entidxs = p_num_entidxs
+        passage_number_tokenids = [tokenidx for (_, tokenidx, _) in p_num_mens]
+        passage_num_wpidx2entidx = [-1 for _ in range(len(passage_wps))]   # number_ent_idx for each token (pad=-1)
+        passage_number_wpindices = []   # wp_idxs that are numbers
+        for passage_num_tokenidx, number_ent_idx in zip(passage_number_tokenids, passage_number_entidxs):
+            wp_index = p_tokenidx2wpidx[passage_num_tokenidx][0]
+            number_value = passage_number_values[number_ent_idx]
+            number_support_idx = number_support.index(number_value)
+            passage_num_wpidx2entidx[wp_index] = number_support_idx
+            passage_number_wpindices.append(wp_index)
+        if not passage_number_wpindices:    # Padding in case no numbers in passage
+            passage_num_wpidx2entidx[0] = 0
+            passage_number_wpindices = [0]
+
+        # Making sorted_num_wpindxs for differentiable min/max
+        numvals_wpidx = [(number_support[passage_num_wpidx2entidx[wpidx]], wpidx) for wpidx in passage_number_wpindices]
+        sorted_numvals_wpidx = sorted(numvals_wpidx, key=lambda x: x[0])
+        sorted_passage_num_wpindices = [x[1] for x in sorted_numvals_wpidx]
+
+        fields["passageidx2numberidx"] = ArrayField(np.array(passage_num_wpidx2entidx), padding_value=-1)
+        fields["number_support_values"] = MetadataField(number_support)
+        fields["passage_number_sortedtokenidxs"] = MetadataField(sorted_passage_num_wpindices)
 
         ##  Passage Dates
         passage_date_entidxs = p_date_entidxs
@@ -453,10 +430,9 @@ class DROPReaderNew(DatasetReader):
         fields["year_differences"] = MetadataField(year_differences)
         fields["year_differences_mat"] = MetadataField(year_differences_mat)
 
-        passage_number_differences, passage_number_diff_mat = self.get_passagenumber_difference_candidates(
-                                                                                            passage_number_values)
-        fields["passagenumber_difference_values"] = MetadataField(passage_number_differences)
-        fields["passagenumber_differences_mat"] = MetadataField(passage_number_diff_mat)
+        number_difference_mat = self.get_numberdifference_mat(number_support=number_support,
+                                                              passage_numbers=passage_number_values)
+        fields["number_difference_mat"] = MetadataField(number_difference_mat)
 
         count_values = list(range(10))
         fields["count_values"] = MetadataField(count_values)
@@ -468,11 +444,8 @@ class DROPReaderNew(DatasetReader):
                          "passage_date_values": passage_date_strvals,
                          "passage_number_values": passage_number_values,
                          "passage_year_diffs": year_differences,
-                         "passagenum_diffs": passage_number_differences,
                          "count_values": count_values
-                         # "number_tokens": [token.text for token in number_tokens],
-                         # "number_indices": number_indices
-                        })
+                         })
 
 
         # FIELDS FOR STRONG-SUPERVISION
@@ -519,9 +492,29 @@ class DROPReaderNew(DatasetReader):
         # Number Comparison - Passage Number Grounding Supervision
         # TODO(nitishg): When number-combinations are included this supervision will need to be updated.
         if num_grounding_supervision:
-            fields["numcomp_qspan_num_groundings"] = MetadataField(num_grounding_supervision)
+            new_num_grounding_supervision = []
+            # num_grounding_supervision is indexed into passage_number_values; but now we use number_support
+            oldidx2newidx = {}
+            for oldidx, val in enumerate(passage_number_values):
+                newidx = number_support.index(val)
+                oldidx2newidx[oldidx] = newidx
+            for num_sup in num_grounding_supervision:
+                new_num_sup = [0] * len(number_support)
+                for old_idx, grnd in enumerate(num_sup):
+                    new_num_sup[oldidx2newidx[old_idx]] = grnd
+                new_num_grounding_supervision.append(new_num_sup)
+
+            grounded_vals = []
+            for val, grnd in zip(passage_number_values, num_grounding_supervision[0]):
+                if grnd > 0:
+                    grounded_vals.append(val)
+            new_grounded_vals = []
+            for val, grnd in zip(number_support, new_num_grounding_supervision[0]):
+                if grnd > 0:
+                    new_grounded_vals.append(val)
+            fields["numcomp_qspan_num_groundings"] = MetadataField(new_num_grounding_supervision)
         else:
-            empty_passagenum_grounding = [0.0] * len(passage_number_values)
+            empty_passagenum_grounding = [0.0] * len(number_support)
             empty_passagenum_grounding_tuple = (empty_passagenum_grounding, empty_passagenum_grounding)
             fields["numcomp_qspan_num_groundings"] = MetadataField(empty_passagenum_grounding_tuple)
 
@@ -615,16 +608,15 @@ class DROPReaderNew(DatasetReader):
                 answer_number = float(number_answer_str)
                 answer_number = int(answer_number) if int(answer_number) == answer_number else answer_number
 
-            ans_as_passage_number = [0] * len(passage_number_values)
+            ans_as_passage_number = [0] * len(number_support)
             ans_as_year_difference = [0] * len(year_differences)
-            answer_as_passagenum_difference = [0] * len(passage_number_differences)
             answer_as_count = [0] * len(count_values)
             # if answer_type == "number":
             if answer_number is not None:
                 # Passage-number answer
-                if answer_number in passage_number_values:
+                if answer_number in number_support:
                     answer_program_start_types.append("passage_number")
-                    ans_as_passage_number_idx = passage_number_values.index(answer_number)
+                    ans_as_passage_number_idx = number_support.index(answer_number)
                     ans_as_passage_number[ans_as_passage_number_idx] = 1
 
                 # Year-difference answer
@@ -632,14 +624,6 @@ class DROPReaderNew(DatasetReader):
                     answer_program_start_types.append("year_difference")
                     ans_as_year_difference_idx = year_differences.index(answer_number)
                     ans_as_year_difference[ans_as_year_difference_idx] = 1
-
-                '''
-                # PassageNum-difference Answer
-                if answer_number in passage_number_differences:
-                    answer_program_start_types.append("passagenum_diff")
-                    ans_as_passagenum_diff_idx = passage_number_differences.index(answer_number)
-                    answer_as_passagenum_difference[ans_as_passagenum_diff_idx] = 1
-                '''
 
                 # Count answer
                 if answer_number in count_values:
@@ -649,7 +633,6 @@ class DROPReaderNew(DatasetReader):
 
             fields["answer_as_passage_number"] = MetadataField(ans_as_passage_number)
             fields["answer_as_year_difference"] = MetadataField(ans_as_year_difference)
-            fields["answer_as_passagenum_difference"] = MetadataField(answer_as_passagenum_difference)
             fields["answer_as_count"] = MetadataField(answer_as_count)
 
             fields["answer_program_start_types"] = MetadataField(answer_program_start_types)
@@ -742,7 +725,7 @@ class DROPReaderNew(DatasetReader):
         pruned_date_mens = []       # New passage date mens
         pruned_old_dateidxs = []
         for date_men, date_idx in zip(p_date_mens, p_date_entidxs):
-            _, (x,y), _ = date_men
+            _, (x, y), _ = date_men
             if y < max_passage_len:
                 pruned_date_mens.append(date_men)
                 pruned_old_dateidxs.append(date_idx)
@@ -815,137 +798,58 @@ class DROPReaderNew(DatasetReader):
 
         return (new_answer_question_spans, new_qattn_supervision)
 
-    '''
     @staticmethod
-    def sort_passage_numbers(passage_number_values, passage_number_entidxs):
-        """ It will be easier to do computations in the model if the number values are sorted in increasing order.
-            Here we sort passage_number_values and correspondingly change the values in passage_number_entidxs
+    def compute_number_support(numbers: List[Union[int, float]],
+                                        max_number_of_numbers_to_consider: int = 2) -> List[Union[int, float]]:
+        """Compute the number support based on combinations of input numbers.
+        This function considers all possible addition/subtraction between all pairs of numbers (even self). This forms
+        the support of the possible answers. The output is a sorted list of number support.
 
-            passage_number_indices: List[int] are the token_idxs of numbers in the passage
-            passage_number_entidxs: List[int] For each index above, mapping to the actual number in passage_number_values
-
-            Therefore if we re-order passage_number_values, we need to change the values in passage_number_entidxs
-            accordingly. For example:
-            passage_number_values = [20, 10, 30]
-            passage_number_entidxs = [2, 1, 0, 0, 1]
-
-            After sorting,
-            passage_number_values = [10, 20, 30]
-            passage_number_entidxs = [2, 0, 1, 1, 0]
+        Args:
+            numbers: input numbers -- usually passage numbers
+            max_number_of_numbers_to_consider: number of numbers to consider to combine
+        Returns:
+            number_support: List of output number support
         """
+        if max_number_of_numbers_to_consider > 2:
+            raise NotImplementedError
+        signs = [-1, 1]
+        number_support = set()
+        all_sign_combinations = list(itertools.product(signs, repeat=2))
+        for number_of_numbers_to_consider in range(2, max_number_of_numbers_to_consider + 1):
+            # for number_combination in itertools.combinations(numbers, number_of_numbers_to_consider):
+            for number_combination in itertools.product(numbers, repeat=number_of_numbers_to_consider):
+                for sign_combination in all_sign_combinations:
+                    value = sum([sign * num for (sign, num) in zip(sign_combination, number_combination)])
+                    if value >= 0:
+                        number_support.add(value)
 
-        # [ (new_idx, value) ]
-        new_idx_values_tuples = sorted(enumerate(passage_number_values), key=lambda x: x[1])
+        number_support.update(numbers)
+        number_support = sorted(list(number_support))
 
-        sorted_passage_number_values = [x[1] for x in new_idx_values_tuples]
-        reordered_oldidxs = [x[0] for x in new_idx_values_tuples]
-
-        oldidx2newidx = {}
-        for new_idx, oldidx in enumerate(reordered_oldidxs):
-            oldidx2newidx[oldidx] = new_idx
-
-        sorted_passage_number_entidxs = [oldidx2newidx[x] for x in passage_number_entidxs]
-
-        return sorted_passage_number_values, sorted_passage_number_entidxs
-    '''
-
-
-    @staticmethod
-    def convert_string_to_int(string: str):
-        no_comma_string = string.replace(",", "")
-        if no_comma_string in WORD_NUMBER_MAP:
-            number = WORD_NUMBER_MAP[no_comma_string]
-        else:
-            try:
-                number = int(no_comma_string)
-            except ValueError:
-                number = None
-        return number
+        return number_support
 
     @staticmethod
-    def find_valid_spans(passage_tokens: List[Token],
-                         answer_texts: List[str]) -> List[Tuple[int, int]]:
-        normalized_tokens = [token.text.lower().strip(STRIPPED_CHARACTERS) for token in passage_tokens]
-        word_positions: Dict[str, List[int]] = defaultdict(list)
-        for i, token in enumerate(normalized_tokens):
-            word_positions[token].append(i)
-        spans = []
-        for answer_text in answer_texts:
-            answer_tokens = answer_text.lower().strip(STRIPPED_CHARACTERS).split()
-            num_answer_tokens = len(answer_tokens)
-            if answer_tokens[0] not in word_positions:
-                continue
-            for span_start in word_positions[answer_tokens[0]]:
-                span_end = span_start  # span_end is _inclusive_
-                answer_index = 1
-                while answer_index < num_answer_tokens and span_end + 1 < len(normalized_tokens):
-                    token = normalized_tokens[span_end + 1]
-                    if answer_tokens[answer_index].strip(STRIPPED_CHARACTERS) == token:
-                        answer_index += 1
-                        span_end += 1
-                    elif token in IGNORED_TOKENS:
-                        span_end += 1
-                    else:
-                        break
-                if num_answer_tokens == answer_index:
-                    spans.append((span_start, span_end))
-        return spans
+    def update_charoffsets(wpidx2tokenidx, tokens, token_charidxs) -> List[Tuple[int, int]]:
+        """Char start and end (exclusive) offset for each word-piece against the original text.
+        The offsets for a word-piece are the offsets for the original token containing it.
+        Therefore, if systemic becomes system, ##ic then the offsets for both word-pieces will be the same
 
-    @staticmethod
-    def find_valid_plus_minus_combinations(numbers: List[int],
-                                           targets: List[int],
-                                           max_length_of_combinations: int = 2) -> List[List[int]]:
-        valid_combinations = []
-        for combination_length in range(2, max_length_of_combinations + 1):
-            possible_signs = list(itertools.product((-1, 1), repeat=combination_length))
-            for combination in itertools.combinations(enumerate(numbers), combination_length):
-                indices = [it[0] for it in combination]
-                values = [it[1] for it in combination]
-                for signs in possible_signs:
-                    eval_value = sum(sign * value for sign, value in zip(signs, values))
-                    if eval_value in targets:
-                        labels_for_numbers = [0] * len(numbers)  # 0 represents ``not included''.
-                        for index, sign in zip(indices, signs):
-                            labels_for_numbers[index] = 1 if sign == 1 else 2  # 1 for positive, 2 for negative
-                        valid_combinations.append(labels_for_numbers)
-        return valid_combinations
+        Returns:
+            char_offsets: List[(start, end(ex)] same length as number of word-pieces
+        """
+        # List of (start, end) char offsets for each passage and question token. (end exclusive)
+        char_offsets: List[Tuple[int, int]] = []
+        for token_idx in wpidx2tokenidx:
+            if token_idx >= 0:
+                token_len = len(tokens[token_idx])
+                # This is the start char offset for this token_idx
+                token_start_charidx = token_charidxs[token_idx]
+                char_offsets.append((token_start_charidx, token_start_charidx + token_len))
+            else:
+                char_offsets.append((0, 0))
+        return char_offsets
 
-    @staticmethod
-    def find_valid_count(count_numbers: List[int],
-                         targets: List[int]) -> List[int]:
-        valid_indices = []
-        for index, number in enumerate(count_numbers):
-            if number in targets:
-                valid_indices.append(index)
-        return valid_indices
-
-    @staticmethod
-    def convert_answer(answer_annotation: Dict[str, Union[str, Dict, List]]) -> Tuple[str, List]:
-        answer_type = None
-        if answer_annotation["spans"]:
-            answer_type = "spans"
-        elif answer_annotation["number"]:
-            answer_type = "number"
-        elif any(answer_annotation["date"].values()):
-            answer_type = "date"
-
-        answer_content = answer_annotation[answer_type] if answer_type is not None else None
-
-        answer_texts = []
-        if answer_type is None:  # No answer
-            pass
-        elif answer_type == "spans":
-            # answer_content is a list of string in this case
-            answer_texts = answer_content
-        elif answer_type == "date":
-            # answer_content is a dict with "month", "day", "year" as the keys
-            date_tokens = [answer_content[key]
-                           for key in ["month", "day", "year"] if key in answer_content and answer_content[key]]
-            answer_texts = date_tokens
-        elif answer_type == "number":
-            # answer_content is a string of number
-            answer_texts = [answer_content]
-        return answer_type, answer_texts
 
 
     @staticmethod
@@ -988,86 +892,33 @@ class DROPReaderNew(DatasetReader):
 
 
     @staticmethod
-    def get_passagenumber_difference_candidates(passage_num_values: List[float]) -> Tuple[List[float], np.array]:
+    def get_numberdifference_mat(number_support: List[float], passage_numbers: List[float]) -> np.array:
         """ List of numbers indicating all-possible non-negative subtractions between the passage-numbers
 
             Parameters:
             -----------
-            passage_num_values: List[float]
-                Sorted list of passage numbers
+            number_support: List[float] Only these numbers are in the scope of the model; any other difference will not
+                be considered
+            passage_numbers: To keep model tractable; only differences amongst this pairs of numbers in this list will
+                be considered
             Returns:
             --------
-            passage_number_differences:
-                List[float] These are the possible differences between passage numbers.
-            passagenumber_difference_mat: Binary np.array of shape (PN, PN, d)
-                Entry (i, j, k) == 1 denotes that PN[i] - PN[j] == passage_number_differences[k]
+            number_difference_mat: binary np.array of shape (size_of_NS, size_of_NS, size_of_NS)
+                Entry (i, j, k) == 1 denotes that number_support[i] - number_support[j] == number_support[k]
+                Since we only consider pairs of numbers in passage_numbers, this mat is not exhaustive.
         """
-        num_passage_numbers = len(passage_num_values)
-        # Adding zero-first since it'll definitely be added and makes sanity-checking easy
-        passage_number_differences: List[int] = [0]
-
-        for (num1, num2) in itertools.product(passage_num_values, repeat=2):
+        size_numsupport = len(number_support)
+        number_difference_mat = np.zeros(shape=(size_numsupport, size_numsupport, size_numsupport), dtype=int)
+        num_pairs = list(itertools.product(passage_numbers, repeat=2))
+        for (num1, num2) in num_pairs:
             number_diff = num1 - num2
-            if number_diff >= 0:
-                if number_diff not in passage_number_differences:
-                    passage_number_differences.append(number_diff)
+            if number_diff in number_support:
+                number_diff_idx = number_support.index(number_diff)
+                num1_idx, num2_idx = number_support.index(num1), number_support.index(num2)
+                number_difference_mat[num1_idx, num2_idx,number_diff_idx] = 1
 
-        num_of_passagenum_differences = len(passage_number_differences)
-        # Making year_difference_mat
-        passage_number_diff_mat = np.zeros(shape=(num_passage_numbers, num_passage_numbers,
-                                                  num_of_passagenum_differences),
-                                       dtype=int)
-        for ((num_idx1, num1), (num_idx2, num2)) in itertools.product(enumerate(passage_num_values), repeat=2):
-            number_diff = num1 - num2
-            if number_diff >= 0:
-                num_diff_idx = passage_number_differences.index(number_diff)  # We know this will not fail
-                passage_number_diff_mat[num_idx1, num_idx2, num_diff_idx] = 1
+        return number_difference_mat
 
-        return passage_number_differences, passage_number_diff_mat
-
-    @staticmethod
-    def get_numberindices_in_sorted_order(number_values, number_token_indices, passage_number_entidxs):
-        """ Returns the number_token_indices in an order so that their values are sorted in increasing order.
-
-        For example,
-        number_values: [4, 1, 5]
-        number_token_indices: [10, 15, 20, 25]
-        passage_number_entidxs: [2, 0, 1, 0]
-
-        Underlying values for indices are: [5, 4, 1, 4]
-
-        Output sorted_number_indices: [20, 15, 25, 10]
-        with underlying values: [1, 4, 4, 5]
-        """
-        # These are the number-values the number-tokens
-        number_token_numbervalues = [number_values[x] for x in passage_number_entidxs]
-
-        number_tokenidx_values = list(zip(number_token_indices, number_token_numbervalues))
-        sorted_numberidx_value_tuples = sorted(number_tokenidx_values, key=lambda x: x[1])
-        sorted_number_indices, _ = zip(*sorted_numberidx_value_tuples)
-        return sorted_number_indices
-
-    @staticmethod
-    def get_candidate_additions(numbers_in_passage: List[int],
-                                number_indices: List[int]) -> Dict[int, List[Tuple[int, int]]]:
-        candidate_additions = defaultdict(list)
-
-        for number_1, index_1 in zip(numbers_in_passage, number_indices):
-            for number_2, index_2 in zip(numbers_in_passage, number_indices):
-                result = number_1 + number_2
-                candidate_additions[result].append((index_1, index_2))
-        return candidate_additions
-
-    @staticmethod
-    def get_candidate_subtractions(numbers_in_passage: List[int],
-                                   number_indices: List[int]) -> Dict[int, List[Tuple[int, int]]]:
-        candidate_subtractions = defaultdict(list)
-
-        for number_1, index_1 in zip(numbers_in_passage, number_indices):
-            for number_2, index_2 in zip(numbers_in_passage, number_indices):
-                result = number_1 - number_2
-                candidate_subtractions[result].append((index_1, index_2))
-        return candidate_subtractions
 
     def get_gold_action_seqs(self,
                              program_supervised: bool,
@@ -1361,81 +1212,7 @@ class DROPReaderNew(DatasetReader):
         return gold_logical_forms, gold_start_types
 
 
-    def make_count_instance(self, passage_tokens: List[str]):
-        ''' output an attention, count_answer, mask. Mask is when we don;t find relevant spans '''
 
-        # We would like to count these spans
-        relevant_spans = ['TD pass', 'TD run', 'touchdown pass', 'field goal', 'touchdown run']
-        num_relevant_spans = len(relevant_spans)
-
-        attention = [0.0] * len(passage_tokens)
-
-        # With 10% prob select no span
-        count_zero_prob = random.random()
-        if count_zero_prob < 0.1:
-            return (attention, 0, 1)
-
-
-        # Choose a particular type of span from relevant ones and find it's starting positions
-        tries = 0
-        starting_positions_in_passage = []
-        while len(starting_positions_in_passage) == 0 and tries < 5:
-            choosen_span = random.randint(0, num_relevant_spans - 1)
-            span_tokens = relevant_spans[choosen_span].split(' ')
-            starting_positions_in_passage = self.contains(span_tokens, passage_tokens)
-            tries += 1
-
-        # even after 5 tries, span to count not found. Return masked attention
-        if len(starting_positions_in_passage) == 0:
-            return attention, 0, 0
-
-        # # TO save from infinite loop
-        # count_zero_prob = random.random()
-        # if count_zero_prob < 0.1:
-        #     return attention, 0
-
-        if len(starting_positions_in_passage) == 1:
-            count = len(starting_positions_in_passage)
-            starting_position = starting_positions_in_passage[0]
-            attention[starting_position] = 1.0
-            attention[starting_position + 1] = 1.0
-
-        else:
-            num_of_spans_found = len(starting_positions_in_passage)
-            # Choose a subset of the starting_positions
-            random.shuffle(starting_positions_in_passage)
-            num_spans = random.randint(2, num_of_spans_found)
-            num_spans = min(num_spans, 9)
-
-            count = num_spans
-
-            spread_len = random.randint(1, 3)
-
-            chosen_starting_positions = starting_positions_in_passage[0:num_spans]
-            for starting_position in chosen_starting_positions:
-                attention[starting_position] = 1.0
-                attention[starting_position + 1] = 1.0
-                for i in range(1, spread_len+1):
-                    prev_idx = starting_position - i
-                    if prev_idx >= 0:
-                        attention[prev_idx] = 0.5
-                    next_idx = starting_position + 1 + i
-                    if next_idx < len(passage_tokens):
-                        attention[next_idx] = 0.5
-
-        return attention, count, 1
-
-    def contains(self, small, big):
-        starting_positions = []
-        for i in range(len(big) - len(small) + 1):
-            start = True
-            for j in range(len(small)):
-                if big[i + j] != small[j]:
-                    start = False
-                    break
-            if start:
-                starting_positions.append(i)
-        return starting_positions
 
 
 

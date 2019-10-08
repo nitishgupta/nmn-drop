@@ -18,7 +18,7 @@ from allennlp.models.reading_comprehension.util import get_best_span
 
 from allennlp.training.metrics import Average, DropEmAndF1
 
-from semqa.domain_languages.drop import Date, QuestionSpanAnswer, PassageSpanAnswer
+from semqa.domain_languages.drop_language import Date, QuestionSpanAnswer, PassageSpanAnswer
 
 import utils.util as myutils
 
