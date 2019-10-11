@@ -2,6 +2,7 @@ import json
 import logging
 import itertools
 import numpy as np
+from collections import defaultdict
 from typing import Dict, List, Union, Tuple
 from overrides import overrides
 from allennlp.common.file_utils import cached_path
@@ -245,9 +246,8 @@ class DROPReaderNew(DatasetReader):
         logger.info(f"Total QAs: {total_qas}. Instances read: {instances_read}")
         logger.info(f"Instances Skipped: {self.skip_count}")
         logger.info(f"Instances skipped due to gold-answer not in gold_program_types: {self.skip_due_to_gold_not_in_answer}")
-
         logger.info("Max passage nums: {}   max num supp : {} ".format(self.max_passage_nums, self.max_num_support))
-        exit()
+        # exit()
 
     @overrides
     def text_to_instance(self,
@@ -369,12 +369,13 @@ class DROPReaderNew(DatasetReader):
                                                                           token_charidxs=question_charidxs)
         # Passage Number
         passage_number_values = [int(x) if int(x) == x else x for x in p_num_normvals]
-        # This number support is sorted
-        number_support = self.compute_number_support(numbers=passage_number_values, max_number_of_numbers_to_consider=2)
-
+        # number_support: List[int/float] is sorted
+        # number2addcombinations (sub): Dict: {number: List[(num1, num2)]} - mapping from num to list of all num-tuples
+        # that combine to form the number-key using the operation
+        number_support, number2addcombinations, number2subcombinations = self.compute_number_support(
+            numbers=passage_number_values, max_number_of_numbers_to_consider=2)
         self.max_passage_nums = max(len(passage_number_values), self.max_passage_nums)
         self.max_num_support = max(len(number_support), self.max_num_support)
-
         if not number_support:
             number_support = [0]
         passage_number_entidxs = p_num_entidxs
@@ -384,8 +385,7 @@ class DROPReaderNew(DatasetReader):
         for passage_num_tokenidx, number_ent_idx in zip(passage_number_tokenids, passage_number_entidxs):
             wp_index = p_tokenidx2wpidx[passage_num_tokenidx][0]
             number_value = passage_number_values[number_ent_idx]
-            number_support_idx = number_support.index(number_value)
-            passage_num_wpidx2entidx[wp_index] = number_support_idx
+            passage_num_wpidx2entidx[wp_index] = number_support.index(number_value)
             passage_number_wpindices.append(wp_index)
         if not passage_number_wpindices:    # Padding in case no numbers in passage
             passage_num_wpidx2entidx[0] = 0
@@ -393,12 +393,23 @@ class DROPReaderNew(DatasetReader):
 
         # Making sorted_num_wpindxs for differentiable min/max
         numvals_wpidx = [(number_support[passage_num_wpidx2entidx[wpidx]], wpidx) for wpidx in passage_number_wpindices]
-        sorted_numvals_wpidx = sorted(numvals_wpidx, key=lambda x: x[0])
-        sorted_passage_num_wpindices = [x[1] for x in sorted_numvals_wpidx]
+        sorted_passage_num_wpindices = [x[1] for x in sorted(numvals_wpidx, key=lambda x: x[0])]
 
         fields["passageidx2numberidx"] = ArrayField(np.array(passage_num_wpidx2entidx), padding_value=-1)
         fields["number_support_values"] = MetadataField(number_support)
         fields["passage_number_sortedtokenidxs"] = MetadataField(sorted_passage_num_wpindices)
+
+        # NP.array of shape: (size_of_number_support, max_num_combinations, 2)
+        add_number_combinations_indices, max_num_add_combs = self.make_addsub_combination_array(
+            number_support=number_support, number2numcombinations=number2addcombinations)
+        sub_number_combinations_indices, max_num_sub_combs = self.make_addsub_combination_array(
+            number_support=number_support, number2numcombinations=number2subcombinations)
+        fields["add_number_combinations_indices"] = ArrayField(array=add_number_combinations_indices,
+                                                               padding_value=-1, dtype=np.int32)
+        fields["sub_number_combinations_indices"] = ArrayField(array=sub_number_combinations_indices,
+                                                               padding_value=-1, dtype=np.int32)
+        fields["max_num_add_combs"] = MetadataField(max_num_add_combs)
+        fields["max_num_sub_combs"] = MetadataField(max_num_sub_combs)
 
         ##  Passage Dates
         passage_date_entidxs = p_date_entidxs
@@ -430,10 +441,6 @@ class DROPReaderNew(DatasetReader):
         fields["year_differences"] = MetadataField(year_differences)
         fields["year_differences_mat"] = MetadataField(year_differences_mat)
 
-        number_difference_mat = self.get_numberdifference_mat(number_support=number_support,
-                                                              passage_numbers=passage_number_values)
-        fields["number_difference_mat"] = MetadataField(number_difference_mat)
-
         count_values = list(range(10))
         fields["count_values"] = MetadataField(count_values)
 
@@ -442,6 +449,7 @@ class DROPReaderNew(DatasetReader):
                          "question_tokens": question_wps,
                          "passage_tokens": passage_wps,
                          "passage_date_values": passage_date_strvals,
+                         "number_support": number_support,
                          "passage_number_values": passage_number_values,
                          "passage_year_diffs": year_differences,
                          "count_values": count_values
@@ -800,7 +808,8 @@ class DROPReaderNew(DatasetReader):
 
     @staticmethod
     def compute_number_support(numbers: List[Union[int, float]],
-                                        max_number_of_numbers_to_consider: int = 2) -> List[Union[int, float]]:
+                                        max_number_of_numbers_to_consider: int = 2) -> Tuple[List[Union[int, float]],
+                                                                                             Dict, Dict]:
         """Compute the number support based on combinations of input numbers.
         This function considers all possible addition/subtraction between all pairs of numbers (even self). This forms
         the support of the possible answers. The output is a sorted list of number support.
@@ -813,21 +822,59 @@ class DROPReaderNew(DatasetReader):
         """
         if max_number_of_numbers_to_consider > 2:
             raise NotImplementedError
-        signs = [-1, 1]
         number_support = set()
-        all_sign_combinations = list(itertools.product(signs, repeat=2))
+        # Map from number to list of number-combinations that lead to this number from the add/sub operation
+        number2subcombinations = defaultdict(set)
+        number2addcombinations = defaultdict(set)
+        signs = [-1, 1]
+        # all_sign_combinations = list(itertools.product(signs, repeat=2))
+        # Since our modules will only perform num1-num2 / num1+num2. Computation like -num1+num2 would not be done
+        all_sign_combinations = [(1, -1), (1, 1)]
         for number_of_numbers_to_consider in range(2, max_number_of_numbers_to_consider + 1):
-            # for number_combination in itertools.combinations(numbers, number_of_numbers_to_consider):
-            for number_combination in itertools.product(numbers, repeat=number_of_numbers_to_consider):
+            # for number_combination in itertools.combinations(numbers, r=number_of_numbers_to_consider):
+            for indexed_number_combination in itertools.product(enumerate(numbers),
+                                                                repeat=number_of_numbers_to_consider):
+                ((idx1, num1), (idx2, num2)) = indexed_number_combination
+                number_combination = (num1, num2)
+                # if idx1 == idx2: continue     # Commented: 0 in support. Un-commented: 0 not in support
+                # print(indexed_number_combination)
                 for sign_combination in all_sign_combinations:
                     value = sum([sign * num for (sign, num) in zip(sign_combination, number_combination)])
                     if value >= 0:
                         number_support.add(value)
+                        if sign_combination == (1, 1):
+                            number2addcombinations[value].add(number_combination)
+                        else: #  sign_combination == [1, -1]:
+                            number2subcombinations[value].add(number_combination)
 
         number_support.update(numbers)
         number_support = sorted(list(number_support))
 
-        return number_support
+        return number_support, number2addcombinations, number2subcombinations
+
+
+    @staticmethod
+    def make_addsub_combination_array(number_support: List[Union[int, float]],
+                                      number2numcombinations: Dict[Union[int, float], List[Tuple]]):
+        """Make a (size_of_number_support, max_num_combinations, 2) sized numpy array which would contain indices into
+        the number_support list.
+
+        Each entry (i, :) will be a list of tuples where (i,j) would signifiy that ns[i] = ns[j][0] OP ns[j][1]
+
+        dim=1 will be padded to the max num of combinations possible for a number for this instance.
+        Later on this will further be padded based on multiple instances.
+        """
+        max_num_combinations = max(len(combinations) for (_, combinations) in number2numcombinations.items())
+        number_combinations_indices = -1 * np.ones(shape=(len(number_support), max_num_combinations, 2), dtype=np.int32)
+
+        for number, combinations in number2numcombinations.items():
+            number_idx = number_support.index(number)
+            for combination_num, (num1, num2) in enumerate(combinations):
+                (num1idx, num2idx) = (number_support.index(num1), number_support.index(num2))
+                number_combinations_indices[number_idx, combination_num, :] = [num1idx, num2idx]
+
+        return number_combinations_indices, max_num_combinations
+
 
     @staticmethod
     def update_charoffsets(wpidx2tokenidx, tokens, token_charidxs) -> List[Tuple[int, int]]:
@@ -888,37 +935,6 @@ class DROPReaderNew(DatasetReader):
                 year_difference_mat[date_idx1, date_idx2, year_diff_idx] = 1
 
         return year_differences, year_difference_mat
-
-
-
-    @staticmethod
-    def get_numberdifference_mat(number_support: List[float], passage_numbers: List[float]) -> np.array:
-        """ List of numbers indicating all-possible non-negative subtractions between the passage-numbers
-
-            Parameters:
-            -----------
-            number_support: List[float] Only these numbers are in the scope of the model; any other difference will not
-                be considered
-            passage_numbers: To keep model tractable; only differences amongst this pairs of numbers in this list will
-                be considered
-            Returns:
-            --------
-            number_difference_mat: binary np.array of shape (size_of_NS, size_of_NS, size_of_NS)
-                Entry (i, j, k) == 1 denotes that number_support[i] - number_support[j] == number_support[k]
-                Since we only consider pairs of numbers in passage_numbers, this mat is not exhaustive.
-        """
-        size_numsupport = len(number_support)
-        number_difference_mat = np.zeros(shape=(size_numsupport, size_numsupport, size_numsupport), dtype=int)
-        num_pairs = list(itertools.product(passage_numbers, repeat=2))
-        for (num1, num2) in num_pairs:
-            number_diff = num1 - num2
-            if number_diff in number_support:
-                number_diff_idx = number_support.index(number_diff)
-                num1_idx, num2_idx = number_support.index(num1), number_support.index(num2)
-                number_difference_mat[num1_idx, num2_idx,number_diff_idx] = 1
-
-        return number_difference_mat
-
 
     def get_gold_action_seqs(self,
                              program_supervised: bool,

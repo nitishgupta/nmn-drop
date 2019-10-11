@@ -167,13 +167,6 @@ class PassageNumber():
         self.debug_value = debug_value
 
 
-class PassageNumberDifference():
-    def __init__(self, passagenumber_difference_dist, loss=0.0, debug_value=""):
-        self._value = passagenumber_difference_dist
-        self.loss = loss
-        self.debug_value = debug_value
-
-
 class CountNumber():
     def __init__(self, count_number_dist, loss=0.0, debug_value=""):
         self._value = count_number_dist
@@ -206,10 +199,11 @@ def get_empty_language_object():
                                 passage_tokenidx2numidx=None,
                                 passage_num_values=None,
                                 passage_number_sortedtokenidxs=None,
+                                add_num_combination_indices=None,
+                                sub_num_combination_indices=None,
                                 year_differences=None,
                                 year_differences_mat=None,
                                 count_num_values=None,
-                                number_difference_mat=None,
                                 question_passage_attention=None,
                                 passage_question_attention=None,
                                 passage_token2date_alignment=None,
@@ -240,7 +234,6 @@ class DropLanguage(DomainLanguage):
                  rawemb_passage: Tensor,
                  embedded_passage: Tensor,
                  encoded_passage: Tensor,
-                 # passage_token2datetoken_sim: Tensor,
                  question_mask: Tensor,
                  passage_mask: Tensor,
                  passage_tokenidx2dateidx: torch.LongTensor,
@@ -248,10 +241,11 @@ class DropLanguage(DomainLanguage):
                  passage_tokenidx2numidx: torch.LongTensor,
                  passage_num_values: List[float],
                  passage_number_sortedtokenidxs: List[int],
+                 add_num_combination_indices: Tensor,
+                 sub_num_combination_indices: Tensor,
                  year_differences: List[int],
                  year_differences_mat: np.array,
                  count_num_values: List[int],
-                 number_difference_mat: np.array,
                  question_passage_attention: Tensor,
                  passage_question_attention: Tensor,
                  passage_token2date_alignment: Tensor,
@@ -267,7 +261,7 @@ class DropLanguage(DomainLanguage):
                  debug=False) -> None:
 
         if start_types is None:
-            start_types = {PassageSpanAnswer, YearDifference, PassageNumber, CountNumber}  # , PassageNumberDifference}
+            start_types = {PassageSpanAnswer, YearDifference, PassageNumber, CountNumber}
             # QuestionSpanAnswer - could be one
 
         super().__init__(start_types=start_types)
@@ -306,6 +300,14 @@ class DropLanguage(DomainLanguage):
         self.passage_number_sortedtokenidxs = passage_number_sortedtokenidxs
         self.num_passage_nums = len(self.passage_num_values)
 
+        # Shape: (size_num_support, max_num_combinations, 2) -- for each number in the support (dim=0), indices for
+        # other number combinations (dim=1) that lead to this number using the op. N[i] = M[i,j,0] OP M[i,j,1] \forall j
+        # Since all numbers won't have same num of combinations, these indices are padded w/ -1
+        self.add_num_combination_indices = add_num_combination_indices.long()
+        self.sub_num_combination_indices = sub_num_combination_indices.long()
+        self.add_num_combination_mask = (self.add_num_combination_indices > -1).long()
+        self.sub_num_combination_mask = (self.sub_num_combination_indices > -1).long()
+
         self.parameters = parameters
         self.max_samples = max_samples
 
@@ -329,19 +331,13 @@ class DropLanguage(DomainLanguage):
         self.num_lt_mat = initialization_returns["num_lt_mat"]
         self.num_gt_mat = initialization_returns["num_gt_mat"]
 
+        # List[int]
+        self.year_differences = year_differences
         # Shape: (num_passage_dates, num_passage_dates, num_of_year_differences)
         self.year_differences_mat = allenutil.move_to_device(torch.FloatTensor(year_differences_mat),
                                                              cuda_device=self.device_id)
         # List[int]
         self.count_num_values = count_num_values
-        self.number_difference_mat = number_difference_mat
-        """
-        # Shape: (size_number_support, size_number_support, size_number_support) -- (x,y,z) = 1 if x - y == z
-        self.number_difference_mat = allenutil.move_to_device(torch.FloatTensor(number_difference_mat),
-                                                              cuda_device=self.device_id)
-                                                              
-        """
-
         self.countvals = allenutil.move_to_device(torch.FloatTensor(range(0, 10)), cuda_device=self.device_id)
 
         """
@@ -678,6 +674,53 @@ class DropLanguage(DomainLanguage):
 
         return num_distribution, num_distribution, num_distribution_entropy
 
+
+    def expected_number_addsub(self, num_dist_1: torch.FloatTensor, num_dist_2: torch.FloatTensor,
+                               operation: str):
+        """Compute the expected number distribution for an addition/subtraction operation."""
+
+        assert operation in ["add", "sub"]
+        if operation == "add":
+            num_combination_indices = self.add_num_combination_indices
+            num_combination_mask = self.add_num_combination_mask
+        elif operation == "sub":
+            num_combination_indices = self.sub_num_combination_indices
+            num_combination_mask = self.sub_num_combination_mask
+        else:
+            raise NotImplementedError
+
+        # num_combination_indices: (size_number_support, max_num_combinations, 2) for each number in the support,
+        # these are combinations (indices of the numbers) that combine (in order) using the operation that result to
+        # this number. For example, num_combination_indices[i, :, :] is a combs=[NC, 2] array where
+        # num_support[i] = combs[j, 0] OP combs[j, 1] for each j.
+
+        masked_num_combination_indices = num_combination_indices * num_combination_mask
+
+        # Making (B=1, seq_len=num_support, dim=1) for batch index selection
+        num_dist_1_uns = num_dist_1.unsqueeze(0).unsqueeze(2)
+        num_dist_2_uns = num_dist_2.unsqueeze(0).unsqueeze(2)
+        # B=1 unsqueezing
+        masked_num_combination_indices_uns = masked_num_combination_indices.unsqueeze(0)
+
+        selected_d_1 = allenutil.batched_index_select(target=num_dist_1_uns,
+                                                      indices=masked_num_combination_indices_uns[:, :, :, 0])
+        # Shape: (number_support, max_num_combinations)
+        selected_d_1 = selected_d_1.squeeze(0).squeeze(-1)
+        selected_d_1 = selected_d_1 * num_combination_mask[:, :, 0].float()
+
+        selected_d_2 = allenutil.batched_index_select(target=num_dist_2_uns,
+                                                      indices=masked_num_combination_indices_uns[:, :, :, 1])
+        # Shape: (number_support, max_num_combinations)
+        selected_d_2 = selected_d_2.squeeze(0).squeeze(-1)
+        selected_d_2 = selected_d_2 * num_combination_mask[:, :, 1].float()
+
+        # Shape: (number_support)
+        expected_distribution = (selected_d_1 * selected_d_2).sum(dim=1)
+        expected_distribution = torch.clamp(expected_distribution, min=1e-10, max=1 - 1e-10)
+
+        return expected_distribution
+
+
     def expected_date_year_difference(self,
                                       date_distribution_1: torch.FloatTensor,
                                       date_distribution_2: torch.FloatTensor):
@@ -705,30 +748,6 @@ class DropLanguage(DomainLanguage):
         year_differences_dist = torch.clamp(year_differences_dist, min=1e-10, max=1 - 1e-10)
 
         return year_differences_dist
-
-    def expected_number_difference(self,
-                                   number_dist_1: torch.FloatTensor,
-                                   number_dist_2: torch.FloatTensor):
-
-        """ Compute a distribution over possible number-differences.
-         Compute the expected probability of any number_difference based on the joint probability of numbers whose diff.
-         could lead to this difference value.
-         This is done by marginalizing over the number_difference_mat weighted by the joint joint distribution over
-         number-pairs from dist_1 and dist_2.
-
-        Parameters:
-            number_dist_1: ``torch.FloatTensor`` Shape: (self.num_passagenumbers, )
-            number_dist_2: ``torch.FloatTensor`` Shape: (self.num_passagenumbers, )
-        """
-
-        # Shape: (size_num_support, size_num_support)
-        joint_dist = torch.matmul(number_dist_1.unsqueeze(1), number_dist_2.unsqueeze(0))
-
-        # Shape: (size_num_support)
-        number_difference_dist = torch.sum(self.number_difference_mat * joint_dist.unsqueeze(2), dim=(0, 1))
-        number_difference_dist = torch.clamp(number_difference_dist, min=1e-10, max=1 - 1e-10)
-
-        return number_difference_dist
 
     def expected_date_comparison(self, date_distribution_1, date_distribution_2, comparison):
         """ Compute the boolean probability that date_1 > date_2 given distributions over passage_dates for each
@@ -1235,35 +1254,59 @@ class DropLanguage(DomainLanguage):
                            loss=loss,
                            debug_value=debug_value)
 
-    # @predicate
-    # def passagenumber_difference(self,
-    #                              passage_number_1: PassageNumber,
-    #                              passage_number_2: PassageNumber) -> PassageNumberDifference:
-    #     """ Given two passage spans, ground them to dates, and then return the difference between their years """
-    #
-    #     passagenumber_dist_1 = passage_number_1._value
-    #     passagenumber_dist_2 = passage_number_2._value
-    #
-    #     # Shape: (num_of_passagenumber_differences, )
-    #     passagenumber_difference_dist = self.expected_passagenumber_difference(passagenumber_dist_1,
-    #                                                                            passagenumber_dist_2)
-    #
-    #     loss = 0.0
-    #     # If we want to use an auxiliary entropy loss
-    #     # loss += d1_dist_entropy + d2_dist_entropy
-    #
-    #     debug_value = ""
-    #     if self._debug:
-    #         num1 = myutils.round_all(myutils.tocpuNPList(passagenumber_dist_1), 3)
-    #         num2 = myutils.round_all(myutils.tocpuNPList(passagenumber_dist_2), 3)
-    #         passagenum_diff_dist = myutils.round_all(myutils.tocpuNPList(passagenumber_difference_dist), 3)
-    #
-    #         debug_value += f"PassageNumDiffDist: {passagenum_diff_dist}\n" + \
-    #                        f"\n Num1: {num1}" + \
-    #                        f"\n Num2: {num2}"
-    #
-    #     return PassageNumberDifference(passagenumber_difference_dist=passagenumber_difference_dist,
-    #                                    loss=loss, debug_value=debug_value)
+
+    def number_add_sub_module(self, number_1: PassageNumber, number_2: PassageNumber, add_sub: str):
+        assert add_sub in ["add", "sub"]
+        numberdist_1 = number_1._value
+        numberdist_2 = number_2._value
+
+        # Shape: (size_number_support, )
+        number_difference_dist = self.expected_number_addsub(num_dist_1=numberdist_1,
+                                                             num_dist_2=numberdist_2,
+                                                             operation=add_sub)
+
+        loss = 0.0
+        loss += number_1.loss + number_2.loss
+
+        debug_value = ""
+        if self._debug:
+            num1 = myutils.round_all(myutils.tocpuNPList(number_1), 3)
+            num2 = myutils.round_all(myutils.tocpuNPList(number_2), 3)
+            passagenum_diff_dist = myutils.round_all(myutils.tocpuNPList(number_difference_dist), 3)
+            topknumdiff = dlutils.topProbMassElems(attention=number_difference_dist,
+                                                   support=self.passage_num_values, k=5)
+            topknum1 = dlutils.topProbMassElems(attention=numberdist_1, support=self.passage_num_values, k=5)
+            topknum2 = dlutils.topProbMassElems(attention=numberdist_2, support=self.passage_num_values, k=5)
+
+            debug_value += f"NumDiffDist: {passagenum_diff_dist}\n" + \
+                           f"Top-num-diff: {topknumdiff}\n" + \
+                           f"\n Top-Num1: {topknum1}" + \
+                           f"\n Top-Num2: {topknum2}"
+
+        return number_difference_dist, loss, debug_value
+
+    @predicate
+    def passagenumber_difference(self,
+                                 passage_number_1: PassageNumber,
+                                 passage_number_2: PassageNumber) -> PassageNumber:
+        """ Find the expected difference between two number distributions. """
+
+        number_difference_dist, loss, debug_value = self.number_add_sub_module(number_1=passage_number_1,
+                                                                               number_2=passage_number_2,
+                                                                               add_sub="sub")
+
+        return PassageNumber(passage_number_dist=number_difference_dist, loss=loss, debug_value=debug_value)
+
+    @predicate
+    def passagenumber_addition(self,
+                               passage_number_1: PassageNumber,
+                               passage_number_2: PassageNumber) -> PassageNumber:
+        """ Find the expected sum of two number distributions. """
+        number_addition_dist, loss, debug_value = self.number_add_sub_module(number_1=passage_number_1,
+                                                                             number_2=passage_number_2,
+                                                                             add_sub="add")
+
+        return PassageNumber(passage_number_dist=number_addition_dist, loss=loss, debug_value=debug_value)
 
     '''
     @predicate
@@ -1366,168 +1409,80 @@ class DropLanguage(DomainLanguage):
         debug_value = ""
         if self._debug:
             number_dist = myutils.round_all(myutils.tocpuNPList(number_distribution), 3)
+            topk_numdist = dlutils.topProbMassElems(attention=number_distribution, support=self.passage_num_values, k=5)
             if number_grounding_supervision is not None:
                 num_grounding_sup = myutils.round_all(myutils.tocpuNPList(number_grounding_supervision), 3)
             else:
                 num_grounding_sup = None
-            _, pattn_vis_most = dlutils.listTokensVis(passage_attn, self.metadata["passage_tokens"])
+            # _, pattn_vis_most = dlutils.listTokensVis(passage_attn, self.metadata["passage_tokens"])
+            top_spans = dlutils.mostAttendedSpans(passage_attn, self.metadata["passage_tokens"])
             debug_value += f"PassageNumber: {number_dist}"
-            debug_value += f"\nPattn: {pattn_vis_most}"
+            debug_value += f"\ntopk-num-dist: {topk_numdist}"
             debug_value += f"\nGoldNum: {num_grounding_sup}"
+            debug_value += f"\ninput-pattn-top-spans: {top_spans}"
 
         return PassageNumber(passage_number_dist=number_distribution,
                              loss=loss,
                              debug_value=debug_value)
 
-    # @predicate_with_side_args(['event_num_groundings'])
-    # def max_num(self,
-    #             passage_attention: PassageAttention,
-    #             event_num_groundings=None) -> PassageNumber:
-    #
-    #     num_grounding_supervision = event_num_groundings[0]
-    #
-    #     pattn = passage_attention._value * self.passage_mask
-    #     # Computing for debugging and aux loss purposes
-    #     inputpattn_num_distribution, _, _ = self.compute_num_distribution(pattn)
-    #
-    #     new_pattn = self.pattn_for_minmaxNum(pattn, 'max')
-    #
-    #     # This is a number-distribution over passage_number_values - unique numbers in the passage
-    #     number_distribution, _, _ = self.compute_num_distribution(new_pattn)
-    #
-    #     grounding_mask = (torch.sum(num_grounding_supervision) > 0).float()
-    #     loss = 0.0
-    #     if grounding_mask > 0:
-    #         # Number distribution for input pattn
-    #         log_probs = torch.log(inputpattn_num_distribution + 1e-40) * num_grounding_supervision
-    #         log_likelihood = torch.sum(log_probs)  # Want all grounded numbers to be high, hence prod of probs
-    #         grounding_loss = -1 * grounding_mask * log_likelihood
-    #         loss += grounding_loss
-    #
-    #     debug_value = ""
-    #     if self._debug:
-    #         input_attn_numdist = myutils.round_all(myutils.tocpuNPList(inputpattn_num_distribution), 3)
-    #         number_dist = myutils.round_all(myutils.tocpuNPList(number_distribution), 3)
-    #         num_grounding_sup = myutils.round_all(myutils.tocpuNPList(num_grounding_supervision), 3)
-    #         debug_value += f"InputPattnPassageNumber: {input_attn_numdist}"
-    #         debug_value += f"MaxPassageNumber: {number_dist}"
-    #         debug_value += f"\nGoldNum: {num_grounding_sup}"
-    #
-    #     return PassageNumber(passage_number_dist=number_distribution, loss=loss, debug_value=debug_value)
-    #
-    #
-    # @predicate_with_side_args(['event_num_groundings'])
-    # def min_num(self,
-    #             passage_attention: PassageAttention,
-    #             event_num_groundings=None) -> PassageNumber:
-    #     num_grounding_supervision = event_num_groundings[0]
-    #
-    #     pattn = passage_attention._value * self.passage_mask
-    #     # Computing for debugging and aux loss purposes
-    #     inputpattn_num_distribution, _, _ = self.compute_num_distribution(pattn)
-    #
-    #     new_pattn = self.pattn_for_minmaxNum(pattn, 'min')
-    #
-    #     # This is a number-distribution over passage_number_values - unique numbers in the passage
-    #     number_distribution, _, _ = self.compute_num_distribution(new_pattn)
-    #
-    #     grounding_mask = (torch.sum(num_grounding_supervision) > 0).float()
-    #     loss = 0.0
-    #     if grounding_mask > 0:
-    #         # Number distribution for input pattn
-    #         log_probs = torch.log(inputpattn_num_distribution + 1e-40) * num_grounding_supervision
-    #         log_likelihood = torch.sum(log_probs)  # Want all grounded numbers to be high, hence prod of probs
-    #         grounding_loss = -1 * grounding_mask * log_likelihood
-    #         loss += grounding_loss
-    #
-    #     debug_value = ""
-    #     if self._debug:
-    #         input_attn_numdist = myutils.round_all(myutils.tocpuNPList(inputpattn_num_distribution), 3)
-    #         number_dist = myutils.round_all(myutils.tocpuNPList(number_distribution), 3)
-    #         num_grounding_sup = myutils.round_all(myutils.tocpuNPList(num_grounding_supervision), 3)
-    #         debug_value += f"InputPattnPassageNumber: {input_attn_numdist}"
-    #         debug_value += f"MinPassageNumber: {number_dist}"
-    #         debug_value += f"\nGoldNum: {num_grounding_sup}"
-    #
-    #     return PassageNumber(passage_number_dist=number_distribution, loss=loss, debug_value=debug_value)
+    def minmaxNumPattn_module(self, passage_attention: PassageAttention, min_max_op: str, event_num_groundings=None):
+        assert min_max_op in ['min', 'max']
+        if event_num_groundings is not None:
+            num_grounding_supervision = event_num_groundings[0]
+        else:
+            num_grounding_supervision = None
+
+        pattn = passage_attention._value * self.passage_mask
+        # Computing for debugging and aux loss purposes
+        inputpattn_num_distribution, _, _ = self.compute_num_distribution(pattn)
+        minmax_num_pattn = self.pattn_for_minmaxNum(pattn, 'min')
+
+        loss = 0.0
+        if num_grounding_supervision is not None:
+            grounding_mask = (torch.sum(num_grounding_supervision) > 0).float()
+            if grounding_mask > 0:
+                # Number distribution for input pattn
+                log_probs = torch.log(inputpattn_num_distribution + 1e-40) * num_grounding_supervision
+                log_likelihood = torch.sum(log_probs)  # Want all grounded numbers to be high, hence prod of probs
+                grounding_loss = -1 * grounding_mask * log_likelihood
+                loss += grounding_loss
+        loss += passage_attention.loss
+
+        debug_value = ""
+        if self._debug:
+            input_attn_numdist = myutils.round_all(myutils.tocpuNPList(inputpattn_num_distribution), 3)
+            topknums = dlutils.topProbMassElems(attention=inputpattn_num_distribution, support=self.passage_num_values)
+            if num_grounding_supervision is not None:
+                num_grounding_sup = myutils.round_all(myutils.tocpuNPList(num_grounding_supervision), 3)
+            else:
+                num_grounding_sup = None
+            min_pattn_comp, _ = dlutils.listTokensVis(minmax_num_pattn, self.metadata["passage_tokens"])
+            topspans = dlutils.mostAttendedSpans(minmax_num_pattn, self.metadata["passage_tokens"])
+            debug_value += f"{min_max_op}-pattn-module"
+            debug_value += f"\noutput-{min_max_op}-num-pattn-most-attended-spans: {topspans}"
+            debug_value += f"\nnumdist-from-input-pattn: {input_attn_numdist}"
+            debug_value += f"\ntopk-input-num-dist: {topknums}"
+            debug_value += f"\nGoldNum: {num_grounding_sup}"
+            # debug_value += f"\noutput-{min_max_op}-num-pattn: {min_pattn_comp}"
+        return minmax_num_pattn, loss, debug_value
+        # return PassageAttention(passage_attention=minmax_num_pattn, loss=loss, debug_value=debug_value)
+
 
     @predicate_with_side_args(['event_num_groundings'])
     def minNumPattn(self, passage_attention: PassageAttention, event_num_groundings=None) -> PassageAttention:
-        if event_num_groundings is not None:
-            num_grounding_supervision = event_num_groundings[0]
-        else:
-            num_grounding_supervision = None
+        minmax_num_pattn, loss, debug_value = self.minmaxNumPattn_module(passage_attention=passage_attention,
+                                                                         min_max_op='min',
+                                                                         event_num_groundings=event_num_groundings)
 
-        pattn = passage_attention._value * self.passage_mask
-        # Computing for debugging and aux loss purposes
-        inputpattn_num_distribution, _, _ = self.compute_num_distribution(pattn)
-
-        min_num_pattn = self.pattn_for_minmaxNum(pattn, 'min')
-
-        loss = 0.0
-        if num_grounding_supervision is not None:
-            grounding_mask = (torch.sum(num_grounding_supervision) > 0).float()
-            if grounding_mask > 0:
-                # Number distribution for input pattn
-                log_probs = torch.log(inputpattn_num_distribution + 1e-40) * num_grounding_supervision
-                log_likelihood = torch.sum(log_probs)  # Want all grounded numbers to be high, hence prod of probs
-                grounding_loss = -1 * grounding_mask * log_likelihood
-                loss += grounding_loss
-        loss += passage_attention.loss
-
-        debug_value = ""
-        if self._debug:
-            input_attn_numdist = myutils.round_all(myutils.tocpuNPList(inputpattn_num_distribution), 3)
-            if num_grounding_supervision is not None:
-                num_grounding_sup = myutils.round_all(myutils.tocpuNPList(num_grounding_supervision), 3)
-            else:
-                num_grounding_sup = None
-            min_pattn_comp, _ = dlutils.listTokensVis(min_num_pattn, self.metadata["passage_tokens"])
-            debug_value += f"InputPattnPassageNumber: {input_attn_numdist}"
-            debug_value += f"\nGoldNum: {num_grounding_sup}"
-            debug_value += f"\nMinNumPattn: {min_pattn_comp}"
-
-        return PassageAttention(passage_attention=min_num_pattn, loss=loss, debug_value=debug_value)
+        return PassageAttention(passage_attention=minmax_num_pattn, loss=loss, debug_value=debug_value)
 
     @predicate_with_side_args(['event_num_groundings'])
     def maxNumPattn(self, passage_attention: PassageAttention, event_num_groundings=None) -> PassageAttention:
-        if event_num_groundings is not None:
-            num_grounding_supervision = event_num_groundings[0]
-        else:
-            num_grounding_supervision = None
+        minmax_num_pattn, loss, debug_value = self.minmaxNumPattn_module(passage_attention=passage_attention,
+                                                                         min_max_op='max',
+                                                                         event_num_groundings=event_num_groundings)
 
-        pattn = passage_attention._value * self.passage_mask
-        # Computing for debugging and aux loss purposes
-        inputpattn_num_distribution, _, _ = self.compute_num_distribution(pattn)
-
-        max_num_pattn = self.pattn_for_minmaxNum(pattn, 'max')
-
-        loss = 0.0
-        if num_grounding_supervision is not None:
-            grounding_mask = (torch.sum(num_grounding_supervision) > 0).float()
-            if grounding_mask > 0:
-                # Number distribution for input pattn
-                log_probs = torch.log(inputpattn_num_distribution + 1e-40) * num_grounding_supervision
-                log_likelihood = torch.sum(log_probs)  # Want all grounded numbers to be high, hence prod of probs
-                grounding_loss = -1 * grounding_mask * log_likelihood
-                loss += grounding_loss
-        loss += passage_attention.loss
-
-        debug_value = ""
-        if self._debug:
-            input_attn_numdist = myutils.round_all(myutils.tocpuNPList(inputpattn_num_distribution), 3)
-            if num_grounding_supervision is not None:
-                num_grounding_sup = myutils.round_all(myutils.tocpuNPList(num_grounding_supervision), 3)
-            else:
-                num_grounding_sup = None
-            max_pattn_comp, _ = dlutils.listTokensVis(max_num_pattn, self.metadata["passage_tokens"])
-            most_attended_spans = dlutils.mostAttendedSpans(max_num_pattn, self.metadata["passage_tokens"])
-            debug_value += f"InputPattnPassageNumber: {input_attn_numdist}"
-            debug_value += f"\nGoldNum: {num_grounding_sup}"
-            debug_value += f"\nMaxNumPattn: {max_pattn_comp}"
-            debug_value += f"\nMostAttended: {most_attended_spans}"
-
-        return PassageAttention(passage_attention=max_num_pattn, loss=loss, debug_value=debug_value)
+        return PassageAttention(passage_attention=minmax_num_pattn, loss=loss, debug_value=debug_value)
 
     def pattn_for_minmaxNum(self,
                             pattn: torch.FloatTensor,
@@ -1583,6 +1538,8 @@ class DropLanguage(DomainLanguage):
         new_pattn = torch.clamp(new_pattn, min=1e-10, max=1 - 1e-10)
 
         return new_pattn
+
+
 
 
 if __name__ == '__main__':

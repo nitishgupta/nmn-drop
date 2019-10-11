@@ -3,13 +3,13 @@
 # export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
-DATASET_NAME=date_num/date_yd_num_hmyw_cnt_whoarg_600  #/questype_datasets/how_many_yards_was
-# DATASET_NAME=date/datefull_yd_new2
+DATASET_NAME=date_num/iclr20_yardsdiff
+# DATASET_NAME=num/hmyw_yardsdiff
 
-DATASET_DIR=./resources/data/drop_iclr/${DATASET_NAME}
+DATASET_DIR=./resources/data/drop_acl/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
-VALFILE=${DATASET_DIR}/drop_dataset_mydev.json
-TESTFILE=${DATASET_DIR}/drop_dataset_mytest.json
+VALFILE=${DATASET_DIR}/drop_dataset_dev.json
+# TESTFILE=${DATASET_DIR}/drop_dataset_mytest.json
 
 # PACKAGE TO BE INCLUDED WHICH HOUSES ALL THE CODE
 INCLUDE_PACKAGE=semqa
@@ -43,7 +43,7 @@ export DROPOUT=0.2
 
 export SEED=1000
 
-export BEAMSIZE=1
+export BEAMSIZE=2
 export MAX_DECODE_STEP=14
 export EPOCHS=45
 
@@ -53,10 +53,11 @@ export DEBUG=false
 CHECKPOINT_ROOT=./resources/semqa/checkpoints
 SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/${DATASET_NAME}
 MODEL_DIR=drop_parser_bert
-PD_1=CNTFIX_${COUNT_FIXED}/EXCLOSS_${EXCLOSS}/MMLLOSS_${MMLLOSS}/aux_${AUXLOSS}/SUPEPOCHS_${SUPEPOCHS}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}/NS_MODEL
+# CNTFIX_${COUNT_FIXED}
+PD_1=EXCLOSS_${EXCLOSS}/MMLLOSS_${MMLLOSS}/aux_${AUXLOSS}/SUPEPOCHS_${SUPEPOCHS}
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}/NWMOD_SINGGPU
 
-SERIALIZATION_DIR=./resources/semqa/checkpoints/test
+# SERIALIZATION_DIR=./resources/semqa/checkpoints/test
 
 #######################################################################################################################
 

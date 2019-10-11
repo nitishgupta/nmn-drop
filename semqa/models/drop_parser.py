@@ -28,7 +28,7 @@ from semqa.models.utils import semparse_utils
 from semqa.models.drop_parser_base import DROPParserBase
 from semqa.domain_languages.drop_language import (DropLanguage, Date,
                                                   QuestionSpanAnswer, PassageSpanAnswer, YearDifference, PassageNumber,
-                                                  CountNumber, PassageNumberDifference)
+                                                  CountNumber)
 from semqa.domain_languages.drop_execution_parameters import ExecutorParameters
 
 import datasets.drop.constants as dropconstants
@@ -749,15 +749,6 @@ class DROPParser(DROPParserBase):
                                                                     cuda_device=device_id)
                             log_likelihood = torch.sum(pred_passagenumber_logprobs * gold_passagenum_dist)
 
-                        elif progtype == 'PassageNumberDifference':
-                            denotation: PassageNumberDifference = denotation
-                            pred_passagenumdiff_dist = denotation._value
-                            pred_passagenumdiff_log_probs = torch.log(pred_passagenumdiff_dist + 1e-40)
-                            gold_passagenum_difference_dist = allenutil.move_to_device(
-                                torch.FloatTensor(answer_as_passagenum_difference[i]),
-                                cuda_device=device_id)
-                            log_likelihood = torch.sum(pred_passagenumdiff_log_probs * gold_passagenum_difference_dist)
-
                         elif progtype == 'CountNumber':
                             denotation: CountNumber = denotation
                             count_distribution = denotation._value
@@ -885,14 +876,6 @@ class DROPParser(DROPParserBase):
                                                                                         else predicted_passage_number
                         predicted_answer = str(predicted_passage_number)
 
-                    elif progtype == 'PassageNumberDifference':
-                        denotation: PassageNumberDifference = denotation
-                        predicted_passagenumdiff_idx = torch.argmax(denotation._value).detach().cpu().numpy()
-                        predicted_passagenum_diff = instance_passagenum_diffs[predicted_passagenumdiff_idx]
-                        predicted_passagenum_diff = int(predicted_passagenum_diff) if int(predicted_passagenum_diff) == \
-                                                                                      predicted_passagenum_diff \
-                                                                                           else predicted_passagenum_diff
-                        predicted_answer = str(predicted_passagenum_diff)
 
                     elif progtype == 'CountNumber':
                         denotation: CountNumber = denotation
@@ -1075,7 +1058,6 @@ class DROPParser(DROPParserBase):
                                          'passage_number': '@start@ -> PassageNumber',
                                          'question_span': '@start@ -> QuestionSpanAnswer',
                                          'count_number': '@start@ -> CountNumber'}
-                                         #'passagenum_diff': '@start@ -> PassageNumberDifference'}
 
         valid_start_action_ids: List[Set[int]] = []
         for i in range(len(answer_types)):

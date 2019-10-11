@@ -19,6 +19,59 @@ def readDataset(input_json):
     return dataset
 
 
+
+def get_question_type_and_attention(question_tokens: List[str]):
+    numbertype_to_qtype_mapping = {
+        ('num', 'num'): constants.DIFF_NUMNUM_qtype,
+        ('num', 'min'): constants.DIFF_NUMMIN_qtype,
+        ('num', 'max'): constants.DIFF_NUMMAX_qtype,
+        ('min', 'num'): constants.DIFF_MINNUM_qtype,
+        ('min', 'max'): constants.DIFF_MINMAX_qtype,
+        ('min', 'min'): constants.DIFF_MINMIN_qtype,
+        ('max', 'num'): constants.DIFF_MAXNUM_qtype,
+        ('max', 'min'): constants.DIFF_MAXMIN_qtype,
+        ('max', 'max'): constants.DIFF_MAXMAX_qtype
+    }
+
+    split_point = -1
+    if 'compared' in question_tokens:
+        split_point = question_tokens.index('compared')
+    elif 'than' in question_tokens:
+        split_point = question_tokens.index('than')
+    elif 'and' in question_tokens:
+        split_point = question_tokens.index('and')
+    elif 'over' in question_tokens:
+        split_point = question_tokens.index('over')
+    else:
+        pass
+
+    if split_point == -1:
+        return None
+
+    first_half_tokens = question_tokens[0:split_point]
+    second_half_tokens = question_tokens[split_point:]
+
+    if 'longest' in first_half_tokens:
+        first_number = 'max'
+    elif 'shortest' in first_half_tokens:
+        first_number = 'min'
+    else:
+        first_number = 'num'
+
+    if 'longest' in second_half_tokens:
+        second_number = 'max'
+    elif 'shortest' in second_half_tokens:
+        second_number = 'min'
+    else:
+        second_number = 'num'
+
+    qtype = numbertype_to_qtype_mapping[(first_number, second_number)]
+
+    return qtype
+
+
+
+
 def preprocess_HowManyYardsDifference_ques(dataset):
     """ This function prunes questions that start with "How many yards longer was" and "How many yards difference"
 
@@ -26,20 +79,6 @@ def preprocess_HowManyYardsDifference_ques(dataset):
     """
 
     difference_ngrams = ['how many yards difference', 'how many yards longer was']
-
-    DIFF_MAXMIN_qtype = constants.DIFF_MAXMIN_qtype
-
-    numbertype_to_qtype_mapping = {
-                                    ('num', 'num'): constants.DIFF_NUMNUM_qtype,
-                                    ('num', 'min'): constants.DIFF_NUMMIN_qtype,
-                                    ('num', 'max'): constants.DIFF_NUMMAX_qtype,
-                                    ('min', 'num'): constants.DIFF_MINNUM_qtype,
-                                    ('min', 'max'): constants.DIFF_MINMAX_qtype,
-                                    ('min', 'min'): constants.DIFF_MINMIN_qtype,
-                                    ('max', 'num'): constants.DIFF_MAXNUM_qtype,
-                                    ('max', 'min'): constants.DIFF_MAXMIN_qtype,
-                                    ('max', 'max'): constants.DIFF_MAXMAX_qtype
-                                  }
 
     new_dataset = {}
     total_ques = 0
@@ -59,46 +98,15 @@ def preprocess_HowManyYardsDifference_ques(dataset):
             question_lower = original_question.lower()
 
             if any(span in question_lower for span in difference_ngrams):
-                split_point = -1
-                question_tokens = question_lower.split(' ')
-                if 'compared' in question_tokens:
-                    split_point = question_tokens.index('compared')
-                elif 'than' in question_tokens:
-                    split_point = question_tokens.index('than')
-                elif 'and' in question_tokens:
-                    split_point = question_tokens.index('and')
-                elif 'over' in question_tokens:
-                    split_point = question_tokens.index('over')
-                else:
-                    pass
+                # qtype = get_question_type_and_attention(question_lower.split(" "))
+                # if qtype is not None:
+                #     question_answer[constants.qtype] = qtype
+                #     question_answer[constants.program_supervised] = True
+                #     qtype_dist[qtype] += 1
+                #     questions_w_qtypes += 1
+                # else:
+                #     missed_questions += 1
 
-                if split_point == -1:
-                    missed_questions += 1
-                    continue
-
-                first_half_tokens = question_tokens[0:split_point]
-                second_half_tokens = question_tokens[split_point:]
-
-                if 'longest' in first_half_tokens:
-                    first_number = 'max'
-                elif 'shortest' in first_half_tokens:
-                    first_number = 'min'
-                else:
-                    first_number = 'num'
-
-                if 'longest' in second_half_tokens:
-                    second_number = 'max'
-                elif 'shortest' in second_half_tokens:
-                    second_number = 'min'
-                else:
-                    second_number = 'num'
-
-                qtype = numbertype_to_qtype_mapping[(first_number, second_number)]
-
-                question_answer[constants.qtype] = qtype
-                question_answer[constants.program_supervised] = True
-                qtype_dist[qtype] += 1
-                questions_w_qtypes += 1
                 new_qa_pairs.append(question_answer)
 
         if len(new_qa_pairs) > 0:

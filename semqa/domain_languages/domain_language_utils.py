@@ -208,6 +208,7 @@ def mostAttendedSpans(attention_vec: torch.FloatTensor, tokens: List[str], span_
         span2atten[(start, end)] = attention_sum
 
     sorted_spanattn = myutils.sortDictByValue(span2atten, decreasing=True)
+    sorted_spanattn = myutils.round_all(sorted_spanattn, 3)
 
     top_spans = [sorted_spanattn[0][0]]
     idx = 1
@@ -226,7 +227,7 @@ def mostAttendedSpans(attention_vec: torch.FloatTensor, tokens: List[str], span_
     attention_values = [span2atten[span] for span in top_spans]
     out_str = ""
     for span, attn in zip(most_attention_spans, attention_values):
-        out_str += "{}:{} | ".format(span, attn)
+        out_str += "{}:{} | ".format(span, myutils.round_all(attn, 3))
     out_str = out_str.strip()
 
     return out_str
@@ -265,5 +266,31 @@ def listTokensVis(attention_vec: torch.FloatTensor, tokens: List[str]):
         most_attended_vis += f"{token}|{attn} "
 
     return complete_attention_vis.strip(), most_attended_vis.strip()
+
+
+def topProbMassElems(attention: torch.FloatTensor, support: List[Any], k=5):
+    """ Get the top attended elems.
+
+        Parameters:
+        ----------
+        attention: Shape: (padded_support_len)
+            Padded vector containing attention over a sequence
+        support: List[Any] List of len=support_len
+
+        Returns:
+        --------
+        complete_attention_vis: str
+        most_attended_vis: String visualization of question attention
+    """
+
+    attention_aslist: List[float] = myutils.round_all(myutils.tocpuNPList(attention), 3)
+    attention_aslist: List[float] = attention_aslist[:len(support)]
+
+    sorted_elem_attn = sorted(zip(support, attention_aslist), key=lambda x: x[1], reverse=True)
+    out_str = ""
+    for i in range(k):
+        out_str += f"{sorted_elem_attn[i][0]}: {sorted_elem_attn[i][1]} || "
+
+    return out_str.strip()
 
 
