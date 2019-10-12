@@ -28,8 +28,12 @@ class ExecutorParameters(torch.nn.Module, Registrable):
 
         self.passage_attention_scalingvals = [1, 2, 5, 10]
 
+        # Parameters for answer start/end prediction from PassageAttention
         self.passage_attention_to_span = passage_attention_to_span
         self.passage_startend_predictor = torch.nn.Linear(self.passage_attention_to_span.get_output_dim(), 2)
+
+        # Parameters for answer start/end pred directly from passage encoding (direct PassageSpanAnswer from 1step prog)
+        self.oneshot_psa_startend_predictor = torch.nn.Linear(passage_encoding_dim, 2)
 
         self.question_attention_to_span = question_attention_to_span
         self.question_startend_predictor = torch.nn.Linear(self.question_attention_to_span.get_output_dim(), 2)
