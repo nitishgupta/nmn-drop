@@ -137,12 +137,14 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--fulldataset_dir')
     parser.add_argument('--qtype_dir_name')
-    parser.add_argument('--split_ratio', type=float)
+    parser.add_argument('--split_ratio', type=float)        # ratio of mydev to mytest
     args = parser.parse_args()
 
-    # This should contain drop_dataset_dev.json
+    # This is full merged dataset -- should contain drop_dataset_dev.json
     fulldataset_dir = args.fulldataset_dir
-    # This should contain multiple qtype dirs, each with drop_dataset_dev.json
+
+    # This directory should contain multiple qtype dirs, after merging which "fulldataset_dir" was created
+    # Each qtype dir will contain a drop_dataset_dev.json (union of which is fulldataset_dir/drop_dataset_dev.json)
     qtype_datasets_rootdir = os.path.join(fulldataset_dir, args.qtype_dir_name)
 
     print("Different question type datasets:")
@@ -158,7 +160,8 @@ if __name__ == '__main__':
     qtype2dataset = make_qtype2dataset_map(qtype_datasets_rootdir, qtype_datasets, "drop_dataset_dev.json")
     qtyperatio2fulldataset(fulldev_dataset, qtype2dataset)
 
-    # Divided dev into mydev and mytest
+    # Divide the full_dataset dev para in to mydev and mytest in the split_ratio
+    # Also try to keep the same ratio of different qtypes in mydev and mytest
     mydev_paraids, mytest_paraids = get_split_paragraphids(fulldev_dataset, qtype2dataset, args.split_ratio)
 
     assert len(mydev_paraids.intersection(mytest_paraids)) == 0
@@ -207,32 +210,3 @@ if __name__ == '__main__':
 
     for qtype, testdataset in qtype2mytestdata.items():
         write_dataset(testdataset, os.path.join(qtype_datasets_rootdir, qtype), "drop_dataset_mytest.json")
-
-
-    # QTYPE_DATASET = ['count', 'datecomp_full', 'how_many_yards_was', 'numcomp_full', 'who_arg', 'year_diff']
-    #
-    # fulldataset_test_json = os.path.join(fulldataset_dir, 'drop_dataset_mytest.json')
-    #
-    # fulldataset_testset = readDataset(fulldataset_test_json)
-    # test_para_ids = list(fulldataset_testset.keys())
-    #
-    # for qtype_dataset in QTYPE_DATASET:
-    #     print("Splitting {}".format(qtype_dataset))
-    #     dataset_dir = os.path.join(root_qtype_datasets_dir, qtype_dataset)
-    #     input_devfp = os.path.join(dataset_dir, 'drop_dataset_dev.json')
-    #     output_devfp = os.path.join(dataset_dir, 'drop_dataset_mydev.json')
-    #     output_testfp = os.path.join(dataset_dir, 'drop_dataset_mytest.json')
-    #
-    #     orig_devset = readDataset(input_devfp)
-    #     split_devset, split_testset = splitDataset(orig_devset, test_para_ids)
-    #
-    #     with open(output_devfp, 'w') as f:
-    #         json.dump(split_devset, f, indent=4)
-    #
-    #     with open(output_testfp, 'w') as f:
-    #         json.dump(split_testset, f, indent=4)
-    #
-
-
-
-

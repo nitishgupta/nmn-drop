@@ -466,15 +466,6 @@ class DROPParserBERT(DROPParserBase):
                                                            allowed_sequences=s_gold_actionseq_idxs,
                                                            allowed_sequence_mask=s_gold_actionseq_masks)
 
-
-                # print()
-                # print(supervised_instances)
-                # print(qtypes)
-                # print(s_gold_actionseq_idxs)
-                # for i in range(batch_size):
-                #     print(metadata[i]["original_question"])
-                # print()
-
                 supervised_final_states = constrained_search.search(initial_state=supervised_initial_state,
                                                                     transition_function=self._decoder_step)
 

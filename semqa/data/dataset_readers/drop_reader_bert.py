@@ -621,7 +621,7 @@ class DROPReaderNew(DatasetReader):
             answer_as_count = [0] * len(count_values)
             # if answer_type == "number":
             if answer_number is not None:
-                # Passage-number answer
+                # Number answer
                 if answer_number in passage_number_values:
                     answer_program_start_types.append("passage_number")
                     ans_as_passage_number_idx = passage_number_values.index(answer_number)
@@ -632,14 +632,6 @@ class DROPReaderNew(DatasetReader):
                     answer_program_start_types.append("year_difference")
                     ans_as_year_difference_idx = year_differences.index(answer_number)
                     ans_as_year_difference[ans_as_year_difference_idx] = 1
-
-                '''
-                # PassageNum-difference Answer
-                if answer_number in passage_number_differences:
-                    answer_program_start_types.append("passagenum_diff")
-                    ans_as_passagenum_diff_idx = passage_number_differences.index(answer_number)
-                    answer_as_passagenum_difference[ans_as_passagenum_diff_idx] = 1
-                '''
 
                 # Count answer
                 if answer_number in count_values:
