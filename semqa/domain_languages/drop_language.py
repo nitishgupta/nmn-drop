@@ -522,6 +522,7 @@ class DropLanguage(DomainLanguage):
 
         # Shape: (passage_length, )
         relocate_attn = (p_to_p_relocate_attention * passage_attn.unsqueeze(1)).sum(0)
+        relocate_attn = torch.clamp(relocate_attn, min=1e-10, max=1 - 1e-10)
 
         loss = passage_attention.loss
         loss += 2.0 * inwindow_aux_loss
@@ -903,6 +904,8 @@ class DropLanguage(DomainLanguage):
          prob_date1_lesser, prob_date2_lesser,
          average_passage_distribution, aux_loss) = self.date_comparison(passage_attention_1, passage_attention_2,
                                                                         "lesser", event_date_groundings)
+
+        average_passage_distribution = torch.clamp(average_passage_distribution, min=1e-10, max=1 - 1e-10)
         loss = 0.0
         loss += aux_loss
         loss += passage_attn_1.loss
@@ -950,6 +953,7 @@ class DropLanguage(DomainLanguage):
          average_passage_distribution,
          aux_loss) = self.date_comparison(passage_attention_1, passage_attention_2,
                                           "greater", event_date_groundings)
+        average_passage_distribution = torch.clamp(average_passage_distribution, min=1e-10, max=1 - 1e-10)
 
         loss = 0.0
         loss += aux_loss
@@ -996,6 +1000,8 @@ class DropLanguage(DomainLanguage):
          prob_num1_lesser, prob_num2_lesser,
          average_passage_distribution, aux_loss) = self.num_comparison(passage_attention_1, passage_attention_2,
                                                                        "lesser", event_num_groundings)
+        average_passage_distribution = torch.clamp(average_passage_distribution, min=1e-10, max=1 - 1e-10)
+
         loss = 0.0
         loss += aux_loss
         loss += passage_attn_1.loss
@@ -1043,6 +1049,7 @@ class DropLanguage(DomainLanguage):
          prob_num1_greater, prob_num2_greater,
          average_passage_distribution, aux_loss) = self.num_comparison(passage_attention_1, passage_attention_2,
                                                                        "greater", event_num_groundings)
+        average_passage_distribution = torch.clamp(average_passage_distribution, min=1e-10, max=1 - 1e-10)
 
         loss = 0.0
         loss += aux_loss
@@ -1157,6 +1164,8 @@ class DropLanguage(DomainLanguage):
 
         # Shape: (passage_length)
         passage_attn = (passage_attn * self.passage_mask)
+
+        passage_attn = torch.clamp(passage_attn, min=1e-15, max=1 - 1e-15)
 
         scaled_attentions = [passage_attn * sf for sf in self.parameters.passage_attention_scalingvals]
         # Shape: (passage_length, num_scaling_factors)
