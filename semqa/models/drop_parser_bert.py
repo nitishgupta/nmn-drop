@@ -28,8 +28,15 @@ from pytorch_pretrained_bert import BertModel
 from semqa.models.utils import semparse_utils
 
 from semqa.models.drop_parser_base import DROPParserBase
-from semqa.domain_languages.drop_language import (DropLanguage, Date, QuestionSpanAnswer, PassageSpanAnswer,
-                                                  YearDifference, PassageNumber, CountNumber)
+from semqa.domain_languages.drop_language import (
+    DropLanguage,
+    Date,
+    QuestionSpanAnswer,
+    PassageSpanAnswer,
+    YearDifference,
+    PassageNumber,
+    CountNumber,
+)
 from semqa.domain_languages.drop_execution_parameters import ExecutorParameters
 
 import datasets.drop.constants as dropconstants
@@ -42,33 +49,37 @@ GOLD_BOOL_LF = ("(bool_and (bool_qent_qstr ", ") (bool_qent_qstr", "))")
 
 @Model.register("drop_parser_bert")
 class DROPParserBERT(DROPParserBase):
-    def __init__(self,
-                 vocab: Vocabulary,
-                 pretrained_bert_model: str,
-                 max_ques_len: int,
-                 action_embedding_dim: int,
-                 transitionfunc_attention: Attention,
-                 passage_attention_to_span: Seq2SeqEncoder,
-                 question_attention_to_span: Seq2SeqEncoder,
-                 passage_attention_to_count: Seq2SeqEncoder,
-                 beam_size: int,
-                 max_decoding_steps: int,
-                 countfixed: bool = False,
-                 auxwinloss: bool = False,
-                 denotationloss: bool = True,
-                 excloss: bool = False,
-                 qattloss: bool = False,
-                 mmlloss: bool = False,
-                 dropout: float = 0.0,
-                 debug: bool = False,
-                 initializers: InitializerApplicator = InitializerApplicator(),
-                 regularizer: Optional[RegularizerApplicator] = None) -> None:
+    def __init__(
+        self,
+        vocab: Vocabulary,
+        pretrained_bert_model: str,
+        max_ques_len: int,
+        action_embedding_dim: int,
+        transitionfunc_attention: Attention,
+        passage_attention_to_span: Seq2SeqEncoder,
+        question_attention_to_span: Seq2SeqEncoder,
+        passage_attention_to_count: Seq2SeqEncoder,
+        beam_size: int,
+        max_decoding_steps: int,
+        countfixed: bool = False,
+        auxwinloss: bool = False,
+        denotationloss: bool = True,
+        excloss: bool = False,
+        qattloss: bool = False,
+        mmlloss: bool = False,
+        dropout: float = 0.0,
+        debug: bool = False,
+        initializers: InitializerApplicator = InitializerApplicator(),
+        regularizer: Optional[RegularizerApplicator] = None,
+    ) -> None:
 
-        super(DROPParserBERT, self).__init__(vocab=vocab,
-                                             action_embedding_dim=action_embedding_dim,
-                                             dropout=dropout,
-                                             debug=debug,
-                                             regularizer=regularizer)
+        super(DROPParserBERT, self).__init__(
+            vocab=vocab,
+            action_embedding_dim=action_embedding_dim,
+            dropout=dropout,
+            debug=debug,
+            regularizer=regularizer,
+        )
 
         self.BERT = BertModel.from_pretrained(pretrained_bert_model)
         bert_dim = self.BERT.pooler.dense.out_features
@@ -78,14 +89,16 @@ class DROPParserBERT(DROPParserBase):
 
         question_encoding_dim = bert_dim
 
-        self._decoder_step = BasicTransitionFunction(encoder_output_dim=question_encoding_dim,
-                                                     action_embedding_dim=action_embedding_dim,
-                                                     input_attention=transitionfunc_attention,
-                                                     activation=Activation.by_name('tanh')(),
-                                                     predict_start_type_separately=False,
-                                                     num_start_types=1,
-                                                     add_action_bias=False,
-                                                     dropout=dropout)
+        self._decoder_step = BasicTransitionFunction(
+            encoder_output_dim=question_encoding_dim,
+            action_embedding_dim=action_embedding_dim,
+            input_attention=transitionfunc_attention,
+            activation=Activation.by_name("tanh")(),
+            predict_start_type_separately=False,
+            num_start_types=1,
+            add_action_bias=False,
+            dropout=dropout,
+        )
         self._mml = MaximumMarginalLikelihood()
 
         # self.modeltype = modeltype
@@ -123,9 +136,9 @@ class DROPParserBERT(DROPParserBase):
 
         # Use a separate encoder for passage - date - num similarity
 
-        self.qp_matrix_attention = LinearMatrixAttention(tensor_1_dim=bert_dim,
-                                                         tensor_2_dim=bert_dim,
-                                                         combination="x,y,x*y")
+        self.qp_matrix_attention = LinearMatrixAttention(
+            tensor_1_dim=bert_dim, tensor_2_dim=bert_dim, combination="x,y,x*y"
+        )
 
         # self.passage_token_to_date = passage_token_to_date
         self.dotprod_matrix_attn = DotProductMatrixAttention()
@@ -137,22 +150,26 @@ class DROPParserBERT(DROPParserBase):
 
         self.num_counts = 10
         self.passage_attention_to_count = passage_attention_to_count
-        self.passage_count_predictor = torch.nn.Linear(self.passage_attention_to_count.get_output_dim(),
-                                                       self.num_counts, bias=False)
-        self.passage_count_hidden2logits = torch.nn.Linear(self.passage_attention_to_count.get_output_dim(),
-                                                           1, bias=True)
+        self.passage_count_predictor = torch.nn.Linear(
+            self.passage_attention_to_count.get_output_dim(), self.num_counts, bias=False
+        )
+        self.passage_count_hidden2logits = torch.nn.Linear(
+            self.passage_attention_to_count.get_output_dim(), 1, bias=True
+        )
 
         # self.passage_count_predictor.bias.data.zero_()
         # self.passage_count_predictor.bias.requires_grad = False
 
-        self._executor_parameters = ExecutorParameters(question_encoding_dim=bert_dim,
-                                                       passage_encoding_dim=bert_dim,
-                                                       passage_attention_to_span=passage_attention_to_span,
-                                                       question_attention_to_span=question_attention_to_span,
-                                                       passage_attention_to_count=self.passage_attention_to_count,
-                                                       passage_count_predictor=self.passage_count_predictor,
-                                                       passage_count_hidden2logits=self.passage_count_hidden2logits,
-                                                       dropout=dropout)
+        self._executor_parameters = ExecutorParameters(
+            question_encoding_dim=bert_dim,
+            passage_encoding_dim=bert_dim,
+            passage_attention_to_span=passage_attention_to_span,
+            question_attention_to_span=question_attention_to_span,
+            passage_attention_to_count=self.passage_attention_to_count,
+            passage_count_predictor=self.passage_count_predictor,
+            passage_count_hidden2logits=self.passage_count_hidden2logits,
+            dropout=dropout,
+        )
 
         self.modelloss_metric = Average()
         self.excloss_metric = Average()
@@ -177,13 +194,11 @@ class DROPParserBERT(DROPParserBase):
                 parameter.requires_grad = False
 
         # # # Fix parameters for Counting
-        count_parameter_names = ['passage_attention_to_count', 'passage_count_hidden2logits',
-                                 'passage_count_predictor']
+        count_parameter_names = ["passage_attention_to_count", "passage_count_hidden2logits", "passage_count_predictor"]
         if countfixed:
             for name, parameter in self.named_parameters():
                 if any(span in name for span in count_parameter_names):
                     parameter.requires_grad = False
-
 
         # Fixing Pre-trained parameters
         # pretrained_components = ['text_field_embedder', 'highway_layer', 'embedding_proj_layer',
@@ -192,49 +207,50 @@ class DROPParserBERT(DROPParserBase):
         #     if any(component in name for component in pretrained_components):
         #         parameter.requires_grad = False
 
-
     @overrides
-    def forward(self,
-                question_passage: Dict[str, torch.LongTensor],
-                question: Dict[str, torch.LongTensor],
-                passage: Dict[str, torch.LongTensor],
-                passageidx2numberidx: torch.LongTensor,
-                number_support_values: List[List[float]],
-                add_number_combinations_indices: torch.LongTensor,
-                sub_number_combinations_indices: torch.LongTensor,
-                max_num_add_combs: List[int],
-                max_num_sub_combs: List[int],
-                passage_number_sortedtokenidxs: List[List[int]],
-                passageidx2dateidx: torch.LongTensor,
-                passage_date_values: List[List[Date]],
-                actions: List[List[ProductionRule]],
-                year_differences: List[List[int]],
-                year_differences_mat: List[np.array],
-                count_values: List[List[int]],
-                answer_program_start_types: List[Union[List[str], None]] = None,
-                answer_as_passage_spans: torch.LongTensor = None,
-                answer_as_question_spans: torch.LongTensor = None,
-                answer_as_passage_number: List[List[int]] = None,
-                answer_as_year_difference: List[List[int]] = None,
-                answer_as_count: List[List[int]] = None,
-                # answer_as_passagenum_difference: List[List[int]] = None,
-                datecomp_ques_event_date_groundings: List[Tuple[List[int], List[int]]] = None,
-                numcomp_qspan_num_groundings: List[Tuple[List[int], List[int]]] = None,
-                strongly_supervised: List[bool] = None,
-                program_supervised: List[bool] = None,
-                qattn_supervised: List[bool] = None,
-                pattn_supervised: List[bool] = None,
-                execution_supervised: List[bool] = None,
-                qtypes: List[str] = None,
-                gold_action_seqs: List[Tuple[List[List[int]], List[List[int]]]]=None,
-                qattn_supervision: torch.FloatTensor = None,
-                passage_attn_supervision: List[List[float]] = None,
-                synthetic_numground_metadata: List[Tuple[int, int]] = None,
-                epoch_num: List[int] = None,
-                metadata: List[Dict[str, Any]] = None,
-                aux_passage_attention=None,
-                aux_answer_as_count=None,
-                aux_count_mask=None) -> Dict[str, torch.Tensor]:
+    def forward(
+        self,
+        question_passage: Dict[str, torch.LongTensor],
+        question: Dict[str, torch.LongTensor],
+        passage: Dict[str, torch.LongTensor],
+        passageidx2numberidx: torch.LongTensor,
+        number_support_values: List[List[float]],
+        add_number_combinations_indices: torch.LongTensor,
+        sub_number_combinations_indices: torch.LongTensor,
+        max_num_add_combs: List[int],
+        max_num_sub_combs: List[int],
+        passage_number_sortedtokenidxs: List[List[int]],
+        passageidx2dateidx: torch.LongTensor,
+        passage_date_values: List[List[Date]],
+        actions: List[List[ProductionRule]],
+        year_differences: List[List[int]],
+        year_differences_mat: List[np.array],
+        count_values: List[List[int]],
+        answer_program_start_types: List[Union[List[str], None]] = None,
+        answer_as_passage_spans: torch.LongTensor = None,
+        answer_as_question_spans: torch.LongTensor = None,
+        answer_as_passage_number: List[List[int]] = None,
+        answer_as_year_difference: List[List[int]] = None,
+        answer_as_count: List[List[int]] = None,
+        # answer_as_passagenum_difference: List[List[int]] = None,
+        datecomp_ques_event_date_groundings: List[Tuple[List[int], List[int]]] = None,
+        numcomp_qspan_num_groundings: List[Tuple[List[int], List[int]]] = None,
+        strongly_supervised: List[bool] = None,
+        program_supervised: List[bool] = None,
+        qattn_supervised: List[bool] = None,
+        pattn_supervised: List[bool] = None,
+        execution_supervised: List[bool] = None,
+        qtypes: List[str] = None,
+        gold_action_seqs: List[Tuple[List[List[int]], List[List[int]]]] = None,
+        qattn_supervision: torch.FloatTensor = None,
+        passage_attn_supervision: List[List[float]] = None,
+        synthetic_numground_metadata: List[Tuple[int, int]] = None,
+        epoch_num: List[int] = None,
+        metadata: List[Dict[str, Any]] = None,
+        aux_passage_attention=None,
+        aux_answer_as_count=None,
+        aux_count_mask=None,
+    ) -> Dict[str, torch.Tensor]:
 
         question_passage_tokens = question_passage["tokens"]
         pad_mask = question_passage["mask"]
@@ -244,14 +260,15 @@ class DROPParserBERT(DROPParserBase):
         pad_mask = (question_passage_tokens > 0).long() * pad_mask
 
         # Shape: (batch_size, seqlen, bert_dim); (batch_size, bert_dim)
-        bert_out, bert_pooled_out = self.BERT(question_passage_tokens, segment_ids, pad_mask,
-                                              output_all_encoded_layers=False)
+        bert_out, bert_pooled_out = self.BERT(
+            question_passage_tokens, segment_ids, pad_mask, output_all_encoded_layers=False
+        )
         # Skip [CLS]; then the next max_ques_len tokens are question tokens
-        encoded_question = bert_out[:, 1:self.max_ques_len + 1, :]
-        question_mask = (pad_mask[:, 1:self.max_ques_len + 1]).float()
+        encoded_question = bert_out[:, 1 : self.max_ques_len + 1, :]
+        question_mask = (pad_mask[:, 1 : self.max_ques_len + 1]).float()
         # [CLS] Q_tokens [SEP]
-        encoded_passage = bert_out[:, 1+self.max_ques_len+1:, :]
-        passage_mask = (pad_mask[:, 1+self.max_ques_len+1:]).float()
+        encoded_passage = bert_out[:, 1 + self.max_ques_len + 1 :, :]
+        passage_mask = (pad_mask[:, 1 + self.max_ques_len + 1 :]).float()
 
         batch_size = len(actions)
         device_id = self._get_prediction_device()
@@ -268,27 +285,36 @@ class DROPParserBERT(DROPParserBase):
         question_passage_similarity = self.qp_matrix_attention(encoded_question, modeled_passage)
         passage_question_similarity = question_passage_similarity.transpose(1, 2)
 
-        question_passage_attention = allenutil.masked_softmax(question_passage_similarity,
-                                                              passage_mask.unsqueeze(1),
-                                                              memory_efficient=True)
+        question_passage_attention = allenutil.masked_softmax(
+            question_passage_similarity, passage_mask.unsqueeze(1), memory_efficient=True
+        )
 
-        passage_question_attention = allenutil.masked_softmax(passage_question_similarity,
-                                                              question_mask.unsqueeze(1),
-                                                              memory_efficient=True)
+        passage_question_attention = allenutil.masked_softmax(
+            passage_question_similarity, question_mask.unsqueeze(1), memory_efficient=True
+        )
 
         # ### Passage Token - Date Alignment
         # Shape: (batch_size, passage_length, passage_length)
         passage_passage_token2date_alignment = self.compute_token_date_alignments(
-            modeled_passage=modeled_passage, passage_mask=passage_mask, passageidx2dateidx=passageidx2dateidx,
-            passage_to_date_attention_params=self._executor_parameters.passage_to_date_attention)
+            modeled_passage=modeled_passage,
+            passage_mask=passage_mask,
+            passageidx2dateidx=passageidx2dateidx,
+            passage_to_date_attention_params=self._executor_parameters.passage_to_date_attention,
+        )
 
         passage_passage_token2startdate_alignment = self.compute_token_date_alignments(
-            modeled_passage=modeled_passage, passage_mask=passage_mask, passageidx2dateidx=passageidx2dateidx,
-            passage_to_date_attention_params=self._executor_parameters.passage_to_start_date_attention)
+            modeled_passage=modeled_passage,
+            passage_mask=passage_mask,
+            passageidx2dateidx=passageidx2dateidx,
+            passage_to_date_attention_params=self._executor_parameters.passage_to_start_date_attention,
+        )
 
         passage_passage_token2enddate_alignment = self.compute_token_date_alignments(
-            modeled_passage=modeled_passage, passage_mask=passage_mask, passageidx2dateidx=passageidx2dateidx,
-            passage_to_date_attention_params=self._executor_parameters.passage_to_end_date_attention)
+            modeled_passage=modeled_passage,
+            passage_mask=passage_mask,
+            passageidx2dateidx=passageidx2dateidx,
+            passage_to_date_attention_params=self._executor_parameters.passage_to_end_date_attention,
+        )
 
         passage_tokenidx2dateidx_mask = (passageidx2numberidx > -1).float()
 
@@ -307,20 +333,22 @@ class DROPParserBERT(DROPParserBase):
         #                                                               mask=passage_tokenidx2dateidx_mask.unsqueeze(1),
         #                                                               memory_efficient=True)
         # ### Passage Token - Num Alignment
-        passage_passage_token2num_similarity = self._executor_parameters.passage_to_num_attention(modeled_passage,
-                                                                                                  modeled_passage)
+        passage_passage_token2num_similarity = self._executor_parameters.passage_to_num_attention(
+            modeled_passage, modeled_passage
+        )
         passage_passage_token2num_similarity = passage_passage_token2num_similarity * passage_mask.unsqueeze(1)
         passage_passage_token2num_similarity = passage_passage_token2num_similarity * passage_mask.unsqueeze(2)
 
         # Shape: (batch_size, passage_length) -- masking for number tokens in the passage
         passage_tokenidx2numidx_mask = (passageidx2numberidx > -1).float()
         # Shape: (batch_size, passage_length, passage_length)
-        passage_passage_token2num_similarity = (passage_passage_token2num_similarity *
-                                                passage_tokenidx2numidx_mask.unsqueeze(1))
+        passage_passage_token2num_similarity = (
+            passage_passage_token2num_similarity * passage_tokenidx2numidx_mask.unsqueeze(1)
+        )
         # Shape: (batch_size, passage_length, passage_length)
-        passage_passage_token2num_alignment = allenutil.masked_softmax(passage_passage_token2num_similarity,
-                                                                       mask=passage_tokenidx2numidx_mask.unsqueeze(1),
-                                                                       memory_efficient=True)
+        passage_passage_token2num_alignment = allenutil.masked_softmax(
+            passage_passage_token2num_similarity, mask=passage_tokenidx2numidx_mask.unsqueeze(1), memory_efficient=True
+        )
 
         # json_dicts = []
         # for i in range(batch_size):
@@ -335,23 +363,22 @@ class DROPParserBERT(DROPParserBase):
 
         """ Aux Loss """
         if self.auxwinloss:
-            inwindow_mask, outwindow_mask = self.masking_blockdiagonal(batch_size, passage_length,
-                                                                       15, device_id)
-            num_aux_loss = self.window_loss_numdate(passage_passage_token2num_alignment,
-                                                    passage_tokenidx2numidx_mask,
-                                                    inwindow_mask, outwindow_mask)
+            inwindow_mask, outwindow_mask = self.masking_blockdiagonal(batch_size, passage_length, 15, device_id)
+            num_aux_loss = self.window_loss_numdate(
+                passage_passage_token2num_alignment, passage_tokenidx2numidx_mask, inwindow_mask, outwindow_mask
+            )
 
-            date_aux_loss = self.window_loss_numdate(passage_passage_token2date_alignment,
-                                                     passage_tokenidx2dateidx_mask,
-                                                     inwindow_mask, outwindow_mask)
+            date_aux_loss = self.window_loss_numdate(
+                passage_passage_token2date_alignment, passage_tokenidx2dateidx_mask, inwindow_mask, outwindow_mask
+            )
 
-            start_date_aux_loss = self.window_loss_numdate(passage_passage_token2startdate_alignment,
-                                                           passage_tokenidx2dateidx_mask,
-                                                           inwindow_mask, outwindow_mask)
+            start_date_aux_loss = self.window_loss_numdate(
+                passage_passage_token2startdate_alignment, passage_tokenidx2dateidx_mask, inwindow_mask, outwindow_mask
+            )
 
-            end_date_aux_loss = self.window_loss_numdate(passage_passage_token2enddate_alignment,
-                                                         passage_tokenidx2dateidx_mask,
-                                                         inwindow_mask, outwindow_mask)
+            end_date_aux_loss = self.window_loss_numdate(
+                passage_passage_token2enddate_alignment, passage_tokenidx2dateidx_mask, inwindow_mask, outwindow_mask
+            )
 
             # count_loss = self.number2count_auxloss(passage_number_values=passage_number_values,
             #                                        device_id=device_id)
@@ -392,45 +419,52 @@ class DROPParserBERT(DROPParserBase):
         # passage_token2datetoken_sim_aslist = [passage_token2datetoken_similarity[i] for i in range(batch_size)]
         size_num_support_aslist = [len(x) for x in number_support_values]
         # Shape: (size_num_support_i, max_num_add_combs_i, 2) where _i is per instance
-        add_num_combination_aslist = [add_number_combinations_indices[i, 0:size_num_support_aslist[i],
-                                                                      0:max_num_add_combs[i], :]
-                                      for i in range(batch_size)]
-        sub_num_combination_aslist = [sub_number_combinations_indices[i, 0:size_num_support_aslist[i],
-                                      0:max_num_sub_combs[i], :]
-                                      for i in range(batch_size)]
+        add_num_combination_aslist = [
+            add_number_combinations_indices[i, 0 : size_num_support_aslist[i], 0 : max_num_add_combs[i], :]
+            for i in range(batch_size)
+        ]
+        sub_num_combination_aslist = [
+            sub_number_combinations_indices[i, 0 : size_num_support_aslist[i], 0 : max_num_sub_combs[i], :]
+            for i in range(batch_size)
+        ]
 
-        languages = [DropLanguage(rawemb_question=question_rawemb_aslist[i],
-                                  embedded_question=question_embedded_aslist[i],
-                                  encoded_question=question_encoded_aslist[i],
-                                  rawemb_passage=passage_rawemb_aslist[i],
-                                  embedded_passage=passage_embedded_aslist[i],
-                                  encoded_passage=passage_encoded_aslist[i],
-                                  modeled_passage=passage_modeled_aslist[i],
-                                  # passage_token2datetoken_sim=None, #passage_token2datetoken_sim_aslist[i],
-                                  question_mask=question_mask_aslist[i],
-                                  passage_mask=passage_mask[i], #passage_mask_aslist[i],
-                                  passage_tokenidx2dateidx=passageidx2dateidx[i],
-                                  passage_date_values=passage_date_values[i],
-                                  passage_tokenidx2numidx=passageidx2numberidx[i],
-                                  passage_num_values=number_support_values[i],
-                                  passage_number_sortedtokenidxs=passage_number_sortedtokenidxs[i],
-                                  add_num_combination_indices=add_num_combination_aslist[i],
-                                  sub_num_combination_indices=sub_num_combination_aslist[i],
-                                  year_differences=year_differences[i],
-                                  year_differences_mat=year_differences_mat[i],
-                                  count_num_values=count_values[i],
-                                  # passagenum_differences=passagenumber_difference_values[i],
-                                  question_passage_attention=q2p_attention_aslist[i],
-                                  passage_question_attention=p2q_attention_aslist[i],
-                                  passage_token2date_alignment=p2pdate_alignment_aslist[i],
-                                  passage_token2startdate_alignment=p2pstartdate_alignment_aslist[i],
-                                  passage_token2enddate_alignment=p2penddate_alignment_aslist[i],
-                                  passage_token2num_alignment=p2pnum_alignment_aslist[i],
-                                  parameters=self._executor_parameters,
-                                  start_types=None,  # batch_start_types[i],
-                                  device_id=device_id,
-                                  debug=self._debug,
-                                  metadata=metadata[i]) for i in range(batch_size)]
+        languages = [
+            DropLanguage(
+                rawemb_question=question_rawemb_aslist[i],
+                embedded_question=question_embedded_aslist[i],
+                encoded_question=question_encoded_aslist[i],
+                rawemb_passage=passage_rawemb_aslist[i],
+                embedded_passage=passage_embedded_aslist[i],
+                encoded_passage=passage_encoded_aslist[i],
+                modeled_passage=passage_modeled_aslist[i],
+                # passage_token2datetoken_sim=None, #passage_token2datetoken_sim_aslist[i],
+                question_mask=question_mask_aslist[i],
+                passage_mask=passage_mask[i],  # passage_mask_aslist[i],
+                passage_tokenidx2dateidx=passageidx2dateidx[i],
+                passage_date_values=passage_date_values[i],
+                passage_tokenidx2numidx=passageidx2numberidx[i],
+                passage_num_values=number_support_values[i],
+                passage_number_sortedtokenidxs=passage_number_sortedtokenidxs[i],
+                add_num_combination_indices=add_num_combination_aslist[i],
+                sub_num_combination_indices=sub_num_combination_aslist[i],
+                year_differences=year_differences[i],
+                year_differences_mat=year_differences_mat[i],
+                count_num_values=count_values[i],
+                # passagenum_differences=passagenumber_difference_values[i],
+                question_passage_attention=q2p_attention_aslist[i],
+                passage_question_attention=p2q_attention_aslist[i],
+                passage_token2date_alignment=p2pdate_alignment_aslist[i],
+                passage_token2startdate_alignment=p2pstartdate_alignment_aslist[i],
+                passage_token2enddate_alignment=p2penddate_alignment_aslist[i],
+                passage_token2num_alignment=p2pnum_alignment_aslist[i],
+                parameters=self._executor_parameters,
+                start_types=None,  # batch_start_types[i],
+                device_id=device_id,
+                debug=self._debug,
+                metadata=metadata[i],
+            )
+            for i in range(batch_size)
+        ]
 
         action2idx_map = {rule: i for i, rule in enumerate(languages[0].all_possible_productions())}
         idx2action_map = languages[0].all_possible_productions()
@@ -455,19 +489,25 @@ class DROPParserBERT(DROPParserBase):
                 s_gold_actionseq_idxs, s_gold_actionseq_masks = zip(*supervised_gold_actionseqs)
                 s_gold_actionseq_idxs = list(s_gold_actionseq_idxs)
                 s_gold_actionseq_masks = list(s_gold_actionseq_masks)
-                (supervised_initial_state, _, _) = self.initialState_forInstanceIndices(supervised_instances,
-                                                                                        languages, actions,
-                                                                                        encoded_question,
-                                                                                        question_mask,
-                                                                                        question_encoded_final_state,
-                                                                                        question_encoded_aslist,
-                                                                                        question_mask_aslist)
-                constrained_search = ConstrainedBeamSearch(self._beam_size,
-                                                           allowed_sequences=s_gold_actionseq_idxs,
-                                                           allowed_sequence_mask=s_gold_actionseq_masks)
+                (supervised_initial_state, _, _) = self.initialState_forInstanceIndices(
+                    supervised_instances,
+                    languages,
+                    actions,
+                    encoded_question,
+                    question_mask,
+                    question_encoded_final_state,
+                    question_encoded_aslist,
+                    question_mask_aslist,
+                )
+                constrained_search = ConstrainedBeamSearch(
+                    self._beam_size,
+                    allowed_sequences=s_gold_actionseq_idxs,
+                    allowed_sequence_mask=s_gold_actionseq_masks,
+                )
 
-                supervised_final_states = constrained_search.search(initial_state=supervised_initial_state,
-                                                                    transition_function=self._decoder_step)
+                supervised_final_states = constrained_search.search(
+                    initial_state=supervised_initial_state, transition_function=self._decoder_step
+                )
 
                 for instance_states in supervised_final_states.values():
                     scores = [state.score[0].view(-1) for state in instance_states]
@@ -475,64 +515,78 @@ class DROPParserBERT(DROPParserBase):
                 mml_loss = mml_loss / len(supervised_final_states)
 
                 if len(unsupervised_instances) > 0:
-                    (unsupervised_initial_state, _, _) = self.initialState_forInstanceIndices(unsupervised_instances,
-                                                                                              languages, actions,
-                                                                                              encoded_question,
-                                                                                              question_mask,
-                                                                                              question_encoded_final_state,
-                                                                                              question_encoded_aslist,
-                                                                                              question_mask_aslist)
+                    (unsupervised_initial_state, _, _) = self.initialState_forInstanceIndices(
+                        unsupervised_instances,
+                        languages,
+                        actions,
+                        encoded_question,
+                        question_mask,
+                        question_encoded_final_state,
+                        question_encoded_aslist,
+                        question_mask_aslist,
+                    )
 
                     unsupervised_answer_types: List[List[str]] = self._select_indices_from_list(
-                                                                                    answer_program_start_types,
-                                                                                    unsupervised_instances)
+                        answer_program_start_types, unsupervised_instances
+                    )
                     unsupervised_ins_start_actionids: List[Set[int]] = self.get_valid_start_actionids(
-                                                                            answer_types=unsupervised_answer_types,
-                                                                            action2actionidx=action2idx_map)
+                        answer_types=unsupervised_answer_types, action2actionidx=action2idx_map
+                    )
 
                     firststep_constrained_search = MyConstrainedBeamSearch(self._beam_size)
-                    unsup_final_states = firststep_constrained_search.search(num_steps=self._max_decoding_steps,
-                                                                             initial_state=unsupervised_initial_state,
-                                                                             transition_function=self._decoder_step,
-                                                                             firststep_allowed_actions=\
-                                                                                    unsupervised_ins_start_actionids,
-                                                                             keep_final_unfinished_states=False)
+                    unsup_final_states = firststep_constrained_search.search(
+                        num_steps=self._max_decoding_steps,
+                        initial_state=unsupervised_initial_state,
+                        transition_function=self._decoder_step,
+                        firststep_allowed_actions=unsupervised_ins_start_actionids,
+                        keep_final_unfinished_states=False,
+                    )
                 else:
                     unsup_final_states = []
 
                 # Merge final_states for supervised and unsupervised instances
-                best_final_states = self.merge_final_states(supervised_final_states,
-                                                            unsup_final_states,
-                                                            supervised_instances,
-                                                            unsupervised_instances)
+                best_final_states = self.merge_final_states(
+                    supervised_final_states, unsup_final_states, supervised_instances, unsupervised_instances
+                )
 
             else:
-                (initial_state, _, _) = self.getInitialDecoderState(languages, actions, encoded_question,
-                                                                    question_mask, question_encoded_final_state,
-                                                                    question_encoded_aslist, question_mask_aslist,
-                                                                    batch_size)
+                (initial_state, _, _) = self.getInitialDecoderState(
+                    languages,
+                    actions,
+                    encoded_question,
+                    question_mask,
+                    question_encoded_final_state,
+                    question_encoded_aslist,
+                    question_mask_aslist,
+                    batch_size,
+                )
                 batch_valid_start_actionids: List[Set[int]] = self.get_valid_start_actionids(
-                                                                        answer_types=answer_program_start_types,
-                                                                        action2actionidx=action2idx_map)
+                    answer_types=answer_program_start_types, action2actionidx=action2idx_map
+                )
                 search = MyConstrainedBeamSearch(self._beam_size)
                 # Mapping[int, Sequence[StateType]])
-                best_final_states = search.search(self._max_decoding_steps,
-                                                  initial_state,
-                                                  self._decoder_step,
-                                                  firststep_allowed_actions=batch_valid_start_actionids,
-                                                  keep_final_unfinished_states=False)
+                best_final_states = search.search(
+                    self._max_decoding_steps,
+                    initial_state,
+                    self._decoder_step,
+                    firststep_allowed_actions=batch_valid_start_actionids,
+                    keep_final_unfinished_states=False,
+                )
         else:
-            (initial_state,
-             _,
-             _) = self.getInitialDecoderState(languages, actions, encoded_question,
-                                              question_mask, question_encoded_final_state,
-                                              question_encoded_aslist, question_mask_aslist,
-                                              batch_size)
+            (initial_state, _, _) = self.getInitialDecoderState(
+                languages,
+                actions,
+                encoded_question,
+                question_mask,
+                question_encoded_final_state,
+                question_encoded_aslist,
+                question_mask_aslist,
+                batch_size,
+            )
             # This is unconstrained beam-search
-            best_final_states = self._decoder_beam_search.search(self._max_decoding_steps,
-                                                                 initial_state,
-                                                                 self._decoder_step,
-                                                                 keep_final_unfinished_states=False)
+            best_final_states = self._decoder_beam_search.search(
+                self._max_decoding_steps, initial_state, self._decoder_step, keep_final_unfinished_states=False
+            )
 
         # batch_actionidxs: List[List[List[int]]]: All action sequence indices for each instance in the batch
         # batch_actionseqs: List[List[List[str]]]: All decoded action sequences for each instance in the batch
@@ -541,31 +595,39 @@ class DROPParserBERT(DROPParserBase):
         # batch_actionseq_sideargs: List[List[List[Dict]]]: List of side_args for each program of each instance
         # The actions here should be in the exact same order as passed when creating the initial_grammar_state ...
         # since the action_ids are assigned based on the order passed there.
-        (batch_actionidxs,
-         batch_actionseqs,
-         batch_actionseq_scores,
-         batch_actionseq_sideargs) = semparse_utils._convert_finalstates_to_actions(best_final_states=best_final_states,
-                                                                                    possible_actions=actions,
-                                                                                    batch_size=batch_size)
+        (
+            batch_actionidxs,
+            batch_actionseqs,
+            batch_actionseq_scores,
+            batch_actionseq_sideargs,
+        ) = semparse_utils._convert_finalstates_to_actions(
+            best_final_states=best_final_states, possible_actions=actions, batch_size=batch_size
+        )
 
         # Adding Date-Comparison supervised event groundings to relevant actions
         max_passage_len = encoded_passage.size()[1]
-        self.passage_attention_to_sidearg(qtypes, batch_actionseqs, batch_actionseq_sideargs, pattn_supervised,
-                                          passage_attn_supervision, max_passage_len, device_id)
+        self.passage_attention_to_sidearg(
+            qtypes,
+            batch_actionseqs,
+            batch_actionseq_sideargs,
+            pattn_supervised,
+            passage_attn_supervision,
+            max_passage_len,
+            device_id,
+        )
 
-        self.datecompare_eventdategr_to_sideargs(qtypes,
-                                                 batch_actionseqs,
-                                                 batch_actionseq_sideargs,
-                                                 datecomp_ques_event_date_groundings,
-                                                 device_id)
+        self.datecompare_eventdategr_to_sideargs(
+            qtypes, batch_actionseqs, batch_actionseq_sideargs, datecomp_ques_event_date_groundings, device_id
+        )
 
-        self.numcompare_eventnumgr_to_sideargs(qtypes,
-                                               execution_supervised,
-                                               batch_actionseqs,
-                                               batch_actionseq_sideargs,
-                                               numcomp_qspan_num_groundings,
-                                               device_id)
-
+        self.numcompare_eventnumgr_to_sideargs(
+            qtypes,
+            execution_supervised,
+            batch_actionseqs,
+            batch_actionseq_sideargs,
+            numcomp_qspan_num_groundings,
+            device_id,
+        )
 
         # For printing predicted - programs
         # for idx, instance_progs in enumerate(batch_actionseqs):
@@ -580,9 +642,9 @@ class DROPParserBERT(DROPParserBase):
         # pdb.set_trace()
 
         # List[List[Any]], List[List[str]]: Denotations and their types for all instances
-        batch_denotations, batch_denotation_types = self._get_denotations(batch_actionseqs,
-                                                                          languages,
-                                                                          batch_actionseq_sideargs)
+        batch_denotations, batch_denotation_types = self._get_denotations(
+            batch_actionseqs, languages, batch_actionseq_sideargs
+        )
         output_dict = {}
         # Computing losses if gold answers are given
         if answer_program_start_types is not None:
@@ -611,8 +673,9 @@ class DROPParserBERT(DROPParserBase):
 
             if self.qattloss:
                 # Compute Question Attention Supervision auxiliary loss
-                qattn_loss = self._ques_attention_loss(batch_actionseqs, batch_actionseq_sideargs, qtypes,
-                                                       qattn_supervised, qattn_supervision)
+                qattn_loss = self._ques_attention_loss(
+                    batch_actionseqs, batch_actionseq_sideargs, qtypes, qattn_supervised, qattn_supervision
+                )
                 if qattn_loss != 0.0:
                     self.qattloss_metric(qattn_loss.item())
                 total_aux_loss += qattn_loss
@@ -635,7 +698,7 @@ class DROPParserBERT(DROPParserBase):
                     # against the appropriate gold-answer and add it to the instance_log_likelihood_list
                     # This is then weighed by the program-log-likelihood and added to the batch_loss
 
-                    instance_prog_denotations, instance_prog_types = batch_denotations[i], batch_denotation_types[i]
+                    instance_prog_denotations, instance_prog_types = (batch_denotations[i], batch_denotation_types[i])
                     instance_progs_logprob_list = batch_actionseq_scores[i]
 
                     # This instance does not have completed programs that were found in beam-search
@@ -652,8 +715,9 @@ class DROPParserBERT(DROPParserBase):
                         if progtype == "PassageSpanAnswer":
                             # Tuple of start, end log_probs
                             denotation: PassageSpanAnswer = denotation
-                            log_likelihood = self._get_span_answer_log_prob(answer_as_spans=answer_as_passage_spans[i],
-                                                                            span_log_probs=denotation._value)
+                            log_likelihood = self._get_span_answer_log_prob(
+                                answer_as_spans=answer_as_passage_spans[i], span_log_probs=denotation._value
+                            )
 
                             if torch.isnan(log_likelihood) == 1:
                                 print(f"Batch index: {i}")
@@ -665,8 +729,9 @@ class DROPParserBERT(DROPParserBase):
                         elif progtype == "QuestionSpanAnswer":
                             # Tuple of start, end log_probs
                             denotation: QuestionSpanAnswer = denotation
-                            log_likelihood = self._get_span_answer_log_prob(answer_as_spans=answer_as_question_spans[i],
-                                                                            span_log_probs=denotation._value)
+                            log_likelihood = self._get_span_answer_log_prob(
+                                answer_as_spans=answer_as_question_spans[i], span_log_probs=denotation._value
+                            )
                             if torch.isnan(log_likelihood) == 1:
                                 print(f"Batch index: {i}")
                                 print(f"AnsAsQuestionSpans:{answer_as_question_spans[i]}")
@@ -680,32 +745,33 @@ class DROPParserBERT(DROPParserBase):
                             pred_year_difference_dist = denotation._value
                             pred_year_diff_log_probs = torch.log(pred_year_difference_dist + 1e-40)
                             gold_year_difference_dist = allenutil.move_to_device(
-                                                                    torch.FloatTensor(answer_as_year_difference[i]),
-                                                                    cuda_device=device_id)
+                                torch.FloatTensor(answer_as_year_difference[i]), cuda_device=device_id
+                            )
                             log_likelihood = torch.sum(pred_year_diff_log_probs * gold_year_difference_dist)
 
-                        elif progtype == 'PassageNumber':
+                        elif progtype == "PassageNumber":
                             # Distribution over PassageNumbers
                             denotation: PassageNumber = denotation
                             pred_passagenumber_dist = denotation._value
                             pred_passagenumber_logprobs = torch.log(pred_passagenumber_dist + 1e-40)
                             gold_passagenum_dist = allenutil.move_to_device(
-                                                                    torch.FloatTensor(answer_as_passage_number[i]),
-                                                                    cuda_device=device_id)
+                                torch.FloatTensor(answer_as_passage_number[i]), cuda_device=device_id
+                            )
                             log_likelihood = torch.sum(pred_passagenumber_logprobs * gold_passagenum_dist)
 
-                        elif progtype == 'CountNumber':
+                        elif progtype == "CountNumber":
                             denotation: CountNumber = denotation
                             count_distribution = denotation._value
                             count_log_probs = torch.log(count_distribution + 1e-40)
-                            gold_count_distribution = allenutil.move_to_device(torch.FloatTensor(answer_as_count[i]),
-                                                                               cuda_device=device_id)
+                            gold_count_distribution = allenutil.move_to_device(
+                                torch.FloatTensor(answer_as_count[i]), cuda_device=device_id
+                            )
                             log_likelihood = torch.sum(count_log_probs * gold_count_distribution)
 
                         # Here implement losses for other program-return-types in else-ifs
                         else:
                             raise NotImplementedError
-                        '''
+                        """
                         elif progtype == "QuestionSpanAnswer":
                             denotation: QuestionSpanAnswer = denotation
                             log_likelihood = self._get_span_answer_log_prob(
@@ -716,7 +782,7 @@ class DROPParserBERT(DROPParserBase):
                                 print(denotation.start_logits)
                                 print(denotation.end_logits)
                                 print(denotation._value)
-                        '''
+                        """
                         if torch.isnan(log_likelihood):
                             logger.info(f"Nan-loss encountered for denotation_log_likelihood")
                             log_likelihood = allenutil.move_to_device(torch.tensor(0.0), device_id)
@@ -769,10 +835,10 @@ class DROPParserBERT(DROPParserBase):
                 instance_count_values = count_values[i]
                 answer_annotations = metadata[i]["answer_annotations"]
 
-                instance_prog_denotations, instance_prog_types = batch_denotations[i], batch_denotation_types[i]
+                instance_prog_denotations, instance_prog_types = (batch_denotations[i], batch_denotation_types[i])
                 instance_progs_logprob_list = batch_actionseq_scores[i]
 
-                all_instance_progs_predicted_answer_strs: List[str] = []    # List of answers from diff instance progs
+                all_instance_progs_predicted_answer_strs: List[str] = []  # List of answers from diff instance progs
                 for progidx in range(len(instance_prog_denotations)):
                     denotation = instance_prog_denotations[progidx]
                     progtype = instance_prog_types[progidx]
@@ -780,8 +846,10 @@ class DROPParserBERT(DROPParserBase):
                         # Tuple of start, end log_probs
                         denotation: PassageSpanAnswer = denotation
                         # Shape: (2, ) -- start / end token ids
-                        best_span = get_best_span(span_start_logits=denotation._value[0].unsqueeze(0),
-                                                  span_end_logits=denotation._value[1].unsqueeze(0)).squeeze(0)
+                        best_span = get_best_span(
+                            span_start_logits=denotation._value[0].unsqueeze(0),
+                            span_end_logits=denotation._value[1].unsqueeze(0),
+                        ).squeeze(0)
 
                         predicted_span = tuple(best_span.detach().cpu().numpy())
                         start_offset = passage_token_offsets[predicted_span[0]][0]
@@ -792,8 +860,10 @@ class DROPParserBERT(DROPParserBase):
                         # Tuple of start, end log_probs
                         denotation: QuestionSpanAnswer = denotation
                         # Shape: (2, ) -- start / end token ids
-                        best_span = get_best_span(span_start_logits=denotation._value[0].unsqueeze(0),
-                                                  span_end_logits=denotation._value[1].unsqueeze(0)).squeeze(0)
+                        best_span = get_best_span(
+                            span_start_logits=denotation._value[0].unsqueeze(0),
+                            span_end_logits=denotation._value[1].unsqueeze(0),
+                        ).squeeze(0)
 
                         predicted_span = tuple(best_span.detach().cpu().numpy())
                         start_offset = question_token_offsets[predicted_span[0]][0]
@@ -809,25 +879,29 @@ class DROPParserBERT(DROPParserBase):
                         # if predicted_yeardiff_idx == 0 and len(instance_year_differences) > 1:
                         #     predicted_yeardiff_idx = np.argmax(year_differences_dist[1:])
                         #     predicted_yeardiff_idx += 1
-                        predicted_year_difference = instance_year_differences[predicted_yeardiff_idx]   # int
+                        predicted_year_difference = instance_year_differences[predicted_yeardiff_idx]  # int
                         predicted_answer = str(predicted_year_difference)
 
                     elif progtype == "PassageNumber":
                         denotation: PassageNumber = denotation
                         predicted_passagenum_idx = torch.argmax(denotation._value).detach().cpu().numpy()
-                        predicted_passage_number = instance_passage_numbers[predicted_passagenum_idx]   # int/float
-                        predicted_passage_number = int(predicted_passage_number) if int(predicted_passage_number) == \
-                                                                                    predicted_passage_number \
-                                                                                        else predicted_passage_number
+                        predicted_passage_number = instance_passage_numbers[predicted_passagenum_idx]  # int/float
+                        predicted_passage_number = (
+                            int(predicted_passage_number)
+                            if int(predicted_passage_number) == predicted_passage_number
+                            else predicted_passage_number
+                        )
                         predicted_answer = str(predicted_passage_number)
 
-                    elif progtype == 'CountNumber':
+                    elif progtype == "CountNumber":
                         denotation: CountNumber = denotation
                         count_idx = torch.argmax(denotation._value).detach().cpu().numpy()
                         predicted_count_answer = instance_count_values[count_idx]
-                        predicted_count_answer = int(predicted_count_answer) if int(predicted_count_answer) == \
-                                                                                predicted_count_answer \
-                                                                                    else predicted_count_answer
+                        predicted_count_answer = (
+                            int(predicted_count_answer)
+                            if int(predicted_count_answer) == predicted_count_answer
+                            else predicted_count_answer
+                        )
                         predicted_answer = str(predicted_count_answer)
 
                     else:
@@ -836,19 +910,19 @@ class DROPParserBERT(DROPParserBase):
                     all_instance_progs_predicted_answer_strs.append(predicted_answer)
                 # If no program was found in beam-search
                 if len(all_instance_progs_predicted_answer_strs) == 0:
-                    all_instance_progs_predicted_answer_strs.append('')
+                    all_instance_progs_predicted_answer_strs.append("")
                 # Since the programs are sorted by decreasing scores, we can directly take the first pred answer
                 instance_predicted_answer = all_instance_progs_predicted_answer_strs[0]
                 output_dict["predicted_answer"].append(instance_predicted_answer)
                 output_dict["all_predicted_answers"].append(all_instance_progs_predicted_answer_strs)
 
-                answer_annotations = metadata[i].get('answer_annotations', [])
+                answer_annotations = metadata[i].get("answer_annotations", [])
                 self._drop_metrics(instance_predicted_answer, answer_annotations)
 
             if not self.training:
-                output_dict['metadata'] = metadata
+                output_dict["metadata"] = metadata
                 # output_dict['best_span_ans_str'] = predicted_answers
-                output_dict['answer_as_passage_spans'] = answer_as_passage_spans
+                output_dict["answer_as_passage_spans"] = answer_as_passage_spans
                 # output_dict['predicted_spans'] = batch_best_spans
 
                 output_dict["batch_action_seqs"] = batch_actionseqs
@@ -858,9 +932,9 @@ class DROPParserBERT(DROPParserBase):
 
         return output_dict
 
-
-    def compute_token_date_alignments(self, modeled_passage, passage_mask, passageidx2dateidx,
-                                      passage_to_date_attention_params):
+    def compute_token_date_alignments(
+        self, modeled_passage, passage_mask, passageidx2dateidx, passage_to_date_attention_params
+    ):
         """Compute the passage_token-to-passage_date alignment matrix.
 
         Args:
@@ -888,12 +962,15 @@ class DROPParserBERT(DROPParserBase):
         # Shape: (batch_size, passage_length) -- masking for number tokens in the passage
         passage_tokenidx2dateidx_mask = (passageidx2dateidx > -1).float()
         # Shape: (batch_size, passage_length, passage_length)
-        passage_passage_token2date_similarity = (passage_passage_token2date_similarity *
-                                                 passage_tokenidx2dateidx_mask.unsqueeze(1))
+        passage_passage_token2date_similarity = (
+            passage_passage_token2date_similarity * passage_tokenidx2dateidx_mask.unsqueeze(1)
+        )
         # Shape: (batch_size, passage_length, passage_length)
-        pasage_passage_token2date_aligment = allenutil.masked_softmax(passage_passage_token2date_similarity,
-                                                                      mask=passage_tokenidx2dateidx_mask.unsqueeze(1),
-                                                                      memory_efficient=True)
+        pasage_passage_token2date_aligment = allenutil.masked_softmax(
+            passage_passage_token2date_similarity,
+            mask=passage_tokenidx2dateidx_mask.unsqueeze(1),
+            memory_efficient=True,
+        )
         return pasage_passage_token2date_aligment
 
     def compute_avg_norm(self, tensor):
@@ -912,18 +989,24 @@ class DROPParserBERT(DROPParserBase):
         mml_loss = self.mmlloss_metric.get_metric(reset)
         winloss = self.auxwinloss_metric.get_metric(reset)
         exact_match, f1_score = self._drop_metrics.get_metric(reset)
-        metric_dict.update({'em': exact_match, 'f1': f1_score,
-                            'ans': model_loss,
-                            'exc': exec_loss,
-                            'qatt': qatt_loss,
-                            'mml': mml_loss,
-                            'win': winloss})
+        metric_dict.update(
+            {
+                "em": exact_match,
+                "f1": f1_score,
+                "ans": model_loss,
+                "exc": exec_loss,
+                "qatt": qatt_loss,
+                "mml": mml_loss,
+                "win": winloss,
+            }
+        )
 
         return metric_dict
 
     @staticmethod
-    def _get_span_answer_log_prob(answer_as_spans: torch.LongTensor,
-                                  span_log_probs: Tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
+    def _get_span_answer_log_prob(
+        answer_as_spans: torch.LongTensor, span_log_probs: Tuple[torch.Tensor, torch.Tensor]
+    ) -> torch.Tensor:
         """ Compute the log_marginal_likelihood for the answer_spans given log_probs for start/end
             Compute log_likelihood (product of start/end probs) of each ans_span
             Sum the prob (logsumexp) for each span and return the log_likelihood
@@ -947,26 +1030,26 @@ class DROPParserBERT(DROPParserBase):
         span_end_log_probs = span_end_log_probs.unsqueeze(0)
 
         # (batch_size, number_of_ans_spans)
-        gold_passage_span_starts = answer_as_spans [:, :, 0]
+        gold_passage_span_starts = answer_as_spans[:, :, 0]
         gold_passage_span_ends = answer_as_spans[:, :, 1]
         # Some spans are padded with index -1,
         # so we clamp those paddings to 0 and then mask after `torch.gather()`.
         gold_passage_span_mask = (gold_passage_span_starts != -1).long()
-        clamped_gold_passage_span_starts = \
-            allenutil.replace_masked_values(gold_passage_span_starts, gold_passage_span_mask, 0)
-        clamped_gold_passage_span_ends = \
-            allenutil.replace_masked_values(gold_passage_span_ends, gold_passage_span_mask, 0)
+        clamped_gold_passage_span_starts = allenutil.replace_masked_values(
+            gold_passage_span_starts, gold_passage_span_mask, 0
+        )
+        clamped_gold_passage_span_ends = allenutil.replace_masked_values(
+            gold_passage_span_ends, gold_passage_span_mask, 0
+        )
         # Shape: (batch_size, # of answer spans)
-        log_likelihood_for_span_starts = \
-            torch.gather(span_start_log_probs, 1, clamped_gold_passage_span_starts)
-        log_likelihood_for_span_ends = \
-            torch.gather(span_end_log_probs, 1, clamped_gold_passage_span_ends)
+        log_likelihood_for_span_starts = torch.gather(span_start_log_probs, 1, clamped_gold_passage_span_starts)
+        log_likelihood_for_span_ends = torch.gather(span_end_log_probs, 1, clamped_gold_passage_span_ends)
         # Shape: (batch_size, # of answer spans)
-        log_likelihood_for_spans = \
-            log_likelihood_for_span_starts + log_likelihood_for_span_ends
+        log_likelihood_for_spans = log_likelihood_for_span_starts + log_likelihood_for_span_ends
         # For those padded spans, we set their log probabilities to be very small negative value
-        log_likelihood_for_spans = \
-            allenutil.replace_masked_values(log_likelihood_for_spans, gold_passage_span_mask, -1e7)
+        log_likelihood_for_spans = allenutil.replace_masked_values(
+            log_likelihood_for_spans, gold_passage_span_mask, -1e7
+        )
         # Shape: (batch_size, )
         log_marginal_likelihood_for_span = allenutil.logsumexp(log_likelihood_for_spans)
 
@@ -976,8 +1059,7 @@ class DROPParserBERT(DROPParserBase):
         return log_marginal_likelihood_for_span
 
     @staticmethod
-    def get_valid_start_actionids(answer_types: List[List[str]],
-                                  action2actionidx: Dict[str, int]) -> List[Set[int]]:
+    def get_valid_start_actionids(answer_types: List[List[str]], action2actionidx: Dict[str, int]) -> List[Set[int]]:
         """ For each instances, given answer_types as man-made strings, return the set of valid start action ids
             that return an object of that type.
             For example, given start_type as 'passage_span', '@start@ -> PassageSpanAnswer' is a valid start action
@@ -996,11 +1078,13 @@ class DROPParserBERT(DROPParserBase):
         """
 
         # Map from string passed by reader to LanguageType class
-        answer_type_to_action_mapping = {'passage_span': '@start@ -> PassageSpanAnswer',
-                                         'year_difference': '@start@ -> YearDifference',
-                                         'passage_number': '@start@ -> PassageNumber',
-                                         'question_span': '@start@ -> QuestionSpanAnswer',
-                                         'count_number': '@start@ -> CountNumber'}
+        answer_type_to_action_mapping = {
+            "passage_span": "@start@ -> PassageSpanAnswer",
+            "year_difference": "@start@ -> YearDifference",
+            "passage_number": "@start@ -> PassageNumber",
+            "question_span": "@start@ -> QuestionSpanAnswer",
+            "count_number": "@start@ -> CountNumber",
+        }
 
         valid_start_action_ids: List[Set[int]] = []
         for i in range(len(answer_types)):
@@ -1017,12 +1101,9 @@ class DROPParserBERT(DROPParserBase):
 
         return valid_start_action_ids
 
-
-    def synthetic_num_grounding_loss(self,
-                                     qtypes,
-                                     synthetic_numgrounding_metadata,
-                                     passage_passage_num_similarity,
-                                     passageidx2numberidx):
+    def synthetic_num_grounding_loss(
+        self, qtypes, synthetic_numgrounding_metadata, passage_passage_num_similarity, passageidx2numberidx
+    ):
         """
         Parameters:
         -----------
@@ -1036,8 +1117,9 @@ class DROPParserBERT(DROPParserBase):
         passageidx2numberidx_mask = (passageidx2numberidx > -1).float()
 
         # (B, P, P) -- with each row now normalized for number tokens
-        passage_passage_num_attention = allenutil.masked_softmax(passage_passage_num_similarity,
-                                                                 mask=passageidx2numberidx_mask.unsqueeze(1))
+        passage_passage_num_attention = allenutil.masked_softmax(
+            passage_passage_num_similarity, mask=passageidx2numberidx_mask.unsqueeze(1)
+        )
         log_likelihood = 0
         normalizer = 0
         for idx, (qtype, token_number_idx_pairs) in enumerate(zip(qtypes, synthetic_numgrounding_metadata)):
@@ -1052,13 +1134,14 @@ class DROPParserBERT(DROPParserBase):
 
         return loss
 
-
-    def _ques_attention_loss(self,
-                             batch_actionseqs: List[List[List[str]]],
-                             batch_actionseq_sideargs: List[List[List[Dict]]],
-                             qtypes: List[str],
-                             qattn_supervised: List[bool],
-                             qattn_supervision: torch.FloatTensor):
+    def _ques_attention_loss(
+        self,
+        batch_actionseqs: List[List[List[str]]],
+        batch_actionseq_sideargs: List[List[List[Dict]]],
+        qtypes: List[str],
+        qattn_supervised: List[bool],
+        qattn_supervision: torch.FloatTensor,
+    ):
 
         """ Compute QAttn supervision loss for different kind of questions. Different question-types have diff.
             gold-programs and can have different number of qattn-supervision for each instance.
@@ -1078,33 +1161,49 @@ class DROPParserBERT(DROPParserBase):
             NOTE: This loss is only computed for instances that are marked as strongly-annotated and hence we don't
             check if the qattns-supervision needs masking.
         """
-        find_passage_attention = 'PassageAttention -> find_PassageAttention'
-        filter_passage_attention = '<PassageAttention:PassageAttention> -> filter_PassageAttention'
-        relocate_passage_attention = '<PassageAttention:PassageAttention_answer> -> relocate_PassageAttention'
+        find_passage_attention = "PassageAttention -> find_PassageAttention"
+        filter_passage_attention = "<PassageAttention:PassageAttention> -> filter_PassageAttention"
+        relocate_passage_attention = "<PassageAttention:PassageAttention_answer> -> relocate_PassageAttention"
 
         single_find_passage_attention_list = [find_passage_attention]
         double_find_passage_attentions_list = [find_passage_attention, find_passage_attention]
         filter_find_passage_attention_list = [filter_passage_attention, find_passage_attention]
         relocate_find_passage_attention_list = [relocate_passage_attention, find_passage_attention]
-        relocate_filterfind_passage_attention_list = [relocate_passage_attention,
-                                                      filter_passage_attention,
-                                                      find_passage_attention]
+        relocate_filterfind_passage_attention_list = [
+            relocate_passage_attention,
+            filter_passage_attention,
+            find_passage_attention,
+        ]
 
-        qtypes_w_findPA = [dropconstants.NUM_find_qtype, dropconstants.MAX_find_qtype, dropconstants.MIN_find_qtype,
-                           dropconstants.COUNT_find_qtype,
-                           dropconstants.YARDS_findnum_qtype, dropconstants.YARDS_longest_qtype,
-                           dropconstants.YARDS_shortest_qtype]
+        qtypes_w_findPA = [
+            dropconstants.NUM_find_qtype,
+            dropconstants.MAX_find_qtype,
+            dropconstants.MIN_find_qtype,
+            dropconstants.COUNT_find_qtype,
+            dropconstants.YARDS_findnum_qtype,
+            dropconstants.YARDS_longest_qtype,
+            dropconstants.YARDS_shortest_qtype,
+        ]
 
-        qtypes_w_filterfindPA = [dropconstants.NUM_filter_find_qtype, dropconstants.MAX_filter_find_qtype,
-                                 dropconstants.MIN_filter_find_qtype, dropconstants.COUNT_filter_find_qtype]
+        qtypes_w_filterfindPA = [
+            dropconstants.NUM_filter_find_qtype,
+            dropconstants.MAX_filter_find_qtype,
+            dropconstants.MIN_filter_find_qtype,
+            dropconstants.COUNT_filter_find_qtype,
+        ]
 
         qtypes_w_two_findPA = [dropconstants.DATECOMP_QTYPE, dropconstants.NUMCOMP_QTYPE]
 
-        qtypes_w_relocatefindPA = [dropconstants.RELOC_find_qtype, dropconstants.RELOC_maxfind_qtype,
-                                   dropconstants.RELOC_minfind_qtype]
-        qtypes_w_relocate_filterfindPA = [dropconstants.RELOC_filterfind_qtype, dropconstants.RELOC_maxfilterfind_qtype,
-                                          dropconstants.RELOC_minfilterfind_qtype]
-
+        qtypes_w_relocatefindPA = [
+            dropconstants.RELOC_find_qtype,
+            dropconstants.RELOC_maxfind_qtype,
+            dropconstants.RELOC_minfind_qtype,
+        ]
+        qtypes_w_relocate_filterfindPA = [
+            dropconstants.RELOC_filterfind_qtype,
+            dropconstants.RELOC_maxfilterfind_qtype,
+            dropconstants.RELOC_minfilterfind_qtype,
+        ]
 
         qtype2relevant_actions_list = {}
 
@@ -1145,7 +1244,7 @@ class DROPParserBERT(DROPParserBase):
                 gold_qattn = instance_qattn_supervision[relevant_action_idx]
                 for action, side_arg in zip(program, side_args):
                     if action == relevant_action:
-                        question_attention = side_arg['question_attention']
+                        question_attention = side_arg["question_attention"]
                         if torch.sum(gold_qattn) != 0.0:
                             # Sum of probs -- model can distribute gold mass however it likes
                             # l = torch.sum(question_attention * gold_qattn)
@@ -1156,9 +1255,11 @@ class DROPParserBERT(DROPParserBase):
                             loss += l
                             normalizer += 1
                         else:
-                            print(f"\nGold attention sum == 0.0."
-                                  f"\nQattnSupervised: {qattn_supervised_instance}"
-                                  f"\nQtype: {qtype}")
+                            print(
+                                f"\nGold attention sum == 0.0."
+                                f"\nQattnSupervised: {qattn_supervised_instance}"
+                                f"\nQtype: {qtype}"
+                            )
                         relevant_action_idx += 1
 
                         # All relevant actions for this instance in this program are found
@@ -1170,12 +1271,18 @@ class DROPParserBERT(DROPParserBase):
         if normalizer == 0:
             return loss
         else:
-            return -1 * (loss/normalizer)
-
+            return -1 * (loss / normalizer)
 
     @staticmethod
-    def _get_best_spans(batch_denotations, batch_denotation_types,
-                        question_char_offsets, question_strs, passage_char_offsets, passage_strs, *args):
+    def _get_best_spans(
+        batch_denotations,
+        batch_denotation_types,
+        question_char_offsets,
+        question_strs,
+        passage_char_offsets,
+        passage_strs,
+        *args,
+    ):
         """ For all SpanType denotations, get the best span
 
         Parameters:
@@ -1201,8 +1308,10 @@ class DROPParserBERT(DROPParserBase):
                 # Distinction between QuestionSpanAnswer and PassageSpanAnswer is not needed currently,
                 # since both classes store the start/end logits as a tuple
                 # Shape: (2, )
-                best_span = get_best_span(span_start_logits=denotation._value[0].unsqueeze(0),
-                                          span_end_logits=denotation._value[1].unsqueeze(0)).squeeze(0)
+                best_span = get_best_span(
+                    span_start_logits=denotation._value[0].unsqueeze(0),
+                    span_end_logits=denotation._value[1].unsqueeze(0),
+                ).squeeze(0)
                 instance_best_spans.append(best_span)
 
                 predicted_span = tuple(best_span.detach().cpu().numpy())
@@ -1241,18 +1350,19 @@ class DROPParserBERT(DROPParserBase):
 
         return batch_best_spans, batch_predicted_answers
 
-
-    def passage_attention_to_sidearg(self,
-                                     qtypes: List[str],
-                                     batch_actionseqs: List[List[List[str]]],
-                                     batch_actionseq_sideargs: List[List[List[Dict]]],
-                                     pattn_supervised: List[bool],
-                                     passage_attn_supervision: torch.FloatTensor,
-                                     max_passage_len: int,
-                                     device_id):
+    def passage_attention_to_sidearg(
+        self,
+        qtypes: List[str],
+        batch_actionseqs: List[List[List[str]]],
+        batch_actionseq_sideargs: List[List[List[Dict]]],
+        pattn_supervised: List[bool],
+        passage_attn_supervision: torch.FloatTensor,
+        max_passage_len: int,
+        device_id,
+    ):
         """ If instance has passage attention supervision, add it to 'PassageAttention -> find_PassageAttention' """
 
-        relevant_action = 'PassageAttention -> find_PassageAttention'
+        relevant_action = "PassageAttention -> find_PassageAttention"
         for ins_idx in range(len(batch_actionseqs)):
             instance_programs = batch_actionseqs[ins_idx]
             instance_prog_sideargs = batch_actionseq_sideargs[ins_idx]
@@ -1263,25 +1373,28 @@ class DROPParserBERT(DROPParserBase):
             for program, side_args in zip(instance_programs, instance_prog_sideargs):
                 for action, sidearg_dict in zip(program, side_args):
                     if action == relevant_action:
-                        sidearg_dict['passage_attention'] = pattn_supervision
+                        sidearg_dict["passage_attention"] = pattn_supervision
 
-    def datecompare_eventdategr_to_sideargs(self,
-                                            qtypes: List[str],
-                                            batch_actionseqs: List[List[List[str]]],
-                                            batch_actionseq_sideargs: List[List[List[Dict]]],
-                                            datecomp_ques_event_date_groundings: List[Tuple[List[float], List[float]]],
-                                            device_id):
+    def datecompare_eventdategr_to_sideargs(
+        self,
+        qtypes: List[str],
+        batch_actionseqs: List[List[List[str]]],
+        batch_actionseq_sideargs: List[List[List[Dict]]],
+        datecomp_ques_event_date_groundings: List[Tuple[List[float], List[float]]],
+        device_id,
+    ):
         """ batch_event_date_groundings: For each question, a two-tuple containing the correct date-grounding for the
             two events mentioned in the question.
             These are in order of the annotation (order of events in question) but later the question attention
             might be predicted in reverse order and these will then be the wrong (reverse) annotations. Take care later.
         """
         # List[Tuple[torch.Tensor, torch.Tensor]]
-        q_event_date_groundings = self.get_gold_question_event_date_grounding(datecomp_ques_event_date_groundings,
-                                                                              device_id)
+        q_event_date_groundings = self.get_gold_question_event_date_grounding(
+            datecomp_ques_event_date_groundings, device_id
+        )
 
-        relevant_action1 = '<PassageAttention,PassageAttention:PassageAttention_answer> -> compare_date_greater_than'
-        relevant_action2 = '<PassageAttention,PassageAttention:PassageAttention_answer> -> compare_date_lesser_than'
+        relevant_action1 = "<PassageAttention,PassageAttention:PassageAttention_answer> -> compare_date_greater_than"
+        relevant_action2 = "<PassageAttention,PassageAttention:PassageAttention_answer> -> compare_date_lesser_than"
         relevant_actions = [relevant_action1, relevant_action2]
 
         for ins_idx in range(len(batch_actionseqs)):
@@ -1291,16 +1404,17 @@ class DROPParserBERT(DROPParserBase):
             for program, side_args in zip(instance_programs, instance_prog_sideargs):
                 for action, sidearg_dict in zip(program, side_args):
                     if action in relevant_actions:
-                        sidearg_dict['event_date_groundings'] = event_date_groundings
+                        sidearg_dict["event_date_groundings"] = event_date_groundings
 
-
-    def numcompare_eventnumgr_to_sideargs(self,
-                                          qtypes,
-                                          execution_supervised,
-                                          batch_actionseqs: List[List[List[str]]],
-                                          batch_actionseq_sideargs: List[List[List[Dict]]],
-                                          numcomp_qspan_num_groundings: List[Tuple[List[float], List[float]]],
-                                          device_id):
+    def numcompare_eventnumgr_to_sideargs(
+        self,
+        qtypes,
+        execution_supervised,
+        batch_actionseqs: List[List[List[str]]],
+        batch_actionseq_sideargs: List[List[List[Dict]]],
+        numcomp_qspan_num_groundings: List[Tuple[List[float], List[float]]],
+        device_id,
+    ):
         """ UPDATE: function name suggest only numpcomp, but works for other questions also
             numcomp_qspan_num_groundings - is a List of 1- or 2- or maybe n- tuple of number-grounding
         """
@@ -1313,41 +1427,39 @@ class DROPParserBERT(DROPParserBase):
         """
         # Reusing the function written for dates -- should work fine
         # List[Tuple[torch.Tensor, torch.Tensor]]
-        q_event_num_groundings = self.get_gold_question_event_date_grounding(numcomp_qspan_num_groundings,
-                                                                             device_id)
-        numcomp_action_gt = '<PassageAttention,PassageAttention:PassageAttention_answer> -> compare_num_greater_than'
-        numcomp_action_lt = '<PassageAttention,PassageAttention:PassageAttention_answer> -> compare_num_greater_than'
-        findnum_action = '<PassageAttention:PassageNumber> -> find_PassageNumber'
-        maxNumPattn_action = '<PassageAttention:PassageAttention> -> maxNumPattn'
-        minNumPattn_action = '<PassageAttention:PassageAttention> -> minNumPattn'
+        q_event_num_groundings = self.get_gold_question_event_date_grounding(numcomp_qspan_num_groundings, device_id)
+        numcomp_action_gt = "<PassageAttention,PassageAttention:PassageAttention_answer> -> compare_num_greater_than"
+        numcomp_action_lt = "<PassageAttention,PassageAttention:PassageAttention_answer> -> compare_num_greater_than"
+        findnum_action = "<PassageAttention:PassageNumber> -> find_PassageNumber"
+        maxNumPattn_action = "<PassageAttention:PassageAttention> -> maxNumPattn"
+        minNumPattn_action = "<PassageAttention:PassageAttention> -> minNumPattn"
 
         qtype2relevant_actions_list = {
-                                        dropconstants.NUMCOMP_QTYPE: [numcomp_action_gt, numcomp_action_lt],
-                                        dropconstants.NUM_find_qtype: [findnum_action],
-                                        dropconstants.NUM_filter_find_qtype: [findnum_action],
-                                        dropconstants.MAX_find_qtype: [maxNumPattn_action],
-                                        dropconstants.MAX_filter_find_qtype: [maxNumPattn_action],
-                                        dropconstants.MIN_find_qtype: [minNumPattn_action],
-                                        dropconstants.MIN_filter_find_qtype: [minNumPattn_action],
-                                      }
+            dropconstants.NUMCOMP_QTYPE: [numcomp_action_gt, numcomp_action_lt],
+            dropconstants.NUM_find_qtype: [findnum_action],
+            dropconstants.NUM_filter_find_qtype: [findnum_action],
+            dropconstants.MAX_find_qtype: [maxNumPattn_action],
+            dropconstants.MAX_filter_find_qtype: [maxNumPattn_action],
+            dropconstants.MIN_find_qtype: [minNumPattn_action],
+            dropconstants.MIN_filter_find_qtype: [minNumPattn_action],
+        }
 
         for ins_idx in range(len(batch_actionseqs)):
             instance_programs = batch_actionseqs[ins_idx]
             instance_prog_sideargs = batch_actionseq_sideargs[ins_idx]
             event_num_groundings = q_event_num_groundings[ins_idx]
-            qtype = qtypes[ins_idx]    # Could be UNK
+            qtype = qtypes[ins_idx]  # Could be UNK
             if qtype not in qtype2relevant_actions_list:
                 continue
             relevant_actions = qtype2relevant_actions_list[qtype]
             for program, side_args in zip(instance_programs, instance_prog_sideargs):
                 for action, sidearg_dict in zip(program, side_args):
                     if action in relevant_actions:
-                        sidearg_dict['event_num_groundings'] = event_num_groundings
+                        sidearg_dict["event_num_groundings"] = event_num_groundings
 
-
-    def get_gold_question_event_date_grounding(self,
-                                               question_event_date_groundings: List[Tuple[List[int], List[int]]],
-                                               device_id: int) -> List[Tuple[torch.Tensor, torch.Tensor]]:
+    def get_gold_question_event_date_grounding(
+        self, question_event_date_groundings: List[Tuple[List[int], List[int]]], device_id: int
+    ) -> List[Tuple[torch.Tensor, torch.Tensor]]:
         """ Converts input event date groundings (date-comparison) to FloatTensors """
         question_date_groundings = []
         # for grounding_1, grounding_2 in question_event_date_groundings:
@@ -1363,7 +1475,6 @@ class DROPParserBERT(DROPParserBase):
                 groundings_tensors.append(g)
             question_date_groundings.append(groundings_tensors)
         return question_date_groundings
-
 
     def passageAnsSpan_to_PassageAttention(self, answer_as_passage_spans, passage_mask):
         """ Convert answers as passage span into passage attention for model introspection
@@ -1415,7 +1526,6 @@ class DROPParserBERT(DROPParserBase):
 
         return attention_aslist
 
-
     def passageattn_to_startendlogits(self, passage_attention, passage_mask):
         span_start_logits = passage_attention.new_zeros(passage_attention.size())
         span_end_logits = passage_attention.new_zeros(passage_attention.size())
@@ -1438,34 +1548,36 @@ class DROPParserBERT(DROPParserBase):
 
         return (span_start_logits, span_end_logits)
 
-
-    def passage_ans_attn_to_sideargs(self,
-                                     batch_actionseqs: List[List[List[str]]],
-                                     batch_actionseq_sideargs: List[List[List[Dict]]],
-                                     batch_gold_attentions: List[torch.Tensor]):
+    def passage_ans_attn_to_sideargs(
+        self,
+        batch_actionseqs: List[List[List[str]]],
+        batch_actionseq_sideargs: List[List[List[Dict]]],
+        batch_gold_attentions: List[torch.Tensor],
+    ):
 
         for ins_idx in range(len(batch_actionseqs)):
             instance_programs = batch_actionseqs[ins_idx]
             instance_prog_sideargs = batch_actionseq_sideargs[ins_idx]
             instance_gold_attention = batch_gold_attentions[ins_idx]
             for program, side_args in zip(instance_programs, instance_prog_sideargs):
-                first_qattn = True   # This tells model which qent attention to use
+                first_qattn = True  # This tells model which qent attention to use
                 # print(side_args)
                 # print()
                 for action, sidearg_dict in zip(program, side_args):
-                    if action == 'PassageSpanAnswer -> find_passageSpanAnswer':
-                        sidearg_dict['passage_attention'] = instance_gold_attention
+                    if action == "PassageSpanAnswer -> find_passageSpanAnswer":
+                        sidearg_dict["passage_attention"] = instance_gold_attention
 
-
-    def getInitialDecoderState(self,
-                               languages: List[DropLanguage],
-                               actions: List[List[ProductionRule]],
-                               encoded_question: torch.FloatTensor,
-                               question_mask: torch.FloatTensor,
-                               question_encoded_final_state: torch.FloatTensor,
-                               question_encoded_aslist: List[torch.Tensor],
-                               question_mask_aslist: List[torch.Tensor],
-                               batch_size: int):
+    def getInitialDecoderState(
+        self,
+        languages: List[DropLanguage],
+        actions: List[List[ProductionRule]],
+        encoded_question: torch.FloatTensor,
+        question_mask: torch.FloatTensor,
+        question_encoded_final_state: torch.FloatTensor,
+        question_encoded_aslist: List[torch.Tensor],
+        question_mask_aslist: List[torch.Tensor],
+        batch_size: int,
+    ):
         # List[torch.Tensor(0.0)] -- Initial log-score list for the decoding
         initial_score_list = [encoded_question.new_zeros(1, dtype=torch.float) for _ in range(batch_size)]
 
@@ -1475,48 +1587,53 @@ class DROPParserBERT(DROPParserBase):
         batch_actionidx2actionstr: List[List[str]] = []
 
         for i in range(batch_size):
-            (grammar_statelet,
-             action2actionidx,
-             actionidx2actionstr) = self._create_grammar_statelet(languages[i], actions[i])
+            (grammar_statelet, action2actionidx, actionidx2actionstr) = self._create_grammar_statelet(
+                languages[i], actions[i]
+            )
 
             initial_grammar_statelets.append(grammar_statelet)
             batch_actionidx2actionstr.append(actionidx2actionstr)
             batch_action2actionidx.append(action2actionidx)
 
-        initial_rnn_states = self._get_initial_rnn_state(question_encoded=encoded_question,
-                                                         question_mask=question_mask,
-                                                         question_encoded_finalstate=question_encoded_final_state,
-                                                         question_encoded_aslist=question_encoded_aslist,
-                                                         question_mask_aslist=question_mask_aslist)
+        initial_rnn_states = self._get_initial_rnn_state(
+            question_encoded=encoded_question,
+            question_mask=question_mask,
+            question_encoded_finalstate=question_encoded_final_state,
+            question_encoded_aslist=question_encoded_aslist,
+            question_mask_aslist=question_mask_aslist,
+        )
 
         initial_side_args = [[] for _ in range(batch_size)]
 
         # Initial grammar state for the complete batch
-        initial_state = GrammarBasedState(batch_indices=list(range(batch_size)),
-                                          action_history=[[] for _ in range(batch_size)],
-                                          score=initial_score_list,
-                                          rnn_state=initial_rnn_states,
-                                          grammar_state=initial_grammar_statelets,
-                                          possible_actions=actions,
-                                          extras=batch_actionidx2actionstr,
-                                          debug_info=initial_side_args)
+        initial_state = GrammarBasedState(
+            batch_indices=list(range(batch_size)),
+            action_history=[[] for _ in range(batch_size)],
+            score=initial_score_list,
+            rnn_state=initial_rnn_states,
+            grammar_state=initial_grammar_statelets,
+            possible_actions=actions,
+            extras=batch_actionidx2actionstr,
+            debug_info=initial_side_args,
+        )
 
         return (initial_state, batch_action2actionidx, batch_actionidx2actionstr)
-
 
     def _select_indices_from_list(self, list, indices):
         new_list = [list[i] for i in indices]
         return new_list
 
-    def initialState_forInstanceIndices(self,
-                                        instances_list: List[int],
-                                        languages: List[DropLanguage],
-                                        actions: List[List[ProductionRule]],
-                                        encoded_question: torch.FloatTensor,
-                                        question_mask: torch.FloatTensor,
-                                        question_encoded_final_state: torch.FloatTensor,
-                                        question_encoded_aslist: List[torch.Tensor],
-                                        question_mask_aslist: List[torch.Tensor]):
+    def initialState_forInstanceIndices(
+        self,
+        instances_list: List[int],
+        languages: List[DropLanguage],
+        actions: List[List[ProductionRule]],
+        encoded_question: torch.FloatTensor,
+        question_mask: torch.FloatTensor,
+        question_encoded_final_state: torch.FloatTensor,
+        question_encoded_aslist: List[torch.Tensor],
+        question_mask_aslist: List[torch.Tensor],
+    ):
 
         s_languages = self._select_indices_from_list(languages, instances_list)
         s_actions = self._select_indices_from_list(actions, instances_list)
@@ -1528,14 +1645,24 @@ class DROPParserBERT(DROPParserBase):
 
         num_instances = len(instances_list)
 
-        return self.getInitialDecoderState(s_languages, s_actions, s_encoded_question, s_question_mask,
-                                           s_question_encoded_final_state, s_question_encoded_aslist,
-                                           s_question_mask_aslist, num_instances)
+        return self.getInitialDecoderState(
+            s_languages,
+            s_actions,
+            s_encoded_question,
+            s_question_mask,
+            s_question_encoded_final_state,
+            s_question_encoded_aslist,
+            s_question_mask_aslist,
+            num_instances,
+        )
 
-
-    def merge_final_states(self,
-                           supervised_final_states, unsupervised_final_states,
-                           supervised_instances: List[int], unsupervised_instances: List[int]):
+    def merge_final_states(
+        self,
+        supervised_final_states,
+        unsupervised_final_states,
+        supervised_instances: List[int],
+        unsupervised_instances: List[int],
+    ):
 
         """ Supervised and unsupervised final_states are dicts with keys in order from 0 - len(dict)
             The final keys are the instances' batch index which is stored in (un)supervised_instances list
@@ -1581,8 +1708,9 @@ class DROPParserBERT(DROPParserBase):
         # Shape: (B, passage_length, num_scaling_factors)
         scaled_passage_attentions = torch.stack(scaled_attentions, dim=2)
         # Shape: (B, hidden_dim)
-        count_hidden_repr = self._executor_parameters.passage_attention_to_count(scaled_passage_attentions,
-                                                                                 passage_mask)
+        count_hidden_repr = self._executor_parameters.passage_attention_to_count(
+            scaled_passage_attentions, passage_mask
+        )
         # Shape: (B, num_counts)
         passage_span_logits = self._executor_parameters.passage_count_predictor(count_hidden_repr)
         count_distribution = torch.softmax(passage_span_logits, dim=1)
@@ -1635,9 +1763,7 @@ class DROPParserBERT(DROPParserBase):
 
         return inwindow_mask, outwindow_mask
 
-
-    def window_loss_numdate(self, passage_passage_alignment, passage_tokenidx_mask,
-                            inwindow_mask, outwindow_mask):
+    def window_loss_numdate(self, passage_passage_alignment, passage_tokenidx_mask, inwindow_mask, outwindow_mask):
         """
         The idea is to first softmax the similarity_scores to get a distribution over the date/num tokens from each
         passage token.
@@ -1664,7 +1790,6 @@ class DROPParserBERT(DROPParserBase):
         # passage_passage_alignment_matrix = allenutil.masked_softmax(passage_passage_similarity_scores,
         #                                                             passage_tokenidx_mask.unsqueeze(1),
         #                                                             memory_efficient=True)
-
 
         inwindow_mask = inwindow_mask.unsqueeze(0) * passage_tokenidx_mask.unsqueeze(1)
         inwindow_probs = passage_passage_alignment * inwindow_mask
@@ -1754,16 +1879,3 @@ class DROPParserBERT(DROPParserBase):
     #     count_loss = F.cross_entropy(input=count_logits, target=count_answers)
     #
     #     return count_loss
-
-
-
-
-
-
-
-
-
-
-
-
-

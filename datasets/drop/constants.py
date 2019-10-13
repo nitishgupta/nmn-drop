@@ -18,7 +18,7 @@ date_ans = "date"
 # List of spans
 spans_ans = "spans"
 
-#query id
+# query id
 query_id = "query_id"
 
 # Passage text
@@ -70,7 +70,7 @@ strongly_supervised = "strongly_supervised"
 program_supervised = "program_supervised"
 qattn_supervised = "qattn_supervised"
 exection_supervised = "execution_supervised"
-pattn_supervised = "pattn_supervised"       # Boolean
+pattn_supervised = "pattn_supervised"  # Boolean
 
 # n-tuple of question attention
 ques_attention_supervision = "ques_attention_supervision"
@@ -86,12 +86,12 @@ qspan_numgrounding_supervision = "qspan_numgrounding_supervision"
 qspan_numvalue_supervision = "qspan_numvalue_supervision"
 
 # How many yards was the longest/shortest ..
-YARDS_longest_qtype = 'how_many_yards_longest'
-YARDS_shortest_qtype = 'how_many_yards_shortest'
-YARDS_second_longest_qtype = 'how_many_yards_second_longest'
-YARDS_second_shortest_qtype = 'how_many_yards_second_shortest'
+YARDS_longest_qtype = "how_many_yards_longest"
+YARDS_shortest_qtype = "how_many_yards_shortest"
+YARDS_second_longest_qtype = "how_many_yards_second_longest"
+YARDS_second_shortest_qtype = "how_many_yards_second_shortest"
 # How many yards -- Find a PassageNum as answer
-YARDS_findnum_qtype = 'how_many_yards_findnum'
+YARDS_findnum_qtype = "how_many_yards_findnum"
 
 MAX_find_qtype = "max_find_qtype"
 MIN_find_qtype = "min_find_qtype"
@@ -126,21 +126,17 @@ RELOC_minfind_qtype = "relocate_minfind_qtype"
 RELOC_minfilterfind_qtype = "relocate_minfilterfind_qtype"
 
 # YEAR Diff question types
-YEARDIFF_SE_qtype = "yeardiff_find_qtype"        # Single event
-YEARDIFF_TE_qtype = "yeardiff_find2_qtype"       # Two Events
+YEARDIFF_SE_qtype = "yeardiff_find_qtype"  # Single event
+YEARDIFF_TE_qtype = "yeardiff_find2_qtype"  # Two Events
 
 # Synthetic questions
-passage_attn_supervision = "passage_attn_supervision"     # passage-attention
+passage_attn_supervision = "passage_attn_supervision"  # passage-attention
 
 
 SYN_COUNT_qtype = "synthetic_count_qtype"
-SYN_NUMGROUND_qtype = "synthetic_numground_qtype"         # Synthetic questions for number grounding
-SYN_NUMGROUND_METADATA = "synthetic_numground_metadata"   # Synthetic num ques come with Metadata
+SYN_NUMGROUND_qtype = "synthetic_numground_qtype"  # Synthetic questions for number grounding
+SYN_NUMGROUND_METADATA = "synthetic_numground_metadata"  # Synthetic num ques come with Metadata
 
-COMMA="@COMMA@"
-LRB="@LRB@"
-RRB="@RRB@"
-
-
-
-
+COMMA = "@COMMA@"
+LRB = "@LRB@"
+RRB = "@RRB@"

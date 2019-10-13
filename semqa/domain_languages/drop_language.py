@@ -6,8 +6,12 @@ from torch import Tensor
 import torch.nn.functional as F
 
 import allennlp.nn.util as allenutil
-from allennlp.semparse.domain_languages.domain_language import (DomainLanguage, predicate,
-                                                                predicate_with_side_args, ExecutionError)
+from allennlp.semparse.domain_languages.domain_language import (
+    DomainLanguage,
+    predicate,
+    predicate_with_side_args,
+    ExecutionError,
+)
 
 from semqa.domain_languages.drop_execution_parameters import ExecutorParameters
 from semqa.domain_languages import domain_language_utils as dlutils
@@ -101,14 +105,16 @@ class Date:
             #     return 0
 
 
-class PassageSpanAnswer():
-    def __init__(self,
-                 passage_span_start_log_probs: Tensor,
-                 passage_span_end_log_probs: Tensor,
-                 start_logits,
-                 end_logits,
-                 loss=0.0,
-                 debug_value="") -> None:
+class PassageSpanAnswer:
+    def __init__(
+        self,
+        passage_span_start_log_probs: Tensor,
+        passage_span_end_log_probs: Tensor,
+        start_logits,
+        end_logits,
+        loss=0.0,
+        debug_value="",
+    ) -> None:
         """ Tuple of start_log_probs and end_log_probs tensor """
         self.start_logits = start_logits
         self.end_logits = end_logits
@@ -117,14 +123,16 @@ class PassageSpanAnswer():
         self.debug_value = debug_value
 
 
-class QuestionSpanAnswer():
-    def __init__(self,
-                 question_span_start_log_probs: Tensor,
-                 question_span_end_log_probs: Tensor,
-                 start_logits,
-                 end_logits,
-                 loss=0.0,
-                 debug_value="") -> None:
+class QuestionSpanAnswer:
+    def __init__(
+        self,
+        question_span_start_log_probs: Tensor,
+        question_span_end_log_probs: Tensor,
+        start_logits,
+        end_logits,
+        loss=0.0,
+        debug_value="",
+    ) -> None:
         """ Tuple of start_log_probs and end_log_probs tensor """
         self.start_logits = start_logits
         self.end_logits = end_logits
@@ -133,41 +141,41 @@ class QuestionSpanAnswer():
         self.debug_value = debug_value
 
 
-class QuestionAttention():
+class QuestionAttention:
     def __init__(self, question_attention, debug_value=""):
         self._value = question_attention
         self.debug_value = debug_value
 
 
-class PassageAttention():
+class PassageAttention:
     def __init__(self, passage_attention, loss=0.0, debug_value=""):
         self._value = passage_attention
         self.loss = loss
         self.debug_value = debug_value
 
 
-class PassageAttention_answer():
+class PassageAttention_answer:
     def __init__(self, passage_attention, loss=0.0, debug_value=""):
         self._value = passage_attention
         self.loss = loss
         self.debug_value = debug_value
 
 
-class YearDifference():
+class YearDifference:
     def __init__(self, year_difference_dist, loss=0.0, debug_value=""):
         self._value = year_difference_dist
         self.loss = loss
         self.debug_value = debug_value
 
 
-class PassageNumber():
+class PassageNumber:
     def __init__(self, passage_number_dist, loss=0.0, debug_value=""):
         self._value = passage_number_dist
         self.loss = loss
         self.debug_value = debug_value
 
 
-class CountNumber():
+class CountNumber:
     def __init__(self, count_number_dist, loss=0.0, debug_value=""):
         self._value = count_number_dist
         self.loss = loss
@@ -185,33 +193,35 @@ class CountAnswer(Tensor):
 
 
 def get_empty_language_object():
-    droplanguage = DropLanguage(rawemb_question=None,
-                                embedded_question=None,
-                                encoded_question=None,
-                                rawemb_passage=None,
-                                embedded_passage=None,
-                                encoded_passage=None,
-                                modeled_passage=None,
-                                question_mask=None,
-                                passage_mask=None,
-                                passage_tokenidx2dateidx=None,
-                                passage_date_values=None,
-                                passage_tokenidx2numidx=None,
-                                passage_num_values=None,
-                                passage_number_sortedtokenidxs=None,
-                                add_num_combination_indices=None,
-                                sub_num_combination_indices=None,
-                                year_differences=None,
-                                year_differences_mat=None,
-                                count_num_values=None,
-                                question_passage_attention=None,
-                                passage_question_attention=None,
-                                passage_token2date_alignment=None,
-                                passage_token2startdate_alignment=None,
-                                passage_token2enddate_alignment=None,
-                                passage_token2num_alignment=None,
-                                parameters=None,
-                                start_types=None)
+    droplanguage = DropLanguage(
+        rawemb_question=None,
+        embedded_question=None,
+        encoded_question=None,
+        rawemb_passage=None,
+        embedded_passage=None,
+        encoded_passage=None,
+        modeled_passage=None,
+        question_mask=None,
+        passage_mask=None,
+        passage_tokenidx2dateidx=None,
+        passage_date_values=None,
+        passage_tokenidx2numidx=None,
+        passage_num_values=None,
+        passage_number_sortedtokenidxs=None,
+        add_num_combination_indices=None,
+        sub_num_combination_indices=None,
+        year_differences=None,
+        year_differences_mat=None,
+        count_num_values=None,
+        question_passage_attention=None,
+        passage_question_attention=None,
+        passage_token2date_alignment=None,
+        passage_token2startdate_alignment=None,
+        passage_token2enddate_alignment=None,
+        passage_token2num_alignment=None,
+        parameters=None,
+        start_types=None,
+    )
     return droplanguage
 
 
@@ -227,38 +237,40 @@ class DropLanguage(DomainLanguage):
     """
 
     # TODO(nitish): Defaulting all parameters to None since in the reader we create an
-    def __init__(self,
-                 rawemb_question: Tensor,
-                 embedded_question: Tensor,
-                 encoded_question: Tensor,
-                 rawemb_passage: Tensor,
-                 embedded_passage: Tensor,
-                 encoded_passage: Tensor,
-                 question_mask: Tensor,
-                 passage_mask: Tensor,
-                 passage_tokenidx2dateidx: torch.LongTensor,
-                 passage_date_values: List[Date],
-                 passage_tokenidx2numidx: torch.LongTensor,
-                 passage_num_values: List[float],
-                 passage_number_sortedtokenidxs: List[int],
-                 add_num_combination_indices: Tensor,
-                 sub_num_combination_indices: Tensor,
-                 year_differences: List[int],
-                 year_differences_mat: np.array,
-                 count_num_values: List[int],
-                 question_passage_attention: Tensor,
-                 passage_question_attention: Tensor,
-                 passage_token2date_alignment: Tensor,
-                 passage_token2startdate_alignment: Tensor,
-                 passage_token2enddate_alignment: Tensor,
-                 passage_token2num_alignment: Tensor,
-                 parameters: ExecutorParameters,
-                 modeled_passage: Tensor = None,
-                 start_types=None,
-                 device_id: int = -1,
-                 max_samples=3,
-                 metadata={},
-                 debug=False) -> None:
+    def __init__(
+        self,
+        rawemb_question: Tensor,
+        embedded_question: Tensor,
+        encoded_question: Tensor,
+        rawemb_passage: Tensor,
+        embedded_passage: Tensor,
+        encoded_passage: Tensor,
+        question_mask: Tensor,
+        passage_mask: Tensor,
+        passage_tokenidx2dateidx: torch.LongTensor,
+        passage_date_values: List[Date],
+        passage_tokenidx2numidx: torch.LongTensor,
+        passage_num_values: List[float],
+        passage_number_sortedtokenidxs: List[int],
+        add_num_combination_indices: Tensor,
+        sub_num_combination_indices: Tensor,
+        year_differences: List[int],
+        year_differences_mat: np.array,
+        count_num_values: List[int],
+        question_passage_attention: Tensor,
+        passage_question_attention: Tensor,
+        passage_token2date_alignment: Tensor,
+        passage_token2startdate_alignment: Tensor,
+        passage_token2enddate_alignment: Tensor,
+        passage_token2num_alignment: Tensor,
+        parameters: ExecutorParameters,
+        modeled_passage: Tensor = None,
+        start_types=None,
+        device_id: int = -1,
+        max_samples=3,
+        metadata={},
+        debug=False,
+    ) -> None:
 
         if start_types is None:
             start_types = {PassageSpanAnswer, YearDifference, PassageNumber, CountNumber}
@@ -282,7 +294,7 @@ class DropLanguage(DomainLanguage):
 
         # Shape: (passage_length, )
         self.passage_tokenidx2dateidx = passage_tokenidx2dateidx.long()
-        passage_tokenidx2dateidx_mask = (self.passage_tokenidx2dateidx > -1)
+        passage_tokenidx2dateidx_mask = self.passage_tokenidx2dateidx > -1
         self.passage_datetokens_mask_long = passage_tokenidx2dateidx_mask.long()
         self.passage_datetokens_mask_float = passage_tokenidx2dateidx_mask.float()
         # List[Date] - number of unique dates in the passage
@@ -291,7 +303,7 @@ class DropLanguage(DomainLanguage):
 
         # Shape: (passage_length, )
         self.passage_tokenidx2numidx = passage_tokenidx2numidx.long()
-        passage_tokenidx2numidx_mask = (self.passage_tokenidx2numidx > -1)
+        passage_tokenidx2numidx_mask = self.passage_tokenidx2numidx > -1
         self.passage_numtokens_mask_long = passage_tokenidx2numidx_mask.long()
         self.passage_numtokens_mask_float = passage_tokenidx2numidx_mask.float()
         # List[float] - number of unique numbers in the passage
@@ -317,7 +329,9 @@ class DropLanguage(DomainLanguage):
         self.device_id = device_id
 
         # Shape: (question_length, passage_length)
-        self.question_passage_attention = question_passage_attention  # initialization_returns["question_passage_attention"]
+        self.question_passage_attention = (
+            question_passage_attention
+        )  # initialization_returns["question_passage_attention"]
         # Shape: (passage_length, question_length)
         self.passage_question_attention = passage_question_attention
         # Shape: (passage_length, passage_length)
@@ -334,8 +348,9 @@ class DropLanguage(DomainLanguage):
         # List[int]
         self.year_differences = year_differences
         # Shape: (num_passage_dates, num_passage_dates, num_of_year_differences)
-        self.year_differences_mat = allenutil.move_to_device(torch.FloatTensor(year_differences_mat),
-                                                             cuda_device=self.device_id)
+        self.year_differences_mat = allenutil.move_to_device(
+            torch.FloatTensor(year_differences_mat), cuda_device=self.device_id
+        )
         # List[int]
         self.count_num_values = count_num_values
         self.countvals = allenutil.move_to_device(torch.FloatTensor(range(0, 10)), cuda_device=self.device_id)
@@ -365,10 +380,12 @@ class DropLanguage(DomainLanguage):
         date_gt_mat, date_lt_mat = self.compute_date_comparison_matrices(self.passage_date_values, self.device_id)
         num_gt_mat, num_lt_mat = self.compute_item_comparison_matrices(self.passage_num_values, self.device_id)
 
-        return {"date_gt_mat": date_gt_mat,
-                "date_lt_mat": date_lt_mat,
-                "num_gt_mat": num_gt_mat,
-                "num_lt_mat": num_lt_mat}
+        return {
+            "date_gt_mat": date_gt_mat,
+            "date_lt_mat": date_lt_mat,
+            "num_gt_mat": num_gt_mat,
+            "num_lt_mat": num_lt_mat,
+        }
 
     @staticmethod
     def compute_date_comparison_matrices(date_values: List[Date], device_id: int):
@@ -410,9 +427,8 @@ class DropLanguage(DomainLanguage):
     #
     #     return QuestionAttention(question_attention, debug_value=debug_value)
 
-    @predicate_with_side_args(['question_attention', 'passage_attention'])
-    def find_PassageAttention(self, question_attention: Tensor,
-                              passage_attention: Tensor = None) -> PassageAttention:
+    @predicate_with_side_args(["question_attention", "passage_attention"])
+    def find_PassageAttention(self, question_attention: Tensor, passage_attention: Tensor = None) -> PassageAttention:
 
         # The passage attention is only used as supervision for certain synthetic questions
         if passage_attention is not None:
@@ -428,21 +444,23 @@ class DropLanguage(DomainLanguage):
 
         debug_value = ""
         if self._debug:
-            qattn_vis_complete, qattn_vis_most = dlutils.listTokensVis(question_attention,
-                                                                       self.metadata["question_tokens"])
+            qattn_vis_complete, qattn_vis_most = dlutils.listTokensVis(
+                question_attention, self.metadata["question_tokens"]
+            )
             debug_value += f"Qattn: {qattn_vis_complete}"
-            pattn_vis_complete, pattn_vis_most = dlutils.listTokensVis(passage_attention,
-                                                                       self.metadata["passage_tokens"])
+            pattn_vis_complete, pattn_vis_most = dlutils.listTokensVis(
+                passage_attention, self.metadata["passage_tokens"]
+            )
             most_attended_spans = dlutils.mostAttendedSpans(passage_attention, self.metadata["passage_tokens"])
             debug_value += f"\nPattn: {pattn_vis_complete}"
             debug_value += f"\nMostAttendedSpans: {most_attended_spans}"
 
         return PassageAttention(passage_attention, debug_value=debug_value)
 
-    @predicate_with_side_args(['question_attention'])
-    def filter_PassageAttention(self,
-                                passage_attention: PassageAttention,
-                                question_attention: Tensor) -> PassageAttention:
+    @predicate_with_side_args(["question_attention"])
+    def filter_PassageAttention(
+        self, passage_attention: PassageAttention, question_attention: Tensor
+    ) -> PassageAttention:
 
         passage_attn: Tensor = passage_attention._value
 
@@ -454,8 +472,8 @@ class DropLanguage(DomainLanguage):
 
         # Shape: (1, 1, passage_length)
         passage_logits_unsqueezed = self.parameters.filter_matrix_attention(
-            weighted_question_vector.unsqueeze(0).unsqueeze(1),
-            passage_repr.unsqueeze(0))
+            weighted_question_vector.unsqueeze(0).unsqueeze(1), passage_repr.unsqueeze(0)
+        )
 
         passage_logits = passage_logits_unsqueezed.squeeze(0).squeeze(0)
 
@@ -471,8 +489,9 @@ class DropLanguage(DomainLanguage):
 
         debug_value = ""
         if self._debug:
-            qattn_vis_complete, qattn_vis_most = dlutils.listTokensVis(question_attention,
-                                                                       self.metadata["question_tokens"])
+            qattn_vis_complete, qattn_vis_most = dlutils.listTokensVis(
+                question_attention, self.metadata["question_tokens"]
+            )
             debug_value += f"Qattn: {qattn_vis_complete}"
 
             f_attn_vis, _ = dlutils.listTokensVis(filter_attn, self.metadata["passage_tokens"])
@@ -480,18 +499,19 @@ class DropLanguage(DomainLanguage):
             debug_value += f"\nFilterAttn: {f_attn_vis}"
             debug_value += f"\nMostAttended: {most_attended_spans}"
 
-            pattn_vis_complete, pattn_vis_most = dlutils.listTokensVis(filtered_passage_attention,
-                                                                       self.metadata["passage_tokens"])
+            pattn_vis_complete, pattn_vis_most = dlutils.listTokensVis(
+                filtered_passage_attention, self.metadata["passage_tokens"]
+            )
             most_attended_spans = dlutils.mostAttendedSpans(filtered_passage_attention, self.metadata["passage_tokens"])
             debug_value += f"\nPattn: {pattn_vis_complete}"
             debug_value += f"\nMostAttended: {most_attended_spans}"
 
         return PassageAttention(filtered_passage_attention, loss=loss, debug_value=debug_value)
 
-    @predicate_with_side_args(['question_attention'])
-    def relocate_PassageAttention(self,
-                                  passage_attention: PassageAttention,
-                                  question_attention: Tensor) -> PassageAttention_answer:
+    @predicate_with_side_args(["question_attention"])
+    def relocate_PassageAttention(
+        self, passage_attention: PassageAttention, question_attention: Tensor
+    ) -> PassageAttention_answer:
 
         passage_attn: Tensor = passage_attention._value
         passage_attn = passage_attn * self.passage_mask
@@ -507,18 +527,21 @@ class DropLanguage(DomainLanguage):
 
         # Shape: (passage_length, passage_length)
         passage_passage_relocate_similarity = self.parameters.relocate_matrix_attention(
-            q_p_repr.unsqueeze(0), passage_repr.unsqueeze(0)).squeeze(0)
+            q_p_repr.unsqueeze(0), passage_repr.unsqueeze(0)
+        ).squeeze(0)
         # Shape: (passage_length, passage_length)
-        p_to_p_relocate_attention = allenutil.masked_softmax(passage_passage_relocate_similarity,
-                                                             mask=self.passage_mask.unsqueeze(0),
-                                                             dim=-1)
+        p_to_p_relocate_attention = allenutil.masked_softmax(
+            passage_passage_relocate_similarity, mask=self.passage_mask.unsqueeze(0), dim=-1
+        )
         p_to_p_relocate_attention = p_to_p_relocate_attention * self.passage_mask.unsqueeze(1)
 
         passage_length = passage_attn.size()[0]
-        inwindow_mask, _ = dlutils.masking_blockdiagonal(passage_length=passage_length, window=15,
-                                                         device_id=self.device_id)
-        inwindow_aux_loss = dlutils.aux_window_loss(ptop_attention=p_to_p_relocate_attention,
-                                                    passage_mask=self.passage_mask, inwindow_mask=inwindow_mask)
+        inwindow_mask, _ = dlutils.masking_blockdiagonal(
+            passage_length=passage_length, window=15, device_id=self.device_id
+        )
+        inwindow_aux_loss = dlutils.aux_window_loss(
+            ptop_attention=p_to_p_relocate_attention, passage_mask=self.passage_mask, inwindow_mask=inwindow_mask
+        )
 
         # Shape: (passage_length, )
         relocate_attn = (p_to_p_relocate_attention * passage_attn.unsqueeze(1)).sum(0)
@@ -529,8 +552,9 @@ class DropLanguage(DomainLanguage):
 
         debug_value = ""
         if self._debug:
-            qattn_vis_complete, qattn_vis_most = dlutils.listTokensVis(question_attention,
-                                                                       self.metadata["question_tokens"])
+            qattn_vis_complete, qattn_vis_most = dlutils.listTokensVis(
+                question_attention, self.metadata["question_tokens"]
+            )
             debug_value += f"Qattn: {qattn_vis_complete}"
             r_attn_vis, _ = dlutils.listTokensVis(relocate_attn, self.metadata["passage_tokens"])
             most_attended_spans = dlutils.mostAttendedSpans(relocate_attn, self.metadata["passage_tokens"])
@@ -546,7 +570,7 @@ class DropLanguage(DomainLanguage):
 
     # New Date Distribtion
     def compute_date_scores(self, passage_attention: Tensor, date_type: str = None):
-        ''' Given a passage over passage token2date attention (normalized), and an additional passage attention
+        """ Given a passage over passage token2date attention (normalized), and an additional passage attention
             for token importance, compute a distribution over (unique) dates in the passage.
 
             Using the token_attention from the passage_attention, find the expected input_token2date_token
@@ -554,7 +578,7 @@ class DropLanguage(DomainLanguage):
             Use this date_token attention as scores for the dates they refer to. Since each date can be referred
             to in multiple places, we use scatter_add_ to get the total_score.
             Softmax over these scores is the date dist.
-        '''
+        """
 
         # passage_date_alignment_matrix = allenutil.masked_softmax(self.passage_passage_token2date_similarity,
         #                                                          mask=self.passage_datetokens_mask_float.unsqueeze(0),
@@ -616,10 +640,10 @@ class DropLanguage(DomainLanguage):
 
     # New Num Distribution by first computing a number-distribution for each passage-token
     def compute_num_distribution(self, passage_attention: Tensor):
-        ''' Given a passage over passage token2num attention (normalized), and an additional passage attention
+        """ Given a passage over passage token2num attention (normalized), and an additional passage attention
             for token importance, compute a distribution over (unique) nums in the passage.
             See compute_date_distribution for details
-        '''
+        """
         # Shape: (passage_length, passage_length) -- each row softmaxed over the number-tokens
         # passage_number_alignment_matrix = allenutil.masked_softmax(self.passage_passage_token2num_similarity,
         #                                                            mask=self.passage_numtokens_mask_float.unsqueeze(0),
@@ -665,7 +689,7 @@ class DropLanguage(DomainLanguage):
 
         masked_passage_tokenidx2numidx = self.passage_numtokens_mask_long * self.passage_tokenidx2numidx
 
-        ''' normalized method with method 2 '''
+        """ normalized method with method 2 """
         num_distribution = passage_attention.new_zeros(self.num_passage_nums)
         num_distribution.scatter_add_(0, masked_passage_tokenidx2numidx, passage_number_token_probs)
 
@@ -675,9 +699,7 @@ class DropLanguage(DomainLanguage):
 
         return num_distribution, num_distribution, num_distribution_entropy
 
-
-    def expected_number_addsub(self, num_dist_1: torch.FloatTensor, num_dist_2: torch.FloatTensor,
-                               operation: str):
+    def expected_number_addsub(self, num_dist_1: torch.FloatTensor, num_dist_2: torch.FloatTensor, operation: str):
         """Compute the expected number distribution for an addition/subtraction operation."""
 
         assert operation in ["add", "sub"]
@@ -703,14 +725,16 @@ class DropLanguage(DomainLanguage):
         # B=1 unsqueezing
         masked_num_combination_indices_uns = masked_num_combination_indices.unsqueeze(0)
 
-        selected_d_1 = allenutil.batched_index_select(target=num_dist_1_uns,
-                                                      indices=masked_num_combination_indices_uns[:, :, :, 0])
+        selected_d_1 = allenutil.batched_index_select(
+            target=num_dist_1_uns, indices=masked_num_combination_indices_uns[:, :, :, 0]
+        )
         # Shape: (number_support, max_num_combinations)
         selected_d_1 = selected_d_1.squeeze(0).squeeze(-1)
         selected_d_1 = selected_d_1 * num_combination_mask[:, :, 0].float()
 
-        selected_d_2 = allenutil.batched_index_select(target=num_dist_2_uns,
-                                                      indices=masked_num_combination_indices_uns[:, :, :, 1])
+        selected_d_2 = allenutil.batched_index_select(
+            target=num_dist_2_uns, indices=masked_num_combination_indices_uns[:, :, :, 1]
+        )
         # Shape: (number_support, max_num_combinations)
         selected_d_2 = selected_d_2.squeeze(0).squeeze(-1)
         selected_d_2 = selected_d_2 * num_combination_mask[:, :, 1].float()
@@ -721,10 +745,9 @@ class DropLanguage(DomainLanguage):
 
         return expected_distribution
 
-
-    def expected_date_year_difference(self,
-                                      date_distribution_1: torch.FloatTensor,
-                                      date_distribution_2: torch.FloatTensor):
+    def expected_date_year_difference(
+        self, date_distribution_1: torch.FloatTensor, date_distribution_2: torch.FloatTensor
+    ):
         """ Compute a distribution over possible year-differences by marginalizing over the year_differnces_mat.
 
             Parameters:
@@ -796,8 +819,7 @@ class DropLanguage(DomainLanguage):
         expected_bool = torch.clamp(expected_bool, min=1e-10, max=1 - 1e-10)
         return expected_bool
 
-    def date_comparison(self, passage_attention_1, passage_attention_2, comparison: str,
-                        gold_date_groundings=None):
+    def date_comparison(self, passage_attention_1, passage_attention_2, comparison: str, gold_date_groundings=None):
 
         date_distribution_1, _, d1_dist_entropy = self.compute_date_scores(passage_attention_1)
         date_distribution_2, _, d2_dist_entropy = self.compute_date_scores(passage_attention_2)
@@ -814,21 +836,23 @@ class DropLanguage(DomainLanguage):
             gold_date_grounding_1, gold_date_grounding_2 = gold_date_groundings
 
             # Shape: (2, num_dates)
-            gold_date_grounding_tensor = torch.cat([gold_date_grounding_1.unsqueeze(0),
-                                                    gold_date_grounding_2.unsqueeze(0)], dim=0)
+            gold_date_grounding_tensor = torch.cat(
+                [gold_date_grounding_1.unsqueeze(0), gold_date_grounding_2.unsqueeze(0)], dim=0
+            )
 
             # The groundings that contain a zero vector will yield max as zero, and hence mask = 0
             # For valid groundings, the max will be 1 (mask = 1) and will contain the correct idx from argmax
             date_grounding_mask, gold_date_idxs = torch.max(gold_date_grounding_tensor, dim=1)
 
             # Shape: [2, num_of_dates]
-            stacked_date_distributions = torch.cat([date_distribution_1.unsqueeze(0),
-                                                    date_distribution_2.unsqueeze(0)], dim=0)
+            stacked_date_distributions = torch.cat(
+                [date_distribution_1.unsqueeze(0), date_distribution_2.unsqueeze(0)], dim=0
+            )
 
             # Shape: (2) - Converting date_distribution to log-probabilties
-            date_grounding_loss = F.nll_loss(input=(stacked_date_distributions + 1e-40).log(),
-                                             target=gold_date_idxs,
-                                             reduction='none')
+            date_grounding_loss = F.nll_loss(
+                input=(stacked_date_distributions + 1e-40).log(), target=gold_date_idxs, reduction="none"
+            )
             date_grounding_loss = date_grounding_loss * date_grounding_mask
             date_grounding_loss = date_grounding_loss.mean()
 
@@ -843,8 +867,7 @@ class DropLanguage(DomainLanguage):
 
         return (date_distribution_1, date_distribution_2, bool1, bool2, average_passage_distribution, aux_loss)
 
-    def num_comparison(self, passage_attention_1, passage_attention_2, comparison: str,
-                       gold_num_groundings=None):
+    def num_comparison(self, passage_attention_1, passage_attention_2, comparison: str, gold_num_groundings=None):
 
         num_distribution_1, _, num1_entropy = self.compute_num_distribution(passage_attention_1)
         num_distribution_2, _, num2_entropy = self.compute_num_distribution(passage_attention_2)
@@ -864,20 +887,22 @@ class DropLanguage(DomainLanguage):
             gold_num_grounding_1, gold_num_grounding_2 = gold_num_groundings
 
             # Shape: (2, num_passage_nums)
-            gold_num_grounding_tensor = torch.cat([gold_num_grounding_1.unsqueeze(0),
-                                                   gold_num_grounding_2.unsqueeze(0)], dim=0)
+            gold_num_grounding_tensor = torch.cat(
+                [gold_num_grounding_1.unsqueeze(0), gold_num_grounding_2.unsqueeze(0)], dim=0
+            )
 
             # The groundings that contain a zero vector will yield max as zero, and hence mask = 0
             # For valid groundings, the max will be 1 (mask = 1) and will contain the correct idx from argmax
             grounding_mask, gold_idxs = torch.max(gold_num_grounding_tensor, dim=1)
 
             # Shape: [2, num_of_dates]
-            stacked_num_distributions = torch.cat([num_distribution_1.unsqueeze(0),
-                                                   num_distribution_2.unsqueeze(0)], dim=0)
+            stacked_num_distributions = torch.cat(
+                [num_distribution_1.unsqueeze(0), num_distribution_2.unsqueeze(0)], dim=0
+            )
             # Shape: (2) - Converting date_distribution to log-probabilties
-            num_grounding_loss = F.nll_loss(input=(stacked_num_distributions + 1e-40).log(),
-                                            target=gold_idxs,
-                                            reduction='none')
+            num_grounding_loss = F.nll_loss(
+                input=(stacked_num_distributions + 1e-40).log(), target=gold_idxs, reduction="none"
+            )
             num_grounding_loss = num_grounding_loss * grounding_mask
             num_grounding_loss = num_grounding_loss.mean()
 
@@ -890,20 +915,22 @@ class DropLanguage(DomainLanguage):
         return (num_distribution_1, num_distribution_2, bool1, bool2, average_passage_distribution, aux_loss)
 
     # @predicate
-    @predicate_with_side_args(['event_date_groundings'])
-    def compare_date_lesser_than(self,
-                                 passage_attn_1: PassageAttention,
-                                 passage_attn_2: PassageAttention,
-                                 event_date_groundings=None) -> PassageAttention_answer:
+    @predicate_with_side_args(["event_date_groundings"])
+    def compare_date_lesser_than(
+        self, passage_attn_1: PassageAttention, passage_attn_2: PassageAttention, event_date_groundings=None
+    ) -> PassageAttention_answer:
 
         passage_attention_1 = passage_attn_1._value * self.passage_mask
         passage_attention_2 = passage_attn_2._value * self.passage_mask
 
-        (date_distribution_1,
-         date_distribution_2,
-         prob_date1_lesser, prob_date2_lesser,
-         average_passage_distribution, aux_loss) = self.date_comparison(passage_attention_1, passage_attention_2,
-                                                                        "lesser", event_date_groundings)
+        (
+            date_distribution_1,
+            date_distribution_2,
+            prob_date1_lesser,
+            prob_date2_lesser,
+            average_passage_distribution,
+            aux_loss,
+        ) = self.date_comparison(passage_attention_1, passage_attention_2, "lesser", event_date_groundings)
 
         average_passage_distribution = torch.clamp(average_passage_distribution, min=1e-10, max=1 - 1e-10)
         loss = 0.0
@@ -918,41 +945,42 @@ class DropLanguage(DomainLanguage):
                 gold_date_2 = myutils.round_all(myutils.tocpuNPList(event_date_groundings[1]), 3)
             else:
                 gold_date_1, gold_date_2 = None, None
-            _, pattn_vis_most_1 = dlutils.listTokensVis(passage_attention_1,
-                                                        self.metadata["passage_tokens"])
-            _, pattn_vis_most_2 = dlutils.listTokensVis(passage_attention_2,
-                                                        self.metadata["passage_tokens"])
+            _, pattn_vis_most_1 = dlutils.listTokensVis(passage_attention_1, self.metadata["passage_tokens"])
+            _, pattn_vis_most_2 = dlutils.listTokensVis(passage_attention_2, self.metadata["passage_tokens"])
 
             date1 = myutils.round_all(myutils.tocpuNPList(date_distribution_1), 3)
             date2 = myutils.round_all(myutils.tocpuNPList(date_distribution_2), 3)
             d1_lt_d2 = myutils.round_all(myutils.tocpuNPList(prob_date1_lesser), 3)
             d2_lt_d1 = myutils.round_all(myutils.tocpuNPList(prob_date2_lesser), 3)
 
-            debug_value += f"Pattn1: {pattn_vis_most_1}\n Date1: {date1}" + \
-                           f"\nPattn2: {pattn_vis_most_2}\n Date2: {date2}" + \
-                           f"\nP(D1 < D2): {d1_lt_d2}  P(D2 < D1): {d2_lt_d1}"
+            debug_value += (
+                f"Pattn1: {pattn_vis_most_1}\n Date1: {date1}"
+                + f"\nPattn2: {pattn_vis_most_2}\n Date2: {date2}"
+                + f"\nP(D1 < D2): {d1_lt_d2}  P(D2 < D1): {d2_lt_d1}"
+            )
             if gold_date_1:
                 debug_value += f"\nGoldDates  Date1: {gold_date_1}  Date2: {gold_date_2}"
 
         return PassageAttention_answer(average_passage_distribution, loss=loss, debug_value=debug_value)
 
     # @predicate
-    @predicate_with_side_args(['event_date_groundings'])
-    def compare_date_greater_than(self,
-                                  passage_attn_1: PassageAttention,
-                                  passage_attn_2: PassageAttention,
-                                  event_date_groundings=None) -> PassageAttention_answer:
-        ''' In short; outputs PA_1 if D1 > D2 i.e. is PA_1 occurred after PA_2 '''
+    @predicate_with_side_args(["event_date_groundings"])
+    def compare_date_greater_than(
+        self, passage_attn_1: PassageAttention, passage_attn_2: PassageAttention, event_date_groundings=None
+    ) -> PassageAttention_answer:
+        """ In short; outputs PA_1 if D1 > D2 i.e. is PA_1 occurred after PA_2 """
 
         passage_attention_1 = passage_attn_1._value * self.passage_mask
         passage_attention_2 = passage_attn_2._value * self.passage_mask
 
-        (date_distribution_1,
-         date_distribution_2,
-         prob_date1_greater, prob_date2_greater,
-         average_passage_distribution,
-         aux_loss) = self.date_comparison(passage_attention_1, passage_attention_2,
-                                          "greater", event_date_groundings)
+        (
+            date_distribution_1,
+            date_distribution_2,
+            prob_date1_greater,
+            prob_date2_greater,
+            average_passage_distribution,
+            aux_loss,
+        ) = self.date_comparison(passage_attention_1, passage_attention_2, "greater", event_date_groundings)
         average_passage_distribution = torch.clamp(average_passage_distribution, min=1e-10, max=1 - 1e-10)
 
         loss = 0.0
@@ -967,39 +995,41 @@ class DropLanguage(DomainLanguage):
                 gold_date_2 = myutils.round_all(myutils.tocpuNPList(event_date_groundings[1]), 3)
             else:
                 gold_date_1, gold_date_2 = None, None
-            _, pattn_vis_most_1 = dlutils.listTokensVis(passage_attention_1,
-                                                        self.metadata["passage_tokens"])
-            _, pattn_vis_most_2 = dlutils.listTokensVis(passage_attention_2,
-                                                        self.metadata["passage_tokens"])
+            _, pattn_vis_most_1 = dlutils.listTokensVis(passage_attention_1, self.metadata["passage_tokens"])
+            _, pattn_vis_most_2 = dlutils.listTokensVis(passage_attention_2, self.metadata["passage_tokens"])
 
             date1 = myutils.round_all(myutils.tocpuNPList(date_distribution_1), 3)
             date2 = myutils.round_all(myutils.tocpuNPList(date_distribution_2), 3)
             d1_gt_d2 = myutils.round_all(myutils.tocpuNPList(prob_date1_greater), 3)
             d2_gt_d1 = myutils.round_all(myutils.tocpuNPList(prob_date2_greater), 3)
 
-            debug_value += f"Pattn1: {pattn_vis_most_1}\n Date1: {date1}" + \
-                           f"\nPattn2: {pattn_vis_most_2}\n Date2: {date2}" + \
-                           f"\nP(D1 > D2): {d1_gt_d2}  P(D2 > D1): {d2_gt_d1}"
+            debug_value += (
+                f"Pattn1: {pattn_vis_most_1}\n Date1: {date1}"
+                + f"\nPattn2: {pattn_vis_most_2}\n Date2: {date2}"
+                + f"\nP(D1 > D2): {d1_gt_d2}  P(D2 > D1): {d2_gt_d1}"
+            )
 
             if gold_date_1:
                 debug_value += f"\nGoldDates  Date1: {gold_date_1}  Date2: {gold_date_2}"
 
         return PassageAttention_answer(average_passage_distribution, loss=loss, debug_value=debug_value)
 
-    @predicate_with_side_args(['event_num_groundings'])
-    def compare_num_lesser_than(self,
-                                passage_attn_1: PassageAttention,
-                                passage_attn_2: PassageAttention,
-                                event_num_groundings=None) -> PassageAttention_answer:
+    @predicate_with_side_args(["event_num_groundings"])
+    def compare_num_lesser_than(
+        self, passage_attn_1: PassageAttention, passage_attn_2: PassageAttention, event_num_groundings=None
+    ) -> PassageAttention_answer:
 
         passage_attention_1 = passage_attn_1._value * self.passage_mask
         passage_attention_2 = passage_attn_2._value * self.passage_mask
 
-        (num_distribution_1,
-         num_distribution_2,
-         prob_num1_lesser, prob_num2_lesser,
-         average_passage_distribution, aux_loss) = self.num_comparison(passage_attention_1, passage_attention_2,
-                                                                       "lesser", event_num_groundings)
+        (
+            num_distribution_1,
+            num_distribution_2,
+            prob_num1_lesser,
+            prob_num2_lesser,
+            average_passage_distribution,
+            aux_loss,
+        ) = self.num_comparison(passage_attention_1, passage_attention_2, "lesser", event_num_groundings)
         average_passage_distribution = torch.clamp(average_passage_distribution, min=1e-10, max=1 - 1e-10)
 
         loss = 0.0
@@ -1014,41 +1044,43 @@ class DropLanguage(DomainLanguage):
                 gold_num_2 = myutils.round_all(myutils.tocpuNPList(event_num_groundings[1]), 3)
             else:
                 gold_num_1, gold_num_2 = None, None
-            _, pattn_vis_most_1 = dlutils.listTokensVis(passage_attention_1,
-                                                        self.metadata["passage_tokens"])
-            _, pattn_vis_most_2 = dlutils.listTokensVis(passage_attention_2,
-                                                        self.metadata["passage_tokens"])
+            _, pattn_vis_most_1 = dlutils.listTokensVis(passage_attention_1, self.metadata["passage_tokens"])
+            _, pattn_vis_most_2 = dlutils.listTokensVis(passage_attention_2, self.metadata["passage_tokens"])
 
             num1 = myutils.round_all(myutils.tocpuNPList(num_distribution_1), 3)
             num2 = myutils.round_all(myutils.tocpuNPList(num_distribution_2), 3)
             d1_lt_d2 = myutils.round_all(myutils.tocpuNPList(prob_num1_lesser), 3)
             d2_lt_d1 = myutils.round_all(myutils.tocpuNPList(prob_num2_lesser), 3)
 
-            debug_value += f"Pattn1: {pattn_vis_most_1}\n Num1: {num1}" + \
-                           f"\nPattn2: {pattn_vis_most_2}\n Num2: {num2}" + \
-                           f"\nP(N1 < N2): {d1_lt_d2}  P(N2 < N1): {d2_lt_d1}"
+            debug_value += (
+                f"Pattn1: {pattn_vis_most_1}\n Num1: {num1}"
+                + f"\nPattn2: {pattn_vis_most_2}\n Num2: {num2}"
+                + f"\nP(N1 < N2): {d1_lt_d2}  P(N2 < N1): {d2_lt_d1}"
+            )
             if gold_num_1:
                 debug_value += f"\nGoldNums Num1: {gold_num_1}  Num2: {gold_num_2}"
 
         return PassageAttention_answer(average_passage_distribution, loss=loss, debug_value=debug_value)
 
     # @predicate
-    @predicate_with_side_args(['event_num_groundings'])
-    def compare_num_greater_than(self,
-                                 passage_attn_1: PassageAttention,
-                                 passage_attn_2: PassageAttention,
-                                 event_num_groundings=None) -> PassageAttention_answer:
-        ''' In short; outputs PA_1 if D1 > D2 i.e. is PA_1 occurred after PA_2
-        '''
+    @predicate_with_side_args(["event_num_groundings"])
+    def compare_num_greater_than(
+        self, passage_attn_1: PassageAttention, passage_attn_2: PassageAttention, event_num_groundings=None
+    ) -> PassageAttention_answer:
+        """ In short; outputs PA_1 if D1 > D2 i.e. is PA_1 occurred after PA_2
+        """
 
         passage_attention_1 = passage_attn_1._value * self.passage_mask
         passage_attention_2 = passage_attn_2._value * self.passage_mask
 
-        (num_distribution_1,
-         num_distribution_2,
-         prob_num1_greater, prob_num2_greater,
-         average_passage_distribution, aux_loss) = self.num_comparison(passage_attention_1, passage_attention_2,
-                                                                       "greater", event_num_groundings)
+        (
+            num_distribution_1,
+            num_distribution_2,
+            prob_num1_greater,
+            prob_num2_greater,
+            average_passage_distribution,
+            aux_loss,
+        ) = self.num_comparison(passage_attention_1, passage_attention_2, "greater", event_num_groundings)
         average_passage_distribution = torch.clamp(average_passage_distribution, min=1e-10, max=1 - 1e-10)
 
         loss = 0.0
@@ -1063,19 +1095,19 @@ class DropLanguage(DomainLanguage):
                 gold_num_2 = myutils.round_all(myutils.tocpuNPList(event_num_groundings[1]), 3)
             else:
                 gold_num_1, gold_num_2 = None, None
-            _, pattn_vis_most_1 = dlutils.listTokensVis(passage_attention_1,
-                                                        self.metadata["passage_tokens"])
-            _, pattn_vis_most_2 = dlutils.listTokensVis(passage_attention_2,
-                                                        self.metadata["passage_tokens"])
+            _, pattn_vis_most_1 = dlutils.listTokensVis(passage_attention_1, self.metadata["passage_tokens"])
+            _, pattn_vis_most_2 = dlutils.listTokensVis(passage_attention_2, self.metadata["passage_tokens"])
 
             num1 = myutils.round_all(myutils.tocpuNPList(num_distribution_1), 3)
             num2 = myutils.round_all(myutils.tocpuNPList(num_distribution_2), 3)
             d1_gt_d2 = myutils.round_all(myutils.tocpuNPList(prob_num1_greater), 3)
             d2_gt_d1 = myutils.round_all(myutils.tocpuNPList(prob_num2_greater), 3)
 
-            debug_value += f"Pattn1: {pattn_vis_most_1}\n num1: {num1}" + \
-                           f"\nPattn2: {pattn_vis_most_2}\n num2: {num2}" + \
-                           f"\nP(N1 > N2): {d1_gt_d2}  P(N2 > N1): {d2_gt_d1}"
+            debug_value += (
+                f"Pattn1: {pattn_vis_most_1}\n num1: {num1}"
+                + f"\nPattn2: {pattn_vis_most_2}\n num2: {num2}"
+                + f"\nP(N1 > N2): {d1_gt_d2}  P(N2 > N1): {d2_gt_d1}"
+            )
 
             if gold_num_1:
                 debug_value += f"\nGoldNums  num1: {gold_num_1}  num2: {gold_num_2}"
@@ -1083,10 +1115,8 @@ class DropLanguage(DomainLanguage):
         return PassageAttention_answer(average_passage_distribution, loss=loss, debug_value=debug_value)
 
     @predicate
-    def year_difference(self,
-                        passage_attn_1: PassageAttention,
-                        passage_attn_2: PassageAttention) -> YearDifference:
-        ''' Given two passage spans, ground them to dates, and then return the difference between their years '''
+    def year_difference(self, passage_attn_1: PassageAttention, passage_attn_2: PassageAttention) -> YearDifference:
+        """ Given two passage spans, ground them to dates, and then return the difference between their years """
 
         passage_attention_1 = passage_attn_1._value * self.passage_mask
         passage_attention_2 = passage_attn_2._value * self.passage_mask
@@ -1105,25 +1135,24 @@ class DropLanguage(DomainLanguage):
 
         debug_value = ""
         if self._debug:
-            _, pattn_vis_most_1 = dlutils.listTokensVis(passage_attention_1,
-                                                        self.metadata["passage_tokens"])
-            _, pattn_vis_most_2 = dlutils.listTokensVis(passage_attention_2,
-                                                        self.metadata["passage_tokens"])
+            _, pattn_vis_most_1 = dlutils.listTokensVis(passage_attention_1, self.metadata["passage_tokens"])
+            _, pattn_vis_most_2 = dlutils.listTokensVis(passage_attention_2, self.metadata["passage_tokens"])
 
             date1 = myutils.round_all(myutils.tocpuNPList(date_distribution_1), 3)
             date2 = myutils.round_all(myutils.tocpuNPList(date_distribution_2), 3)
             year_diff_dist = myutils.round_all(myutils.tocpuNPList(year_difference_dist), 3)
 
-            debug_value += f"YearDiffDist: {year_diff_dist}\n" + \
-                           f"\nPattn1: {pattn_vis_most_1}\n Date1: {date1}" + \
-                           f"\nPattn2: {pattn_vis_most_2}\n Date2: {date2}"
+            debug_value += (
+                f"YearDiffDist: {year_diff_dist}\n"
+                + f"\nPattn1: {pattn_vis_most_1}\n Date1: {date1}"
+                + f"\nPattn2: {pattn_vis_most_2}\n Date2: {date2}"
+            )
 
         return YearDifference(year_difference_dist=year_difference_dist, loss=loss, debug_value=debug_value)
 
     @predicate
-    def year_difference_single_event(self,
-                                     passage_attn: PassageAttention) -> YearDifference:
-        ''' Given a single passage span, find its start and end dates, then return the difference in years '''
+    def year_difference_single_event(self, passage_attn: PassageAttention) -> YearDifference:
+        """ Given a single passage span, find its start and end dates, then return the difference in years """
 
         passage_attention = passage_attn._value * self.passage_mask
 
@@ -1141,18 +1170,19 @@ class DropLanguage(DomainLanguage):
 
         debug_value = ""
         if self._debug:
-            _, pattn_vis_most_1 = dlutils.listTokensVis(passage_attention,
-                                                        self.metadata["passage_tokens"])
+            _, pattn_vis_most_1 = dlutils.listTokensVis(passage_attention, self.metadata["passage_tokens"])
             most_attended_spans = dlutils.mostAttendedSpans(passage_attention, self.metadata["passage_tokens"])
 
             date1 = myutils.round_all(myutils.tocpuNPList(date_distribution_1), 3)
             date2 = myutils.round_all(myutils.tocpuNPList(date_distribution_2), 3)
             year_diff_dist = myutils.round_all(myutils.tocpuNPList(year_difference_dist), 3)
 
-            debug_value += f"YearDiffDist: {year_diff_dist}\n" + \
-                           f"\nPattn1: {pattn_vis_most_1}" + \
-                           f"\nMostAttendedSpans: {most_attended_spans}" + \
-                           f"\n Date1: {date1}\n Date2: {date2}"
+            debug_value += (
+                f"YearDiffDist: {year_diff_dist}\n"
+                + f"\nPattn1: {pattn_vis_most_1}"
+                + f"\nMostAttendedSpans: {most_attended_spans}"
+                + f"\n Date1: {date1}\n Date2: {date2}"
+            )
 
         return YearDifference(year_difference_dist=year_difference_dist, loss=loss, debug_value=debug_value)
 
@@ -1173,10 +1203,8 @@ class DropLanguage(DomainLanguage):
         span_start_log_probs = allenutil.masked_log_softmax(span_start_logits, self.passage_mask)
         span_end_log_probs = allenutil.masked_log_softmax(span_end_logits, self.passage_mask)
 
-        span_start_log_probs = allenutil.replace_masked_values(span_start_log_probs,
-                                                               self.passage_mask, -1e32)
-        span_end_log_probs = allenutil.replace_masked_values(span_end_log_probs,
-                                                             self.passage_mask, -1e32)
+        span_start_log_probs = allenutil.replace_masked_values(span_start_log_probs, self.passage_mask, -1e32)
+        span_end_log_probs = allenutil.replace_masked_values(span_end_log_probs, self.passage_mask, -1e32)
 
         loss = 0.0
 
@@ -1184,13 +1212,14 @@ class DropLanguage(DomainLanguage):
         if self._debug:
             debug_value += f"OneShotPassageSpanAnswer extraction: nothing to visualize"
 
-        return PassageSpanAnswer(passage_span_start_log_probs=span_start_log_probs,
-                                 passage_span_end_log_probs=span_end_log_probs,
-                                 start_logits=span_start_logits,
-                                 end_logits=span_end_logits,
-                                 loss=loss,
-                                 debug_value=debug_value)
-
+        return PassageSpanAnswer(
+            passage_span_start_log_probs=span_start_log_probs,
+            passage_span_end_log_probs=span_end_log_probs,
+            start_logits=span_start_logits,
+            end_logits=span_end_logits,
+            loss=loss,
+            debug_value=debug_value,
+        )
 
     @predicate
     def find_passageSpanAnswer(self, passage_attention: PassageAttention_answer) -> PassageSpanAnswer:
@@ -1198,7 +1227,7 @@ class DropLanguage(DomainLanguage):
         # passage_attn = passage_attention
 
         # Shape: (passage_length)
-        passage_attn = (passage_attn * self.passage_mask)
+        passage_attn = passage_attn * self.passage_mask
 
         passage_attn = torch.clamp(passage_attn, min=1e-15, max=1 - 1e-15)
 
@@ -1207,8 +1236,9 @@ class DropLanguage(DomainLanguage):
         scaled_passage_attentions = torch.stack(scaled_attentions, dim=1)
 
         # Shape: (passage_lengths, hidden_dim)
-        passage_span_hidden_reprs = self.parameters.passage_attention_to_span(scaled_passage_attentions.unsqueeze(0),
-                                                                              self.passage_mask.unsqueeze(0)).squeeze(0)
+        passage_span_hidden_reprs = self.parameters.passage_attention_to_span(
+            scaled_passage_attentions.unsqueeze(0), self.passage_mask.unsqueeze(0)
+        ).squeeze(0)
 
         # Shape: (passage_lengths, 2)
         passage_span_logits = self.parameters.passage_startend_predictor(passage_span_hidden_reprs)
@@ -1223,10 +1253,8 @@ class DropLanguage(DomainLanguage):
         span_start_log_probs = allenutil.masked_log_softmax(span_start_logits, self.passage_mask)
         span_end_log_probs = allenutil.masked_log_softmax(span_end_logits, self.passage_mask)
 
-        span_start_log_probs = allenutil.replace_masked_values(span_start_log_probs,
-                                                               self.passage_mask, -1e32)
-        span_end_log_probs = allenutil.replace_masked_values(span_end_log_probs,
-                                                             self.passage_mask, -1e32)
+        span_start_log_probs = allenutil.replace_masked_values(span_start_log_probs, self.passage_mask, -1e32)
+        span_end_log_probs = allenutil.replace_masked_values(span_end_log_probs, self.passage_mask, -1e32)
 
         loss = passage_attention.loss
 
@@ -1237,27 +1265,30 @@ class DropLanguage(DomainLanguage):
             # debug_value += f"Pattn: {pattn_vis_most}\n"
             debug_value += f"MostAttendedSpans: {most_attended_spans}"
 
-        return PassageSpanAnswer(passage_span_start_log_probs=span_start_log_probs,
-                                 passage_span_end_log_probs=span_end_log_probs,
-                                 start_logits=span_start_logits,
-                                 end_logits=span_end_logits,
-                                 loss=loss,
-                                 debug_value=debug_value)
+        return PassageSpanAnswer(
+            passage_span_start_log_probs=span_start_log_probs,
+            passage_span_end_log_probs=span_end_log_probs,
+            start_logits=span_start_logits,
+            end_logits=span_end_logits,
+            loss=loss,
+            debug_value=debug_value,
+        )
 
     @predicate
     def passageAttn2Count(self, passage_attention: PassageAttention) -> CountNumber:
         passage_attn = passage_attention._value
 
         # Shape: (passage_length)
-        passage_attn = (passage_attn * self.passage_mask)
+        passage_attn = passage_attn * self.passage_mask
 
         scaled_attentions = [passage_attn * sf for sf in self.parameters.passage_attention_scalingvals]
         # Shape: (passage_length, num_scaling_factors)
         scaled_passage_attentions = torch.stack(scaled_attentions, dim=1)
 
         # Shape: (passage_length, hidden_dim)
-        count_hidden_repr = self.parameters.passage_attention_to_count(scaled_passage_attentions.unsqueeze(0),
-                                                                       self.passage_mask.unsqueeze(0)).squeeze(0)
+        count_hidden_repr = self.parameters.passage_attention_to_count(
+            scaled_passage_attentions.unsqueeze(0), self.passage_mask.unsqueeze(0)
+        ).squeeze(0)
 
         # Shape: (passage_length, 1)
         passage_token_logits = self.parameters.passage_count_hidden2logits(count_hidden_repr)
@@ -1273,8 +1304,7 @@ class DropLanguage(DomainLanguage):
         loss = 0
         loss += passage_attention.loss
         if count_mean > 10.0:
-            extra_loss = F.mse_loss(count_mean, allenutil.move_to_device(torch.tensor(9.0),
-                                                                         cuda_device=self.device_id))
+            extra_loss = F.mse_loss(count_mean, allenutil.move_to_device(torch.tensor(9.0), cuda_device=self.device_id))
             loss += extra_loss
             logger.info(f"CountMean: {count_mean} ExtraLoss: {extra_loss}")
             count_mean = allenutil.move_to_device(torch.tensor(9.0), cuda_device=self.device_id)
@@ -1294,10 +1324,7 @@ class DropLanguage(DomainLanguage):
             debug_value += f"CountMean: {count_mean}"
             debug_value += f"\nPSigms: {psigms}"
 
-        return CountNumber(count_number_dist=count_distribution,
-                           loss=loss,
-                           debug_value=debug_value)
-
+        return CountNumber(count_number_dist=count_distribution, loss=loss, debug_value=debug_value)
 
     def number_add_sub_module(self, number_1: PassageNumber, number_2: PassageNumber, add_sub: str):
         assert add_sub in ["add", "sub"]
@@ -1305,9 +1332,9 @@ class DropLanguage(DomainLanguage):
         numberdist_2 = number_2._value
 
         # Shape: (size_number_support, )
-        number_difference_dist = self.expected_number_addsub(num_dist_1=numberdist_1,
-                                                             num_dist_2=numberdist_2,
-                                                             operation=add_sub)
+        number_difference_dist = self.expected_number_addsub(
+            num_dist_1=numberdist_1, num_dist_2=numberdist_2, operation=add_sub
+        )
 
         loss = 0.0
         loss += number_1.loss + number_2.loss
@@ -1317,42 +1344,43 @@ class DropLanguage(DomainLanguage):
             num1 = myutils.round_all(myutils.tocpuNPList(number_1), 3)
             num2 = myutils.round_all(myutils.tocpuNPList(number_2), 3)
             passagenum_diff_dist = myutils.round_all(myutils.tocpuNPList(number_difference_dist), 3)
-            topknumdiff = dlutils.topProbMassElems(attention=number_difference_dist,
-                                                   support=self.passage_num_values, k=5)
+            topknumdiff = dlutils.topProbMassElems(
+                attention=number_difference_dist, support=self.passage_num_values, k=5
+            )
             topknum1 = dlutils.topProbMassElems(attention=numberdist_1, support=self.passage_num_values, k=5)
             topknum2 = dlutils.topProbMassElems(attention=numberdist_2, support=self.passage_num_values, k=5)
 
-            debug_value += f"NumDiffDist: {passagenum_diff_dist}\n" + \
-                           f"Top-num-diff: {topknumdiff}\n" + \
-                           f"\n Top-Num1: {topknum1}" + \
-                           f"\n Top-Num2: {topknum2}"
+            debug_value += (
+                f"NumDiffDist: {passagenum_diff_dist}\n"
+                + f"Top-num-diff: {topknumdiff}\n"
+                + f"\n Top-Num1: {topknum1}"
+                + f"\n Top-Num2: {topknum2}"
+            )
 
         return number_difference_dist, loss, debug_value
 
     @predicate
-    def passagenumber_difference(self,
-                                 passage_number_1: PassageNumber,
-                                 passage_number_2: PassageNumber) -> PassageNumber:
+    def passagenumber_difference(
+        self, passage_number_1: PassageNumber, passage_number_2: PassageNumber
+    ) -> PassageNumber:
         """ Find the expected difference between two number distributions. """
 
-        number_difference_dist, loss, debug_value = self.number_add_sub_module(number_1=passage_number_1,
-                                                                               number_2=passage_number_2,
-                                                                               add_sub="sub")
+        number_difference_dist, loss, debug_value = self.number_add_sub_module(
+            number_1=passage_number_1, number_2=passage_number_2, add_sub="sub"
+        )
 
         return PassageNumber(passage_number_dist=number_difference_dist, loss=loss, debug_value=debug_value)
 
     @predicate
-    def passagenumber_addition(self,
-                               passage_number_1: PassageNumber,
-                               passage_number_2: PassageNumber) -> PassageNumber:
+    def passagenumber_addition(self, passage_number_1: PassageNumber, passage_number_2: PassageNumber) -> PassageNumber:
         """ Find the expected sum of two number distributions. """
-        number_addition_dist, loss, debug_value = self.number_add_sub_module(number_1=passage_number_1,
-                                                                             number_2=passage_number_2,
-                                                                             add_sub="add")
+        number_addition_dist, loss, debug_value = self.number_add_sub_module(
+            number_1=passage_number_1, number_2=passage_number_2, add_sub="add"
+        )
 
         return PassageNumber(passage_number_dist=number_addition_dist, loss=loss, debug_value=debug_value)
 
-    '''
+    """
     @predicate
     def find_questionSpanAnswer(self, passage_attention: PassageAttention_answer) -> QuestionSpanAnswer:
         passage_attn = passage_attention._value
@@ -1405,7 +1433,7 @@ class DropLanguage(DomainLanguage):
                                   end_logits=span_end_logits,
                                   loss=loss,
                                   debug_value=debug_value)
-    '''
+    """
 
     def max_number_distribution(self, num_dist: torch.FloatTensor):
         cum_dist = num_dist.cumsum(0)
@@ -1424,7 +1452,7 @@ class DropLanguage(DomainLanguage):
         minimum_distribution = torch.clamp(minimum_distribution, min=1e-10, max=1 - 1e-10)
         return minimum_distribution
 
-    @predicate_with_side_args(['event_num_groundings'])
+    @predicate_with_side_args(["event_num_groundings"])
     def find_PassageNumber(self, passage_attention: PassageAttention, event_num_groundings=None) -> PassageNumber:
         # This comes as a list of groundings; even though for this action there's just one
         # This can be completely-zero indicating masked. In that case, don't compute loss
@@ -1435,7 +1463,7 @@ class DropLanguage(DomainLanguage):
 
         passage_attn = passage_attention._value
         # Shape: (passage_length)
-        passage_attn = (passage_attn * self.passage_mask)
+        passage_attn = passage_attn * self.passage_mask
 
         number_distribution, _, num_dist_entropy = self.compute_num_distribution(passage_attention=passage_attn)
 
@@ -1465,12 +1493,10 @@ class DropLanguage(DomainLanguage):
             debug_value += f"\nGoldNum: {num_grounding_sup}"
             debug_value += f"\ninput-pattn-top-spans: {top_spans}"
 
-        return PassageNumber(passage_number_dist=number_distribution,
-                             loss=loss,
-                             debug_value=debug_value)
+        return PassageNumber(passage_number_dist=number_distribution, loss=loss, debug_value=debug_value)
 
     def minmaxNumPattn_module(self, passage_attention: PassageAttention, min_max_op: str, event_num_groundings=None):
-        assert min_max_op in ['min', 'max']
+        assert min_max_op in ["min", "max"]
         if event_num_groundings is not None:
             num_grounding_supervision = event_num_groundings[0]
         else:
@@ -1479,7 +1505,7 @@ class DropLanguage(DomainLanguage):
         pattn = passage_attention._value * self.passage_mask
         # Computing for debugging and aux loss purposes
         inputpattn_num_distribution, _, _ = self.compute_num_distribution(pattn)
-        minmax_num_pattn = self.pattn_for_minmaxNum(pattn, 'min')
+        minmax_num_pattn = self.pattn_for_minmaxNum(pattn, "min")
 
         loss = 0.0
         if num_grounding_supervision is not None:
@@ -1511,26 +1537,25 @@ class DropLanguage(DomainLanguage):
         return minmax_num_pattn, loss, debug_value
         # return PassageAttention(passage_attention=minmax_num_pattn, loss=loss, debug_value=debug_value)
 
-
-    @predicate_with_side_args(['event_num_groundings'])
+    @predicate_with_side_args(["event_num_groundings"])
     def minNumPattn(self, passage_attention: PassageAttention, event_num_groundings=None) -> PassageAttention:
-        minmax_num_pattn, loss, debug_value = self.minmaxNumPattn_module(passage_attention=passage_attention,
-                                                                         min_max_op='min',
-                                                                         event_num_groundings=event_num_groundings)
+        minmax_num_pattn, loss, debug_value = self.minmaxNumPattn_module(
+            passage_attention=passage_attention, min_max_op="min", event_num_groundings=event_num_groundings
+        )
 
         return PassageAttention(passage_attention=minmax_num_pattn, loss=loss, debug_value=debug_value)
 
-    @predicate_with_side_args(['event_num_groundings'])
+    @predicate_with_side_args(["event_num_groundings"])
     def maxNumPattn(self, passage_attention: PassageAttention, event_num_groundings=None) -> PassageAttention:
-        minmax_num_pattn, loss, debug_value = self.minmaxNumPattn_module(passage_attention=passage_attention,
-                                                                         min_max_op='max',
-                                                                         event_num_groundings=event_num_groundings)
+        minmax_num_pattn, loss, debug_value = self.minmaxNumPattn_module(
+            passage_attention=passage_attention, min_max_op="max", event_num_groundings=event_num_groundings
+        )
 
         return PassageAttention(passage_attention=minmax_num_pattn, loss=loss, debug_value=debug_value)
 
-    def pattn_for_minmaxNum(self,
-                            pattn: torch.FloatTensor,
-                            max_min: str) -> Tuple[torch.FloatTensor, torch.FloatTensor]:
+    def pattn_for_minmaxNum(
+        self, pattn: torch.FloatTensor, max_min: str
+    ) -> Tuple[torch.FloatTensor, torch.FloatTensor]:
         """ Re-distribute the passage-attention based on a max number-token distribution
             The idea here is to find a `max-number-token` passage attention, i.e. given a distribution over
             passage-tokens, and for each token a distribution over numbers, find the passage-attention that contains,
@@ -1558,9 +1583,9 @@ class DropLanguage(DomainLanguage):
 
         # Shape: (num_of_number_tokens, ) -- the probability of the number tokens in sorted order
         only_expected_numbertoken_probs = pattn_weighted_numbertoken_probs.sum(0)
-        if max_min == 'max':
+        if max_min == "max":
             only_numbertoken_minmaxprobs_sorted = self.max_number_distribution(only_expected_numbertoken_probs)
-        elif max_min == 'min':
+        elif max_min == "min":
             only_numbertoken_minmaxprobs_sorted = self.min_number_distribution(only_expected_numbertoken_probs)
         else:
             only_numbertoken_minmaxprobs_sorted = None
@@ -1572,8 +1597,9 @@ class DropLanguage(DomainLanguage):
         # Shape: (1, num_of_number_tokens)
         total_weight_to_numbertoken = pattn_weighted_numbertoken_probs.sum(0, keepdim=True)
         # Shape: (passage_length, num_of_number_tokens) - each entry here is (pattn * numberprob * number-max-prob)
-        maxprob_times_pattn_numbertokenprob = (pattn_weighted_numbertoken_probs *
-                                               only_numbertoken_minmaxprobs_sorted.unsqueeze(0))
+        maxprob_times_pattn_numbertokenprob = (
+            pattn_weighted_numbertoken_probs * only_numbertoken_minmaxprobs_sorted.unsqueeze(0)
+        )
         # Divide each entry above by \sum_tokens pattn * numberprob --
         # This is the new-distributed weight of number-max-prob on the i-th token, j-th number.
         # Now marginalize over numbers, to get the new-passage-attention
@@ -1584,9 +1610,7 @@ class DropLanguage(DomainLanguage):
         return new_pattn
 
 
-
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     dl = get_empty_language_object()
     print(dl.all_possible_productions())
     print(dl.get_nonterminal_productions())

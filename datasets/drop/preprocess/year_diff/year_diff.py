@@ -6,8 +6,13 @@ import os
 
 import datasets.drop.constants as constants
 
-YEAR_DIFF_NGRAMS = ["how many years after the", "how many years did it", "how many years did the",
-                    "how many years passed between", "how many years was"]
+YEAR_DIFF_NGRAMS = [
+    "how many years after the",
+    "how many years did it",
+    "how many years did the",
+    "how many years passed between",
+    "how many years was",
+]
 
 # "how many years passed between" -- two events
 # "how many years after the" - year-diff between 2 events
@@ -15,6 +20,7 @@ YEAR_DIFF_NGRAMS = ["how many years after the", "how many years did it", "how ma
 # "how many years was" - single event if doesn't contain "from" or "between" (high precision filter)
 # "how many years did it" - single event if it doesn't contain the word "from"
 # "how many years did the" - single event
+
 
 def is_single_event_yeardiff_question(question_lower: str):
     single_event_ques: bool = None
@@ -39,7 +45,7 @@ def is_single_event_yeardiff_question(question_lower: str):
 
 
 def readDataset(input_json):
-    with open(input_json, 'r') as f:
+    with open(input_json, "r") as f:
         dataset = json.load(f)
     return dataset
 
@@ -90,14 +96,14 @@ def prune_YearDiffQues(dataset):
     return new_dataset
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input_dir')
-    parser.add_argument('--output_dir')
+    parser.add_argument("--input_dir")
+    parser.add_argument("--output_dir")
     args = parser.parse_args()
 
-    train_json = 'drop_dataset_train.json'
-    dev_json = 'drop_dataset_dev.json'
+    train_json = "drop_dataset_train.json"
+    dev_json = "drop_dataset_dev.json"
 
     input_dir = args.input_dir
     output_dir = args.output_dir
@@ -119,10 +125,10 @@ if __name__ == '__main__':
 
     new_dev_dataset = prune_YearDiffQues(dev_dataset)
 
-    with open(output_trnfp, 'w') as f:
+    with open(output_trnfp, "w") as f:
         json.dump(new_train_dataset, f, indent=4)
 
-    with open(output_devfp, 'w') as f:
+    with open(output_devfp, "w") as f:
         json.dump(new_dev_dataset, f, indent=4)
 
     print("Written augmented datasets")

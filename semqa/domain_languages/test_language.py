@@ -1,31 +1,34 @@
 from typing import Callable, List
 
-from allennlp.semparse import (DomainLanguage, ExecutionError, ParsingError,
-                               predicate, predicate_with_side_args)
+from allennlp.semparse import DomainLanguage, ExecutionError, ParsingError, predicate, predicate_with_side_args
+
 
 class Arithmetic(DomainLanguage):
     def __init__(self):
-        super().__init__(start_types={int}, allowed_constants={
+        super().__init__(
+            start_types={int},
+            allowed_constants={
                 # We unfortunately have to explicitly enumerate all allowed constants in the
                 # grammar.  Because we'll be inducing a grammar for this language for use with a
                 # semantic parser, we need the grammar to be finite, which means we can't allow
                 # arbitrary constants (you can't parameterize an infinite categorical
                 # distribution).  So our Arithmetic language will have to only operate on simple
                 # numbers.
-                '1': 1,
-                '2': 2,
-                '3': 3,
-                '4': 4,
-                '5': 5,
-                '6': 6,
-                '7': 7,
-                '8': 8,
-                '9': 9,
-                '10': 10,
-                '20': 20,
-                '-5': -5,
-                '-2': -2,
-                })
+                "1": 1,
+                "2": 2,
+                "3": 3,
+                "4": 4,
+                "5": 5,
+                "6": 6,
+                "7": 7,
+                "8": 8,
+                "9": 9,
+                "10": 10,
+                "20": 20,
+                "-5": -5,
+                "-2": -2,
+            },
+        )
 
     @predicate
     def add(self, num1: int, num2: int) -> int:
@@ -85,12 +88,14 @@ class Arithmetic(DomainLanguage):
         function would.  Totally senseless function that's just here to test higher-order
         functions.
         """
+
         def new_function(num1: int, num2: int) -> int:
             return function(num1, num2) - 3
+
         return new_function
 
 
-if __name__=="__main__":
+if __name__ == "__main__":
     language = Arithmetic()
     all_prods = language.all_possible_productions()
 
@@ -104,6 +109,3 @@ if __name__=="__main__":
 
     function_types = language._function_types
     print("Function Types:\n{}\n".format(function_types))
-
-
-

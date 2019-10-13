@@ -25,12 +25,13 @@ def forward(mean, answer):
         mean -= mean.grad * lr
         mean.grad.zero_()
 
+
 # mean = Variable(torch.tensor(20.0))
-mean = torch.tensor(15.0, requires_grad = True)
+mean = torch.tensor(15.0, requires_grad=True)
 # mean.requires_grad = True
 # variance = abs(10 - mean.detach())/10
 if mean.detach() > 10:
-    variance = (mean.detach() - 10)
+    variance = mean.detach() - 10
 else:
     variance = 0.5
 

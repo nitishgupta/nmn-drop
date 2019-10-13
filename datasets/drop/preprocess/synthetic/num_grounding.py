@@ -8,19 +8,26 @@ import argparse
 
 random.seed(100)
 
-COUNT_NGRAMS = ["how many field goals did", "how many field goals were",
-                "how many interceptions did", "how many passes", "how many rushing",
-                "how many touchdown passes did", "how many touchdowns did the",
-                "how many touchdowns were scored"]
+COUNT_NGRAMS = [
+    "how many field goals did",
+    "how many field goals were",
+    "how many interceptions did",
+    "how many passes",
+    "how many rushing",
+    "how many touchdown passes did",
+    "how many touchdowns did the",
+    "how many touchdowns were scored",
+]
 
 
-RELEVANT_TOKENS = ['TD', 'pass', 'run', 'field', 'goal', 'touchdown']
+RELEVANT_TOKENS = ["TD", "pass", "run", "field", "goal", "touchdown"]
 
 
 def readDataset(input_json):
-    with open(input_json, 'r') as f:
+    with open(input_json, "r") as f:
         dataset = json.load(f)
     return dataset
+
 
 def generateNumGroundingQues(dataset):
     """ Here we make synthetic data for counting questions.
@@ -54,7 +61,7 @@ def generateNumGroundingQues(dataset):
         passage_num_values = passage_info[constants.passage_num_normalized_values]
 
         # Keeping passage to a maximum of 400 tokens to avoid conflicts later
-        passage_tokens = tokenized_passage.split(' ')
+        passage_tokens = tokenized_passage.split(" ")
 
         new_qa_pairs = []
 
@@ -67,8 +74,8 @@ def generateNumGroundingQues(dataset):
         for (str_val, num_token_idx, num_value) in passage_num_mens:
             if num_token_idx >= 400:
                 continue
-            starting_limit = max(0, num_token_idx - BACKWARD_WINDOW_SIZE)      # Inclusive
-            ending_limit = min(len(passage_tokens), 400, num_token_idx + FORWARD_WINDOW_SIZE)   # Exclusive
+            starting_limit = max(0, num_token_idx - BACKWARD_WINDOW_SIZE)  # Inclusive
+            ending_limit = min(len(passage_tokens), 400, num_token_idx + FORWARD_WINDOW_SIZE)  # Exclusive
             for i in range(starting_limit, ending_limit):
                 if passage_tokens[i] in RELEVANT_TOKENS and num_value in passage_num_values:
                     token_number_idx_pairs.append((i, num_token_idx))
@@ -79,7 +86,6 @@ def generateNumGroundingQues(dataset):
         if answer_number_value == -1:
             continue
 
-
         # Now we have token_number_idx_pairs: [ (tokenidx, numberidx) ]
         # Sort according to tokenidx, and make a fake question with
         #   1. passage-attention on first tokenidx and corresponding number as answer
@@ -89,7 +95,6 @@ def generateNumGroundingQues(dataset):
         answer_token_idx = token_number_idx_pairs[0][0]
         attention = [0.0] * len(passage_tokens)
         attention[answer_token_idx] = 1.0
-
 
         question_answer = passage_info[constants.qa_pairs][0]
 
@@ -120,7 +125,7 @@ def generateNumGroundingQues(dataset):
 
         # Adding this so that the instance remains strongly supervised
         question_answer[constants.qattn_supervised] = True
-        question_answer[constants.ques_attention_supervision] = [[1.0, 1.0]]     # Single attention vector of size=1
+        question_answer[constants.ques_attention_supervision] = [[1.0, 1.0]]  # Single attention vector of size=1
 
         # The final output of the program is enough to train, so no aux loss / execution supervision is needed
         # Still label as execution_supervised as it requires passing the pattn as side-arg
@@ -139,16 +144,14 @@ def generateNumGroundingQues(dataset):
     return new_dataset
 
 
-
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input_dir')
-    parser.add_argument('--output_dir')
+    parser.add_argument("--input_dir")
+    parser.add_argument("--output_dir")
     args = parser.parse_args()
 
-    train_json = 'drop_dataset_train.json'
-    dev_json = 'drop_dataset_dev.json'
+    train_json = "drop_dataset_train.json"
+    dev_json = "drop_dataset_dev.json"
 
     input_dir = args.input_dir
     output_dir = args.output_dir
@@ -170,11 +173,10 @@ if __name__ == '__main__':
 
     new_dev_dataset = generateNumGroundingQues(dev_dataset)
 
-    with open(output_trnfp, 'w') as f:
+    with open(output_trnfp, "w") as f:
         json.dump(new_train_dataset, f, indent=2)
 
-    with open(output_devfp, 'w') as f:
+    with open(output_devfp, "w") as f:
         json.dump(new_dev_dataset, f, indent=2)
 
     print("Written count dataset")
-

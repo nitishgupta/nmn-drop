@@ -9,14 +9,14 @@ NUMBER_COMPARISON = ["were there more", "were there fewer", "which age group", "
 
 def number_comparison_filter(question: str):
     question_lower = question.lower()
-    football_ques_spans = ['first half', 'second half', 'quarter', 'touchdown', 'field goals']
+    football_ques_spans = ["first half", "second half", "quarter", "touchdown", "field goals"]
     relevant = True
     if any(span in question_lower for span in NUMBER_COMPARISON):
-        or_split = question_lower.split(' or ')
+        or_split = question_lower.split(" or ")
         if len(or_split) != 2:
             relevant = False
 
-        comma_split = question_lower.split(',')
+        comma_split = question_lower.split(",")
         if len(comma_split) > 2:
             relevant = False
 
@@ -35,7 +35,7 @@ def pruneDataset(input_json: str, output_json: str, output_txt: str) -> None:
     """
 
     # Input file contains single json obj with list of questions as jsonobjs inside it
-    with open(input_json, 'r') as f:
+    with open(input_json, "r") as f:
         dataset = json.load(f)
 
     num_input_qas = 0
@@ -48,7 +48,7 @@ def pruneDataset(input_json: str, output_json: str, output_txt: str) -> None:
     output_passage_dict = {}
     num_output_qas = 0
 
-    txtfile = open(output_txt, 'w')
+    txtfile = open(output_txt, "w")
 
     for passage_id, passage_info in dataset.items():
         qa_pairs = passage_info[constants.qa_pairs]
@@ -92,7 +92,7 @@ def pruneDataset(input_json: str, output_json: str, output_txt: str) -> None:
         #     continue
         output_passage_dict[passage_id] = passage_info
 
-    with open(output_json, 'w') as outf:
+    with open(output_json, "w") as outf:
         json.dump(output_passage_dict, outf, indent=4)
 
     txtfile.close()
@@ -101,16 +101,16 @@ def pruneDataset(input_json: str, output_json: str, output_txt: str) -> None:
     print()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input_dir')
-    parser.add_argument('--output_dir')
+    parser.add_argument("--input_dir")
+    parser.add_argument("--output_dir")
     args = parser.parse_args()
 
-    train_json = 'drop_dataset_train.json'
-    dev_json = 'drop_dataset_dev.json'
-    train_txt = 'train.txt'
-    dev_txt = 'dev.txt'
+    train_json = "drop_dataset_train.json"
+    dev_json = "drop_dataset_dev.json"
+    train_txt = "train.txt"
+    dev_txt = "dev.txt"
 
     input_dir = args.input_dir
     output_dir = args.output_dir
@@ -131,4 +131,3 @@ if __name__ == '__main__':
 
     # args.input_json --- is the raw json from the DROP dataset
     pruneDataset(input_json=input_devfp, output_json=output_devfp, output_txt=output_dev_txt)
-

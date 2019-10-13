@@ -16,6 +16,3 @@ file_dict = json.loads(evaluate_file(params_file, ext_vars=ext_vars))
 
 with open(outfile, "w") as handle:
     json.dump(file_dict, handle, indent=4)
-
-
-

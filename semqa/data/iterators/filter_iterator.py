@@ -23,23 +23,28 @@ class DataFilterIterator(DataIterator):
 
     It takes the same parameters as :class:`allennlp.data.iterators.DataIterator`
     """
-    def __init__(self,
-                 batch_size: int = 32,
-                 instances_per_epoch: int = None,
-                 max_instances_in_memory: int = None,
-                 cache_instances: bool = False,
-                 track_epoch: bool = False,
-                 maximum_samples_per_batch: Tuple[str, int] = None,
-                 filter_key: str = "strongly_supervised",
-                 supervision_keys: List[str] = ["program_supervised", "qattn_supervised", "execution_supervised"],
-                 filter_instances: bool = False,
-                 filter_for_epochs: int = 0) -> None:
-        super(DataFilterIterator, self).__init__(batch_size=batch_size,
-                                                 instances_per_epoch=instances_per_epoch,
-                                                 max_instances_in_memory=max_instances_in_memory,
-                                                 cache_instances=cache_instances,
-                                                 track_epoch=track_epoch,
-                                                 maximum_samples_per_batch=maximum_samples_per_batch)
+
+    def __init__(
+        self,
+        batch_size: int = 32,
+        instances_per_epoch: int = None,
+        max_instances_in_memory: int = None,
+        cache_instances: bool = False,
+        track_epoch: bool = False,
+        maximum_samples_per_batch: Tuple[str, int] = None,
+        filter_key: str = "strongly_supervised",
+        supervision_keys: List[str] = ["program_supervised", "qattn_supervised", "execution_supervised"],
+        filter_instances: bool = False,
+        filter_for_epochs: int = 0,
+    ) -> None:
+        super(DataFilterIterator, self).__init__(
+            batch_size=batch_size,
+            instances_per_epoch=instances_per_epoch,
+            max_instances_in_memory=max_instances_in_memory,
+            cache_instances=cache_instances,
+            track_epoch=track_epoch,
+            maximum_samples_per_batch=maximum_samples_per_batch,
+        )
 
         self.filter_instances = filter_instances
         # This is the field_name in the instances that contains filter-ing bool
@@ -52,7 +57,7 @@ class DataFilterIterator(DataIterator):
         for instance_list in self._memory_sized_lists(instances):
             instances_w_epoch_num = 0
             for instance in instances:
-                if 'epoch_num' in instance.fields:
+                if "epoch_num" in instance.fields:
                     instances_w_epoch_num += 1
 
             print(f"\nInstances: {len(instance_list)}")
@@ -62,26 +67,32 @@ class DataFilterIterator(DataIterator):
             epoch_num = epochs_list[0]
             if self._track_epoch:
                 for instance in instance_list:
-                    instance.fields['epoch_num'] = epoch_num
+                    instance.fields["epoch_num"] = epoch_num
 
             supervision_dict = defaultdict(int)
             qtype_dict = defaultdict(int)
             for instance in instance_list:
                 for key in self.supervision_keys:
                     supervision_dict[key] += 1 if instance[key].metadata else 0
-                qtype_dict[instance['qtypes'].metadata] += 1
+                qtype_dict[instance["qtypes"].metadata] += 1
 
             print(f"QType: {qtype_dict}")
 
             # These QType instances will not be kept in the first curriculum even if supervised
-            NO_CURRICULUM = [constants.COUNT_filter_find_qtype, constants.MAX_filter_find_qtype,
-                             constants.MIN_filter_find_qtype, constants.NUM_filter_find_qtype]
+            NO_CURRICULUM = [
+                constants.COUNT_filter_find_qtype,
+                constants.MAX_filter_find_qtype,
+                constants.MIN_filter_find_qtype,
+                constants.NUM_filter_find_qtype,
+            ]
 
             filtered_instance_list = []
             if self.filter_instances and epoch_num < self.filter_for_epochs:
                 for instance in instance_list:
-                    if (any(instance[key].metadata is True for key in self.supervision_keys) and
-                            not instance["qtypes"].metadata in NO_CURRICULUM):
+                    if (
+                        any(instance[key].metadata is True for key in self.supervision_keys)
+                        and not instance["qtypes"].metadata in NO_CURRICULUM
+                    ):
                         filtered_instance_list.append(instance)
             else:
                 filtered_instance_list = instance_list

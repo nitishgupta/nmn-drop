@@ -26,6 +26,3 @@ print(selected_d_m2)
 
 expected_prob = (selected_d_m1 * selected_d_m2).sum(dim=1)
 print(expected_prob)
-
-
-

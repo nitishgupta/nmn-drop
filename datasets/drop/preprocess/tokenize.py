@@ -16,8 +16,8 @@ from datasets.drop.preprocess import ner_process
 
 import multiprocessing
 
-IGNORED_TOKENS = {'a', 'an', 'the'}
-STRIPPED_CHARACTERS = string.punctuation + ''.join([u"‘", u"’", u"´", u"`", "_"])
+IGNORED_TOKENS = {"a", "an", "the"}
+STRIPPED_CHARACTERS = string.punctuation + "".join(["‘", "’", "´", "`", "_"])
 
 spacy_nlp = spacyutils.getSpacyNLP()
 spacy_whitespacetokenizer = spacyutils.getWhiteTokenizerSpacyNLP()
@@ -76,7 +76,7 @@ def grouper(n, iterable, padvalue=None):
 	('a','b','c'), ('d','e','f'), ('g','x','x')"""
 
     chunk_size = n
-    return [iterable[i:i + chunk_size] for i in range(0, len(iterable), chunk_size)]
+    return [iterable[i : i + chunk_size] for i in range(0, len(iterable), chunk_size)]
 
 
 def _check_validity_of_spans(spans: List[Tuple[int, int]], len_seq: int):
@@ -85,8 +85,8 @@ def _check_validity_of_spans(spans: List[Tuple[int, int]], len_seq: int):
         assert span[0] >= 0
         assert span[1] < len_seq
 
-def find_valid_spans(passage_tokens: List[str],
-                     answer_texts: List[str]) -> List[Tuple[int, int]]:
+
+def find_valid_spans(passage_tokens: List[str], answer_texts: List[str]) -> List[Tuple[int, int]]:
 
     # debug = False
     # if 'T. J. Houshmandzadeh' in answer_texts:
@@ -112,7 +112,6 @@ def find_valid_spans(passage_tokens: List[str],
         if answer_tokens[0] not in word_positions:
             continue
 
-
         for span_start in word_positions[answer_tokens[0]]:
             span_end = span_start  # span_end is _inclusive_
             answer_index = 1
@@ -128,6 +127,7 @@ def find_valid_spans(passage_tokens: List[str],
             if num_answer_tokens == answer_index:
                 spans.append((span_start, span_end))
     return spans
+
 
 def convert_answer(answer_annotation: Dict[str, Union[str, Dict, List]]) -> Tuple[str, List]:
     answer_type = None
@@ -148,8 +148,9 @@ def convert_answer(answer_annotation: Dict[str, Union[str, Dict, List]]) -> Tupl
         answer_texts = answer_content
     elif answer_type == "date":
         # answer_content is a dict with "month", "day", "year" as the keys
-        date_tokens = [answer_content[key]
-                       for key in ["month", "day", "year"] if key in answer_content and answer_content[key]]
+        date_tokens = [
+            answer_content[key] for key in ["month", "day", "year"] if key in answer_content and answer_content[key]
+        ]
         answer_texts = date_tokens
     elif answer_type == "number":
         # answer_content is a string of number
@@ -315,24 +316,26 @@ def processPassage(input_args):
 
     # Adding tokenized passage, and
     passage_info[constants.cleaned_passage] = cleaned_passage_text
-    passage_info[constants.tokenized_passage] = ' '.join(passage_token_texts)
+    passage_info[constants.tokenized_passage] = " ".join(passage_token_texts)
     passage_info[constants.passage_charidxs] = passage_token_charidxs
 
     # Remaking the doc for running NER on new tokenization
-    new_passage_doc = spacyutils.getSpacyDoc(' '.join(passage_token_texts), spacy_whitespacetokenizer)
+    new_passage_doc = spacyutils.getSpacyDoc(" ".join(passage_token_texts), spacy_whitespacetokenizer)
 
-    assert len(passage_tokens) == len(' '.join(passage_token_texts).split(' '))
+    assert len(passage_tokens) == len(" ".join(passage_token_texts).split(" "))
     assert len(new_passage_doc) == len(passage_tokens)
 
     passage_ners = spacyutils.getNER(new_passage_doc)
 
-    (parsed_dates, normalized_date_idxs,
-     normalized_date_values, num_date_entities) = ner_process.parseDateNERS(passage_ners, passage_token_texts)
+    (parsed_dates, normalized_date_idxs, normalized_date_values, num_date_entities) = ner_process.parseDateNERS(
+        passage_ners, passage_token_texts
+    )
 
-    _check_validity_of_spans(spans=[(s,e) for _, (s,e), _ in parsed_dates], len_seq=len(passage_tokens))
+    _check_validity_of_spans(spans=[(s, e) for _, (s, e), _ in parsed_dates], len_seq=len(passage_tokens))
 
-    (parsed_nums, normalized_num_idxs,
-     normalized_number_values, num_num_entities) = ner_process.parseNumNERS(passage_ners, passage_token_texts)
+    (parsed_nums, normalized_num_idxs, normalized_number_values, num_num_entities) = ner_process.parseNumNERS(
+        passage_ners, passage_token_texts
+    )
 
     # Adding NER Value
     passage_info[constants.passage_date_mens] = parsed_dates
@@ -358,20 +361,22 @@ def processPassage(input_args):
         question_token_texts = [t.text for t in question_tokens]
 
         qa[constants.cleaned_question] = cleaned_question
-        qa[constants.tokenized_question] = ' '.join(question_token_texts)
+        qa[constants.tokenized_question] = " ".join(question_token_texts)
         # new_qa[constants.original_question] = original_question
         qa[constants.question_charidxs] = question_token_charidxs
 
         # Remaking the doc for running NER on new tokenization
-        new_question_doc = spacyutils.getSpacyDoc(' '.join(question_token_texts), spacy_whitespacetokenizer)
+        new_question_doc = spacyutils.getSpacyDoc(" ".join(question_token_texts), spacy_whitespacetokenizer)
         assert len(new_question_doc) == len(question_tokens)
 
         q_ners = spacyutils.getNER(new_question_doc)
-        (parsed_dates, normalized_date_idxs,
-         normalized_date_values, num_date_entities) = ner_process.parseDateNERS(q_ners, question_token_texts)
+        (parsed_dates, normalized_date_idxs, normalized_date_values, num_date_entities) = ner_process.parseDateNERS(
+            q_ners, question_token_texts
+        )
         _check_validity_of_spans(spans=[(s, e) for _, (s, e), _ in parsed_dates], len_seq=len(question_tokens))
-        (parsed_nums, normalized_num_idxs,
-         normalized_number_values, num_num_entities) = ner_process.parseNumNERS(q_ners, question_token_texts)
+        (parsed_nums, normalized_num_idxs, normalized_number_values, num_num_entities) = ner_process.parseNumNERS(
+            q_ners, question_token_texts
+        )
 
         qa[constants.q_date_mens] = parsed_dates
         qa[constants.q_date_entidx] = normalized_date_idxs
@@ -401,12 +406,14 @@ def processPassage(input_args):
             answer_tokens = [t for t in answer_spacydoc]
             answer_tokens = split_tokens_by_hyphen(answer_tokens)
             answer_token_texts = [t.text for t in answer_tokens]
-            tokenized_answer_texts.append(' '.join(answer_token_texts))
+            tokenized_answer_texts.append(" ".join(answer_token_texts))
 
-        valid_passage_spans = \
+        valid_passage_spans = (
             find_valid_spans(passage_token_texts, tokenized_answer_texts) if tokenized_answer_texts else []
-        valid_question_spans = \
+        )
+        valid_question_spans = (
             find_valid_spans(question_token_texts, tokenized_answer_texts) if tokenized_answer_texts else []
+        )
 
         _check_validity_of_spans(valid_question_spans, len(question_tokens))
 
@@ -454,7 +461,7 @@ def tokenizeDocs(input_json: str, output_json: str, nump: int) -> None:
     print("Output filepath: {}".format(output_json))
 
     # Input file contains single json obj with list of questions as jsonobjs inside it
-    with open(input_json, 'r') as f:
+    with open(input_json, "r") as f:
         dataset = json.load(f)
 
     print("Number of docs: {}".format(len(dataset)))
@@ -492,7 +499,7 @@ def tokenizeDocs(input_json: str, output_json: str, nump: int) -> None:
         print(f"Groups done: {group_num} in {ttime} mins")
         group_num += 1
 
-    with open(output_json, 'w') as outf:
+    with open(output_json, "w") as outf:
         json.dump(output_passage_id_info_dict, outf, indent=4)
 
     print(f"Number of QA pairs input: {num_input_qas}")
@@ -500,17 +507,13 @@ def tokenizeDocs(input_json: str, output_json: str, nump: int) -> None:
     print(f"Multiprocessing finished. Total elems in output: {len(output_passage_id_info_dict)}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     # This is the original drop_old json file
-    parser.add_argument('--input_json', required=True)
-    parser.add_argument('--output_json', default=True)
-    parser.add_argument('--nump', type=int, default=10)
+    parser.add_argument("--input_json", required=True)
+    parser.add_argument("--output_json", default=True)
+    parser.add_argument("--nump", type=int, default=10)
     args = parser.parse_args()
 
     # args.input_json --- is the raw json from the DROP dataset
     tokenizeDocs(input_json=args.input_json, output_json=args.output_json, nump=args.nump)
-
-
-
-

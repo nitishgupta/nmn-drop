@@ -6,8 +6,7 @@ from utils import util
 from typing import List, Tuple, Dict
 
 
-def _writeSortedDocs(input_jsonl: str, output_jsonl: str, sort_key: str,
-                    reverse: bool) -> None:
+def _writeSortedDocs(input_jsonl: str, output_jsonl: str, sort_key: str, reverse: bool) -> None:
     """ Converts WDW jsonl files from xmlReader to tokenized, NP chunked jsonl files.
 
     Json keys:
@@ -20,27 +19,26 @@ def _writeSortedDocs(input_jsonl: str, output_jsonl: str, sort_key: str,
     contextPara_NPs -- list of list of int-tuples. Len of outer list == numSentences
     """
 
-    assert(os.path.exists(input_jsonl))
+    assert os.path.exists(input_jsonl)
 
-    print("Reading input ... ", end='', flush=True)
+    print("Reading input ... ", end="", flush=True)
 
-    with open(input_jsonl, 'r') as f:
+    with open(input_jsonl, "r") as f:
 
         lines = f.readlines()
         docDicts = [json.loads(s) for s in lines]
 
     doc_lengths = [sum([len(s) for s in doc[sort_key]]) for doc in docDicts]
 
-    print("Sorting input ... ", end='', flush=True)
+    print("Sorting input ... ", end="", flush=True)
 
-    sorted_docDicts = [x for _, x in \
-                       sorted(zip(doc_lengths, docDicts), key=lambda pair: pair[0], reverse=reverse)]
+    sorted_docDicts = [x for _, x in sorted(zip(doc_lengths, docDicts), key=lambda pair: pair[0], reverse=reverse)]
 
     numdocswritten = 0
 
-    print("Writing output ... ", end='', flush=True)
+    print("Writing output ... ", end="", flush=True)
 
-    with open(output_jsonl, 'w') as outf:
+    with open(output_jsonl, "w") as outf:
         for doc in sorted_docDicts:
             outf.write(json.dumps(doc))
             outf.write("\n")
@@ -65,8 +63,14 @@ def _getdocweights(docs: List[Dict], sort_keys: List[str], depths: List[int], co
     return doc_weights
 
 
-def writeSortedDocs(input_jsonl: str, output_jsonl: str, sort_keys: List[str], depths: List[int],
-                    combination: str = "x*y", reverse: bool = True) -> None:
+def writeSortedDocs(
+    input_jsonl: str,
+    output_jsonl: str,
+    sort_keys: List[str],
+    depths: List[int],
+    combination: str = "x*y",
+    reverse: bool = True,
+) -> None:
     """
     Sort input jsonl documents based on values from multiple keys.
     Each sorting criteria is a nested list, whose depth is specified. For example, counting number of mentions in 
@@ -78,31 +82,29 @@ def writeSortedDocs(input_jsonl: str, output_jsonl: str, sort_keys: List[str], d
     :param combination: combination to arrive at the final sorting order. Possible values "x*y" or "x+y"
     :param reverse: True indicates decreasing order
     :return: 
-    """""
+    """ ""
     possible_combinations = ["x*y", "x+y"]
-    assert(combination in possible_combinations), "Combination value is invalid"
-    assert(os.path.exists(input_jsonl)), "Input jsonl doesn't exist"
+    assert combination in possible_combinations, "Combination value is invalid"
+    assert os.path.exists(input_jsonl), "Input jsonl doesn't exist"
 
-    print("Reading input ... ", end='', flush=True)
+    print("Reading input ... ", end="", flush=True)
 
-    with open(input_jsonl, 'r') as f:
+    with open(input_jsonl, "r") as f:
 
         lines = f.readlines()
         docDicts = [json.loads(s) for s in lines]
 
-
     doc_weights = _getdocweights(docDicts, sort_keys, depths, combination)
 
-    print("Sorting input ... ", end='', flush=True)
+    print("Sorting input ... ", end="", flush=True)
 
-    sorted_docDicts = [x for _, x in \
-                       sorted(zip(doc_weights, docDicts), key=lambda pair: pair[0], reverse=reverse)]
+    sorted_docDicts = [x for _, x in sorted(zip(doc_weights, docDicts), key=lambda pair: pair[0], reverse=reverse)]
 
     numdocswritten = 0
 
-    print("Writing output ... ", end='', flush=True)
+    print("Writing output ... ", end="", flush=True)
 
-    with open(output_jsonl, 'w') as outf:
+    with open(output_jsonl, "w") as outf:
         for doc in sorted_docDicts:
             outf.write(json.dumps(doc))
             outf.write("\n")
@@ -114,11 +116,11 @@ def writeSortedDocs(input_jsonl: str, output_jsonl: str, sort_keys: List[str], d
 def checkSort(input_jsonl: str, sort_keys: List[str], depths: List[int], combination: str = "x*y") -> None:
     """ Checks if a jsonl is sorted in the key of sort_key. """
 
-    assert(os.path.exists(input_jsonl))
+    assert os.path.exists(input_jsonl)
 
-    print("Reading input ... ", end='', flush=True)
+    print("Reading input ... ", end="", flush=True)
 
-    with open(input_jsonl, 'r') as f:
+    with open(input_jsonl, "r") as f:
 
         lines = f.readlines()
         docDicts = [json.loads(s) for s in lines]
@@ -141,9 +143,10 @@ def checkSort(input_jsonl: str, sort_keys: List[str], depths: List[int], combina
             print("Docs are NOT sorted")
             return None
 
+
 def main(args):
 
-    reverse_bool = True if args.decreasing == 'true' else False
+    reverse_bool = True if args.decreasing == "true" else False
     sort_keys = args.sort_keys.split(",")
     depths = [int(x) for x in args.depths.split(",")]
     combination = args.combination
@@ -155,8 +158,7 @@ def main(args):
 
     if args.checksort:
         print("Checking sort of docs in : {}".format(args.input_jsonl))
-        checkSort(input_jsonl=args.input_jsonl, sort_keys=sort_keys, depths=depths,
-                  combination=combination)
+        checkSort(input_jsonl=args.input_jsonl, sort_keys=sort_keys, depths=depths, combination=combination)
 
     else:
         print("Sort in decreasing: {}".format(reverse_bool))
@@ -173,9 +175,14 @@ def main(args):
             temp_jsonl = args.input_jsonl + ".bak"
             output_jsonl = temp_jsonl
 
-        writeSortedDocs(input_jsonl=args.input_jsonl, output_jsonl=output_jsonl,
-                        sort_keys=sort_keys, depths=depths, reverse=reverse_bool,
-                        combination=combination)
+        writeSortedDocs(
+            input_jsonl=args.input_jsonl,
+            output_jsonl=output_jsonl,
+            sort_keys=sort_keys,
+            depths=depths,
+            reverse=reverse_bool,
+            combination=combination,
+        )
 
         # Remove old input file, replace it with temp
         if not args.new_file:
@@ -186,17 +193,16 @@ def main(args):
         print("Done sorting")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input_jsonl', required=True)
-    parser.add_argument('--sort_keys', required=True)
-    parser.add_argument('--depths', required=True)
-    parser.add_argument('--new_file', action='store_true', default=False)
-    parser.add_argument('--output_jsonl')
-    parser.add_argument('--checksort', action='store_true', default=False)
-    parser.add_argument('--decreasing', type=str, default="true") # or true
-    parser.add_argument('--combination', type=str, default="x*y")  # or "x+y"
-
+    parser.add_argument("--input_jsonl", required=True)
+    parser.add_argument("--sort_keys", required=True)
+    parser.add_argument("--depths", required=True)
+    parser.add_argument("--new_file", action="store_true", default=False)
+    parser.add_argument("--output_jsonl")
+    parser.add_argument("--checksort", action="store_true", default=False)
+    parser.add_argument("--decreasing", type=str, default="true")  # or true
+    parser.add_argument("--combination", type=str, default="x*y")  # or "x+y"
 
     args = parser.parse_args()
 

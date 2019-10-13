@@ -11,7 +11,7 @@ from datasets.drop import constants
 
 
 def readDataset(input_json):
-    with open(input_json, 'r') as f:
+    with open(input_json, "r") as f:
         dataset = json.load(f)
     return dataset
 
@@ -118,17 +118,18 @@ def sample_dataset(dataset, perc):
 
     return new_dataset
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input_dir')
-    parser.add_argument('--output_dir')
-    parser.add_argument('--perc', type=float, required=True)
+    parser.add_argument("--input_dir")
+    parser.add_argument("--output_dir")
+    parser.add_argument("--perc", type=float, required=True)
     args = parser.parse_args()
 
     input_dir = args.input_dir
     output_dir = args.output_dir
 
-    train_json = 'drop_dataset_train.json'
+    train_json = "drop_dataset_train.json"
 
     perc = args.perc
 
@@ -145,8 +146,5 @@ if __name__ == '__main__':
     new_train_dataset = sample_dataset(train_dataset, perc)
     # new_dev_dataset = removeDateCompPassageWeakAnnotations(train_dataset, 0)
 
-    with open(output_trnfp, 'w') as f:
+    with open(output_trnfp, "w") as f:
         json.dump(new_train_dataset, f, indent=4)
-
-
-

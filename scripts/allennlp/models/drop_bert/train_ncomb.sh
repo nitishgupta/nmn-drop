@@ -3,8 +3,8 @@
 # export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
-DATASET_NAME=date_num/date_yd_num_hmyw_cnt_whoarg_600
-# DATASET_NAME=num/hmyw_yardsdiff
+# DATASET_NAME=date_num/iclr20_yardsdiff
+DATASET_NAME=date/datecomp_full
 
 DATASET_DIR=./resources/data/drop_acl/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
@@ -41,11 +41,11 @@ export SUPEPOCHS=5
 export BS=4
 export DROPOUT=0.2
 
-export SEED=1
+export SEED=10
 
-export BEAMSIZE=1
+export BEAMSIZE=2
 export MAX_DECODE_STEP=14
-export EPOCHS=45
+export EPOCHS=42
 
 export DEBUG=false
 
@@ -55,9 +55,9 @@ SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/${DATASET_NAME}
 MODEL_DIR=drop_parser_bert
 # CNTFIX_${COUNT_FIXED}
 PD_1=EXCLOSS_${EXCLOSS}/MMLLOSS_${MMLLOSS}/aux_${AUXLOSS}/SUPEPOCHS_${SUPEPOCHS}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}/NWMOD
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}/NWMOD_0a61fce
 
-# SERIALIZATION_DIR=./resources/semqa/checkpoints/test
+SERIALIZATION_DIR=./resources/semqa/checkpoints/test
 
 #######################################################################################################################
 

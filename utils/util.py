@@ -13,7 +13,7 @@ def makedir(dirpath: str):
         os.makedirs(dirpath)
 
 
-def count_list(input_list: List[Any], depth: int=1) -> int:
+def count_list(input_list: List[Any], depth: int = 1) -> int:
     """
     Count the number of elements in a nested list
     :param input_list: nested list
@@ -40,12 +40,12 @@ def pruneMultipleSpaces(sentence: str):
     """
 
     sentence = sentence.strip()
-    tokens = sentence.split(' ')
-    tokens = [t for t in tokens if t != '']
+    tokens = sentence.split(" ")
+    tokens = [t for t in tokens if t != ""]
     if len(tokens) == 1:
         return tokens[0]
     else:
-        return ' '.join(tokens)
+        return " ".join(tokens)
 
 
 def stopWords():
@@ -53,7 +53,7 @@ def stopWords():
 
     global stopwords
     if stopwords is None:
-        f = open("utils/stopwords.txt", 'r')
+        f = open("utils/stopwords.txt", "r")
         lines = f.readlines()
         words = [w.strip() for w in lines if w.strip()]
         stopwords = set(words)
@@ -61,15 +61,15 @@ def stopWords():
 
 
 def readlines(fp):
-    ''' Read all lines from a filepath. '''
-    with open(fp, 'r') as f:
+    """ Read all lines from a filepath. """
+    with open(fp, "r") as f:
         text = f.read().strip()
-        lines = text.split('\n')
+        lines = text.split("\n")
     return lines
 
 
 def readJsonlDocs(jsonlfp: str) -> List[Dict]:
-    ''' Read all docs from jsonl file. '''
+    """ Read all docs from jsonl file. """
     lines = readlines(jsonlfp)
     docs = [json.loads(line) for line in lines]
     return docs
@@ -172,8 +172,8 @@ def getContextAroundSpan(seq: List[Any], span: Tuple[int, int], context_len: int
     left_start_index = max(0, span[0] - context_len)
     right_end_index = min(len(seq), span[1] + context_len)
 
-    left_context = seq[left_start_index:span[0]]
-    right_context = seq[span[1]:right_end_index]
+    left_context = seq[left_start_index : span[0]]
+    right_context = seq[span[1] : right_end_index]
 
     return (left_context, right_context)
 
@@ -200,12 +200,12 @@ def _KnuthMorrisPratt(text, pattern):
     # David Eppstein, UC Irvine, 1 Mar 2002
 
     # from http://code.activestate.com/recipes/117214/
-    '''Yields all starting positions of copies of the pattern in the text.
+    """Yields all starting positions of copies of the pattern in the text.
     Calling conventions are similar to string.find, but its arguments can be
     lists or iterators, not just strings, it returns all matches, not just
     the first one, and it does not need the whole text in memory at once.
     Whenever it yields, it will have read the text exactly up to and including
-    the match that caused the yield.'''
+    the match that caused the yield."""
 
     # allow indexing into pattern and protect against change during yield
     pattern = list(pattern)
@@ -214,16 +214,15 @@ def _KnuthMorrisPratt(text, pattern):
     shifts = [1] * (len(pattern) + 1)
     shift = 1
     for pos in range(len(pattern)):
-        while shift <= pos and pattern[pos] != pattern[pos-shift]:
-            shift += shifts[pos-shift]
-        shifts[pos+1] = shift
+        while shift <= pos and pattern[pos] != pattern[pos - shift]:
+            shift += shifts[pos - shift]
+        shifts[pos + 1] = shift
 
     # do the actual search
     startPos = 0
     matchLen = 0
     for c in text:
-        while matchLen == len(pattern) or \
-              matchLen >= 0 and pattern[matchLen] != c:
+        while matchLen == len(pattern) or matchLen >= 0 and pattern[matchLen] != c:
             startPos += shifts[matchLen]
             matchLen -= shifts[matchLen]
         matchLen += 1
@@ -234,14 +233,14 @@ def _KnuthMorrisPratt(text, pattern):
 def normalizeD1byD2(dict1, dict2):
     d = {}
     for k, v in dict1.items():
-        d[k] = float(v)/float(dict2[k])
+        d[k] = float(v) / float(dict2[k])
     return d
 
 
 def normalizeDictbyK(dict1, constant):
     d = {}
     for k, v in dict1.items():
-        d[k] = float(v)/constant
+        d[k] = float(v) / constant
     return d
 
 
@@ -273,6 +272,7 @@ def removeOverlappingSpans(spans):
 
     spans: List of (start, end) tuples
     """
+
     def spanOverlap(s1, s2):
         """ Works with exclusive end spans """
         start1, end1 = s1
@@ -300,6 +300,7 @@ def removeOverlappingSpans(spans):
 
     return final_spans
 
+
 def tocpuNPList(var):
     if isinstance(var, float):
         return var
@@ -307,7 +308,7 @@ def tocpuNPList(var):
 
 
 def mergeSpansAndRemoveOverlap(orig_spans, new_spans, srt_idx, end_idx, exclusive=True):
-    ''' Merge a list of spans in another given list resulting in non-overlapping spans.
+    """ Merge a list of spans in another given list resulting in non-overlapping spans.
     Assumes that both span lists are independently non-overlapping.
 
     While merging, if incoming span overlaps, keep the original.
@@ -324,7 +325,7 @@ def mergeSpansAndRemoveOverlap(orig_spans, new_spans, srt_idx, end_idx, exclusiv
     --------
     final_spans: List of merged spans sorted by span start.
 
-    '''
+    """
 
     if len(orig_spans) == 0:
         return new_spans
@@ -385,11 +386,9 @@ def _getLnrm(arg):
     """Normalizes the given arg by stripping it of diacritics, lowercasing, and
     removing all non-alphanumeric characters.
     """
-    arg = ''.join(
-        [c for c in unicodedata.normalize('NFD', arg) if unicodedata.category(c) != 'Mn'])
+    arg = "".join([c for c in unicodedata.normalize("NFD", arg) if unicodedata.category(c) != "Mn"])
     arg = arg.lower()
-    arg = ''.join(
-        [c for c in arg if c in set('abcdefghijklmnopqrstuvwxyz0123456789')])
+    arg = "".join([c for c in arg if c in set("abcdefghijklmnopqrstuvwxyz0123456789")])
     return arg
 
 
@@ -411,12 +410,11 @@ def getGlobalTokenOffset(sentences: List[List[str]]):
     return sentIdxTokenIdx2GlobalTokenIdx
 
 
-
-if __name__=='__main__':
+if __name__ == "__main__":
     words = stopWords()
 
-    l = [2,1,2,1,2,1,2,1,2,1]
+    l = [2, 1, 2, 1, 2, 1, 2, 1, 2, 1]
 
-    pattern = [1,2,1]
+    pattern = [1, 2, 1]
 
     print(getMatchingSubSpans(l, pattern))

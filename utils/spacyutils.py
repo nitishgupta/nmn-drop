@@ -10,21 +10,21 @@ class WhitespaceTokenizer(object):
         self.vocab = vocab
 
     def __call__(self, text):
-        words = text.split(' ')
+        words = text.split(" ")
         # All tokens 'own' a subsequent space character in this tokenizer
         spaces = [True] * len(words)
         return Doc(self.vocab, words=words, spaces=spaces)
 
 
-def getWhiteTokenizerSpacyNLP(disable_list: List[str]=['textcat']):
+def getWhiteTokenizerSpacyNLP(disable_list: List[str] = ["textcat"]):
     nlp = getSpacyNLP(disable_list)
     nlp.tokenizer = WhitespaceTokenizer(nlp.vocab)
     return nlp
 
 
-def getSpacyNLP(disable_list: List[str]=['textcat']):
+def getSpacyNLP(disable_list: List[str] = ["textcat"]):
     # nlp = spacy.load('en', disable=disable_list)
-    nlp = spacy.load('en_core_web_lg', disable=disable_list)
+    nlp = spacy.load("en_core_web_lg", disable=disable_list)
     return nlp
 
 
@@ -52,8 +52,10 @@ def getNER(spacydoc: Doc) -> List[Tuple[str, int, int, str]]:
 def getPropnSpans(spacydoc: Doc) -> List[Tuple[str, int, int, str]]:
     pos_tags = getPOSTags(spacydoc)
     propn_span_srtend = util.getContiguousSpansOfElement(pos_tags, "PROPN")
-    propn_spans = [(spacydoc[propnspan[0]:propnspan[1]].text, propnspan[0], propnspan[1], "PROPN") \
-                   for propnspan in propn_span_srtend]
+    propn_spans = [
+        (spacydoc[propnspan[0] : propnspan[1]].text, propnspan[0], propnspan[1], "PROPN")
+        for propnspan in propn_span_srtend
+    ]
 
     return propn_spans
 
@@ -63,7 +65,7 @@ def getNER_and_PROPN(spacydoc: Doc) -> List[Tuple[str, int, int, str]]:
     This also includes PROPN spans that are not part of a NER
     """
     ner_tags = getNER(spacydoc)
-    ner_spans = [(x,y) for (_, x, y, _) in ner_tags]
+    ner_spans = [(x, y) for (_, x, y, _) in ner_tags]
 
     pos_tags = getPOSTags(spacydoc)
     propn_spans = util.getContiguousSpansOfElement(pos_tags, "PROPN")
@@ -80,7 +82,7 @@ def getNER_and_PROPN(spacydoc: Doc) -> List[Tuple[str, int, int, str]]:
             propn_spans_tokeep.append(propnspan)
 
     for propnspan in propn_spans_tokeep:
-        ner_tags.append((spacydoc[propnspan[0]:propnspan[1]].text, propnspan[0], propnspan[1], "PROPN"))
+        ner_tags.append((spacydoc[propnspan[0] : propnspan[1]].text, propnspan[0], propnspan[1], "PROPN"))
 
     return ner_tags
 
@@ -99,7 +101,7 @@ def getTokens(spacydoc: Doc) -> List[str]:
 def getWhiteSpacedSent(spacydoc: Doc) -> str:
     """Return a whitespaced delimited spacydoc. """
     tokens = getTokens(spacydoc)
-    return ' '.join(tokens)
+    return " ".join(tokens)
 
 
 def getAll_SentIdAndTokenOffset(spacydoc: Doc) -> List[Tuple[int, int]]:
@@ -148,7 +150,7 @@ def getNERInToken(doc: Doc, token_idx: int):
     token: Token = doc[token_idx]
     ner_spans = [(ent.start, ent.end) for ent in doc.ents]
 
-    if token.ent_iob_ == 'O':
+    if token.ent_iob_ == "O":
         # Input token is not a NER
         return (token_idx, token_idx + 1)
     else:
@@ -161,10 +163,10 @@ def getNERInToken(doc: Doc, token_idx: int):
     return (token_idx, token_idx + 1)
 
 
-if __name__=='__main__':
+if __name__ == "__main__":
     nlp = getSpacyNLP()
 
-    text = "He died in the destruction of the Space Shuttle \"Challenger\", on which he was serving as Mission Specialist for mission STS-51-L."
+    text = 'He died in the destruction of the Space Shuttle "Challenger", on which he was serving as Mission Specialist for mission STS-51-L.'
 
     # sent = "Amherst ( ) is a town in Hampshire County , Massachusetts , United States , in the Connecticut River valley ."
 
@@ -172,7 +174,7 @@ if __name__=='__main__':
 
     for sent in doc.sents:
         sent: Span = sent
-        print(getWhiteSpacedSent(doc[sent.start:sent.end]))
+        print(getWhiteSpacedSent(doc[sent.start : sent.end]))
         print(f"{sent.start} {sent.end}")
 
     for token in doc:
@@ -183,10 +185,8 @@ if __name__=='__main__':
         ent: Span = ent
         print(f"{ent.text} {ent.start}  {ent.end}  {ent.label_}  {ent.label}")
 
-
     for span in getNER_and_PROPN(doc):
         print(span)
-
 
     # with open('/save/ngupta19/datasets/WDW/pruned_cloze/val_temp.jsonl', 'r') as inpf:
     #     for line in inpf:
@@ -205,4 +205,3 @@ if __name__=='__main__':
     #             # print(sent[span[0]:span[1]])
     #             spanhead = getSpanHead(sent, span)
     #             nerspan = getNERInToken(sent, spanhead)
-

@@ -20,13 +20,12 @@ def getOntonotesNER(sentence: List[str], ccg_nlp: LocalPipeline):
 
     if ner_view.cons_list is not None:
         for cons in ner_view.cons_list:
-            ners.append((cons['tokens'], cons['start'], cons['end'], cons['label'] + '_ccg'))
+            ners.append((cons["tokens"], cons["start"], cons["end"], cons["label"] + "_ccg"))
 
     return ners
 
 
-def thresholdSentLength(ta: TextAnnotation, lp: LocalPipeline,
-                        maxlen: int = 120) -> TextAnnotation:
+def thresholdSentLength(ta: TextAnnotation, lp: LocalPipeline, maxlen: int = 120) -> TextAnnotation:
     """ Make a new text annotation by spliting sentences longer than maxlen tokens 
     :rtype: TextAnnotation
     """
@@ -60,9 +59,9 @@ def getNPChunks_perSent(ta: TextAnnotation) -> List[List[Tuple[int, int]]]:
 
     chunk_cons = ta.get_shallow_parse.cons_list
     for cons in chunk_cons:
-        if cons['label'] == 'NP':
-            (sentidx1, startOffset) = token_sentIdxWithinSentIdx[cons['start']]
-            (sentidx2, endOffset) = token_sentIdxWithinSentIdx[cons['end'] - 1]
+        if cons["label"] == "NP":
+            (sentidx1, startOffset) = token_sentIdxWithinSentIdx[cons["start"]]
+            (sentidx2, endOffset) = token_sentIdxWithinSentIdx[cons["end"] - 1]
             if sentidx1 != sentidx2:
                 # Ignore cross sentence NPs
                 continue
@@ -76,12 +75,11 @@ def getPOS_forDoc(ta: TextAnnotation) -> List[str]:
 
     pos_cons = ta.get_pos.cons_list
 
-    pos_tags = [cons['label'] for cons in pos_cons]
+    pos_tags = [cons["label"] for cons in pos_cons]
 
     assert len(ta.tokens) == len(pos_tags)
 
     return pos_tags
-
 
 
 def getPOS_perSent(ta: TextAnnotation) -> List[List[str]]:
@@ -97,7 +95,7 @@ def getPOS_perSent(ta: TextAnnotation) -> List[List[str]]:
     assert len(ta.tokens) == len(pos_cons)
 
     for idx in range(0, len(ta.tokens)):
-        pos_label = pos_cons[idx]['label']
+        pos_label = pos_cons[idx]["label"]
         (sentidx1, _) = token_sentIdxWithinSentIdx[idx]
         pos_perSent[sentidx1].append(pos_label)
     return pos_perSent
@@ -108,10 +106,10 @@ def getNPsWithGlobalOffsets(ta: TextAnnotation) -> List[Tuple[int, int]]:
     chunk_cons = ta.get_shallow_parse.cons_list
     np_chunk_cons = []
     for cons in chunk_cons:
-        if cons['label'] == 'NP':
+        if cons["label"] == "NP":
             np_chunk_cons.append(cons)
 
-    np_chunk_startend = [(cons['start'], cons['end']) for cons in np_chunk_cons]
+    np_chunk_startend = [(cons["start"], cons["end"]) for cons in np_chunk_cons]
 
     return np_chunk_startend
 
@@ -162,6 +160,7 @@ def getSentIdAndTokenOffset(ta: TextAnnotation) -> List[Tuple[int, int]]:
 
     return tokenIdxs
 
+
 def getSentEndPosArray(sentences: List[List[str]]) -> List[int]:
     """
     Get sentences end position array for tokenized sentences
@@ -179,7 +178,7 @@ def getSentEndPosArray(sentences: List[List[str]]) -> List[int]:
 def tokenizedSentToStr(sentences: List[List[str]]) -> str:
     docstr = ""
     for sent in sentences:
-        docstr += ' '.join(sent)
+        docstr += " ".join(sent)
         docstr += "\n"
     return docstr.strip()
 
@@ -207,8 +206,7 @@ def get_closest_value(arr, target):
     mid = 0
 
     if target > arr[-1] or target < 0:
-        print("Token Offset not in range: target:{} max:{} ".format(
-            target, arr[-1]))
+        print("Token Offset not in range: target:{} max:{} ".format(target, arr[-1]))
         raise Exception
 
     # edge case - last or above all
@@ -234,8 +232,35 @@ def get_closest_value(arr, target):
         return mid
 
 
-if __name__=='__main__':
-    a = [32, 79, 127, 173, 196, 225, 248, 266, 287, 314, 325, 349, 395, 426, 457, 470, 492, 525, 537, 560, 572, 620, 649, 670, 693, 716]
+if __name__ == "__main__":
+    a = [
+        32,
+        79,
+        127,
+        173,
+        196,
+        225,
+        248,
+        266,
+        287,
+        314,
+        325,
+        349,
+        395,
+        426,
+        457,
+        470,
+        492,
+        525,
+        537,
+        560,
+        572,
+        620,
+        649,
+        670,
+        693,
+        716,
+    ]
     print(a)
     print(len(a))
     print("\n")
@@ -254,4 +279,3 @@ if __name__=='__main__':
     print(getSentIdx_WithinSentTokenIdx(a, 32))
     print(getSentIdx_WithinSentTokenIdx(a, 560))
     print(getSentIdx_WithinSentTokenIdx(a, 564))
-

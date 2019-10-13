@@ -9,18 +9,26 @@ import argparse
 """ This script is used to augment date-comparison-data by flipping events in the questions """
 THRESHOLD = 20
 
-STOP_WORDS = set(stopwords.words('english'))
+STOP_WORDS = set(stopwords.words("english"))
 STOP_WORDS.update(["'s", ","])
 
 FIRST = "first"
 SECOND = "second"
 
-DATE_COMPARISON_TRIGRAMS = ["which happened", "which event", "what happened first", "what happened second",
-                            "what happened later", "what happened last", "what event happened", "what event came"]
+DATE_COMPARISON_TRIGRAMS = [
+    "which happened",
+    "which event",
+    "what happened first",
+    "what happened second",
+    "what happened later",
+    "what happened last",
+    "what event happened",
+    "what event came",
+]
 
 
 def readDataset(input_json):
-    with open(input_json, 'r') as f:
+    with open(input_json, "r") as f:
         dataset = json.load(f)
     return dataset
 
@@ -35,8 +43,8 @@ def is_date_comparison(question: str):
 
 def getQuestionComparisonOperator(question_tokens: List[str]) -> str:
     # Correct if Attn1 is first event
-    lesser_tokens = ['first', 'earlier', 'forst', 'firts']
-    greater_tokens = ['later', 'last', 'second']
+    lesser_tokens = ["first", "earlier", "forst", "firts"]
+    greater_tokens = ["later", "last", "second"]
 
     for t in lesser_tokens:
         if t in question_tokens:
@@ -49,15 +57,16 @@ def getQuestionComparisonOperator(question_tokens: List[str]) -> str:
     return SECOND
 
 
-def getDateTokenIdxs(p_date_mens: List[Tuple[str, Tuple[int, int], Tuple[int, int, int]]],
-                     p_date_entidxs: List[int]) -> Tuple[List[int], List[int]]:
+def getDateTokenIdxs(
+    p_date_mens: List[Tuple[str, Tuple[int, int], Tuple[int, int, int]]], p_date_entidxs: List[int]
+) -> Tuple[List[int], List[int]]:
     """List of date token idxs, and list of their date-ent-idxs."""
     # List of token idxs that are dates
     passage_date_tokens = []
     passage_datetoken_entidxs = []
     for date_men, date_idx in zip(p_date_mens, p_date_entidxs):
         (s, e) = date_men[1]
-        passage_date_tokens.extend([x for x in range(s, e+1)])
+        passage_date_tokens.extend([x for x in range(s, e + 1)])
         passage_datetoken_entidxs.extend([date_idx for _ in range(s, e + 1)])
 
     assert len(passage_date_tokens) == len(passage_datetoken_entidxs)
@@ -66,29 +75,29 @@ def getDateTokenIdxs(p_date_mens: List[Tuple[str, Tuple[int, int], Tuple[int, in
 
 def quesEvents(qstr) -> Tuple[Tuple[int, int], Tuple[int, int]]:
     """ Returns (start, end) span tuples for event1 and event2 in the question """
-    or_split = qstr.split(' or ')
+    or_split = qstr.split(" or ")
     if len(or_split) != 2:
         return None
 
-    tokens = qstr.split(' ')
+    tokens = qstr.split(" ")
 
-    or_idx = tokens.index('or')
+    or_idx = tokens.index("or")
     # Last token is ? which we don't want to attend to
     event2 = tokens[or_idx + 1 : len(tokens) - 1]
     event2_span = (or_idx + 1, len(tokens) - 1)
 
     # Gets first index of the item
     try:
-        comma_idx = tokens.index(',')
+        comma_idx = tokens.index(",")
     except:
         comma_idx = 100000
     try:
-        colon_idx = tokens.index(':')
+        colon_idx = tokens.index(":")
     except:
         colon_idx = 100000
 
     try:
-        hyphen_idx = tokens.index('-')
+        hyphen_idx = tokens.index("-")
     except:
         hyphen_idx = 100000
 
@@ -96,14 +105,14 @@ def quesEvents(qstr) -> Tuple[Tuple[int, int], Tuple[int, int]]:
 
     if split_idx == 100000 or (or_idx - split_idx <= 1):
         # print(f"{qstr} first_split:{split_idx} or:{or_idx}")
-        if 'first' in tokens:
-            split_idx = tokens.index('first')
-        elif 'second' in tokens:
-            split_idx = tokens.index('second')
-        elif 'last' in tokens:
-            split_idx = tokens.index('last')
-        elif 'later' in tokens:
-            split_idx = tokens.index('later')
+        if "first" in tokens:
+            split_idx = tokens.index("first")
+        elif "second" in tokens:
+            split_idx = tokens.index("second")
+        elif "last" in tokens:
+            split_idx = tokens.index("last")
+        elif "later" in tokens:
+            split_idx = tokens.index("later")
         else:
             split_idx = -1
 
@@ -115,7 +124,7 @@ def quesEvents(qstr) -> Tuple[Tuple[int, int], Tuple[int, int]]:
 
 
 def find_answer_event(answer_span: str, event1_tokens: List[str], event2_tokens: List[str]) -> str:
-    ans_tokens = set(answer_span.split(' '))
+    ans_tokens = set(answer_span.split(" "))
     event1, event2 = set(event1_tokens), set(event2_tokens)
     ans_event = FIRST if len(event1.intersection(ans_tokens)) > len(event2.intersection(ans_tokens)) else SECOND
     return ans_event
@@ -124,7 +133,7 @@ def find_answer_event(answer_span: str, event1_tokens: List[str], event2_tokens:
 def difference_in_successive_terms(l: List[int]):
     sum_of_differences = 0
     for i in range(len(l) - 1):
-        sum_of_differences += l[i+1] - l[i]
+        sum_of_differences += l[i + 1] - l[i]
     return sum_of_differences
 
 
@@ -143,19 +152,20 @@ def matchEventToPassage(event_tokens: List[str], passage_tokens: List[str]) -> L
     best_diff = 100000
     best_start_point = 0
     for i in range(0, len(relevant_passage_tokenidxs) - len_event_span + 1):
-        passage_token_span = relevant_passage_tokenidxs[i:i+len_event_span]
+        passage_token_span = relevant_passage_tokenidxs[i : i + len_event_span]
         sum_of_token_diffs = difference_in_successive_terms(passage_token_span)
         if sum_of_token_diffs < best_diff:
             best_start_point = i
             best_diff = sum_of_token_diffs
 
-    pruned_relevant_passage_tokenidxs = relevant_passage_tokenidxs[best_start_point:best_start_point + len_event_span]
+    pruned_relevant_passage_tokenidxs = relevant_passage_tokenidxs[best_start_point : best_start_point + len_event_span]
 
     return pruned_relevant_passage_tokenidxs
 
 
-def dateInNeighborhood(passage_tokenidxs: List[int], passage_date_tokenidxs: List[int],
-                       passage_datetoken_entidxs: List[int], threshold = 20):
+def dateInNeighborhood(
+    passage_tokenidxs: List[int], passage_date_tokenidxs: List[int], passage_datetoken_entidxs: List[int], threshold=20
+):
     """ Given a list of relevant-passage-tokens, and list of date-tokens in the passage, figure out -
         if there's a date in the neighborhood of the relevant tokens
         For each passage-token, first find the min-distance to a date token. Then find the min-amongst that.
@@ -163,7 +173,7 @@ def dateInNeighborhood(passage_tokenidxs: List[int], passage_date_tokenidxs: Lis
     """
 
     distance_to_dates = []
-    closest_date_entidxs  = []
+    closest_date_entidxs = []
     for tokenidx in passage_tokenidxs:
         min_distance_to_date = 10000
         closest_dateidx = -1
@@ -178,7 +188,7 @@ def dateInNeighborhood(passage_tokenidxs: List[int], passage_date_tokenidxs: Lis
     if len(distance_to_dates) == 0:
         return False, -1
 
-    avg_distance_to_dates = float(sum(distance_to_dates))/len(distance_to_dates)
+    avg_distance_to_dates = float(sum(distance_to_dates)) / len(distance_to_dates)
     # Mode
     closest_date_entidx = max(set(closest_date_entidxs), key=closest_date_entidxs.count)
 
@@ -216,7 +226,7 @@ def pruneDateQuestions(dataset):
 
     for passage_id, passage_info in dataset.items():
         passage = passage_info[constants.tokenized_passage]
-        passage_tokens: List[str] = passage.split(' ')
+        passage_tokens: List[str] = passage.split(" ")
         p_date_mens: List[Tuple[str, Tuple[int, int], Tuple[int, int, int]]] = passage_info[constants.passage_date_mens]
         p_date_entidxs = passage_info[constants.passage_date_entidx]
         p_date_values: List[Tuple] = passage_info[constants.passage_date_normalized_values]
@@ -228,7 +238,7 @@ def pruneDateQuestions(dataset):
             total_ques += 1
 
             question_tokenized_text = question_answer[constants.tokenized_question]
-            question_tokens: List[str] = question_tokenized_text.split(' ')
+            question_tokens: List[str] = question_tokenized_text.split(" ")
             answer_annotation = question_answer[constants.answer]
 
             if not is_date_comparison(question_tokenized_text):
@@ -246,17 +256,19 @@ def pruneDateQuestions(dataset):
             # For questions with identified events, we'll try to ground dates
             event1_span, event2_span = event_spans
 
-            event1_tokens = question_tokens[event1_span[0]: event1_span[1]]
-            event2_tokens = question_tokens[event2_span[0]: event2_span[1]]
+            event1_tokens = question_tokens[event1_span[0] : event1_span[1]]
+            event2_tokens = question_tokens[event2_span[0] : event2_span[1]]
 
             # List of tokenidxs in passage that is a rough grounding for event 1/2
             event1_passage_tokenidxs: List[int] = matchEventToPassage(event1_tokens, passage_tokens)
             event2_passage_tokenidxs: List[int] = matchEventToPassage(event2_tokens, passage_tokens)
 
-            date_near_event1, event1_date_idx = dateInNeighborhood(event1_passage_tokenidxs, passage_date_tokenidxs,
-                                                                   passage_datetoken_entidxs, threshold=THRESHOLD)
-            date_near_event2, event2_date_idx = dateInNeighborhood(event2_passage_tokenidxs, passage_date_tokenidxs,
-                                                                   passage_datetoken_entidxs, threshold=THRESHOLD)
+            date_near_event1, event1_date_idx = dateInNeighborhood(
+                event1_passage_tokenidxs, passage_date_tokenidxs, passage_datetoken_entidxs, threshold=THRESHOLD
+            )
+            date_near_event2, event2_date_idx = dateInNeighborhood(
+                event2_passage_tokenidxs, passage_date_tokenidxs, passage_datetoken_entidxs, threshold=THRESHOLD
+            )
 
             if not date_near_event1 or not date_near_event2:
                 continue
@@ -273,12 +285,16 @@ def pruneDateQuestions(dataset):
                 answer_event_date = event1_date_idx if answer_event == FIRST else event2_date_idx
                 other_event_date = event2_date_idx if answer_event == FIRST else event1_date_idx
 
-                answer_event_date = Date(year=p_date_values[answer_event_date][2],
-                                         month=p_date_values[answer_event_date][1],
-                                         day=p_date_values[answer_event_date][0])
-                other_event_date = Date(year=p_date_values[other_event_date][2],
-                                        month=p_date_values[other_event_date][1],
-                                        day=p_date_values[other_event_date][0])
+                answer_event_date = Date(
+                    year=p_date_values[answer_event_date][2],
+                    month=p_date_values[answer_event_date][1],
+                    day=p_date_values[answer_event_date][0],
+                )
+                other_event_date = Date(
+                    year=p_date_values[other_event_date][2],
+                    month=p_date_values[other_event_date][1],
+                    day=p_date_values[other_event_date][0],
+                )
 
                 # If the questions asks for what happened first, and our date grounding says that answer happened later,
                 # means our date annotation is wrong.
@@ -307,15 +323,11 @@ def pruneDateQuestions(dataset):
                 event2_date_value = p_date_values[event2_date_idx]
                 question_answer[constants.exection_supervised] = True
 
-
-            ''' We store the groundings in the reverse order since they seem to help '''
-            question_answer[constants.qspan_dategrounding_supervision] = [event2_date_grounding,
-                                                                          event1_date_grounding]
-            question_answer[constants.qspan_datevalue_supervision] = [event2_date_value,
-                                                                      event1_date_value]
+            """ We store the groundings in the reverse order since they seem to help """
+            question_answer[constants.qspan_dategrounding_supervision] = [event2_date_grounding, event1_date_grounding]
+            question_answer[constants.qspan_datevalue_supervision] = [event2_date_value, event1_date_value]
 
             new_qa_pairs.append(question_answer)
-
 
         if len(new_qa_pairs) > 0:
             passage_info[constants.qa_pairs] = new_qa_pairs
@@ -330,14 +342,14 @@ def pruneDateQuestions(dataset):
     return new_dataset
 
 
-if __name__=='__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input_dir')
-    parser.add_argument('--output_dir')
+    parser.add_argument("--input_dir")
+    parser.add_argument("--output_dir")
     args = parser.parse_args()
 
-    train_json = 'drop_dataset_train.json'
-    dev_json = 'drop_dataset_dev.json'
+    train_json = "drop_dataset_train.json"
+    dev_json = "drop_dataset_dev.json"
 
     input_dir = args.input_dir
     output_dir = args.output_dir
@@ -357,18 +369,16 @@ if __name__=='__main__':
 
     new_dev_dataset = pruneDateQuestions(dev_dataset)
 
-    with open(output_trnfp, 'w') as f:
+    with open(output_trnfp, "w") as f:
         json.dump(new_train_dataset, f, indent=4)
 
-    with open(output_devfp, 'w') as f:
+    with open(output_devfp, "w") as f:
         json.dump(new_dev_dataset, f, indent=4)
 
     print("Written augmented datasets")
 
 
-
-
-''' DATASET CREATED THIS WAY
+""" DATASET CREATED THIS WAY
 
 input_dir = "./resources/data/drop_old/preprocess_new"
 output_dir = "./resources/data/drop_old/date/datecomp_traindev_pruned"
@@ -396,4 +406,4 @@ with open(output_devfp, 'w') as f:
 
 print("Written augmented datasets")
 
-'''
+"""

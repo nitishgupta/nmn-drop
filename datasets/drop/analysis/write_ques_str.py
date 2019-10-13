@@ -9,6 +9,7 @@ train_outfile = f"/srv/local/data/nitishg/data/drop_old/{input_dir}/train_qa.txt
 dev_infile = f"/srv/local/data/nitishg/data/drop_old/{input_dir}/drop_dataset_dev.json"
 dev_outfile = f"/srv/local/data/nitishg/data/drop_old/{input_dir}/dev_qa.txt"
 
+
 def get_dataset(infile):
     with open(infile) as f:
         dataset = json.load(f)
@@ -16,7 +17,7 @@ def get_dataset(infile):
 
 
 def printDataset(dataset, outfile):
-    with open(outfile, 'w') as f:
+    with open(outfile, "w") as f:
         for pid, pinfo in dataset.items():
             passage = pinfo[constants.original_passage]
             qapairs = pinfo["qa_pairs"]

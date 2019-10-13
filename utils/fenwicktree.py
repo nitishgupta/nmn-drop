@@ -1,6 +1,7 @@
 from typing import List
 
-class FenwickTree():
+
+class FenwickTree:
     def __init__(self, n: int, arr: List[int] = None):
         """
         Initialize fenwick tree for an array of size n
@@ -28,7 +29,6 @@ class FenwickTree():
             i -= i & (-i)
         return s
 
-
     # Updates a node in Binary Index Tree (BITree) at given index
     # in BITree. The given value 'val' is added to BITree[i] and
     # all of its ancestors in tree.
@@ -43,7 +43,6 @@ class FenwickTree():
 
             # Update index to that of parent in update View
             i += i & (-i)
-
 
     # Constructs and returns a Binary Indexed Tree for given
     # array of size n.
@@ -66,7 +65,7 @@ class FenwickTree():
 # class IndexUpdatingList
 
 
-if __name__=='__main__':
+if __name__ == "__main__":
     n = 10
     fwtree = FenwickTree(n)
     fwtree.updatebit(i=2, v=1)

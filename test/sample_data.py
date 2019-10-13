@@ -3,8 +3,9 @@ import json
 input_dir = "./resources/data/drop/date_num/date_ydnew2_num_hmyw_cnt_rel_500/"
 output_dir = input_dir
 
+
 def readDataset(input_json):
-    with open(input_json, 'r') as f:
+    with open(input_json, "r") as f:
         dataset = json.load(f)
     return dataset
 
@@ -29,5 +30,5 @@ output_json = output_dir + "sample.json"
 
 output_dataset = make_sample(train_dataset, num_paras=50)
 
-with open(output_json, 'w') as f:
+with open(output_json, "w") as f:
     json.dump(output_dataset, f, indent=4)

@@ -26,6 +26,7 @@ def dt_greater(dt1, dt2, date_gt_mat):
     bool_greater = (date_gt_mat * joint_prob).sum()
     return bool_greater
 
+
 def dt_lesser(dt1, dt2, date_lt_mat):
     joint_prob = torch.matmul(dt1.unsqueeze(1), dt2.unsqueeze(0))
     bool_lesser = (date_lt_mat * joint_prob).sum()
@@ -33,16 +34,16 @@ def dt_lesser(dt1, dt2, date_lt_mat):
 
 
 dates = [
-            Date(year=1917, month=11, day=-1),
-            Date(year=1918, month=1, day=18),
-            Date(year=1918, month=1, day=-1),
-            Date(year=1918, month=2, day=9)
-        ]
+    Date(year=1917, month=11, day=-1),
+    Date(year=1918, month=1, day=18),
+    Date(year=1918, month=1, day=-1),
+    Date(year=1918, month=2, day=9),
+]
 
 
-date_distribution_1 = [0.5, 0.0, 0.5, 0.0] # [0.33333, 0.333333, 0.333333]
-date_distribution_2 = [1.0, 0.0, 0.0, 0.0] # [0.33333, 0.333333, 0.333333]
-date_distribution_3 = [0.5, 0.0, 0.5, 0.0] # [0.33333, 0.333333, 0.333333]
+date_distribution_1 = [0.5, 0.0, 0.5, 0.0]  # [0.33333, 0.333333, 0.333333]
+date_distribution_2 = [1.0, 0.0, 0.0, 0.0]  # [0.33333, 0.333333, 0.333333]
+date_distribution_3 = [0.5, 0.0, 0.5, 0.0]  # [0.33333, 0.333333, 0.333333]
 
 date_gt_mat, date_lt_mat = compute_date_greater_than_matrix(dates, -1)
 
@@ -86,4 +87,3 @@ print(f"p(D3 < D1): {lt_3_1}")
 #
 # print(probs1)
 # print(probs3)
-

@@ -10,8 +10,9 @@ random.seed(100)
 
 """ Split the dev data into mydev and mytest. """
 
+
 def readDataset(input_json):
-    with open(input_json, 'r') as f:
+    with open(input_json, "r") as f:
         dataset = json.load(f)
     return dataset
 
@@ -47,17 +48,17 @@ def splitDataset(dataset, perc_split: float):
     return dev_dataset, test_dataset
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input_dir')
-    parser.add_argument('--output_dir')
-    parser.add_argument('--perc_split', type=float, required=True)
+    parser.add_argument("--input_dir")
+    parser.add_argument("--output_dir")
+    parser.add_argument("--perc_split", type=float, required=True)
     args = parser.parse_args()
 
     input_dir = args.input_dir
     output_dir = args.output_dir
 
-    dev_json = 'drop_dataset_dev.json'
+    dev_json = "drop_dataset_dev.json"
 
     perc_split = args.perc_split
 
@@ -65,8 +66,8 @@ if __name__ == '__main__':
         os.makedirs(output_dir, exist_ok=True)
 
     input_devfp = os.path.join(input_dir, dev_json)
-    output_devfp = os.path.join(output_dir, 'drop_dataset_mydev.json')
-    output_testfp = os.path.join(output_dir, 'drop_dataset_mytest.json')
+    output_devfp = os.path.join(output_dir, "drop_dataset_mydev.json")
+    output_testfp = os.path.join(output_dir, "drop_dataset_mytest.json")
 
     input_dev_dataset = readDataset(input_devfp)
 
@@ -74,11 +75,8 @@ if __name__ == '__main__':
     print(output_dir)
     new_dev_dataset, new_test_dataset = splitDataset(input_dev_dataset, perc_split)
 
-    with open(output_devfp, 'w') as f:
+    with open(output_devfp, "w") as f:
         json.dump(new_dev_dataset, f, indent=4)
 
-    with open(output_testfp, 'w') as f:
+    with open(output_testfp, "w") as f:
         json.dump(new_test_dataset, f, indent=4)
-
-
-

@@ -9,7 +9,7 @@ WHO_RELOCATE_NGRAMS = ["which player scored", "who kicked the", "who threw the",
 
 
 def readDataset(input_json):
-    with open(input_json, 'r') as f:
+    with open(input_json, "r") as f:
         dataset = json.load(f)
     return dataset
 
@@ -20,7 +20,7 @@ def relocate_program_qattn(tokenized_queslower: str):
         2. filter(QuestionAttention, find(QuestionAttention))
     """
     question_lower = tokenized_queslower
-    question_tokens: List[str] = question_lower.split(' ')
+    question_tokens: List[str] = question_lower.split(" ")
     qlen = len(question_tokens)
 
     qtype = None
@@ -28,15 +28,55 @@ def relocate_program_qattn(tokenized_queslower: str):
     filter_qattn = [0.0] * qlen
     find_qattn = [0.0] * qlen
 
-    tokens_with_find_attention = ["touchdown", "run", "pass", "field", "goal", "passing", "TD", "td", "rushing",
-                                  "kick", "scoring", "drive", "touchdowns", "reception", "interception", "return",
-                                  "goals", "passes"]
-    tokens_with_no_attention = ["which", "Which", "who", "Who", "How", "many", "yards", "yard", "was", "the",
-                                "longest", "shortest", "?", "kicked", "caught", "threw", "player", "scored",
-                                "of", "in", "game", "most"]
+    tokens_with_find_attention = [
+        "touchdown",
+        "run",
+        "pass",
+        "field",
+        "goal",
+        "passing",
+        "TD",
+        "td",
+        "rushing",
+        "kick",
+        "scoring",
+        "drive",
+        "touchdowns",
+        "reception",
+        "interception",
+        "return",
+        "goals",
+        "passes",
+    ]
+    tokens_with_no_attention = [
+        "which",
+        "Which",
+        "who",
+        "Who",
+        "How",
+        "many",
+        "yards",
+        "yard",
+        "was",
+        "the",
+        "longest",
+        "shortest",
+        "?",
+        "kicked",
+        "caught",
+        "threw",
+        "player",
+        "scored",
+        "of",
+        "in",
+        "game",
+        "most",
+    ]
 
-    if any(span in question_lower for span in ["who threw the", "who caught the", "who kicked the", "who scored the",
-                                               "which player scored"]):
+    if any(
+        span in question_lower
+        for span in ["who threw the", "who caught the", "who kicked the", "who scored the", "which player scored"]
+    ):
         # first deal with non longest / shortest -- strategy is everything that is not in find or relocate is filter
         reloc_qattn[1] = 1.0
         for i, t in enumerate(question_tokens):
@@ -103,13 +143,12 @@ def preprocess_Relocate_ques_wattn(dataset):
             original_question = question_answer[constants.cleaned_question]
             question_lower = original_question.lower()
             tokenized_ques = question_answer[constants.tokenized_question]
-            tokens = tokenized_ques.split(' ')
+            tokens = tokenized_ques.split(" ")
             qlen = len(tokens)
             if any(span in question_lower for span in WHO_RELOCATE_NGRAMS):
-                (qtype,
-                 reloc_qattn,
-                 filter_qattn,
-                 find_qattn) = relocate_program_qattn(tokenized_queslower=tokenized_ques.lower())
+                (qtype, reloc_qattn, filter_qattn, find_qattn) = relocate_program_qattn(
+                    tokenized_queslower=tokenized_ques.lower()
+                )
 
                 # if question_attention_filter_span is not None:
                 #     filter_qattn = convert_span_to_attention(qlen, question_attention_filter_span)
@@ -160,14 +199,14 @@ def preprocess_Relocate_ques_wattn(dataset):
     return new_dataset
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input_dir')
-    parser.add_argument('--output_dir')
+    parser.add_argument("--input_dir")
+    parser.add_argument("--output_dir")
     args = parser.parse_args()
 
-    train_json = 'drop_dataset_train.json'
-    dev_json = 'drop_dataset_dev.json'
+    train_json = "drop_dataset_train.json"
+    dev_json = "drop_dataset_dev.json"
 
     input_dir = args.input_dir
     output_dir = args.output_dir
@@ -189,11 +228,10 @@ if __name__ == '__main__':
 
     new_dev_dataset = preprocess_Relocate_ques_wattn(dev_dataset)
 
-    with open(output_trnfp, 'w') as f:
+    with open(output_trnfp, "w") as f:
         json.dump(new_train_dataset, f, indent=4)
 
-    with open(output_devfp, 'w') as f:
+    with open(output_devfp, "w") as f:
         json.dump(new_dev_dataset, f, indent=4)
 
     print("Written count dataset")
-

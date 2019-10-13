@@ -13,24 +13,43 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 # TODO: Add more number here
-WORD_NUMBER_MAP = {"zero": 0, "one": 1, "two": 2, "three": 3, "four": 4,
-                   "five": 5, "six": 6, "seven": 7, "eight": 8,
-                   "nine": 9, "ten": 10, "eleven": 11, "twelve": 12,
-                   "thirteen": 13, "fourteen": 14, "fifteen": 15,
-                   "sixteen": 16, "seventeen": 17, "eighteen": 18, "nineteen": 19}
+WORD_NUMBER_MAP = {
+    "zero": 0,
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+    "eleven": 11,
+    "twelve": 12,
+    "thirteen": 13,
+    "fourteen": 14,
+    "fifteen": 15,
+    "sixteen": 16,
+    "seventeen": 17,
+    "eighteen": 18,
+    "nineteen": 19,
+}
 
 
 @DatasetReader.register("passage_attn2span_reader")
 class DROPReader(DatasetReader):
-    def __init__(self,
-                 lazy: bool = False,
-                 min_passage_length=200,
-                 max_passage_length=400,
-                 max_span_length=10,
-                 num_training_samples=2000,
-                 attnval: float = 1.0,
-                 normalized=True,
-                 withnoise=True)-> None:
+    def __init__(
+        self,
+        lazy: bool = False,
+        min_passage_length=200,
+        max_passage_length=400,
+        max_span_length=10,
+        num_training_samples=2000,
+        attnval: float = 1.0,
+        normalized=True,
+        withnoise=True,
+    ) -> None:
         super().__init__(lazy)
 
         self._min_passage_length = min_passage_length
@@ -40,7 +59,8 @@ class DROPReader(DatasetReader):
         self._normalized = normalized
         self._attnval = attnval
         self._withnoise = withnoise
-    '''
+
+    """
     @overrides
     def _read(self, file_path: str):
         # pylint: disable=logging-fstring-interpolation
@@ -84,7 +104,7 @@ class DROPReader(DatasetReader):
             print("Making data")
 
         return instances
-    '''
+    """
 
     def _read(self, file_path: str):
         # pylint: disable=logging-fstring-interpolation
@@ -96,7 +116,7 @@ class DROPReader(DatasetReader):
 
         for passage_id, passage_info in dataset.items():
             passage_text = passage_info[constants.tokenized_passage]
-            passage_length = len(passage_text.split(' '))
+            passage_length = len(passage_text.split(" "))
 
             for question_answer in passage_info[constants.qa_pairs]:
                 fields = {}
@@ -117,7 +137,7 @@ class DROPReader(DatasetReader):
 
                 attention = [0.0 for _ in range(passage_length)]
 
-                attention[start_position:end_position + 1] = [1.0] * span_length
+                attention[start_position : end_position + 1] = [1.0] * span_length
 
                 if self._withnoise:
                     attention = [x + abs(random.gauss(0, 0.001)) for x in attention]

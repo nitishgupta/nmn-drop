@@ -5,10 +5,10 @@ import argparse
 
 def read_prediction_file(file_path):
     """Input files are instance-per-line w/ each line being tab-separated."""
-    with open(file_path, 'r') as f:
+    with open(file_path, "r") as f:
         lines = f.readlines()
 
-    instances = [line.strip().split('\t') for line in lines]
+    instances = [line.strip().split("\t") for line in lines]
 
     return instances
 
@@ -27,7 +27,7 @@ def make_correct_incorrect_dicts(instances):
     incorrect_qids = set()
 
     for instance in instances:
-        if instance[2] == 'C':
+        if instance[2] == "C":
             correct_qids.add(instance[0])
         else:
             incorrect_qids.add(instance[0])
@@ -70,7 +70,7 @@ def make_qid2logicalform(instances):
         if len(instance) == 4:
             lf = instance[3]
         else:
-            lf = ''
+            lf = ""
         qid2lf[qid] = lf
 
     return qid2lf
@@ -138,7 +138,7 @@ def error_overlap_statistics(file1, file2):
     correct_qids1, incorrect_qids1 = make_correct_incorrect_dicts(instances1)
     correct_qids2, incorrect_qids2 = make_correct_incorrect_dicts(instances2)
 
-    perf1 = len(correct_qids1)/float(num_instances1)
+    perf1 = len(correct_qids1) / float(num_instances1)
     perf2 = len(correct_qids2) / float(num_instances2)
 
     correct_overlap_qids = correct_qids1.intersection(correct_qids2)
@@ -156,14 +156,19 @@ def error_overlap_statistics(file1, file2):
     print("Incorrect in Model 1, Correct in Model 2")
     print_qtext_bothlfs(incorrect1_correct2_qids, qid2qtext1, qid2lf1, qid2lf2)
 
-
     print("Model 1")
-    print("Num instances: {} Correct: {} Incorrect: {} Perf: {}".format(num_instances1, len(correct_qids1),
-                                                                        len(incorrect_qids1), perf1))
+    print(
+        "Num instances: {} Correct: {} Incorrect: {} Perf: {}".format(
+            num_instances1, len(correct_qids1), len(incorrect_qids1), perf1
+        )
+    )
     print()
     print("Model 2")
-    print("Num instances: {} Correct: {} Incorrect: {} Perf: {}".format(num_instances2, len(correct_qids2),
-                                                                        len(incorrect_qids2), perf2))
+    print(
+        "Num instances: {} Correct: {} Incorrect: {} Perf: {}".format(
+            num_instances2, len(correct_qids2), len(incorrect_qids2), perf2
+        )
+    )
 
     print("Correct Overlap : {}".format(len(correct_overlap_qids)))
 
@@ -181,25 +186,27 @@ def error_overlap_statistics(file1, file2):
     overlap_in_correct_incorrect_questext(correct_qids2, incorrect_qids2, qid2qtext2)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--file1')
-    parser.add_argument('--file2')
+    parser.add_argument("--file1")
+    parser.add_argument("--file2")
     args = parser.parse_args()
 
     file1 = args.file1
     file2 = args.file2
 
+    OurGRUmodel = (
+        "/scratch1/nitishg/semqa/checkpoints/drop/date_num/date_numcq_hmvy_cnt_relprog_500/drop_parser/"
+        "TOKENS_qanet/ED_100/RG_1e-07/MODELTYPE_encoded/CNTFIX_false/aux_true/SUPEPOCHS_5/"
+        "S_10/CModelBM1" + "/predictions"
+    )
 
-    OurGRUmodel = "/scratch1/nitishg/semqa/checkpoints/drop/date_num/date_numcq_hmvy_cnt_relprog_500/drop_parser/" \
-                  "TOKENS_qanet/ED_100/RG_1e-07/MODELTYPE_encoded/CNTFIX_false/aux_true/SUPEPOCHS_5/" \
-                  "S_10/CModelBM1" + "/predictions"
+    OurBERTmodel = (
+        "/scratch1/nitishg/semqa/checkpoints/drop/date_num/date_ydNEW_num_hmyw_cnt_rel_600/S_1000/"
+        "BertModel15RelAux15_2x" + "/predictions"
+    )
 
-    OurBERTmodel = "/scratch1/nitishg/semqa/checkpoints/drop/date_num/date_ydNEW_num_hmyw_cnt_rel_600/S_1000/" \
-                   "BertModel15RelAux15_2x" + "/predictions"
-
-    NABERTmodel = ("/scratch1/nitishg/semqa/checkpoints/drop-bert/mydata_ydre_relre/S_1/predictions")
-
+    NABERTmodel = "/scratch1/nitishg/semqa/checkpoints/drop-bert/mydata_ydre_relre/S_1/predictions"
 
     numcomp = "numcomp_full_dev_analysis.tsv"
     relocate = "relocate_wprog_dev_analysis.tsv"
@@ -207,8 +214,8 @@ if __name__ == '__main__':
     year_diff = "year_diff_dev_analysis.tsv"
 
     ###
-    model1 = OurBERTmodel       # Should be the weaker model
-    model2 = NABERTmodel        # Should be stronger model
+    model1 = OurBERTmodel  # Should be the weaker model
+    model2 = NABERTmodel  # Should be stronger model
     dataset = count
 
     file1 = os.path.join(model1, dataset)

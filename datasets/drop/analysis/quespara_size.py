@@ -7,7 +7,7 @@ from utils.util import round_all
 
 
 def readDataset(input_json):
-    with open(input_json, 'r') as f:
+    with open(input_json, "r") as f:
         dataset = json.load(f)
     return dataset
 
@@ -24,7 +24,7 @@ def quesParaSize(input_json):
     for pid, pinfo in dataset.items():
         numparas += 1
         passage = pinfo[constants.tokenized_passage]
-        plen = len(passage.split(' '))
+        plen = len(passage.split(" "))
         maxparalen = plen if plen > maxparalen else maxparalen
 
         qa_pairs = pinfo[constants.qa_pairs]
@@ -39,13 +39,12 @@ def quesParaSize(input_json):
             else:
                 qtype_dist["UNK"] += 1
 
-
     print("\nCount of QTypes")
     print(qtype_dist)
     print()
 
     for k, v in qtype_dist.items():
-        qtype_dist[k] = round_all(100 * (float(v)/numques), 1)
+        qtype_dist[k] = round_all(100 * (float(v) / numques), 1)
 
     print("\nPercentage of QTypes:")
     print(qtype_dist)
@@ -55,15 +54,15 @@ def quesParaSize(input_json):
     print(f"Questions: {numques}  MaxQuesLen:{maxqueslen}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--inputdir')
+    parser.add_argument("--inputdir")
     args = parser.parse_args()
 
     inputdir = args.inputdir
 
-    train_json = 'drop_dataset_train.json'
-    dev_json = 'drop_dataset_dev.json'
+    train_json = "drop_dataset_train.json"
+    dev_json = "drop_dataset_dev.json"
 
     inputdir = "./resources/data/drop_s/num/howmanyyards_count_diff"
 
@@ -75,6 +74,3 @@ if __name__ == '__main__':
 
     print(input_devfp)
     quesParaSize(input_devfp)
-
-
-

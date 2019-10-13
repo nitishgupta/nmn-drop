@@ -5,12 +5,14 @@ from allennlp.modules.text_field_embedders import TextFieldEmbedder
 from allennlp.modules.seq2seq_encoders import Seq2SeqEncoder
 
 
-def embed_and_encode_ques_contexts(text_field_embedder: TextFieldEmbedder,
-                                   qencoder: Seq2SeqEncoder,
-                                   batch_size: int,
-                                   question: Dict[str, torch.LongTensor],
-                                   contexts: Dict[str, torch.LongTensor]):
-        """ Embed and Encode question and contexts
+def embed_and_encode_ques_contexts(
+    text_field_embedder: TextFieldEmbedder,
+    qencoder: Seq2SeqEncoder,
+    batch_size: int,
+    question: Dict[str, torch.LongTensor],
+    contexts: Dict[str, torch.LongTensor],
+):
+    """ Embed and Encode question and contexts
 
         Parameters:
         -----------
@@ -41,47 +43,54 @@ def embed_and_encode_ques_contexts(text_field_embedder: TextFieldEmbedder,
             Batch-sized list of contexts_mask for each context in the instance
 
         """
-        # Shape: (B, question_length, D)
-        embedded_questions_tensor = text_field_embedder(question)
-        # Shape: (B, question_length)
-        questions_mask_tensor = allenutil.get_text_field_mask(question).float()
-        embedded_questions = [embedded_questions_tensor[i] for i in range(batch_size)]
-        questions_mask = [questions_mask_tensor[i] for i in range(batch_size)]
+    # Shape: (B, question_length, D)
+    embedded_questions_tensor = text_field_embedder(question)
+    # Shape: (B, question_length)
+    questions_mask_tensor = allenutil.get_text_field_mask(question).float()
+    embedded_questions = [embedded_questions_tensor[i] for i in range(batch_size)]
+    questions_mask = [questions_mask_tensor[i] for i in range(batch_size)]
 
-        # Shape: (B, ques_len, D)
-        encoded_ques_tensor = qencoder(embedded_questions_tensor, questions_mask_tensor)
-        # Shape: (B, D)
-        ques_encoded_final_state = allenutil.get_final_encoder_states(encoded_ques_tensor,
-                                                                      questions_mask_tensor,
-                                                                      qencoder.is_bidirectional())
-        encoded_questions = [encoded_ques_tensor[i] for i in range(batch_size)]
+    # Shape: (B, ques_len, D)
+    encoded_ques_tensor = qencoder(embedded_questions_tensor, questions_mask_tensor)
+    # Shape: (B, D)
+    ques_encoded_final_state = allenutil.get_final_encoder_states(
+        encoded_ques_tensor, questions_mask_tensor, qencoder.is_bidirectional()
+    )
+    encoded_questions = [encoded_ques_tensor[i] for i in range(batch_size)]
 
-        # # contexts is a (B, num_contexts, context_length, *) tensors
-        # (tokenindexer, indexed_tensor) = next(iter(contexts.items()))
-        # num_contexts = indexed_tensor.size()[1]
-        # # Making a separate batched token_indexer_dict for each context -- [{token_inderxer: (C, T, *)}]
-        # contexts_indices_list: List[Dict[str, torch.LongTensor]] = [{} for _ in range(batch_size)]
-        # for token_indexer_name, token_indices_tensor in contexts.items():
-        #         print(f"{token_indexer_name}: {token_indices_tensor.size()}")
-        #         for i in range(batch_size):
-        #                 contexts_indices_list[i][token_indexer_name] = token_indices_tensor[i, ...]
-        #
-        # # Each tensor of shape (num_contexts, context_len, D)
-        # embedded_contexts = []
-        # contexts_mask = []
-        # # Shape: (num_contexts, context_length, D)
-        # for i in range(batch_size):
-        #         embedded_contexts_i = text_field_embedder(contexts_indices_list[i])
-        #         embedded_contexts.append(embedded_contexts_i)
-        #         contexts_mask_i = allenutil.get_text_field_mask(contexts_indices_list[i]).float()
-        #         contexts_mask.append(contexts_mask_i)
+    # # contexts is a (B, num_contexts, context_length, *) tensors
+    # (tokenindexer, indexed_tensor) = next(iter(contexts.items()))
+    # num_contexts = indexed_tensor.size()[1]
+    # # Making a separate batched token_indexer_dict for each context -- [{token_inderxer: (C, T, *)}]
+    # contexts_indices_list: List[Dict[str, torch.LongTensor]] = [{} for _ in range(batch_size)]
+    # for token_indexer_name, token_indices_tensor in contexts.items():
+    #         print(f"{token_indexer_name}: {token_indices_tensor.size()}")
+    #         for i in range(batch_size):
+    #                 contexts_indices_list[i][token_indexer_name] = token_indices_tensor[i, ...]
+    #
+    # # Each tensor of shape (num_contexts, context_len, D)
+    # embedded_contexts = []
+    # contexts_mask = []
+    # # Shape: (num_contexts, context_length, D)
+    # for i in range(batch_size):
+    #         embedded_contexts_i = text_field_embedder(contexts_indices_list[i])
+    #         embedded_contexts.append(embedded_contexts_i)
+    #         contexts_mask_i = allenutil.get_text_field_mask(contexts_indices_list[i]).float()
+    #         contexts_mask.append(contexts_mask_i)
 
-        embedded_contexts_tensor = text_field_embedder(contexts, num_wrapping_dims=1)
-        contexts_mask_tensor = allenutil.get_text_field_mask(contexts, num_wrapping_dims=1).float()
+    embedded_contexts_tensor = text_field_embedder(contexts, num_wrapping_dims=1)
+    contexts_mask_tensor = allenutil.get_text_field_mask(contexts, num_wrapping_dims=1).float()
 
-        embedded_contexts = [embedded_contexts_tensor[i] for i in range(batch_size)]
-        contexts_mask = [contexts_mask_tensor[i] for i in range(batch_size)]
+    embedded_contexts = [embedded_contexts_tensor[i] for i in range(batch_size)]
+    contexts_mask = [contexts_mask_tensor[i] for i in range(batch_size)]
 
-        return (embedded_questions, encoded_questions, questions_mask,
-                encoded_ques_tensor, questions_mask_tensor, ques_encoded_final_state,
-                embedded_contexts, contexts_mask)
+    return (
+        embedded_questions,
+        encoded_questions,
+        questions_mask,
+        encoded_ques_tensor,
+        questions_mask_tensor,
+        ques_encoded_final_state,
+        embedded_contexts,
+        contexts_mask,
+    )

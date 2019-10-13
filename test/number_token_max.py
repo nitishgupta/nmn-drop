@@ -16,7 +16,7 @@ def find_numerindices_sorted_order(number_values, number_token_indices, passage_
 
     number_tokenidx_values = list(zip(number_token_indices, number_token_numbervalues))
 
-    sorted_numberidx_value_tuples = sorted(number_tokenidx_values, key = lambda x: x[1])
+    sorted_numberidx_value_tuples = sorted(number_tokenidx_values, key=lambda x: x[1])
 
     sorted_number_indices, _ = zip(*sorted_numberidx_value_tuples)
 
@@ -52,8 +52,7 @@ passage_number_alignment[4, 4] = 1
 passage_number_alignment[6, 6] = 1
 passage_number_alignment[8, 8] = 1
 passage_number_alignment[9, 9] = 1
-passage_number_alignment = util.masked_softmax(passage_number_alignment,
-                                               mask=token2num_mask.unsqueeze(0), dim=-1)
+passage_number_alignment = util.masked_softmax(passage_number_alignment, mask=token2num_mask.unsqueeze(0), dim=-1)
 
 # passage_number_alignment = util.masked_softmax(torch.randn(passage_length, passage_length),
 #                                                mask=token2num_mask.unsqueeze(0), dim=-1)
@@ -92,7 +91,3 @@ print(f"OrigPattn:{passage_attention}")
 print(f"NewPattn: {new_pattn}")
 print(new_pattn.sum())
 print(new_number)
-
-
-
-

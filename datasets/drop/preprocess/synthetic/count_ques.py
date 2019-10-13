@@ -9,14 +9,20 @@ import argparse
 
 random.seed(100)
 
-COUNT_NGRAMS = ["how many field goals did", "how many field goals were",
-                "how many interceptions did", "how many passes", "how many rushing",
-                "how many touchdown passes did", "how many touchdowns did the",
-                "how many touchdowns were scored"]
+COUNT_NGRAMS = [
+    "how many field goals did",
+    "how many field goals were",
+    "how many interceptions did",
+    "how many passes",
+    "how many rushing",
+    "how many touchdown passes did",
+    "how many touchdowns did the",
+    "how many touchdowns were scored",
+]
 
 
 def readDataset(input_json):
-    with open(input_json, 'r') as f:
+    with open(input_json, "r") as f:
         dataset = json.load(f)
     return dataset
 
@@ -66,7 +72,7 @@ def preprocess_HowManyYardsCount_ques(dataset):
             tokenized_ques = question_answer[constants.tokenized_question]
 
             tokenized_passage = passage_info[constants.tokenized_passage]
-            passage_tokens = tokenized_passage.split(' ')
+            passage_tokens = tokenized_passage.split(" ")
 
             if any(span in question_lower for span in COUNT_NGRAMS):
                 attention, count, mask = make_count_instance(passage_tokens)
@@ -100,7 +106,9 @@ def preprocess_HowManyYardsCount_ques(dataset):
 
                 # Adding this so that the instance remains strongly supervised
                 question_answer[constants.qattn_supervised] = True
-                question_answer[constants.ques_attention_supervision] = [[1.0, 1.0]]     # Single attention vector of size=1
+                question_answer[constants.ques_attention_supervision] = [
+                    [1.0, 1.0]
+                ]  # Single attention vector of size=1
 
                 # The final output of the program is enough to train, so no aux loss / execution supervision is needed
                 # Still label as execution_supervised as it requires passing the pattn as side-arg
@@ -114,7 +122,7 @@ def preprocess_HowManyYardsCount_ques(dataset):
             num_of_gen_ques += len(new_qa_pairs)
 
     for k, v in count_distribution.items():
-        count_distribution[k] = util.round_all((float(v)/num_of_gen_ques) * 100, 3)
+        count_distribution[k] = util.round_all((float(v) / num_of_gen_ques) * 100, 3)
 
     num_passages_after_prune = len(new_dataset)
     print(f"Passages:{num_passages_after_prune}  Questions:{num_of_gen_ques}")
@@ -124,10 +132,10 @@ def preprocess_HowManyYardsCount_ques(dataset):
 
 
 def make_count_instance(passage_tokens: List[str]):
-    ''' output an attention, count_answer, mask. Mask is when we don;t find relevant spans '''
+    """ output an attention, count_answer, mask. Mask is when we don;t find relevant spans """
 
     # We would like to count these spans
-    relevant_spans = ['TD pass', 'TD run', 'touchdown pass', 'field goal', 'touchdown run']
+    relevant_spans = ["TD pass", "TD run", "touchdown pass", "field goal", "touchdown run"]
     num_relevant_spans = len(relevant_spans)
 
     attention = [0.0] * len(passage_tokens)
@@ -142,7 +150,7 @@ def make_count_instance(passage_tokens: List[str]):
     starting_positions_in_passage = []
     while len(starting_positions_in_passage) == 0 and tries < 5:
         choosen_span = random.randint(0, num_relevant_spans - 1)
-        span_tokens = relevant_spans[choosen_span].split(' ')
+        span_tokens = relevant_spans[choosen_span].split(" ")
         starting_positions_in_passage = contains(span_tokens, passage_tokens)
         tries += 1
 
@@ -176,7 +184,7 @@ def make_count_instance(passage_tokens: List[str]):
         for starting_position in chosen_starting_positions:
             attention[starting_position] = 1.0
             attention[starting_position + 1] = 1.0
-            for i in range(1, spread_len+1):
+            for i in range(1, spread_len + 1):
                 prev_idx = starting_position - i
                 if prev_idx >= 0:
                     attention[prev_idx] = 0.5
@@ -192,15 +200,14 @@ def make_count_instance(passage_tokens: List[str]):
     return attention, count, 1
 
 
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input_dir')
-    parser.add_argument('--output_dir')
+    parser.add_argument("--input_dir")
+    parser.add_argument("--output_dir")
     args = parser.parse_args()
 
-    train_json = 'drop_dataset_train.json'
-    dev_json = 'drop_dataset_dev.json'
+    train_json = "drop_dataset_train.json"
+    dev_json = "drop_dataset_dev.json"
 
     input_dir = args.input_dir
     output_dir = args.output_dir
@@ -222,11 +229,10 @@ if __name__ == '__main__':
 
     new_dev_dataset = preprocess_HowManyYardsCount_ques(dev_dataset)
 
-    with open(output_trnfp, 'w') as f:
+    with open(output_trnfp, "w") as f:
         json.dump(new_train_dataset, f, indent=2)
 
-    with open(output_devfp, 'w') as f:
+    with open(output_devfp, "w") as f:
         json.dump(new_dev_dataset, f, indent=2)
 
     print("Written count dataset")
-

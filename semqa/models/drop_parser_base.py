@@ -17,21 +17,24 @@ from semqa.domain_languages.drop_language import DropLanguage
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
-StateType = TypeVar('StateType', bound=State)
+StateType = TypeVar("StateType", bound=State)
 
 START_SYMBOL = alcommon_utils.START_SYMBOL
 
 
 class DROPParserBase(Model):
     """ DROP Parser BaseClass """
-    def __init__(self,
-                 vocab: Vocabulary,
-                 action_embedding_dim: int,
-                 text_field_embedder: TextFieldEmbedder = None,
-                 dropout: float = 0.0,
-                 rule_namespace: str = 'rule_labels',
-                 debug: bool=False,
-                 regularizer: Optional[RegularizerApplicator] = None) -> None:
+
+    def __init__(
+        self,
+        vocab: Vocabulary,
+        action_embedding_dim: int,
+        text_field_embedder: TextFieldEmbedder = None,
+        dropout: float = 0.0,
+        rule_namespace: str = "rule_labels",
+        debug: bool = False,
+        regularizer: Optional[RegularizerApplicator] = None,
+    ) -> None:
         super(DROPParserBase, self).__init__(vocab=vocab, regularizer=regularizer)
 
         self._denotation_accuracy = Average()
@@ -46,9 +49,11 @@ class DROPParserBase(Model):
         # This flag turns on the debugging mode which prints a bunch of stuff in self.decode (inside functions as well)
         self._debug = debug
 
-        self._action_embedder = Embedding(num_embeddings=vocab.get_vocab_size(self._rule_namespace),
-                                          embedding_dim=action_embedding_dim,
-                                          vocab_namespace=self._rule_namespace)
+        self._action_embedder = Embedding(
+            num_embeddings=vocab.get_vocab_size(self._rule_namespace),
+            embedding_dim=action_embedding_dim,
+            vocab_namespace=self._rule_namespace,
+        )
 
         self._action_embedding_dim = action_embedding_dim
         # This is what we pass as input in the first step of decoding, when we don't have a
@@ -62,12 +67,14 @@ class DROPParserBase(Model):
         # Sub-classes should define their own logic here.
         raise NotImplementedError
 
-    def _get_initial_rnn_state(self,
-                               question_encoded: torch.FloatTensor,
-                               question_mask: torch.LongTensor,
-                               question_encoded_finalstate: torch.FloatTensor,
-                               question_encoded_aslist: List[torch.FloatTensor],
-                               question_mask_aslist: List[torch.LongTensor]):
+    def _get_initial_rnn_state(
+        self,
+        question_encoded: torch.FloatTensor,
+        question_mask: torch.LongTensor,
+        question_encoded_finalstate: torch.FloatTensor,
+        question_encoded_aslist: List[torch.FloatTensor],
+        question_mask_aslist: List[torch.LongTensor],
+    ):
         """ Get the initial RnnStatelet for the decoder based on the question encoding
 
         Parameters:
@@ -85,26 +92,30 @@ class DROPParserBase(Model):
         # Shape: (B, D)
         memory_cell = question_encoded_finalstate.new_zeros(batch_size, ques_encoded_dim)
         # TODO(nitish): Why does WikiTablesParser use '_first_attended_question' embedding and not this
-        attended_sentence, _ = self._decoder_step.attend_on_question(question_encoded_finalstate,
-                                                                     question_encoded, question_mask)
+        attended_sentence, _ = self._decoder_step.attend_on_question(
+            question_encoded_finalstate, question_encoded, question_mask
+        )
 
         initial_rnn_state = []
         for i in range(batch_size):
-            initial_rnn_state.append(RnnStatelet(question_encoded_finalstate[i],
-                                                 memory_cell[i],
-                                                 self._first_action_embedding,
-                                                 attended_sentence[i],
-                                                 question_encoded_aslist,
-                                                 question_mask_aslist))
+            initial_rnn_state.append(
+                RnnStatelet(
+                    question_encoded_finalstate[i],
+                    memory_cell[i],
+                    self._first_action_embedding,
+                    attended_sentence[i],
+                    question_encoded_aslist,
+                    question_mask_aslist,
+                )
+            )
         return initial_rnn_state
 
-    def _create_grammar_statelet(self,
-                                 language: DropLanguage,
-                                 possible_actions: List[ProductionRule]) -> Tuple[GrammarStatelet, Dict[str, int],
-                                                                                  List[str]]:
-                                 # linked_rule2idx: Dict = None,
-                                 # action2ques_linkingscore: torch.FloatTensor = None,
-                                 # quesspan_action_emb: torch.FloatTensor = None) -> GrammarStatelet:
+    def _create_grammar_statelet(
+        self, language: DropLanguage, possible_actions: List[ProductionRule]
+    ) -> Tuple[GrammarStatelet, Dict[str, int], List[str]]:
+        # linked_rule2idx: Dict = None,
+        # action2ques_linkingscore: torch.FloatTensor = None,
+        # quesspan_action_emb: torch.FloatTensor = None) -> GrammarStatelet:
         """ Make grammar state for a particular instance in the batch using the global and instance-specific actions.
         For each instance-specific action we have a linking_score vector (size:ques_tokens), and an action embedding
 
@@ -158,18 +169,22 @@ class DROPParserBase(Model):
                 #     global_action_biases = self._action_biases(global_action_tensor)
                 #     global_input_embeddings = torch.cat([global_input_embeddings, global_action_biases], dim=-1)
                 global_output_embeddings = self._action_embedder(global_action_tensor)
-                translated_valid_actions[key]['global'] = (global_output_embeddings,
-                                                           global_output_embeddings,
-                                                           list(global_action_ids))
+                translated_valid_actions[key]["global"] = (
+                    global_output_embeddings,
+                    global_output_embeddings,
+                    list(global_action_ids),
+                )
 
-        return (GrammarStatelet([START_SYMBOL],
-                                translated_valid_actions,
-                                language.is_nonterminal), action2actionidx, actionidx2actionstr)
+        return (
+            GrammarStatelet([START_SYMBOL], translated_valid_actions, language.is_nonterminal),
+            action2actionidx,
+            actionidx2actionstr,
+        )
 
     @staticmethod
-    def _get_denotations(action_strings: List[List[List[str]]],
-                         languages: List[DropLanguage],
-                         sideargs: List[List[List[Dict]]] = None) -> Tuple[List[List[Any]], List[List[str]]]:
+    def _get_denotations(
+        action_strings: List[List[List[str]]], languages: List[DropLanguage], sideargs: List[List[List[Dict]]] = None
+    ) -> Tuple[List[List[Any]], List[List[str]]]:
         """ Get denotations for all action-sequences for  every instance in a batch.
 
         Parameters:
@@ -200,7 +215,9 @@ class DROPParserBase(Model):
                 actionseq_denotation = instance_language.execute_action_sequence(action_sequence, program_sideargs)
                 # instance_actionseq_denotation = instance_language.execute(logical_form)
                 instance_denotations.append(actionseq_denotation)
-                instance_actionseq_type = actionseq_denotation.__class__.__name__ # instance_language.typeobj_to_typename(actionseq_denotation)
+                instance_actionseq_type = (
+                    actionseq_denotation.__class__.__name__
+                )  # instance_language.typeobj_to_typename(actionseq_denotation)
                 instance_denotation_types.append(instance_actionseq_type)
 
             all_denotations.append(instance_denotations)
@@ -249,7 +266,7 @@ class DROPParserBase(Model):
                     denotation, ex_vals = dl_utils.execute_action_sequence(l, action_strings, side_args)
                     instance_execution_vals.append(ex_vals)
                 else:
-                    instance_logical_forms.append('')
+                    instance_logical_forms.append("")
                     instance_execution_vals.append([])
 
             logical_forms.append(instance_logical_forms)
@@ -262,8 +279,8 @@ class DROPParserBase(Model):
 
         output_dict["logical_forms"] = logical_forms
         output_dict["execution_vals"] = execution_vals
-        output_dict.pop('languages', None)
-        output_dict.pop('batch_actionseq_sideargs', None)
+        output_dict.pop("languages", None)
+        output_dict.pop("batch_actionseq_sideargs", None)
 
         return output_dict
         # '''

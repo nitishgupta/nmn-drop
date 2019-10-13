@@ -5,7 +5,7 @@ import datasets.drop.constants as constants
 
 
 def readDataset(input_json):
-    with open(input_json, 'r') as f:
+    with open(input_json, "r") as f:
         dataset = json.load(f)
     return dataset
 
@@ -26,7 +26,7 @@ def quesParaSize(input_json):
     for pid, pinfo in dataset.items():
         numparas += 1
         passage = pinfo[constants.tokenized_passage]
-        plen = len(passage.split(' '))
+        plen = len(passage.split(" "))
         maxparalen = plen if plen > maxparalen else maxparalen
 
         passage_len_sums += plen
@@ -46,7 +46,7 @@ def quesParaSize(input_json):
         if plen < 1000:
             plen_lt_1000_cnt += 1
 
-    avg_plen = float(passage_len_sums)/numparas
+    avg_plen = float(passage_len_sums) / numparas
 
     print(f"Paras: {numparas}  MaxParaLen:{maxparalen}")
     print(f"Avg Para len: {avg_plen}")
@@ -59,19 +59,18 @@ def quesParaSize(input_json):
     print(f"Plen < 1000: {plen_lt_1000_cnt}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--inputdir')
+    parser.add_argument("--inputdir")
     args = parser.parse_args()
 
     inputdir = args.inputdir
 
-    train_json = 'drop_dataset_train.json'
-    dev_json = 'drop_dataset_dev.json'
+    train_json = "drop_dataset_train.json"
+    dev_json = "drop_dataset_dev.json"
 
     inputdir = "./resources/data/drop_s/num/count_filterqattn"
     # inputdir = "./resources/data/drop_s/date_num/date_numcq_hmvy_cnt_filter"
-
 
     input_trnfp = os.path.join(inputdir, train_json)
     input_devfp = os.path.join(inputdir, dev_json)
@@ -81,6 +80,3 @@ if __name__ == '__main__':
 
     print(input_devfp)
     quesParaSize(input_devfp)
-
-
-

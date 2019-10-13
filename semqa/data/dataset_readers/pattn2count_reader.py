@@ -12,32 +12,51 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 # TODO: Add more number here
-WORD_NUMBER_MAP = {"zero": 0, "one": 1, "two": 2, "three": 3, "four": 4,
-                   "five": 5, "six": 6, "seven": 7, "eight": 8,
-                   "nine": 9, "ten": 10, "eleven": 11, "twelve": 12,
-                   "thirteen": 13, "fourteen": 14, "fifteen": 15,
-                   "sixteen": 16, "seventeen": 17, "eighteen": 18, "nineteen": 19}
+WORD_NUMBER_MAP = {
+    "zero": 0,
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+    "eleven": 11,
+    "twelve": 12,
+    "thirteen": 13,
+    "fourteen": 14,
+    "fifteen": 15,
+    "sixteen": 16,
+    "seventeen": 17,
+    "eighteen": 18,
+    "nineteen": 19,
+}
 
 
 @DatasetReader.register("passage_attn2count_reader")
 class PAttn2CountReader(DatasetReader):
-    def __init__(self,
-                 lazy: bool = False,
-                 min_passage_length=200,
-                 max_passage_length=400,
-                 min_span_length=5,
-                 max_span_length=15,
-                 samples_per_bucket_count=1000,
-                 normalized=True,
-                 withnoise=True)-> None:
+    def __init__(
+        self,
+        lazy: bool = False,
+        min_passage_length=200,
+        max_passage_length=400,
+        min_span_length=5,
+        max_span_length=15,
+        samples_per_bucket_count=1000,
+        normalized=True,
+        withnoise=True,
+    ) -> None:
         super().__init__(lazy)
 
         self._min_passage_length = min_passage_length
         self._max_passage_length = max_passage_length
         self._min_span_length = min_span_length
         self._max_span_length = max_span_length
-        self._normalized = True   # normalized
-        self._withnoise = True    # withnoise
+        self._normalized = True  # normalized
+        self._withnoise = True  # withnoise
         self.samples_per_bucket_count = samples_per_bucket_count
         self.num_instances = 0
 
@@ -71,21 +90,27 @@ class PAttn2CountReader(DatasetReader):
     @overrides
     def _read(self, file_path: str):
         # pylint: disable=logging-fstring-interpolation
-        logger.info(f"Making training examples with:\n"
-                    f"min_passage_len: {self._min_passage_length}\n"
-                    f"max_passage_length: {self._max_passage_length}\n"
-                    f"min / max span_len: {self._min_span_length} / {self._max_span_length}\n")
+        logger.info(
+            f"Making training examples with:\n"
+            f"min_passage_len: {self._min_passage_length}\n"
+            f"max_passage_length: {self._max_passage_length}\n"
+            f"min / max span_len: {self._min_span_length} / {self._max_span_length}\n"
+        )
 
         instances: List[Instance] = []
 
-        data_dicts = self.make_data(min_passage_length=self._min_passage_length,
-                                    max_passage_length=self._max_passage_length,
-                                    min_span_length=self._min_span_length, max_span_length=self._max_span_length,
-                                    max_count_value=7, samples_per_bucket_count=self.samples_per_bucket_count)
+        data_dicts = self.make_data(
+            min_passage_length=self._min_passage_length,
+            max_passage_length=self._max_passage_length,
+            min_span_length=self._min_span_length,
+            max_span_length=self._max_span_length,
+            max_count_value=7,
+            samples_per_bucket_count=self.samples_per_bucket_count,
+        )
 
         for d in data_dicts:
-            attention = d['attention']
-            count_value = d['count_value']
+            attention = d["attention"]
+            count_value = d["count_value"]
             passage_length = len(attention)
 
             fields = {}
@@ -101,9 +126,15 @@ class PAttn2CountReader(DatasetReader):
 
         return instances
 
-
-    def make_data(self, min_passage_length, max_passage_length, min_span_length, max_span_length,
-                  samples_per_bucket_count: int, max_count_value: int = 7):
+    def make_data(
+        self,
+        min_passage_length,
+        max_passage_length,
+        min_span_length,
+        max_span_length,
+        samples_per_bucket_count: int,
+        max_count_value: int = 7,
+    ):
         # For each 100 length bucket, and count value, generate 1000 examples in train mode, and 100 in val mode
         num_instances_per_bucket_per_count = samples_per_bucket_count
 
@@ -122,20 +153,23 @@ class PAttn2CountReader(DatasetReader):
             for min_plen, max_plen in minmax_passagelen_tuples:
                 instances_for_bucket = 0
                 for i in range(num_instances_per_bucket_per_count):
-                    attention = self.make_instance(min_passage_length=min_plen, max_passage_length=max_plen,
-                                                   min_span_length=min_span_length, max_span_length=max_span_length,
-                                                   count_value=count_value)
+                    attention = self.make_instance(
+                        min_passage_length=min_plen,
+                        max_passage_length=max_plen,
+                        min_span_length=min_span_length,
+                        max_span_length=max_span_length,
+                        count_value=count_value,
+                    )
                     if attention is None:
                         continue
                     if count_value not in lenbucket_count_dict:
                         lenbucket_count_dict[count_value] = defaultdict(int)
                     lenbucket_count_dict[count_value][(min_plen, max_plen)] += 1
-                    data_dicts.append({'attention': attention, 'count_value': count_value})
+                    data_dicts.append({"attention": attention, "count_value": count_value})
                     instances_for_bucket += 1
                 print(f"{min_plen}, {max_plen} :: {instances_for_bucket}")
-            print('\n')
+            print("\n")
         return data_dicts
-
 
     def sample_spansfor_variablelength(self, seqlen, num_spans, span_lengths: List[int]):
         sum_lengths = sum(span_lengths)
@@ -157,8 +191,14 @@ class PAttn2CountReader(DatasetReader):
             offset += span_length - 1 + 1
         return result
 
-    def make_instance(self, min_passage_length: int, max_passage_length: int,
-                      min_span_length: int, max_span_length: int, count_value: int):
+    def make_instance(
+        self,
+        min_passage_length: int,
+        max_passage_length: int,
+        min_span_length: int,
+        max_span_length: int,
+        count_value: int,
+    ):
 
         passage_length = random.randint(min_passage_length, max_passage_length)
         # Mean: 0, Std: 0.2, Size: PassageLength

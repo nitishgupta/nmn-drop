@@ -9,19 +9,25 @@ import argparse
 """ This script is used to augment date-comparison-data by flipping events in the questions """
 THRESHOLD = 20
 
-STOP_WORDS = set(stopwords.words('english'))
+STOP_WORDS = set(stopwords.words("english"))
 STOP_WORDS.update(["'s", ","])
 
 FIRST = "first"
 SECOND = "second"
 
-RELEVANT_NGRAMS = ["how many yards was", "how many yards longer was", "how many yards difference",
-                   "how many field goals did", "how many field goals were", "how many touchdowns were scored",
-                   "how many touchdowns did the"]
+RELEVANT_NGRAMS = [
+    "how many yards was",
+    "how many yards longer was",
+    "how many yards difference",
+    "how many field goals did",
+    "how many field goals were",
+    "how many touchdowns were scored",
+    "how many touchdowns did the",
+]
 
 
 def readDataset(input_json):
-    with open(input_json, 'r') as f:
+    with open(input_json, "r") as f:
         dataset = json.load(f)
     return dataset
 
@@ -39,10 +45,10 @@ def preprocess_HowManyYardsWasThe_ques(dataset):
     second_longest_question_ngram = "How many yards was the second longest"
     second_shortest_question_ngram = "How many yards was the second shortest"
 
-    longest_qtype = 'how_many_yards_longest'
-    shortest_qtype = 'how_many_yards_shortest'
-    second_longest_qtype = 'how_many_yards_second_longest'
-    second_shortest_qtype = 'how_many_yards_second_shortest'
+    longest_qtype = "how_many_yards_longest"
+    shortest_qtype = "how_many_yards_shortest"
+    second_longest_qtype = "how_many_yards_second_longest"
+    second_shortest_qtype = "how_many_yards_second_shortest"
 
     new_dataset = {}
     total_ques = 0
@@ -102,14 +108,14 @@ def preprocess_HowManyYardsWasThe_ques(dataset):
     return new_dataset
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input_dir')
-    parser.add_argument('--output_dir')
+    parser.add_argument("--input_dir")
+    parser.add_argument("--output_dir")
     args = parser.parse_args()
 
-    train_json = 'drop_dataset_train.json'
-    dev_json = 'drop_dataset_dev.json'
+    train_json = "drop_dataset_train.json"
+    dev_json = "drop_dataset_dev.json"
 
     input_dir = args.input_dir
     output_dir = args.output_dir
@@ -134,17 +140,17 @@ if __name__ == '__main__':
 
     new_dev_dataset = preprocess_HowManyYardsWasThe_ques(dev_dataset)
 
-    with open(output_trnfp, 'w') as f:
+    with open(output_trnfp, "w") as f:
         json.dump(new_train_dataset, f, indent=4)
 
-    with open(output_devfp, 'w') as f:
+    with open(output_devfp, "w") as f:
         json.dump(new_dev_dataset, f, indent=4)
 
     print("Written pruned datasets")
 
-''' DATASET CREATED THIS WAY
+""" DATASET CREATED THIS WAY
 
 input_dir = "./resources/data/drop_old/analysis/ngram/num/how_many_yards_was_the/"
 output_dir = "./resources/data/drop_old/num/how_many_yards_was_the"
 
-'''
+"""

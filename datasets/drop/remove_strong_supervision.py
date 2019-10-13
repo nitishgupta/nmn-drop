@@ -15,9 +15,8 @@ from datasets.drop import constants
 """
 
 
-
 def readDataset(input_json):
-    with open(input_json, 'r') as f:
+    with open(input_json, "r") as f:
         dataset = json.load(f)
     return dataset
 
@@ -82,8 +81,12 @@ def remove_all_annotations(dataset, annotation_for_numpassages):
 
     total_num_qa = 0
 
-    supervision_keys = [constants.program_supervised, constants.qattn_supervised, constants.exection_supervised,
-                        constants.strongly_supervised]
+    supervision_keys = [
+        constants.program_supervised,
+        constants.qattn_supervised,
+        constants.exection_supervised,
+        constants.strongly_supervised,
+    ]
 
     orig_supervision_dict, orig_qtype_dict = make_supervision_dict(dataset)
 
@@ -109,18 +112,19 @@ def remove_all_annotations(dataset, annotation_for_numpassages):
 
     return dataset
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input_dir')
-    parser.add_argument('--output_dir')
-    parser.add_argument('--annotation_for_numpassages', type=int, required=True)
+    parser.add_argument("--input_dir")
+    parser.add_argument("--output_dir")
+    parser.add_argument("--annotation_for_numpassages", type=int, required=True)
     args = parser.parse_args()
 
     input_dir = args.input_dir
     output_dir = args.output_dir
 
-    train_json = 'drop_dataset_train.json'
-    dev_json = 'drop_dataset_dev.json'
+    train_json = "drop_dataset_train.json"
+    dev_json = "drop_dataset_dev.json"
 
     annotation_for_numpassages = args.annotation_for_numpassages
 
@@ -140,11 +144,8 @@ if __name__ == '__main__':
     new_train_dataset = remove_all_annotations(train_dataset, annotation_for_numpassages)
     # new_dev_dataset = removeDateCompPassageWeakAnnotations(train_dataset, 0)
 
-    with open(output_trnfp, 'w') as f:
+    with open(output_trnfp, "w") as f:
         json.dump(new_train_dataset, f, indent=4)
 
-    with open(output_devfp, 'w') as f:
+    with open(output_devfp, "w") as f:
         json.dump(dev_dataset, f, indent=4)
-
-
-

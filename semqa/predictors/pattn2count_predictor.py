@@ -14,15 +14,14 @@ class Pattn2CountPredictor(Predictor):
     """
     Predictor for the :class:`~allennlp.models.bidaf.SemanticRoleLabeler` model.
     """
+
     def __init__(self, model: Model, dataset_reader: DatasetReader) -> None:
         super().__init__(model, dataset_reader)
-
 
     @overrides
     def predict_instance(self, instance: Instance) -> JsonDict:
         outputs = self._model.forward_on_instance(instance)
         return sanitize(outputs)
-
 
     def predict_batch_instance(self, instances: List[Instance]) -> List[JsonDict]:
         outputs = self._model.forward_on_instances(instances)
@@ -32,7 +31,7 @@ class Pattn2CountPredictor(Predictor):
     def dump_line(self, outputs: JsonDict) -> str:  # pylint: disable=no-self-use
         # Use json.dumps(outputs) + "\n" to dump a dictionary
 
-        out_str = ''
+        out_str = ""
         pattn = outputs["passage_attention"]
         pattn = myutils.round_all(pattn, 4)
         psigmoid = outputs["passage_sigmoid"]
@@ -51,11 +50,11 @@ class Pattn2CountPredictor(Predictor):
         out_str += f"Plen: {len(pattn)}" + "\n"
         out_str += f"PattnSum: {sum(pattn)}" + "\n"
         out_str += f"PSigmSum: {sum(psigmoid)}" + "\n"
-        out_str += f"CountMean: {passage_count_mean}" + '\n'
-        out_str += f"CountDist: {count_distribution}" + '\n'
-        out_str += f"CountAnswer: {count_answer}" + '\n'
-        out_str += f"Predicted CountAnswer: {pred_count_idx}" + '\n'
-        out_str += '--------------------------------------------------\n'
+        out_str += f"CountMean: {passage_count_mean}" + "\n"
+        out_str += f"CountDist: {count_distribution}" + "\n"
+        out_str += f"CountAnswer: {count_answer}" + "\n"
+        out_str += f"Predicted CountAnswer: {pred_count_idx}" + "\n"
+        out_str += "--------------------------------------------------\n"
 
         return out_str
 

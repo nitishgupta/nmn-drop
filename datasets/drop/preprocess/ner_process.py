@@ -3,20 +3,50 @@ import dateparser
 from datasets.drop import constants
 import utils.util as util
 
-dateparser_en = dateparser.date.DateDataParser(languages=['en'])
+dateparser_en = dateparser.date.DateDataParser(languages=["en"])
 
-WORD_NUMBER_MAP = {"zero": 0, "one": 1, "two": 2, "three": 3, "four": 4,
-                   "five": 5, "six": 6, "seven": 7, "eight": 8,
-                   "nine": 9, "ten": 10, "eleven": 11, "twelve": 12,
-                   "thirteen": 13, "fourteen": 14, "fifteen": 15,
-                   "sixteen": 16, "seventeen": 17, "eighteen": 18, "nineteen": 19}
+WORD_NUMBER_MAP = {
+    "zero": 0,
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+    "eleven": 11,
+    "twelve": 12,
+    "thirteen": 13,
+    "fourteen": 14,
+    "fifteen": 15,
+    "sixteen": 16,
+    "seventeen": 17,
+    "eighteen": 18,
+    "nineteen": 19,
+}
 
-MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october',
-          'november', 'december']
+MONTHS = [
+    "january",
+    "february",
+    "march",
+    "april",
+    "may",
+    "june",
+    "july",
+    "august",
+    "september",
+    "october",
+    "november",
+    "december",
+]
 
 NUM_NER_TYPES = ["QUANTITY", "CARDINAL", "PERCENT", "MONEY"]
 
 dateStr2DateObj_cache = {}
+
 
 def parseDateNERS(ner_spans, passage_tokens: List[str]) -> Tuple[List, List, List, int]:
     """ Returns (List1, List2, int)
@@ -52,7 +82,6 @@ def parseDateNERS(ner_spans, passage_tokens: List[str]) -> Tuple[List, List, Lis
     assert len(parsed_dates) == len(normalized_date_idxs)
 
     return (parsed_dates, normalized_date_idxs, normalized_date_values, num_date_entities)
-
 
 
 def parseNumNERS(ner_spans, tokens: List[str]) -> Tuple[List, List, List, int]:
@@ -114,7 +143,7 @@ def merge_datener_with_yearmentions(date_mentions, year_mentions):
 
     final_mentions = date_mentions
     final_mentions.extend(year_mentions_to_keep)
-    final_mentions = sorted(final_mentions, key=lambda  x: x[1][0])
+    final_mentions = sorted(final_mentions, key=lambda x: x[1][0])
 
     return final_mentions
 
@@ -126,7 +155,7 @@ def extract_years_from_text(passage_tokens) -> List[Tuple[str, Tuple, Tuple]]:
     """
     year_date_mentions = []
     for idx, token in enumerate(passage_tokens):
-        if len(token) == 4:   # or len(token) == 3:
+        if len(token) == 4:  # or len(token) == 3:
             try:
                 int_token = int(token)
                 year_date_mentions.append((token, (idx, idx), (-1, -1, int_token)))
@@ -140,7 +169,7 @@ def normalizeDATE(date_ner_span, dateparser_en):
     def parseDate(date_str, dateparser_en):
         if date_str not in dateStr2DateObj_cache:
             date = dateparser_en.get_date_data(date_str)
-            dateStr2DateObj_cache[date_str] = date['date_obj']
+            dateStr2DateObj_cache[date_str] = date["date_obj"]
         # if parse fails, date['date_obj'] is None
         return dateStr2DateObj_cache[date_str]
 
@@ -171,7 +200,7 @@ def normalizeDATE(date_ner_span, dateparser_en):
 
         # If span is incomplete date
         # Only Year: 1980 / 2017
-        if len(nertext.split(' ')) == 1:
+        if len(nertext.split(" ")) == 1:
             if len(nertext) == 4:
                 month = -1
                 day = -1
@@ -182,10 +211,10 @@ def normalizeDATE(date_ner_span, dateparser_en):
                 # These are usually words like "Monday", "year", etc.
                 return None
         # Month Year -- January 2012 OR Day Month
-        elif len(nertext.split(' ')) == 2:
-            if len(nertext.split(' ')[1]) == 4 and nertext.split(' ')[1].lower() not in MONTHS:
+        elif len(nertext.split(" ")) == 2:
+            if len(nertext.split(" ")[1]) == 4 and nertext.split(" ")[1].lower() not in MONTHS:
                 day = -1
-            if nertext.split(' ')[1].lower() in MONTHS:
+            if nertext.split(" ")[1].lower() in MONTHS:
                 year = -1
 
         normalized_val = (day, month, year)
@@ -193,7 +222,7 @@ def normalizeDATE(date_ner_span, dateparser_en):
         if year == 2019:
             return None
 
-        return [(nertext, (start, end-1), normalized_val)]
+        return [(nertext, (start, end - 1), normalized_val)]
 
     except:
         # Additionally try parsing strings of the kind:
@@ -202,13 +231,13 @@ def normalizeDATE(date_ner_span, dateparser_en):
         #   "14 December 1875 – 1 January 1964"  start:7 end:14
         #   "1899 to 1968"  start: 21 end: 24
 
-        tokens = nertext.split(' ')
-        if ("to" in tokens or "-" in tokens):
+        tokens = nertext.split(" ")
+        if "to" in tokens or "-" in tokens:
             # Covers first three cases
             if len(tokens) == 7:
 
-                string1 = ' '.join(tokens[0:3])
-                string2 = ' '.join(tokens[4:7])
+                string1 = " ".join(tokens[0:3])
+                string2 = " ".join(tokens[4:7])
 
                 date1, date2 = None, None
                 try:
@@ -282,10 +311,11 @@ def normalizeDATE(date_ner_span, dateparser_en):
             if normalized_val_1[-1] == 2019 or normalized_val_2[-1] == 2019:
                 return None
 
-            return [(text1, (start1, end1-1), normalized_val_1), (text2, (start2, end2-1), normalized_val_2)]
+            return [(text1, (start1, end1 - 1), normalized_val_1), (text2, (start2, end2 - 1), normalized_val_2)]
 
         else:
             return None
+
 
 def _str2float(string_val):
     # Remove , for strings like 70,0000
@@ -302,7 +332,6 @@ def _str2float(string_val):
         return None
 
 
-
 def normalizeNUM(num_ner, tokens: List[str]):
     """ This normalized num mention in a way to extract a single token.
         For given ner mention, try to resolve the tokens from left2right in the mention.
@@ -314,7 +343,7 @@ def normalizeNUM(num_ner, tokens: List[str]):
     for idx, token in enumerate(relevant_tokens):
         normalized_value = _str2float(token)
         if normalized_value is not None:
-            return (token, start+idx, normalized_value)
+            return (token, start + idx, normalized_value)
 
     # None of the tokens could be normalized
     return None
@@ -349,7 +378,7 @@ def normalizeCARDINAL(cardinal_ner_span):
     assert type == "CARDINAL"
 
     # Only parse single token cardinals
-    if len(nertext.split(' ')) > 1:
+    if len(nertext.split(" ")) > 1:
         return None
 
     floatval = _str2float(nertext)
@@ -378,7 +407,7 @@ def normalizePERCENT(percent_ner_span):
 
     # Only parse single token cardinals
     # Since % is a separate token, resort to space based tokenization
-    if len(nertext.split(' ')) > 1:
+    if len(nertext.split(" ")) > 1:
         return None
 
     stringval = nertext.lower()
@@ -412,7 +441,7 @@ def normalizeMONEY(money_ner_span):
 
     # assert type == "MONEY"
 
-    ner_text_tokens = nertext.split(' ')
+    ner_text_tokens = nertext.split(" ")
     ner_text_tokens = [t.lower() for t in ner_text_tokens]
 
     floatval = None

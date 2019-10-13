@@ -3,11 +3,12 @@ from collections import defaultdict
 
 import argparse
 
-def read_numsteps_annotation(filepath='analysis/dev_numsteps_annotation.tsv'):
-    with open(filepath, 'r') as f:
+
+def read_numsteps_annotation(filepath="analysis/dev_numsteps_annotation.tsv"):
+    with open(filepath, "r") as f:
         lines = f.readlines()
 
-    instances = [line.strip().split('\t') for line in lines]
+    instances = [line.strip().split("\t") for line in lines]
 
     qid2steps = {}
     for instance in instances:
@@ -19,15 +20,15 @@ def read_numsteps_annotation(filepath='analysis/dev_numsteps_annotation.tsv'):
 
 
 def read_qid2prediction(filepath):
-    with open(filepath, 'r') as f:
+    with open(filepath, "r") as f:
         lines = f.readlines()
 
-    instances = [line.strip().split('\t') for line in lines]
+    instances = [line.strip().split("\t") for line in lines]
 
     qid2pred = {}
     for instance in instances:
         qid = instance[0]
-        pred = 1 if instance[2] == 'C' else 0
+        pred = 1 if instance[2] == "C" else 0
         qid2pred[qid] = pred
 
     return qid2pred
@@ -48,15 +49,13 @@ def count_step2correct(qid2steps, qid2pred):
     for steps, total in steps2total.items():
         correct = steps2correct[steps]
 
-        ration = float(correct)/total
+        ration = float(correct) / total
         steps2crrectratio[steps] = ration
 
     print(steps2total)
     print(steps2correct)
     print(steps2crrectratio)
     return steps2crrectratio
-
-
 
 
 # def read_prediction_file(file_path):
@@ -237,36 +236,37 @@ def count_step2correct(qid2steps, qid2pred):
 #     overlap_in_correct_incorrect_questext(correct_qids2, incorrect_qids2, qid2qtext2)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--file1')
-    parser.add_argument('--file2')
+    parser.add_argument("--file1")
+    parser.add_argument("--file2")
     args = parser.parse_args()
 
     file1 = args.file1
     file2 = args.file2
 
-
     # OurGRUmodel = "/scratch1/nitishg/semqa/checkpoints/drop/date_num/date_numcq_hmvy_cnt_relprog_500/drop_parser/" \
     #               "TOKENS_qanet/ED_100/RG_1e-07/MODELTYPE_encoded/CNTFIX_false/aux_true/SUPEPOCHS_5/" \
     #               "S_10/CModelBM1" + "/predictions"
 
-    OurBERTmodel = "./resources/semqa/checkpoints/drop/date_num/date_ydNEW_num_hmyw_cnt_rel_600/drop_parser_bert/" \
-                   "CNTFIX_false/EXCLOSS_true/MMLLOSS_true/aux_true/SUPEPOCHS_5/S_100/BertModel_wTest/" \
-                   "predictions/date_ydNEW_num_hmyw_cnt_rel_600_dev_numstepanalysis.tsv"
+    OurBERTmodel = (
+        "./resources/semqa/checkpoints/drop/date_num/date_ydNEW_num_hmyw_cnt_rel_600/drop_parser_bert/"
+        "CNTFIX_false/EXCLOSS_true/MMLLOSS_true/aux_true/SUPEPOCHS_5/S_100/BertModel_wTest/"
+        "predictions/date_ydNEW_num_hmyw_cnt_rel_600_dev_numstepanalysis.tsv"
+    )
 
-    NABERT_model = "./resources/semqa/checkpoints/drop-bert/mydata_ydNEW_rel/S_1000/BertModel_wTest/" \
-                   "predictions/date_ydNEW_num_hmyw_cnt_rel_600_dev_pred.txt"
+    NABERT_model = (
+        "./resources/semqa/checkpoints/drop-bert/mydata_ydNEW_rel/S_1000/BertModel_wTest/"
+        "predictions/date_ydNEW_num_hmyw_cnt_rel_600_dev_pred.txt"
+    )
 
     # NABERTmodel = ("/scratch1/nitishg/semqa/checkpoints/drop-bert/mydata_ydre_relre/S_1/predictions")
-
 
     qid2steps = read_numsteps_annotation()
 
     qid2pred_outbert = read_qid2prediction(OurBERTmodel)
 
     qid2pred_nabert = read_qid2prediction(NABERT_model)
-
 
     print("\nOUR BERT")
     count_step2correct(qid2steps=qid2steps, qid2pred=qid2pred_outbert)

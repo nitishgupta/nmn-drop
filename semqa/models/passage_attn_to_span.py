@@ -17,14 +17,17 @@ from allennlp.training.metrics import Average
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
+
 @Model.register("drop_pattn2span")
 class PassageAttnToSpan(Model):
-    def __init__(self,
-                 vocab: Vocabulary,
-                 passage_attention_to_span: Seq2SeqEncoder,
-                 scaling: bool = False,
-                 dropout: float = 0.0,
-                 initializers: InitializerApplicator = InitializerApplicator()) -> None:
+    def __init__(
+        self,
+        vocab: Vocabulary,
+        passage_attention_to_span: Seq2SeqEncoder,
+        scaling: bool = False,
+        dropout: float = 0.0,
+        initializers: InitializerApplicator = InitializerApplicator(),
+    ) -> None:
 
         super(PassageAttnToSpan, self).__init__(vocab=vocab)
 
@@ -61,11 +64,13 @@ class PassageAttnToSpan(Model):
         allenutil.get_device_of()
 
     @overrides
-    def forward(self,
-                passage_attention: torch.Tensor,
-                passage_lengths: List[int],
-                answer_as_passage_spans: torch.LongTensor = None,
-                metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
+    def forward(
+        self,
+        passage_attention: torch.Tensor,
+        passage_lengths: List[int],
+        answer_as_passage_spans: torch.LongTensor = None,
+        metadata: List[Dict[str, Any]] = None,
+    ) -> Dict[str, torch.Tensor]:
 
         batch_size, max_passage_length = passage_attention.size()
         passage_mask = passage_attention.new_zeros(batch_size, max_passage_length)
@@ -95,30 +100,28 @@ class PassageAttnToSpan(Model):
         # span_start_logits = self.start_ff(passage_span_logits_repr).squeeze(2)
         # span_end_logits = self.end_ff(passage_span_logits_repr).squeeze(2)
 
-
         span_start_logits = allenutil.replace_masked_values(span_start_logits, passage_mask, -1e32)
         span_end_logits = allenutil.replace_masked_values(span_end_logits, passage_mask, -1e32)
 
         span_start_log_probs = allenutil.masked_log_softmax(span_start_logits, passage_mask)
         span_end_log_probs = allenutil.masked_log_softmax(span_end_logits, passage_mask)
 
-        span_start_log_probs = allenutil.replace_masked_values(span_start_log_probs,
-                                                               passage_mask, -1e32)
-        span_end_log_probs = allenutil.replace_masked_values(span_end_log_probs,
-                                                             passage_mask, -1e32)
-
-
+        span_start_log_probs = allenutil.replace_masked_values(span_start_log_probs, passage_mask, -1e32)
+        span_end_log_probs = allenutil.replace_masked_values(span_end_log_probs, passage_mask, -1e32)
 
         # Loss computation
         batch_likelihood = 0
         output_dict = {}
         for i in range(batch_size):
-            log_likelihood = self._get_span_answer_log_prob(answer_as_spans=answer_as_passage_spans[i],
-                                                            span_log_probs=(span_start_log_probs[i],
-                                                                            span_end_log_probs[i]))
+            log_likelihood = self._get_span_answer_log_prob(
+                answer_as_spans=answer_as_passage_spans[i],
+                span_log_probs=(span_start_log_probs[i], span_end_log_probs[i]),
+            )
 
-            best_span = get_best_span(span_start_logits=span_start_log_probs[i].unsqueeze(0),
-                                      span_end_logits=span_end_log_probs[i].unsqueeze(0)).squeeze(0)
+            best_span = get_best_span(
+                span_start_logits=span_start_log_probs[i].unsqueeze(0),
+                span_end_logits=span_end_log_probs[i].unsqueeze(0),
+            ).squeeze(0)
 
             correct_start, correct_end = False, False
 
@@ -141,7 +144,6 @@ class PassageAttnToSpan(Model):
 
             batch_likelihood += log_likelihood
 
-
         loss = -1.0 * batch_likelihood
 
         batch_loss = loss / batch_size
@@ -149,20 +151,19 @@ class PassageAttnToSpan(Model):
 
         return output_dict
 
-
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
         metric_dict = {}
         start_acc = self.start_acc_metric.get_metric(reset)
         end_acc = self.end_acc_metric.get_metric(reset)
         span_acc = self.span_acc_metric.get_metric(reset)
-        metric_dict.update({'st': start_acc, 'end': end_acc, 'span': span_acc})
+        metric_dict.update({"st": start_acc, "end": end_acc, "span": span_acc})
 
         return metric_dict
 
-
     @staticmethod
-    def _get_span_answer_log_prob(answer_as_spans: torch.LongTensor,
-                                  span_log_probs: Tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
+    def _get_span_answer_log_prob(
+        answer_as_spans: torch.LongTensor, span_log_probs: Tuple[torch.Tensor, torch.Tensor]
+    ) -> torch.Tensor:
         """ Compute the log_marginal_likelihood for the answer_spans given log_probs for start/end
             Compute log_likelihood (product of start/end probs) of each ans_span
             Sum the prob (logsumexp) for each span and return the log_likelihood
@@ -186,35 +187,41 @@ class PassageAttnToSpan(Model):
         span_end_log_probs = span_end_log_probs.unsqueeze(0)
 
         # (batch_size, number_of_ans_spans)
-        gold_passage_span_starts = answer_as_spans [:, :, 0]
+        gold_passage_span_starts = answer_as_spans[:, :, 0]
         gold_passage_span_ends = answer_as_spans[:, :, 1]
         # Some spans are padded with index -1,
         # so we clamp those paddings to 0 and then mask after `torch.gather()`.
         gold_passage_span_mask = (gold_passage_span_starts != -1).long()
-        clamped_gold_passage_span_starts = \
-            allenutil.replace_masked_values(gold_passage_span_starts, gold_passage_span_mask, 0)
-        clamped_gold_passage_span_ends = \
-            allenutil.replace_masked_values(gold_passage_span_ends, gold_passage_span_mask, 0)
+        clamped_gold_passage_span_starts = allenutil.replace_masked_values(
+            gold_passage_span_starts, gold_passage_span_mask, 0
+        )
+        clamped_gold_passage_span_ends = allenutil.replace_masked_values(
+            gold_passage_span_ends, gold_passage_span_mask, 0
+        )
         # Shape: (batch_size, # of answer spans)
-        log_likelihood_for_span_starts = \
-            torch.gather(span_start_log_probs, 1, clamped_gold_passage_span_starts)
-        log_likelihood_for_span_ends = \
-            torch.gather(span_end_log_probs, 1, clamped_gold_passage_span_ends)
+        log_likelihood_for_span_starts = torch.gather(span_start_log_probs, 1, clamped_gold_passage_span_starts)
+        log_likelihood_for_span_ends = torch.gather(span_end_log_probs, 1, clamped_gold_passage_span_ends)
         # Shape: (batch_size, # of answer spans)
-        log_likelihood_for_spans = \
-            log_likelihood_for_span_starts + log_likelihood_for_span_ends
+        log_likelihood_for_spans = log_likelihood_for_span_starts + log_likelihood_for_span_ends
         # For those padded spans, we set their log probabilities to be very small negative value
-        log_likelihood_for_spans = \
-            allenutil.replace_masked_values(log_likelihood_for_spans, gold_passage_span_mask, -1e7)
+        log_likelihood_for_spans = allenutil.replace_masked_values(
+            log_likelihood_for_spans, gold_passage_span_mask, -1e7
+        )
         # Shape: (batch_size, )
         log_marginal_likelihood_for_span = allenutil.logsumexp(log_likelihood_for_spans)
 
         return log_marginal_likelihood_for_span
 
-
     @staticmethod
-    def _get_best_spans(batch_denotations, batch_denotation_types,
-                        question_char_offsets, question_strs, passage_char_offsets, passage_strs, *args):
+    def _get_best_spans(
+        batch_denotations,
+        batch_denotation_types,
+        question_char_offsets,
+        question_strs,
+        passage_char_offsets,
+        passage_strs,
+        *args,
+    ):
         """ For all SpanType denotations, get the best span
 
         Parameters:
@@ -240,8 +247,10 @@ class PassageAttnToSpan(Model):
                 # Distinction between QuestionSpanAnswer and PassageSpanAnswer is not needed currently,
                 # since both classes store the start/end logits as a tuple
                 # Shape: (2, )
-                best_span = get_best_span(span_start_logits=denotation._value[0].unsqueeze(0),
-                                          span_end_logits=denotation._value[1].unsqueeze(0)).squeeze(0)
+                best_span = get_best_span(
+                    span_start_logits=denotation._value[0].unsqueeze(0),
+                    span_end_logits=denotation._value[1].unsqueeze(0),
+                ).squeeze(0)
                 instance_best_spans.append(best_span)
 
                 predicted_span = tuple(best_span.detach().cpu().numpy())
@@ -281,7 +290,6 @@ class PassageAttnToSpan(Model):
             batch_predicted_answers.append(instance_predicted_ans)
 
         return batch_best_spans, batch_predicted_answers
-
 
     def passageattn_to_startendlogits(self, passage_attention, passage_mask):
         span_start_logits = passage_attention.new_zeros(passage_attention.size())

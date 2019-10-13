@@ -7,11 +7,11 @@ from collections import defaultdict
 trnfp = "/srv/local/data/nitishg/data/drop_old/date_subset/train_ques.txt"
 devfp = "/srv/local/data/nitishg/data/drop_old/date_subset/dev_ques.txt"
 
-with open(trnfp, 'r') as f:
-    train_questions = f.read().strip().split('\n')
+with open(trnfp, "r") as f:
+    train_questions = f.read().strip().split("\n")
 
-with open(devfp, 'r') as f:
-    dev_questions = f.read().strip().split('\n')
+with open(devfp, "r") as f:
+    dev_questions = f.read().strip().split("\n")
 
 
 print(f"Num of train question: {len(train_questions)}")
@@ -21,12 +21,12 @@ print(f"Num of dev question: {len(dev_questions)}")
 date_lesser = "date_lesser"
 date_greater = "date_greater"
 
+
 def questionAttns(qstr):
-    tokens = qstr.split(' ')
+    tokens = qstr.split(" ")
 
-
-    lesser_tokens = ['first', 'earlier', 'forst', 'firts']
-    greater_tokens = ['later', 'last', 'second']
+    lesser_tokens = ["first", "earlier", "forst", "firts"]
+    greater_tokens = ["later", "last", "second"]
 
     func = None
 
@@ -60,11 +60,9 @@ def quesAttnsDataset(questions):
     print(f"Not parsed: {not_parsed}")
 
 
-
-if __name__=='__main__':
+if __name__ == "__main__":
     print("\nTrain questions")
     quesAttnsDataset(train_questions)
 
-    print('\nDev questions')
+    print("\nDev questions")
     quesAttnsDataset(dev_questions)
-

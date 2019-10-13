@@ -24,23 +24,23 @@ def execute_action_sequence(language, action_sequence: List[str], side_arguments
 
     # We'll strip off the first action, because it doesn't matter for execution.
     first_action = action_sequence[0]
-    left_side, right_side = first_action.split(' -> ')
-    if left_side != '@start@':
-        raise ExecutionError('invalid action sequence')
+    left_side, right_side = first_action.split(" -> ")
+    if left_side != "@start@":
+        raise ExecutionError("invalid action sequence")
     remaining_side_args = side_arguments[1:] if side_arguments else None
 
     execution_vals = []
 
-    execution_value, _, _, execution_vals = _execute_sequence(language, action_sequence[1:],
-                                                              remaining_side_args, execution_vals)
+    execution_value, _, _, execution_vals = _execute_sequence(
+        language, action_sequence[1:], remaining_side_args, execution_vals
+    )
 
     return execution_value, execution_vals[0]
 
 
-def _execute_sequence(language,
-                      action_sequence: List[str],
-                      side_arguments: List[Dict],
-                      execution_vals: List[Any]) -> Tuple[Any, List[str], List[Dict], List[Any]]:
+def _execute_sequence(
+    language, action_sequence: List[str], side_arguments: List[Dict], execution_vals: List[Any]
+) -> Tuple[Any, List[str], List[Dict], List[Any]]:
     """
     This does the bulk of the work of :func:`execute_action_sequence`, recursively executing
     the functions it finds and trimming actions off of the action sequence.  The return value
@@ -50,7 +50,7 @@ def _execute_sequence(language,
     first_action = action_sequence[0]
     remaining_actions = action_sequence[1:]
     remaining_side_args = side_arguments[1:] if side_arguments else None
-    left_side, right_side = first_action.split(' -> ')
+    left_side, right_side = first_action.split(" -> ")
     if right_side in language._functions:
         function = language._functions[right_side]
         # mypy doesn't like this check, saying that Callable isn't a reasonable thing to pass
@@ -76,6 +76,7 @@ def _execute_sequence(language,
                     # left.
                     def curried_function(*args):
                         return function(*args, **kwargs)
+
                     execution_value = curried_function
                 elif kwargs:
                     # This is a function that _only_ has side arguments - we just call the
@@ -95,22 +96,20 @@ def _execute_sequence(language,
         # Because we linearize the abstract syntax tree depth first, left-to-right, we can just
         # recursively call `_execute_sequence` for the function and all of its arguments, and
         # things will just work.
-        right_side_parts = right_side.split(', ')
+        right_side_parts = right_side.split(", ")
 
         # We don't really need to know what the types are, just how many of them there are, so
         # we recurse the right number of times.
-        function, remaining_actions, remaining_side_args, execution_vals = _execute_sequence(language,
-                                                                                             remaining_actions,
-                                                                                             remaining_side_args,
-                                                                                             execution_vals)
+        function, remaining_actions, remaining_side_args, execution_vals = _execute_sequence(
+            language, remaining_actions, remaining_side_args, execution_vals
+        )
 
         args_exval_list = []
         arguments = []
         for _ in right_side_parts[1:]:
-            argument, remaining_actions, remaining_side_args, args_exval_list_i = _execute_sequence(language,
-                                                                                                    remaining_actions,
-                                                                                                    remaining_side_args,
-                                                                                                    [])
+            argument, remaining_actions, remaining_side_args, args_exval_list_i = _execute_sequence(
+                language, remaining_actions, remaining_side_args, []
+            )
             arguments.append(argument)
             args_exval_list.append(args_exval_list_i[0])
 
@@ -259,7 +258,7 @@ def listTokensVis(attention_vec: torch.FloatTensor, tokens: List[str]):
         complete_attention_vis += f"{token}|{attn} "
 
     # List[(token, attn)]
-    sorted_token_attn = sorted([(x, y)for x, y in zip(tokens, attention_aslist)], key=lambda x: x[1], reverse=True)
+    sorted_token_attn = sorted([(x, y) for x, y in zip(tokens, attention_aslist)], key=lambda x: x[1], reverse=True)
     most_attended_token_attn = sorted_token_attn[:10]
     most_attended_vis = "Most attended: "
     for token, attn in most_attended_token_attn:
@@ -284,7 +283,7 @@ def topProbMassElems(attention: torch.FloatTensor, support: List[Any], k=5):
     """
 
     attention_aslist: List[float] = myutils.round_all(myutils.tocpuNPList(attention), 3)
-    attention_aslist: List[float] = attention_aslist[:len(support)]
+    attention_aslist: List[float] = attention_aslist[: len(support)]
 
     sorted_elem_attn = sorted(zip(support, attention_aslist), key=lambda x: x[1], reverse=True)
     out_str = ""
@@ -292,5 +291,3 @@ def topProbMassElems(attention: torch.FloatTensor, support: List[Any], k=5):
         out_str += f"{sorted_elem_attn[i][0]}: {sorted_elem_attn[i][1]} || "
 
     return out_str.strip()
-
-

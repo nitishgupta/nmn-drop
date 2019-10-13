@@ -3,13 +3,13 @@ import glob
 import json
 from collections import defaultdict
 
-'''This path should have multiple folders for different seeds, and within each seed a directory for ModelName. 
+"""This path should have multiple folders for different seeds, and within each seed a directory for ModelName. 
 For eg. SERIALIZATION_PATH/S_1/BertModel/, SERIALIZATION_PATH/S_2/BertModel/, etc. 
 
 From inside each model folder this script expects a predictions folder. 
-'''
+"""
 # SERIALIZATION_PATH="./resources/semqa/checkpoints/drop-bert/mydata_ydNEW_rel"
-SERIALIZATION_PATH="./resources/semqa/checkpoints/drop-bert-tg/mydata_ydNEW_rel"
+SERIALIZATION_PATH = "./resources/semqa/checkpoints/drop-bert-tg/mydata_ydNEW_rel"
 
 print("\nSERIALIZATION PATH: {}".format(SERIALIZATION_PATH))
 
@@ -45,8 +45,8 @@ if num_seeds > 0:
     for k, v in seedpath2valem.items():
         print("{} : {}".format(k, v))
 
-    avg_val_f1 = sum(x[1] for x in seedpath2valf1.items())/len(seedpath2valf1)
-    avg_val_em = sum(x[1] for x in seedpath2valem.items())/len(seedpath2valem)
+    avg_val_f1 = sum(x[1] for x in seedpath2valf1.items()) / len(seedpath2valf1)
+    avg_val_em = sum(x[1] for x in seedpath2valem.items()) / len(seedpath2valem)
 
     print("Avg F1: {}".format(avg_val_f1))
     print("Avg EM: {}".format(avg_val_em))
@@ -65,7 +65,7 @@ for seedpath in paths:
     datasetname2em = {}
     for filepath in dataset_eval_filepaths:
         filename = os.path.split(filepath)[1]
-        eval_dict = json.load(open(filepath, 'r'))
+        eval_dict = json.load(open(filepath, "r"))
         datasetname2f1[filename] = eval_dict["f1"]
         datasetname2em[filename] = eval_dict["em"]
 
@@ -82,14 +82,14 @@ for seeddir, dataset2f1 in seedpath2datasetf1.items():
     for evaldataset, f1 in dataset2f1.items():
         avg_dataset_f1_perf[evaldataset] += f1
 for dataset, f1 in avg_dataset_f1_perf.items():
-    avg_dataset_f1_perf[dataset] = f1/num_seeds
+    avg_dataset_f1_perf[dataset] = f1 / num_seeds
 
 
 for seeddir, dataset2em in seedpath2datasetem.items():
     for evaldataset, em in dataset2em.items():
         avg_dataset_em_perf[evaldataset] += em
 for dataset, em in avg_dataset_em_perf.items():
-    avg_dataset_em_perf[dataset] = em/num_seeds
+    avg_dataset_em_perf[dataset] = em / num_seeds
 
 print("Avg F1")
 for k, v in avg_dataset_f1_perf.items():
@@ -98,10 +98,3 @@ for k, v in avg_dataset_f1_perf.items():
 print("Avg EM")
 for k, v in avg_dataset_em_perf.items():
     print("{} : {}".format(k, v))
-
-
-
-
-
-
-

@@ -9,8 +9,12 @@ from datasets.drop import constants
 
 
 def count_supervision_types(passage_dict):
-    supervision_keys = [constants.program_supervised, constants.qattn_supervised, constants.exection_supervised,
-                        constants.strongly_supervised]
+    supervision_keys = [
+        constants.program_supervised,
+        constants.qattn_supervised,
+        constants.exection_supervised,
+        constants.strongly_supervised,
+    ]
     supervision_dict = defaultdict(int)
     for _, pinfo in passage_dict.items():
         qa_pairs = pinfo[constants.qa_pairs]
@@ -31,10 +35,10 @@ def mergeDatasets(input_json1: str, input_json2: str, output_json: str) -> None:
     """
 
     # Input file contains single json obj with list of questions as jsonobjs inside it
-    with open(input_json1, 'r') as f:
+    with open(input_json1, "r") as f:
         dataset1 = json.load(f)
 
-    with open(input_json2, 'r') as f:
+    with open(input_json2, "r") as f:
         dataset2 = json.load(f)
 
     passage_ids_1 = set(dataset1.keys())
@@ -75,7 +79,7 @@ def mergeDatasets(input_json1: str, input_json2: str, output_json: str) -> None:
         output_passage_dict[passage_id] = passage_info
         num_output_qas += len(passage_info[constants.qa_pairs])
 
-    with open(output_json, 'w') as outf:
+    with open(output_json, "w") as outf:
         json.dump(output_passage_dict, outf, indent=4)
 
     supervision_dict = count_supervision_types(output_passage_dict)
@@ -87,11 +91,11 @@ def mergeDatasets(input_json1: str, input_json2: str, output_json: str) -> None:
     print()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dir1')
-    parser.add_argument('--dir2')
-    parser.add_argument('--outputdir')
+    parser.add_argument("--dir1")
+    parser.add_argument("--dir2")
+    parser.add_argument("--outputdir")
     args = parser.parse_args()
 
     dir1 = args.dir1
@@ -101,7 +105,7 @@ if __name__ == '__main__':
     # Raise error if directory already exists
     os.makedirs(outputdir)
 
-    FILES_TO_MERGE = ['drop_dataset_train.json', 'drop_dataset_dev.json']
+    FILES_TO_MERGE = ["drop_dataset_train.json", "drop_dataset_dev.json"]
 
     for filename in FILES_TO_MERGE:
         print(filename)
@@ -113,5 +117,3 @@ if __name__ == '__main__':
         print(f"OutFile: {outputfile}")
 
         mergeDatasets(input_json1=file1, input_json2=file2, output_json=outputfile)
-
-

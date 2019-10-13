@@ -3,6 +3,7 @@ import json
 import argparse
 from typing import List, Tuple
 
+
 def NPStats(nps: List[Tuple[int]]) -> Tuple[int, int]:
     """ Get number of nps and maxlen of a NP span"""
     num_nps = 0
@@ -11,7 +12,7 @@ def NPStats(nps: List[Tuple[int]]) -> Tuple[int, int]:
     for sent in nps:
         for np in sent:
             num_nps += 1
-            nplen = (np[1] - np[0])
+            nplen = np[1] - np[0]
             maxlen = nplen if maxlen < nplen else maxlen
 
     return (num_nps, maxlen)
@@ -38,7 +39,7 @@ def dataStats(input_jsonl: str, sent_key: str, nps_key: str) -> None:
 
     docidx = 0
 
-    with open(input_jsonl, 'r') as f:
+    with open(input_jsonl, "r") as f:
         for line in f:
             if not line.strip():
                 continue
@@ -50,8 +51,6 @@ def dataStats(input_jsonl: str, sent_key: str, nps_key: str) -> None:
                 maxDocSents = len(sentences)
 
             sent_lens = [len(s) for s in sentences]
-
-
 
             tokens = [word for sent in sentences for word in sent]
             avgDocWords += len(tokens)
@@ -75,8 +74,8 @@ def dataStats(input_jsonl: str, sent_key: str, nps_key: str) -> None:
             maxNP_perdoc = numnp if numnp > maxNP_perdoc else maxNP_perdoc
             docidx += 1
 
-    avgDocWords = float(avgDocWords)/float(docidx)
-    avgNPPerdoc = float(num_NPs)/float(docidx)
+    avgDocWords = float(avgDocWords) / float(docidx)
+    avgNPPerdoc = float(num_NPs) / float(docidx)
     print("MaxDocSents: {}".format(maxDocSents))
     print("maxSenLens: {}".format(maxSenLength))
     print("numSents: {}".format(numSents))
@@ -97,11 +96,11 @@ def main(args):
     dataStats(input_jsonl=args.input_jsonl, sent_key=args.sent_key, nps_key=args.nps_key)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input_jsonl', required=True)
-    parser.add_argument('--sent_key', required=True)
-    parser.add_argument('--nps_key', required=True)
+    parser.add_argument("--input_jsonl", required=True)
+    parser.add_argument("--sent_key", required=True)
+    parser.add_argument("--nps_key", required=True)
     args = parser.parse_args()
 
     main(args)

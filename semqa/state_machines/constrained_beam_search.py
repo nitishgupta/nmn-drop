@@ -5,7 +5,7 @@ from allennlp.common.registrable import FromParams
 from allennlp.state_machines.states import State
 from allennlp.state_machines.transition_functions import TransitionFunction
 
-StateType = TypeVar('StateType', bound=State)  # pylint: disable=invalid-name
+StateType = TypeVar("StateType", bound=State)  # pylint: disable=invalid-name
 
 
 class ConstrainedBeamSearch(FromParams):
@@ -40,12 +40,14 @@ class ConstrainedBeamSearch(FromParams):
         self._beam_size = beam_size
         self._per_node_beam_size = per_node_beam_size or beam_size
 
-    def search(self,
-               num_steps: int,
-               initial_state: StateType,
-               transition_function: TransitionFunction,
-               firststep_allowed_actions: List[Set[int]] = None,
-               keep_final_unfinished_states: bool = True) -> Mapping[int, Sequence[StateType]]:
+    def search(
+        self,
+        num_steps: int,
+        initial_state: StateType,
+        transition_function: TransitionFunction,
+        firststep_allowed_actions: List[Set[int]] = None,
+        keep_final_unfinished_states: bool = True,
+    ) -> Mapping[int, Sequence[StateType]]:
         """
         Parameters
         ----------
@@ -80,12 +82,13 @@ class ConstrainedBeamSearch(FromParams):
             next_states: Dict[int, List[StateType]] = defaultdict(list)
             grouped_state = states[0].combine_states(states)
             if step_num == 1:
-                possible_next_states = transition_function.take_step(grouped_state,
-                                                                     max_actions=self._per_node_beam_size,
-                                                                     allowed_actions=firststep_allowed_actions)
+                possible_next_states = transition_function.take_step(
+                    grouped_state, max_actions=self._per_node_beam_size, allowed_actions=firststep_allowed_actions
+                )
             else:
-                possible_next_states = transition_function.take_step(grouped_state,
-                                                                     max_actions=self._per_node_beam_size)
+                possible_next_states = transition_function.take_step(
+                    grouped_state, max_actions=self._per_node_beam_size
+                )
             for next_state in possible_next_states:
                 # NOTE: we're doing state.batch_indices[0] here (and similar things below),
                 # hard-coding a group size of 1.  But, our use of `next_state.is_finished()`
@@ -101,7 +104,7 @@ class ConstrainedBeamSearch(FromParams):
             for batch_index, batch_states in next_states.items():
                 # The states from the generator are already sorted, so we can just take the first
                 # ones here, without an additional sort.
-                states.extend(batch_states[:self._beam_size])
+                states.extend(batch_states[: self._beam_size])
             step_num += 1
         best_states: Dict[int, Sequence[StateType]] = {}
         for batch_index, batch_states in finished_states.items():
@@ -109,5 +112,5 @@ class ConstrainedBeamSearch(FromParams):
             # yet.  Maybe with a larger beam size...
             finished_to_sort = [(-state.score[0].item(), state) for state in batch_states]
             finished_to_sort.sort(key=lambda x: x[0])
-            best_states[batch_index] = [state[1] for state in finished_to_sort[:self._beam_size]]
+            best_states[batch_index] = [state[1] for state in finished_to_sort[: self._beam_size]]
         return best_states

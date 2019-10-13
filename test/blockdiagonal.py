@@ -1,6 +1,7 @@
 import torch
 import allennlp.nn.util as util
 
+
 def masking_blockdiagonal(batch_size, passage_length, window, device_id):
     """ Make a (batch_size, passage_length, passage_length) tensor M of 1 and -1 in which for each row x,
         M[:, x, y] = -1 if y < x - window or y > x + window, else it is 1.
@@ -28,11 +29,6 @@ def masking_blockdiagonal(batch_size, passage_length, window, device_id):
     print(inwindow_mask)
     print(outwindow_mask)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     masking_blockdiagonal(batch_size=3, passage_length=15, window=3, device_id=0)
-
-
-
-
-
-

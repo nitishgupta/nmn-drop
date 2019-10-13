@@ -11,7 +11,6 @@ from allennlp.models.archival import load_archive
 from allennlp.models.reading_comprehension.bidaf import BidirectionalAttentionFlow
 
 
-
 from allennlp.common.registrable import Registrable
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -21,12 +20,14 @@ from allennlp.modules import Seq2SeqEncoder, SimilarityFunction
 
 
 class PretrainedBidafModelUtils(torch.nn.Module, Registrable):
-    def __init__(self,
-                 vocab: Vocabulary,
-                 bidaf_model_path: str,
-                 bidaf_wordemb_file: str,
-                 dropout:float=0.0,
-                 fine_tune_bidaf:bool=False) -> None:
+    def __init__(
+        self,
+        vocab: Vocabulary,
+        bidaf_model_path: str,
+        bidaf_wordemb_file: str,
+        dropout: float = 0.0,
+        fine_tune_bidaf: bool = False,
+    ) -> None:
         super(PretrainedBidafModelUtils, self).__init__()
         if bidaf_model_path is None:
             logger.info(f"NOT loading pretrained bidaf model. bidaf_model_path - not given")
@@ -54,11 +55,10 @@ class PretrainedBidafModelUtils(torch.nn.Module, Registrable):
 
         # Extending token embedding matrix for Bidaf based on current vocab
         for key, _ in self._bidaf_model._text_field_embedder._token_embedders.items():
-            token_embedder = getattr(self._bidaf_model._text_field_embedder, 'token_embedder_{}'.format(key))
+            token_embedder = getattr(self._bidaf_model._text_field_embedder, "token_embedder_{}".format(key))
             if isinstance(token_embedder, Embedding):
                 token_embedder.extend_vocab(extended_vocab=vocab, pretrained_file=bidaf_wordemb_file)
         logger.info(f"Embedder for bidaf extended. New size: {token_embedder.weight.size()}")
-
 
         self.bidaf_encoder_bidirectional = self._bidaf_model._phrase_layer.is_bidirectional()
         self._bidaf_encoded_dim = self._bidaf_model._phrase_layer.get_output_dim()
@@ -67,7 +67,6 @@ class PretrainedBidafModelUtils(torch.nn.Module, Registrable):
             self._dropout = torch.nn.Dropout(p=dropout)
         else:
             self._dropout = lambda x: x
-
 
     def embed_ques_passages(self, question, contexts):
         # Shape: (B, question_length, D)
@@ -91,7 +90,8 @@ class PretrainedBidafModelUtils(torch.nn.Module, Registrable):
         # Shape: (num_contexts, context_length, D)
         for i in range(batch_size):
             embedded_contexts_i = self._bidaf_model._highway_layer(
-                self._bidaf_model._text_field_embedder(contexts_indices_list[i]))
+                self._bidaf_model._text_field_embedder(contexts_indices_list[i])
+            )
             embedded_contexts_list.append(embedded_contexts_i)
             contexts_mask_i = allenutil.get_text_field_mask(contexts_indices_list[i]).float()
             contexts_mask_list.append(contexts_mask_i)
@@ -101,22 +101,21 @@ class PretrainedBidafModelUtils(torch.nn.Module, Registrable):
 
         return embedded_question, embedded_passages, question_mask, passages_mask
 
-
     def encode_question(self, embedded_question, question_lstm_mask):
         encoded_question = self._dropout(self._bidaf_model._phrase_layer(embedded_question, question_lstm_mask))
         return encoded_question
-
 
     def encode_context(self, embedded_passage, passage_lstm_mask):
         encoded_passage = self._dropout(self._bidaf_model._phrase_layer(embedded_passage, passage_lstm_mask))
         return encoded_passage
 
-
-    def forward_bidaf(self,
-                      encoded_question: torch.FloatTensor,
-                      encoded_passage: torch.FloatTensor,
-                      question_lstm_mask: torch.FloatTensor,
-                      passage_lstm_mask: torch.FloatTensor):
+    def forward_bidaf(
+        self,
+        encoded_question: torch.FloatTensor,
+        encoded_passage: torch.FloatTensor,
+        question_lstm_mask: torch.FloatTensor,
+        passage_lstm_mask: torch.FloatTensor,
+    ):
         """
         Runs bidaf model on already embedded question and passage. This function can be used to run on sub-questions,
         or sub-questions concatenated.
@@ -149,9 +148,9 @@ class PretrainedBidafModelUtils(torch.nn.Module, Registrable):
 
         # We replace masked values with something really negative here, so they don't affect the
         # max below.
-        masked_similarity = allenutil.replace_masked_values(passage_question_similarity,
-                                                            question_lstm_mask.unsqueeze(1),
-                                                            -1e7)
+        masked_similarity = allenutil.replace_masked_values(
+            passage_question_similarity, question_lstm_mask.unsqueeze(1), -1e7
+        )
         # Shape: (batch_size, passage_length)
         question_passage_similarity = masked_similarity.max(dim=-1)[0].squeeze(-1)
         # Shape: (batch_size, passage_length)
@@ -159,19 +158,22 @@ class PretrainedBidafModelUtils(torch.nn.Module, Registrable):
         # Shape: (batch_size, encoding_dim)
         question_passage_vector = allenutil.weighted_sum(encoded_passage, question_passage_attention)
         # Shape: (batch_size, passage_length, encoding_dim)
-        tiled_question_passage_vector = question_passage_vector.unsqueeze(1).expand(batch_size,
-                                                                                    passage_length,
-                                                                                    encoding_dim)
+        tiled_question_passage_vector = question_passage_vector.unsqueeze(1).expand(
+            batch_size, passage_length, encoding_dim
+        )
 
         # Shape: (batch_size, passage_length, encoding_dim * 4)
-        final_merged_passage = torch.cat([encoded_passage,
-                                          passage_question_vectors,
-                                          encoded_passage * passage_question_vectors,
-                                          encoded_passage * tiled_question_passage_vector],
-                                         dim=-1)
+        final_merged_passage = torch.cat(
+            [
+                encoded_passage,
+                passage_question_vectors,
+                encoded_passage * passage_question_vectors,
+                encoded_passage * tiled_question_passage_vector,
+            ],
+            dim=-1,
+        )
 
-        modeled_passage = self._dropout(self._bidaf_model._modeling_layer(final_merged_passage,
-                                                                          passage_lstm_mask))
+        modeled_passage = self._dropout(self._bidaf_model._modeling_layer(final_merged_passage, passage_lstm_mask))
 
         output_dict = {
             "encoded_question": encoded_question,
@@ -179,16 +181,19 @@ class PretrainedBidafModelUtils(torch.nn.Module, Registrable):
             "passage_vector": question_passage_vector,
             "final_merged_passage": final_merged_passage,
             "modeled_passage": modeled_passage,
-            "passage_question_attention": passage_question_attention
+            "passage_question_attention": passage_question_attention,
         }
 
         return output_dict
 
-
     def bidaf_reprs(self, question, contexts):
         # Shape: (B, ques_len, D), (B, num_contexts, context_len, D)
-        (embedded_question_tensor, embedded_passages_tensor,
-         question_mask_tensor, passages_mask_tensor) = self.embed_ques_passages(question, contexts)
+        (
+            embedded_question_tensor,
+            embedded_passages_tensor,
+            question_mask_tensor,
+            passages_mask_tensor,
+        ) = self.embed_ques_passages(question, contexts)
 
         batch_size = embedded_question_tensor.size()[0]
         num_contexts = embedded_passages_tensor.size()[1]
@@ -205,13 +210,14 @@ class PretrainedBidafModelUtils(torch.nn.Module, Registrable):
             contexts_mask.append(passages_mask_tensor[i])
 
         # Shape: (B, ques_len, D)
-        encoded_ques_tensor = self.encode_question(embedded_question=embedded_question_tensor,
-                                                   question_lstm_mask=question_mask_tensor)
+        encoded_ques_tensor = self.encode_question(
+            embedded_question=embedded_question_tensor, question_lstm_mask=question_mask_tensor
+        )
 
         # Shape: (B, D)
-        ques_encoded_final_state = allenutil.get_final_encoder_states(encoded_ques_tensor,
-                                                                      question_mask_tensor,
-                                                                      self.bidaf_encoder_bidirectional)
+        ques_encoded_final_state = allenutil.get_final_encoder_states(
+            encoded_ques_tensor, question_mask_tensor, self.bidaf_encoder_bidirectional
+        )
 
         # List of tensors: (question_len, D)
         encoded_questions = []
@@ -223,8 +229,9 @@ class PretrainedBidafModelUtils(torch.nn.Module, Registrable):
             #                                     question_lstm_mask=questions_mask[i].unsqueeze(0))
             encoded_questions.append(encoded_ques_tensor[i])
             # Shape: (num_contexts, context_len, D)
-            encoded_context = self.encode_context(embedded_passage=embedded_contexts[i],
-                                                  passage_lstm_mask=contexts_mask[i])
+            encoded_context = self.encode_context(
+                embedded_passage=embedded_contexts[i], passage_lstm_mask=contexts_mask[i]
+            )
             encoded_contexts.append(encoded_context)
 
         modeled_contexts = []
@@ -235,19 +242,26 @@ class PretrainedBidafModelUtils(torch.nn.Module, Registrable):
             encoded_ques_ex = encoded_ques.unsqueeze(0).expand(num_contexts, *encoded_ques.size())
             ques_mask_ex = ques_mask.unsqueeze(0).expand(num_contexts, *ques_mask.size())
 
-            output_dict = self.forward_bidaf(encoded_question=encoded_ques_ex,
-                                             encoded_passage=encoded_contexts[i],
-                                             question_lstm_mask=ques_mask_ex,
-                                             passage_lstm_mask=contexts_mask[i])
+            output_dict = self.forward_bidaf(
+                encoded_question=encoded_ques_ex,
+                encoded_passage=encoded_contexts[i],
+                question_lstm_mask=ques_mask_ex,
+                passage_lstm_mask=contexts_mask[i],
+            )
 
             # Shape: (num_contexts, context_len, D)
-            modeled_context = output_dict['modeled_passage']
+            modeled_context = output_dict["modeled_passage"]
             modeled_contexts.append(modeled_context)
 
-        return (ques_encoded_final_state,
-                encoded_ques_tensor, question_mask_tensor,
-                embedded_questions, questions_mask,
-                embedded_contexts, contexts_mask,
-                encoded_questions,
-                encoded_contexts, modeled_contexts)
-
+        return (
+            ques_encoded_final_state,
+            encoded_ques_tensor,
+            question_mask_tensor,
+            embedded_questions,
+            questions_mask,
+            embedded_contexts,
+            contexts_mask,
+            encoded_questions,
+            encoded_contexts,
+            modeled_contexts,
+        )

@@ -11,7 +11,7 @@ def answerTypeAnalysis(input_json: str) -> None:
     print("Reading input json: {}".format(input_json))
 
     # Input file contains single json obj with list of questions as jsonobjs inside it
-    with open(input_json, 'r') as f:
+    with open(input_json, "r") as f:
         dataset = json.load(f)
 
     print("Number of docs: {}".format(len(dataset)))
@@ -57,9 +57,9 @@ def answerTypeAnalysis(input_json: str) -> None:
     print(f"SpanType ans - number of correct spans: {spanans_numspandist}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input_json', required=True)
+    parser.add_argument("--input_json", required=True)
     args = parser.parse_args()
 
     answerTypeAnalysis(input_json=args.input_json)

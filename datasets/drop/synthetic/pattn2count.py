@@ -29,8 +29,9 @@ def sample_spansfor_variablelength(seqlen, num_spans, span_lengths: List[int]):
     return result
 
 
-def make_instance(min_passage_length: int, max_passage_length: int,
-                  min_span_length: int, max_span_length: int, count_value: int):
+def make_instance(
+    min_passage_length: int, max_passage_length: int, min_span_length: int, max_span_length: int, count_value: int
+):
 
     passage_length = random.randint(min_passage_length, max_passage_length)
     # Mean: 0, Std: 0.2, Size: PassageLength
@@ -51,6 +52,7 @@ def make_instance(min_passage_length: int, max_passage_length: int,
     attention = attention / attention_sum
 
     return attention
+
 
 def _get_length_buckets(min_passage_length, max_passage_length):
     if min_passage_length == max_passage_length:
@@ -79,8 +81,14 @@ def _get_length_buckets(min_passage_length, max_passage_length):
     return list(zip(min_length_buckets, max_length_buckets))
 
 
-def make_data(min_passage_length, max_passage_length, min_span_length, max_span_length,
-              samples_per_bucket_count: int, max_count_value: int = 7):
+def make_data(
+    min_passage_length,
+    max_passage_length,
+    min_span_length,
+    max_span_length,
+    samples_per_bucket_count: int,
+    max_count_value: int = 7,
+):
     # For each 100 length bucket, and count value, generate 1000 examples in train mode, and 100 in val mode
     num_instances_per_bucket_per_count = samples_per_bucket_count
 
@@ -95,47 +103,54 @@ def make_data(min_passage_length, max_passage_length, min_span_length, max_span_
         for min_plen, max_plen in minmax_passagelen_tuples:
             instances_for_bucket = 0
             for i in range(num_instances_per_bucket_per_count):
-                attention = make_instance(min_passage_length=min_plen, max_passage_length=max_plen,
-                                          min_span_length=min_span_length, max_span_length=max_span_length,
-                                          count_value=count_value)
+                attention = make_instance(
+                    min_passage_length=min_plen,
+                    max_passage_length=max_plen,
+                    min_span_length=min_span_length,
+                    max_span_length=max_span_length,
+                    count_value=count_value,
+                )
                 if attention is None:
                     continue
                 if count_value not in lenbucket_count_dict:
                     lenbucket_count_dict[count_value] = defaultdict(int)
                 lenbucket_count_dict[count_value][(min_plen, max_plen)] += 1
                 attention = attention.tolist()
-                data_dicts.append({'attention': attention, 'count_value': count_value})
+                data_dicts.append({"attention": attention, "count_value": count_value})
                 instances_for_bucket += 1
             print(f"{min_plen}, {max_plen} :: {instances_for_bucket}")
-        print('\n')
+        print("\n")
 
     print(lenbucket_count_dict)
     return data_dicts
 
 
 def write_data_to_file(data, filepath):
-    with open(filepath, 'w') as f:
+    with open(filepath, "w") as f:
         json.dump(data, f)
 
 
-if __name__=='__main__':
-    train_data = make_data(min_passage_length=100, max_passage_length=600, min_span_length=5,
-                           max_span_length=15, max_count_value=7, samples_per_bucket_count=2000)
+if __name__ == "__main__":
+    train_data = make_data(
+        min_passage_length=100,
+        max_passage_length=600,
+        min_span_length=5,
+        max_span_length=15,
+        max_count_value=7,
+        samples_per_bucket_count=2000,
+    )
 
-    dev_data = make_data(min_passage_length=100, max_passage_length=600, min_span_length=5,
-                         max_span_length=15, max_count_value=7, samples_per_bucket_count=500)
+    dev_data = make_data(
+        min_passage_length=100,
+        max_passage_length=600,
+        min_span_length=5,
+        max_span_length=15,
+        max_count_value=7,
+        samples_per_bucket_count=500,
+    )
 
     train_data_path = "./resources/data/drop_s/synthetic/pattn2count/train.json"
     dev_data_path = "./resources/data/drop_s/synthetic/pattn2count/dev.json"
 
-
     write_data_to_file(train_data, train_data_path)
     write_data_to_file(dev_data, dev_data_path)
-
-
-
-
-
-
-
-

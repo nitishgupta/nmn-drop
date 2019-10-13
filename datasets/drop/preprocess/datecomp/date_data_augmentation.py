@@ -11,25 +11,25 @@ import argparse
 
 random.seed(100)
 
-IGNORED_TOKENS = {'a', 'an', 'the'}
-STRIPPED_CHARACTERS = string.punctuation + ''.join([u"‘", u"’", u"´", u"`", "_"])
+IGNORED_TOKENS = {"a", "an", "the"}
+STRIPPED_CHARACTERS = string.punctuation + "".join(["‘", "’", "´", "`", "_"])
 
 """ This script is used to augment date-comparison-data by flipping events in the questions """
 
 FIRST = "first"
 SECOND = "second"
 
-FIRST_operator_tokens = ['first', 'earlier']
-SECOND_operator_tokens = ['later', 'last', 'second']
+FIRST_operator_tokens = ["first", "earlier"]
+SECOND_operator_tokens = ["later", "last", "second"]
 
 
 def readDataset(input_json):
-    with open(input_json, 'r') as f:
+    with open(input_json, "r") as f:
         dataset = json.load(f)
     return dataset
 
-def find_valid_spans(passage_tokens: List[str],
-                     answer_texts: List[str]) -> List[Tuple[int, int]]:
+
+def find_valid_spans(passage_tokens: List[str], answer_texts: List[str]) -> List[Tuple[int, int]]:
 
     # debug = False
     # if 'T. J. Houshmandzadeh' in answer_texts:
@@ -55,7 +55,6 @@ def find_valid_spans(passage_tokens: List[str],
         if answer_tokens[0] not in word_positions:
             continue
 
-
         for span_start in word_positions[answer_tokens[0]]:
             span_end = span_start  # span_end is _inclusive_
             answer_index = 1
@@ -80,14 +79,14 @@ def get_answer_event_order(ans_tokens: List[str], event1_tokens: List[str], even
 
 
 def getQuestionComparisonOperator(question: str) -> str:
-    question_tokens = question.split(' ')
+    question_tokens = question.split(" ")
     # Correct if Attn1 is first event
 
-    for t in ['first', 'earlier', 'forst', 'firts']:
+    for t in ["first", "earlier", "forst", "firts"]:
         if t in question_tokens:
             return FIRST
 
-    for t in ['later', 'last', 'second']:
+    for t in ["later", "last", "second"]:
         if t in question_tokens:
             return SECOND
 
@@ -96,29 +95,29 @@ def getQuestionComparisonOperator(question: str) -> str:
 
 def quesEvents(qstr):
     """ Returns (start, end) span tuples for event1 and event2 in the question """
-    or_split = qstr.split(' or ')
+    or_split = qstr.split(" or ")
     if len(or_split) != 2:
         return None
 
-    tokens = qstr.split(' ')
+    tokens = qstr.split(" ")
 
-    or_idx = tokens.index('or')
+    or_idx = tokens.index("or")
     # Last token is ? which we don't want to attend to
     event2 = tokens[or_idx + 1 : len(tokens) - 1]
     event2_span = (or_idx + 1, len(tokens) - 1)
 
     # Gets first index of the item
     try:
-        comma_idx = tokens.index(',')
+        comma_idx = tokens.index(",")
     except:
         comma_idx = 100000
     try:
-        colon_idx = tokens.index(':')
+        colon_idx = tokens.index(":")
     except:
         colon_idx = 100000
 
     try:
-        hyphen_idx = tokens.index('-')
+        hyphen_idx = tokens.index("-")
     except:
         hyphen_idx = 100000
 
@@ -126,14 +125,14 @@ def quesEvents(qstr):
 
     if split_idx == 100000 or (or_idx - split_idx <= 1):
         # print(f"{qstr} first_split:{split_idx} or:{or_idx}")
-        if 'first' in tokens:
-            split_idx = tokens.index('first')
-        elif 'second' in tokens:
-            split_idx = tokens.index('second')
-        elif 'last' in tokens:
-            split_idx = tokens.index('last')
-        elif 'later' in tokens:
-            split_idx = tokens.index('later')
+        if "first" in tokens:
+            split_idx = tokens.index("first")
+        elif "second" in tokens:
+            split_idx = tokens.index("second")
+        elif "last" in tokens:
+            split_idx = tokens.index("last")
+        elif "later" in tokens:
+            split_idx = tokens.index("later")
         else:
             split_idx = -1
 
@@ -142,10 +141,10 @@ def quesEvents(qstr):
         return None
 
     if tokens[or_idx - 1] == ",":
-        event1 = tokens[split_idx + 1: or_idx - 1]
+        event1 = tokens[split_idx + 1 : or_idx - 1]
         event1_span = (split_idx + 1, or_idx - 1)
     else:
-        event1 = tokens[split_idx + 1: or_idx]
+        event1 = tokens[split_idx + 1 : or_idx]
         event1_span = (split_idx + 1, or_idx)
 
     return event1_span, event2_span
@@ -173,15 +172,15 @@ def getEventOrderSwitchQuestion(question_answer):
 
     new_question_answer = copy.deepcopy(question_answer)
 
-    tokens = question_tokenized_text.split(' ')
-    pretext = tokens[0: event1_span[0]]
-    event2_text = tokens[event2_span[0]: event2_span[1]]
-    mid_text = tokens[event1_span[1]: event2_span[0]]
-    event1_text = tokens[event1_span[0]: event1_span[1]]
-    end_text = tokens[event2_span[1]:]
+    tokens = question_tokenized_text.split(" ")
+    pretext = tokens[0 : event1_span[0]]
+    event2_text = tokens[event2_span[0] : event2_span[1]]
+    mid_text = tokens[event1_span[1] : event2_span[0]]
+    event1_text = tokens[event1_span[0] : event1_span[1]]
+    end_text = tokens[event2_span[1] :]
 
     new_question_tokens = pretext + event2_text + mid_text + event1_text + end_text
-    new_question_text = ' '.join(new_question_tokens)
+    new_question_text = " ".join(new_question_tokens)
 
     new_question_answer[constants.tokenized_question] = new_question_text
     # Since we don't know the following, we will keep them blank
@@ -200,15 +199,19 @@ def getEventOrderSwitchQuestion(question_answer):
         new_question_answer[constants.qspan_datevalue_supervision] = new_qevent_date_values
 
     new_question_answer["augmented_data"] = True
-    new_question_answer[constants.query_id] = question_answer[constants.query_id] + '-dc-event-switch'
+    new_question_answer[constants.query_id] = question_answer[constants.query_id] + "-dc-event-switch"
 
     return new_question_answer
 
 
-def getQuestionOperatorSwitchQA_wo_QSA(question_answer,
-                                       passage_tokenized_text,
-                                       passage_token_charidxs, question_token_charidxs,
-                                       original_passage_text, original_question_text):
+def getQuestionOperatorSwitchQA_wo_QSA(
+    question_answer,
+    passage_tokenized_text,
+    passage_token_charidxs,
+    question_token_charidxs,
+    original_passage_text,
+    original_question_text,
+):
     """ event1_span and event2_span are end-exclusive 
         
         Doesn't consider new answers to be question span answers!
@@ -223,20 +226,20 @@ def getQuestionOperatorSwitchQA_wo_QSA(question_answer,
         return None
     event1_span, event2_span = event_spans
 
-    question_tokens = question_tokenized_text.split(' ')
-    passage_tokens = passage_tokenized_text.split(' ')
+    question_tokens = question_tokenized_text.split(" ")
+    passage_tokens = passage_tokenized_text.split(" ")
 
     # Get correct answer to find which event in question is correct
     answer_as_passage_spans = question_answer[constants.answer_passage_spans]
     if answer_as_passage_spans:
         passage_ans_span = answer_as_passage_spans[0]
-        answer_tokens = passage_tokens[passage_ans_span[0]: passage_ans_span[1] + 1]
+        answer_tokens = passage_tokens[passage_ans_span[0] : passage_ans_span[1] + 1]
     else:
         answer_text = new_question_answer[constants.answer]["spans"][0]
-        answer_tokens = answer_text.split(' ')
+        answer_tokens = answer_text.split(" ")
 
-    event1_tokens = question_tokens[event1_span[0]:event1_span[1]]
-    event2_tokens = question_tokens[event2_span[0]:event2_span[1]]
+    event1_tokens = question_tokens[event1_span[0] : event1_span[1]]
+    event2_tokens = question_tokens[event2_span[0] : event2_span[1]]
     # First or Second
     answer_event = get_answer_event_order(answer_tokens, event1_tokens, event2_tokens)
 
@@ -250,7 +253,7 @@ def getQuestionOperatorSwitchQA_wo_QSA(question_answer,
         new_ans_tokens = new_ans_tokens[1:]
 
     # Find this question answer span in the passage
-    new_ans_as_passage_spans = find_valid_spans(passage_tokens, [' '.join(new_ans_tokens)])
+    new_ans_as_passage_spans = find_valid_spans(passage_tokens, [" ".join(new_ans_tokens)])
     if not new_ans_as_passage_spans:
         # print(question_tokenized_text)
         # print(new_question_answer[constants.answer]["spans"])
@@ -262,8 +265,10 @@ def getQuestionOperatorSwitchQA_wo_QSA(question_answer,
     # Only consider the first grounding
     new_ans_as_passage_span = new_ans_as_passage_spans[0]
     # To find the un-tokenized surface of this answer
-    new_ans_start_char_offset, new_ans_end_charoffset = (passage_token_charidxs[new_ans_as_passage_span[0]],
-                                                         passage_token_charidxs[new_ans_as_passage_span[1] + 1])
+    new_ans_start_char_offset, new_ans_end_charoffset = (
+        passage_token_charidxs[new_ans_as_passage_span[0]],
+        passage_token_charidxs[new_ans_as_passage_span[1] + 1],
+    )
 
     answer_passage_text = original_passage_text[new_ans_start_char_offset:new_ans_end_charoffset]
 
@@ -273,15 +278,14 @@ def getQuestionOperatorSwitchQA_wo_QSA(question_answer,
     if "validated_answers" in new_question_answer:
         new_question_answer.pop("validated_answers")
 
-
     # Make the new question -
     original_ques_operator = getQuestionComparisonOperator(question_tokenized_text)
     # not using the FIRST_operator_tokens list since there is noise in original question
     if original_ques_operator == FIRST:
-        tokens_to_replace = ['first', 'earlier', 'forst', 'firts']
+        tokens_to_replace = ["first", "earlier", "forst", "firts"]
         new_operator_token = random.choice(SECOND_operator_tokens)
     else:
-        tokens_to_replace = ['later', 'last', 'second']
+        tokens_to_replace = ["later", "last", "second"]
         new_operator_token = random.choice(FIRST_operator_tokens)
 
     # Replace the
@@ -298,13 +302,13 @@ def getQuestionOperatorSwitchQA_wo_QSA(question_answer,
     new_question_answer[constants.question] = new_question_text
 
     new_question_answer["augmented_data"] = True
-    new_question_answer[constants.query_id] = question_answer[constants.query_id] + '-dc-qop-switch'
+    new_question_answer[constants.query_id] = question_answer[constants.query_id] + "-dc-qop-switch"
     return new_question_answer
 
 
 def addQuestionAttentionVectors(question_answer):
     question_tokenized_text = question_answer[constants.tokenized_question]
-    question_tokens = question_tokenized_text.split(' ')
+    question_tokens = question_tokenized_text.split(" ")
     qlen = len(question_tokens)
     event_spans = quesEvents(question_answer[constants.tokenized_question])
     if event_spans:
@@ -324,7 +328,7 @@ def addQuestionAttentionVectors(question_answer):
         event2_attention = [0.0] * qlen
         question_answer[constants.qattn_supervised] = False
 
-    ''' Add attentions in reverse order -- seem to help '''
+    """ Add attentions in reverse order -- seem to help """
     question_answer[constants.ques_attention_supervision] = (event2_attention, event1_attention)
 
     return question_answer
@@ -338,22 +342,25 @@ def strongSupervisionFlagAndQType(question_answer_pairs: List[Dict]):
         question_answer[constants.qtype] = constants.DATECOMP_QTYPE
         question_answer[constants.program_supervised] = True
 
-
-        if (question_answer[constants.program_supervised] and
-                question_answer[constants.qattn_supervised] and
-                question_answer[constants.exection_supervised]):
+        if (
+            question_answer[constants.program_supervised]
+            and question_answer[constants.qattn_supervised]
+            and question_answer[constants.exection_supervised]
+        ):
             question_answer[constants.strongly_supervised] = True
         else:
             question_answer[constants.strongly_supervised] = False
 
-        supervision_distribution[constants.program_supervised] += 1 if question_answer[
-            constants.program_supervised] else 0
-        supervision_distribution[constants.qattn_supervised] += 1 if question_answer[
-            constants.qattn_supervised] else 0
-        supervision_distribution[constants.exection_supervised] += 1 if question_answer[
-            constants.exection_supervised] else 0
-        supervision_distribution[constants.strongly_supervised] += 1 if question_answer[
-            constants.strongly_supervised] else 0
+        supervision_distribution[constants.program_supervised] += (
+            1 if question_answer[constants.program_supervised] else 0
+        )
+        supervision_distribution[constants.qattn_supervised] += 1 if question_answer[constants.qattn_supervised] else 0
+        supervision_distribution[constants.exection_supervised] += (
+            1 if question_answer[constants.exection_supervised] else 0
+        )
+        supervision_distribution[constants.strongly_supervised] += (
+            1 if question_answer[constants.strongly_supervised] else 0
+        )
 
     return question_answer_pairs, supervision_distribution
 
@@ -412,37 +419,47 @@ def augmentDateComparisonData(dataset):
             event_switch_question_answer = getEventOrderSwitchQuestion(question_answer)
             if event_switch_question_answer is not None:
                 event_switch_question_answer = addQuestionAttentionVectors(event_switch_question_answer)
-                ques_operator = getQuestionComparisonOperator(event_switch_question_answer[constants.tokenized_question])
+                ques_operator = getQuestionComparisonOperator(
+                    event_switch_question_answer[constants.tokenized_question]
+                )
                 augment_operator_dist[ques_operator] += 1
                 new_qa_pairs.append(event_switch_question_answer)
 
             # "first A or B" --> "second A or B"
-            qoperator_switch_question_answer = getQuestionOperatorSwitchQA_wo_QSA(question_answer,
-                                                                                  passage_tokenized_text,
-                                                                                  passage_token_charidxs,
-                                                                                  question_token_charidxs,
-                                                                                  original_passage_text,
-                                                                                  original_question_text)
+            qoperator_switch_question_answer = getQuestionOperatorSwitchQA_wo_QSA(
+                question_answer,
+                passage_tokenized_text,
+                passage_token_charidxs,
+                question_token_charidxs,
+                original_passage_text,
+                original_question_text,
+            )
 
             if qoperator_switch_question_answer is not None:
                 qoperator_switch_question_answer = addQuestionAttentionVectors(qoperator_switch_question_answer)
-                ques_operator = getQuestionComparisonOperator(qoperator_switch_question_answer[constants.tokenized_question])
+                ques_operator = getQuestionComparisonOperator(
+                    qoperator_switch_question_answer[constants.tokenized_question]
+                )
                 augment_operator_dist[ques_operator] += 1
                 new_qa_pairs.append(qoperator_switch_question_answer)
 
             if event_switch_question_answer is not None:
                 # "first B or A" --> "second B or A"
                 event_sw_qoperator_sw_question_answer = getQuestionOperatorSwitchQA_wo_QSA(
-                                                                                    event_switch_question_answer,
-                                                                                    passage_tokenized_text,
-                                                                                    passage_token_charidxs,
-                                                                                    question_token_charidxs,
-                                                                                    original_passage_text,
-                                                                                    original_question_text)
+                    event_switch_question_answer,
+                    passage_tokenized_text,
+                    passage_token_charidxs,
+                    question_token_charidxs,
+                    original_passage_text,
+                    original_question_text,
+                )
                 if event_sw_qoperator_sw_question_answer is not None:
-                    event_sw_qoperator_sw_question_answer = \
-                            addQuestionAttentionVectors(event_sw_qoperator_sw_question_answer)
-                    ques_operator = getQuestionComparisonOperator(event_sw_qoperator_sw_question_answer[constants.tokenized_question])
+                    event_sw_qoperator_sw_question_answer = addQuestionAttentionVectors(
+                        event_sw_qoperator_sw_question_answer
+                    )
+                    ques_operator = getQuestionComparisonOperator(
+                        event_sw_qoperator_sw_question_answer[constants.tokenized_question]
+                    )
                     augment_operator_dist[ques_operator] += 1
                     new_qa_pairs.append(event_sw_qoperator_sw_question_answer)
 
@@ -467,16 +484,16 @@ def augmentDateComparisonData(dataset):
     return new_dataset
 
 
-if __name__=='__main__':
+if __name__ == "__main__":
     print("Running data augmentation")
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input_dir')
-    parser.add_argument('--output_dir')
+    parser.add_argument("--input_dir")
+    parser.add_argument("--output_dir")
     args = parser.parse_args()
 
-    train_json = 'drop_dataset_train.json'
-    dev_json = 'drop_dataset_dev.json'
+    train_json = "drop_dataset_train.json"
+    dev_json = "drop_dataset_dev.json"
 
     input_dir = args.input_dir
     output_dir = args.output_dir
@@ -496,11 +513,10 @@ if __name__=='__main__':
     new_train_dataset = augmentDateComparisonData(train_dataset)
     new_dev_dataset = augmentDateComparisonData(dev_dataset)
 
-    with open(output_trnfp, 'w') as f:
+    with open(output_trnfp, "w") as f:
         json.dump(new_train_dataset, f, indent=4)
 
-    with open(output_devfp, 'w') as f:
+    with open(output_devfp, "w") as f:
         json.dump(new_dev_dataset, f, indent=4)
-
 
     print("Written augmented datasets")

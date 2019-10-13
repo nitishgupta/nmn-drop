@@ -10,15 +10,15 @@ import datasets.drop.constants as dropconstants
 random.seed(100)
 
 
-''' Let's say the full dataset's dev set paragraphs are split in to P_dev and P_test, then this script splits the 
+""" Let's say the full dataset's dev set paragraphs are split in to P_dev and P_test, then this script splits the 
     individual qtype datasets' dev set into mydev and mytest so that mytest will only contain paras from P_test.  
     
     Each directory inside args.root_qtype_datasets_dir is considered an individual qtype-dataset.
-'''
+"""
 
 
 def readDataset(input_json):
-    with open(input_json, 'r') as f:
+    with open(input_json, "r") as f:
         dataset = json.load(f)
     return dataset
 
@@ -85,7 +85,7 @@ def get_split_paragraphids(fulldataset, qtype2dataset, split_ratio) -> Tuple[Lis
                 if pid in qtypedataset:
                     qtype_mydevnum_qas += len(qtypedataset[pid][dropconstants.qa_pairs])
 
-            qtype_mydev_ratio = float(qtype_mydevnum_qas)/float(qtype_totalnum_qas)
+            qtype_mydev_ratio = float(qtype_mydevnum_qas) / float(qtype_totalnum_qas)
             ratios.append(qtype_mydev_ratio)
             ratio_diff = abs(qtype_mydev_ratio - split_ratio)
             ratio_diffs.append(ratio_diff)
@@ -99,7 +99,6 @@ def get_split_paragraphids(fulldataset, qtype2dataset, split_ratio) -> Tuple[Lis
 
     print("Best dev/test qa ratio diff: {}".format(best_diff_split_actual_ratio))
     print("Best ratios: {}".format(best_ratios))
-
 
     return set(best_mydev_para_ids), set(best_mytest_para_ids)
 
@@ -124,20 +123,23 @@ def qtyperatio2fulldataset(full_dataset, qtype2dataset):
     for qtype, dataset in qtype2dataset.items():
         num_passages_qtype, num_qas_qtype = get_num_passage_ques(dataset)
         ratio_of_full_dev = float(num_qas_qtype) * 100.0 / num_qas_full
-        print("Number in {}; passages: {}  QA:{} Ratio_dev: {}".format(
-            qtype, num_passages_qtype, num_qas_qtype, ratio_of_full_dev))
+        print(
+            "Number in {}; passages: {}  QA:{} Ratio_dev: {}".format(
+                qtype, num_passages_qtype, num_qas_qtype, ratio_of_full_dev
+            )
+        )
 
 
 def write_dataset(dataset, output_dir, output_filname):
-    with open(os.path.join(output_dir, output_filname), 'w') as f:
+    with open(os.path.join(output_dir, output_filname), "w") as f:
         json.dump(dataset, f, indent=4)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--fulldataset_dir')
-    parser.add_argument('--qtype_dir_name')
-    parser.add_argument('--split_ratio', type=float)        # ratio of mydev to mytest
+    parser.add_argument("--fulldataset_dir")
+    parser.add_argument("--qtype_dir_name")
+    parser.add_argument("--split_ratio", type=float)  # ratio of mydev to mytest
     args = parser.parse_args()
 
     # This is full merged dataset -- should contain drop_dataset_dev.json
@@ -151,7 +153,7 @@ if __name__ == '__main__':
     qtype_datasets = os.listdir(qtype_datasets_rootdir)
     print(qtype_datasets)
 
-    full_dev_json = os.path.join(fulldataset_dir, 'drop_dataset_dev.json')
+    full_dev_json = os.path.join(fulldataset_dir, "drop_dataset_dev.json")
     fulldev_dataset = readDataset(full_dev_json)
     num_passages_dev, num_qas_dev = get_num_passage_ques(fulldev_dataset)
     print("Number of full Dev; passages: {}  QA:{}".format(num_passages_dev, num_qas_dev))
@@ -200,7 +202,6 @@ if __name__ == '__main__':
     qtyperatio2fulldataset(mydev_dataset, qtype2mydevdata)
     print("Qtype analysis for my test")
     qtyperatio2fulldataset(mytest_dataset, qtype2mytestdata)
-
 
     write_dataset(mydev_dataset, fulldataset_dir, "drop_dataset_mydev.json")
     write_dataset(mytest_dataset, fulldataset_dir, "drop_dataset_mytest.json")

@@ -9,7 +9,7 @@ SUPERVISION_KEYS = [constants.program_supervised, constants.qattn_supervised, co
 
 
 def readDataset(input_json):
-    with open(input_json, 'r') as f:
+    with open(input_json, "r") as f:
         dataset = json.load(f)
     return dataset
 
@@ -53,21 +53,20 @@ def supervisionStats(input_json):
                     supervision_dict[qtype][supervision_key] += qa_supervionkey_val
                     supervision_dict["TOTAL"][supervision_key] += qa_supervionkey_val
 
-
     print(f"Paras: {numparas}  NumQues:{numques}")
     print(f"Qtypes Count: {json.dumps(qtype_dict, indent=2)}")
     print(f"Per Qtype supervision amount:\n {json.dumps(supervision_dict, indent=2)}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--inputdir')
+    parser.add_argument("--inputdir")
     args = parser.parse_args()
 
     inputdir = args.inputdir
 
-    train_json = 'drop_dataset_train.json'
-    dev_json = 'drop_dataset_dev.json'
+    train_json = "drop_dataset_train.json"
+    dev_json = "drop_dataset_dev.json"
 
     input_trnfp = os.path.join(inputdir, train_json)
     input_devfp = os.path.join(inputdir, dev_json)
@@ -80,6 +79,3 @@ if __name__ == '__main__':
 
     print(input_devfp)
     supervisionStats(input_devfp)
-
-
-

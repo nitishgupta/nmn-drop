@@ -10,16 +10,17 @@ import argparse
 """ This script is used to augment date-comparison-data by flipping events in the questions """
 THRESHOLD = 20
 
-STOP_WORDS = set(stopwords.words('english'))
+STOP_WORDS = set(stopwords.words("english"))
 STOP_WORDS.update(["'s", ","])
 
 
 def readDataset(input_json):
-    with open(input_json, 'r') as f:
+    with open(input_json, "r") as f:
         dataset = json.load(f)
     return dataset
 
-'''
+
+"""
 def get_question_attention(tokenized_question: str) -> List[float]:
     ques_tokens = tokenized_question.split(' ')
     attention = [0] * len(ques_tokens)
@@ -39,17 +40,24 @@ def get_question_attention(tokenized_question: str) -> List[float]:
             attention[i] = 1
 
     return attention
-'''
+"""
 
 
-def get_number_distribution_supervision(tokenized_question, tokenized_passage, num_answer,
-                                        attention, passage_num_mens, passage_num_entidxs, passage_num_vals):
+def get_number_distribution_supervision(
+    tokenized_question,
+    tokenized_passage,
+    num_answer,
+    attention,
+    passage_num_mens,
+    passage_num_entidxs,
+    passage_num_vals,
+):
     WINDOW = 10
-    passage_tokens = tokenized_passage.split(' ')
-    question_tokens = tokenized_question.split(' ')
+    passage_tokens = tokenized_passage.split(" ")
+    question_tokens = tokenized_question.split(" ")
 
     # Only supervised longest / shortest questions -- cannot do the first / last kind of questions
-    if 'longest' not in question_tokens and 'shortest' not in question_tokens:
+    if "longest" not in question_tokens and "shortest" not in question_tokens:
         return None, None
     if num_answer is None:
         return None, None
@@ -58,15 +66,15 @@ def get_number_distribution_supervision(tokenized_question, tokenized_passage, n
     attended_tokens = [token for att, token in zip(attention, question_tokens) if att > 0]
     attended_tokens = set(attended_tokens)
     # Replacing TD with touchdown
-    if 'TD' in attended_tokens:
-        attended_tokens.remove('TD')
-        attended_tokens.add('touchdown')
-    if 'goals' in attended_tokens:
-        attended_tokens.remove('goals')
-        attended_tokens.add('goal')
-    if 'touchdowns' in attended_tokens:
-        attended_tokens.remove('touchdowns')
-        attended_tokens.add('touchdown')
+    if "TD" in attended_tokens:
+        attended_tokens.remove("TD")
+        attended_tokens.add("touchdown")
+    if "goals" in attended_tokens:
+        attended_tokens.remove("goals")
+        attended_tokens.add("goal")
+    if "touchdowns" in attended_tokens:
+        attended_tokens.remove("touchdowns")
+        attended_tokens.add("touchdown")
     irrelevant_tokens = ["'", "'s", "of", "the", "game", "games", "in"]
     # Remove irrelevant tokens from attended-tokens
     for t in irrelevant_tokens:
@@ -82,22 +90,22 @@ def get_number_distribution_supervision(tokenized_question, tokenized_passage, n
 
     for menidx, number_token_idx in enumerate(number_token_idxs):
         try:
-            if passage_tokens[number_token_idx + 1] != '-' or passage_tokens[number_token_idx + 2] != 'yard':
+            if passage_tokens[number_token_idx + 1] != "-" or passage_tokens[number_token_idx + 2] != "yard":
                 continue
         except:
             continue
-        starting_tokenidx = max(0, number_token_idx - WINDOW)   # Inclusive
-        ending_tokenidx = min(len(passage_tokens), number_token_idx + WINDOW + 1)   # Exclusive
+        starting_tokenidx = max(0, number_token_idx - WINDOW)  # Inclusive
+        ending_tokenidx = min(len(passage_tokens), number_token_idx + WINDOW + 1)  # Exclusive
         surrounding_passage_tokens = set(passage_tokens[starting_tokenidx:ending_tokenidx])
-        if 'TD' in surrounding_passage_tokens:
-            surrounding_passage_tokens.remove('TD')
-            surrounding_passage_tokens.add('touchdown')
-        if 'goals' in surrounding_passage_tokens:
-            surrounding_passage_tokens.remove('goals')
-            surrounding_passage_tokens.add('goal')
-        if 'touchdowns' in surrounding_passage_tokens:
-            surrounding_passage_tokens.remove('touchdowns')
-            surrounding_passage_tokens.add('touchdown')
+        if "TD" in surrounding_passage_tokens:
+            surrounding_passage_tokens.remove("TD")
+            surrounding_passage_tokens.add("touchdown")
+        if "goals" in surrounding_passage_tokens:
+            surrounding_passage_tokens.remove("goals")
+            surrounding_passage_tokens.add("goal")
+        if "touchdowns" in surrounding_passage_tokens:
+            surrounding_passage_tokens.remove("touchdowns")
+            surrounding_passage_tokens.add("touchdown")
         intersection_tokens = surrounding_passage_tokens.intersection(attended_tokens)
         if intersection_tokens == attended_tokens:
             relevant_number_tokenidxs.append(number_token_idx)
@@ -112,7 +120,7 @@ def get_number_distribution_supervision(tokenized_question, tokenized_passage, n
             number_values.add(passage_num_vals[entidx])
         number_grounding = [number_grounding]
         number_values = [list(number_values)]
-        if num_answer not in number_values[0]: # It's now a list
+        if num_answer not in number_values[0]:  # It's now a list
             number_grounding = None
             number_values = None
 
@@ -132,11 +140,39 @@ def get_number_distribution_supervision(tokenized_question, tokenized_passage, n
 
 
 def get_question_attention(question_tokens: str):
-    tokens_with_find_attention = ["touchdown", "run", "pass", "field", "goal", "passing", "TD", "td", "rushing",
-                                  "kick", "scoring", "drive", "touchdowns", "reception", "interception", "return",
-                                  "goals"]
-    tokens_with_no_attention = ["how", "How", "many", "yards", "was", "the", "longest", "shortest", "?",
-                                "of", "in", "game"]
+    tokens_with_find_attention = [
+        "touchdown",
+        "run",
+        "pass",
+        "field",
+        "goal",
+        "passing",
+        "TD",
+        "td",
+        "rushing",
+        "kick",
+        "scoring",
+        "drive",
+        "touchdowns",
+        "reception",
+        "interception",
+        "return",
+        "goals",
+    ]
+    tokens_with_no_attention = [
+        "how",
+        "How",
+        "many",
+        "yards",
+        "was",
+        "the",
+        "longest",
+        "shortest",
+        "?",
+        "of",
+        "in",
+        "game",
+    ]
     qlen = len(question_tokens)
     find_qattn = [0.0] * qlen
     filter_qattn = [0.0] * qlen
@@ -231,7 +267,7 @@ def preprocess_HowManyYardsWasThe_ques(dataset, ques_attn: bool, number_supervis
 
             original_question = question_answer[constants.cleaned_question]
             tokenized_question = question_answer[constants.tokenized_question]
-            ques_lower_tokens = tokenized_question.lower().split(' ')
+            ques_lower_tokens = tokenized_question.lower().split(" ")
             question_lower = original_question.lower()
 
             # Keep questions that contain "how many yards was"
@@ -251,7 +287,7 @@ def preprocess_HowManyYardsWasThe_ques(dataset, ques_attn: bool, number_supervis
 
                 find_or_filter = None
                 if find_qattn is None and filter_qattn is None:
-                   pass
+                    pass
                 elif find_qattn is None:
                     find_qattn = filter_qattn
                     filter_qattn = None
@@ -287,7 +323,7 @@ def preprocess_HowManyYardsWasThe_ques(dataset, ques_attn: bool, number_supervis
                 questions_w_attn += 1
 
                 if number_supervision is True:
-                    num_answer_str = answer['number']
+                    num_answer_str = answer["number"]
                     num_answer = float(num_answer_str) if num_answer_str else None
 
                     qattn = copy.deepcopy(find_qattn)
@@ -295,9 +331,14 @@ def preprocess_HowManyYardsWasThe_ques(dataset, ques_attn: bool, number_supervis
                         qattn = [x + y for (x, y) in zip(qattn, filter_qattn)]
 
                     number_grounding, number_values = get_number_distribution_supervision(
-                        tokenized_question, tokenized_passage, num_answer,
-                        qattn, passage_num_mens, passage_num_entidxs,
-                        passage_num_vals)
+                        tokenized_question,
+                        tokenized_passage,
+                        num_answer,
+                        qattn,
+                        passage_num_mens,
+                        passage_num_entidxs,
+                        passage_num_vals,
+                    )
                     if number_grounding is not None:
                         question_answer[constants.exection_supervised] = True
                         question_answer[constants.qspan_numgrounding_supervision] = number_grounding
@@ -322,16 +363,16 @@ def preprocess_HowManyYardsWasThe_ques(dataset, ques_attn: bool, number_supervis
     return new_dataset
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input_dir')
-    parser.add_argument('--output_dir')
-    parser.add_argument('--qattn', action='store_true', default=False)
-    parser.add_argument('--numground', action='store_true', default=False)
+    parser.add_argument("--input_dir")
+    parser.add_argument("--output_dir")
+    parser.add_argument("--qattn", action="store_true", default=False)
+    parser.add_argument("--numground", action="store_true", default=False)
     args = parser.parse_args()
 
-    train_json = 'drop_dataset_train.json'
-    dev_json = 'drop_dataset_dev.json'
+    train_json = "drop_dataset_train.json"
+    dev_json = "drop_dataset_dev.json"
 
     input_dir = args.input_dir
     output_dir = args.output_dir
@@ -357,16 +398,18 @@ if __name__ == '__main__':
     dev_dataset = readDataset(input_devfp)
 
     print()
-    new_train_dataset = preprocess_HowManyYardsWasThe_ques(train_dataset, ques_attn=qattn,
-                                                           number_supervision=numbergrounding)
+    new_train_dataset = preprocess_HowManyYardsWasThe_ques(
+        train_dataset, ques_attn=qattn, number_supervision=numbergrounding
+    )
     print()
-    new_dev_dataset = preprocess_HowManyYardsWasThe_ques(dev_dataset, ques_attn=qattn,
-                                                         number_supervision=numbergrounding)
+    new_dev_dataset = preprocess_HowManyYardsWasThe_ques(
+        dev_dataset, ques_attn=qattn, number_supervision=numbergrounding
+    )
 
-    with open(output_trnfp, 'w') as f:
+    with open(output_trnfp, "w") as f:
         json.dump(new_train_dataset, f, indent=4)
 
-    with open(output_devfp, 'w') as f:
+    with open(output_devfp, "w") as f:
         json.dump(new_dev_dataset, f, indent=4)
 
     print("Written HowManyYards datasets")

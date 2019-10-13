@@ -54,43 +54,54 @@ class LinkingTransitionFunctionEmbeddings(BasicTransitionFunction):
     num_layers: ``int`` (optional, default=1)
         The number of layers in the decoder LSTM.
     """
-    def __init__(self,
-                 encoder_output_dim: int,
-                 action_embedding_dim: int,
-                 input_attention: Attention,
-                 input_attention_activation: Activation = None,
-                 activation: Activation = Activation.by_name('relu')(),
-                 predict_start_type_separately: bool = True,
-                 num_start_types: int = None,
-                 add_action_bias: bool = True,
-                 mixture_feedforward: FeedForward = None,
-                 dropout: float = 0.0,
-                 num_layers: int = 1) -> None:
-        super().__init__(encoder_output_dim=encoder_output_dim,
-                         action_embedding_dim=action_embedding_dim,
-                         input_attention=input_attention,
-                         input_attention_activation=input_attention_activation,
-                         num_start_types=num_start_types,
-                         activation=activation,
-                         predict_start_type_separately=predict_start_type_separately,
-                         add_action_bias=add_action_bias,
-                         dropout=dropout,
-                         num_layers=num_layers)
+
+    def __init__(
+        self,
+        encoder_output_dim: int,
+        action_embedding_dim: int,
+        input_attention: Attention,
+        input_attention_activation: Activation = None,
+        activation: Activation = Activation.by_name("relu")(),
+        predict_start_type_separately: bool = True,
+        num_start_types: int = None,
+        add_action_bias: bool = True,
+        mixture_feedforward: FeedForward = None,
+        dropout: float = 0.0,
+        num_layers: int = 1,
+    ) -> None:
+        super().__init__(
+            encoder_output_dim=encoder_output_dim,
+            action_embedding_dim=action_embedding_dim,
+            input_attention=input_attention,
+            input_attention_activation=input_attention_activation,
+            num_start_types=num_start_types,
+            activation=activation,
+            predict_start_type_separately=predict_start_type_separately,
+            add_action_bias=add_action_bias,
+            dropout=dropout,
+            num_layers=num_layers,
+        )
         self._mixture_feedforward = mixture_feedforward
 
         if mixture_feedforward is not None:
-            check_dimensions_match(encoder_output_dim, mixture_feedforward.get_input_dim(),
-                                   "hidden state embedding dim", "mixture feedforward input dim")
-            check_dimensions_match(mixture_feedforward.get_output_dim(), 1,
-                                   "mixture feedforward output dim", "dimension for scalar value")
+            check_dimensions_match(
+                encoder_output_dim,
+                mixture_feedforward.get_input_dim(),
+                "hidden state embedding dim",
+                "mixture feedforward input dim",
+            )
+            check_dimensions_match(
+                mixture_feedforward.get_output_dim(), 1, "mixture feedforward output dim", "dimension for scalar value"
+            )
 
     @overrides
-    def _compute_action_probabilities(self,
-                                      state: GrammarBasedState,
-                                      hidden_state: torch.Tensor,
-                                      attention_weights: torch.Tensor,
-                                      predicted_action_embeddings: torch.Tensor
-                                     ) -> Dict[int, List[Tuple[int, Any, Any, Any, List[int]]]]:
+    def _compute_action_probabilities(
+        self,
+        state: GrammarBasedState,
+        hidden_state: torch.Tensor,
+        attention_weights: torch.Tensor,
+        predicted_action_embeddings: torch.Tensor,
+    ) -> Dict[int, List[Tuple[int, Any, Any, Any, List[int]]]]:
         # In this section we take our predicted action embedding and compare it to the available
         # actions in our current state (which might be different for each group element).  For
         # computing action scores, we'll forget about doing batched / grouped computation, as it
@@ -117,16 +128,16 @@ class LinkingTransitionFunctionEmbeddings(BasicTransitionFunction):
             embedded_action_logits = None
             current_log_probs = None
 
-            if 'global' in instance_actions:
-                action_embeddings, output_action_embeddings, embedded_actions = instance_actions['global']
+            if "global" in instance_actions:
+                action_embeddings, output_action_embeddings, embedded_actions = instance_actions["global"]
 
                 # This is just a matrix product between a (num_actions, embedding_dim) matrix and an
                 # (embedding_dim, 1) matrix.
                 embedded_action_logits = action_embeddings.mm(predicted_action_embedding.unsqueeze(-1)).squeeze(-1)
                 action_ids = embedded_actions
 
-            if 'linked' in instance_actions:
-                linked_action_embeddings, type_embeddings, linked_actions = instance_actions['linked']
+            if "linked" in instance_actions:
+                linked_action_embeddings, type_embeddings, linked_actions = instance_actions["linked"]
 
                 linked_action_logits = linked_action_embeddings.mm(predicted_action_embedding.unsqueeze(-1)).squeeze(-1)
 
@@ -152,8 +163,7 @@ class LinkingTransitionFunctionEmbeddings(BasicTransitionFunction):
 
                     entity_action_probs = torch.nn.functional.log_softmax(linked_action_logits, dim=-1) + mix1
                     if embedded_action_logits is not None:
-                        embedded_action_probs = torch.nn.functional.log_softmax(embedded_action_logits,
-                                                                                dim=-1) + mix2
+                        embedded_action_probs = torch.nn.functional.log_softmax(embedded_action_logits, dim=-1) + mix2
                         current_log_probs = torch.cat([embedded_action_probs, entity_action_probs], dim=-1)
                     else:
                         current_log_probs = entity_action_probs
@@ -174,9 +184,7 @@ class LinkingTransitionFunctionEmbeddings(BasicTransitionFunction):
             # print(current_log_probs)
             log_probs = state.score[group_index] + current_log_probs
             # print(f"c: {current_log_probs} lp: {log_probs}")
-            batch_results[state.batch_indices[group_index]].append((group_index,
-                                                                    log_probs,
-                                                                    current_log_probs,
-                                                                    output_action_embeddings,
-                                                                    action_ids))
+            batch_results[state.batch_indices[group_index]].append(
+                (group_index, log_probs, current_log_probs, output_action_embeddings, action_ids)
+            )
         return batch_results

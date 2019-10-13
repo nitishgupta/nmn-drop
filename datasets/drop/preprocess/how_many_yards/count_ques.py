@@ -9,20 +9,26 @@ import argparse
 """ This script is used to augment date-comparison-data by flipping events in the questions """
 THRESHOLD = 20
 
-STOP_WORDS = set(stopwords.words('english'))
+STOP_WORDS = set(stopwords.words("english"))
 STOP_WORDS.update(["'s", ","])
 
 FIRST = "first"
 SECOND = "second"
 
-COUNT_TRIGRAMS = ["how many field goals did", "how many field goals were",
-                  "how many interceptions did", "how many passes", "how many rushing",
-                  "how many touchdown passes did", "how many touchdowns did the",
-                  "how many touchdowns were scored"]
+COUNT_TRIGRAMS = [
+    "how many field goals did",
+    "how many field goals were",
+    "how many interceptions did",
+    "how many passes",
+    "how many rushing",
+    "how many touchdown passes did",
+    "how many touchdowns did the",
+    "how many touchdowns were scored",
+]
 
 
 def readDataset(input_json):
-    with open(input_json, 'r') as f:
+    with open(input_json, "r") as f:
         dataset = json.load(f)
     return dataset
 
@@ -33,19 +39,24 @@ def filter_questionattention(tokenized_queslower: str):
         2. filter(QuestionAttention, find(QuestionAttention))
     """
     question_lower = tokenized_queslower
-    question_tokens: List[str] = question_lower.split(' ')
+    question_tokens: List[str] = question_lower.split(" ")
     qlen = len(question_tokens)
 
     if "how many field goals were" in question_lower:
         # Non-filter question
-        if question_lower in ["how many field goals were kicked ?", "how many field goals were kicked in the game ?",
-                              "how many field goals were made ?", "how many field goals were made in the game ?",
-                              "how many field goals were scored ?", "how many field goals were scored in the game ?",
-                              "how many field goals were in the game ?",
-                              "how many field goals were made in this game ?",
-                              "how many field goals were in this game?"]:
+        if question_lower in [
+            "how many field goals were kicked ?",
+            "how many field goals were kicked in the game ?",
+            "how many field goals were made ?",
+            "how many field goals were made in the game ?",
+            "how many field goals were scored ?",
+            "how many field goals were scored in the game ?",
+            "how many field goals were in the game ?",
+            "how many field goals were made in this game ?",
+            "how many field goals were in this game?",
+        ]:
             qtype = constants.COUNT_find_qtype
-            question_attention_find = [2, 3]       # Inclusive
+            question_attention_find = [2, 3]  # Inclusive
             question_attention_filter = None
 
         else:
@@ -86,8 +97,11 @@ def filter_questionattention(tokenized_queslower: str):
         question_attention_filter = [5, qlen - 2]  # skipping first 5 tokens and ?
 
     elif "how many touchdowns were scored" in question_lower:
-        if question_lower in ["how many touchdowns were scored in the game ?", "how many touchdowns were scored ?",
-                              "how many touchdowns were scored in total ?"]:
+        if question_lower in [
+            "how many touchdowns were scored in the game ?",
+            "how many touchdowns were scored ?",
+            "how many touchdowns were scored in total ?",
+        ]:
             qtype = constants.COUNT_find_qtype
             question_attention_find = [2, 2]  # Inclusive
             question_attention_filter = None
@@ -129,12 +143,12 @@ def preprocess_HowManyYardsCount_ques(dataset):
             original_question = question_answer[constants.cleaned_question]
             question_lower = original_question.lower()
             tokenized_ques = question_answer[constants.tokenized_question]
-            tokens = tokenized_ques.split(' ')
+            tokens = tokenized_ques.split(" ")
             qlen = len(tokens)
             if any(span in question_lower for span in COUNT_TRIGRAMS):
-                (qtype,
-                 question_attention_filter_span,
-                 question_attention_find_span) = filter_questionattention(tokenized_queslower=tokenized_ques.lower())
+                (qtype, question_attention_filter_span, question_attention_find_span) = filter_questionattention(
+                    tokenized_queslower=tokenized_ques.lower()
+                )
 
                 if question_attention_filter_span is not None:
                     filter_qattn = convert_span_to_attention(qlen, question_attention_filter_span)
@@ -168,18 +182,17 @@ def preprocess_HowManyYardsCount_ques(dataset):
     print(f"Ques with attn: {questions_w_attn}")
     print(f"QType distribution: {qtype_dist}")
 
-
     return new_dataset
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input_dir')
-    parser.add_argument('--output_dir')
+    parser.add_argument("--input_dir")
+    parser.add_argument("--output_dir")
     args = parser.parse_args()
 
-    train_json = 'drop_dataset_train.json'
-    dev_json = 'drop_dataset_dev.json'
+    train_json = "drop_dataset_train.json"
+    dev_json = "drop_dataset_dev.json"
 
     input_dir = args.input_dir
     output_dir = args.output_dir
@@ -201,11 +214,10 @@ if __name__ == '__main__':
 
     new_dev_dataset = preprocess_HowManyYardsCount_ques(dev_dataset)
 
-    with open(output_trnfp, 'w') as f:
+    with open(output_trnfp, "w") as f:
         json.dump(new_train_dataset, f, indent=4)
 
-    with open(output_devfp, 'w') as f:
+    with open(output_devfp, "w") as f:
         json.dump(new_dev_dataset, f, indent=4)
 
     print("Written count dataset")
-

@@ -46,8 +46,3 @@ gold_lf = outer1 + maxfilterfind + outer2
 action_seq = dl.logical_form_to_action_sequence(gold_lf)
 print(action_seq)
 print(len(action_seq))
-
-
-
-
-

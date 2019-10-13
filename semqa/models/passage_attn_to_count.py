@@ -17,13 +17,16 @@ from allennlp.training.metrics import Average
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
+
 @Model.register("drop_pattn2count")
 class PassageAttnToCount(Model):
-    def __init__(self,
-                 vocab: Vocabulary,
-                 passage_attention_to_count: Seq2SeqEncoder,
-                 dropout: float = 0.2,
-                 initializers: InitializerApplicator = InitializerApplicator()) -> None:
+    def __init__(
+        self,
+        vocab: Vocabulary,
+        passage_attention_to_count: Seq2SeqEncoder,
+        dropout: float = 0.2,
+        initializers: InitializerApplicator = InitializerApplicator(),
+    ) -> None:
 
         super(PassageAttnToCount, self).__init__(vocab=vocab)
 
@@ -38,8 +41,9 @@ class PassageAttnToCount(Model):
         #                                                self.num_counts, bias=False)
 
         # We want to predict a score for each passage token
-        self.passage_count_hidden2logits = torch.nn.Linear(self.passage_attention_to_count.get_output_dim(),
-                                                           1, bias=True)
+        self.passage_count_hidden2logits = torch.nn.Linear(
+            self.passage_attention_to_count.get_output_dim(), 1, bias=True
+        )
 
         self.passagelength_to_bias = torch.nn.Linear(1, 1, bias=True)
 
@@ -58,11 +62,13 @@ class PassageAttnToCount(Model):
         allenutil.get_device_of()
 
     @overrides
-    def forward(self,
-                passage_attention: torch.Tensor,
-                passage_lengths: List[int],
-                count_answer: torch.LongTensor = None,
-                metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
+    def forward(
+        self,
+        passage_attention: torch.Tensor,
+        passage_lengths: List[int],
+        count_answer: torch.LongTensor = None,
+        metadata: List[Dict[str, Any]] = None,
+    ) -> Dict[str, torch.Tensor]:
         device_id = allenutil.get_device_of(passage_attention)
 
         batch_size, max_passage_length = passage_attention.size()
@@ -81,8 +87,7 @@ class PassageAttnToCount(Model):
         scaled_passage_attentions = scaled_passage_attentions * passage_mask.unsqueeze(2)
 
         # Shape: (B, passage_length, hidden_dim)
-        count_hidden_repr = self.passage_attention_to_count(scaled_passage_attentions,
-                                                            passage_mask)
+        count_hidden_repr = self.passage_attention_to_count(scaled_passage_attentions, passage_mask)
 
         # Shape: (B, passage_length, 1) -- score for each token
         passage_span_logits = self.passage_count_hidden2logits(count_hidden_repr)
@@ -118,8 +123,8 @@ class PassageAttnToCount(Model):
             predictions = np.round_(predictions)
 
             gold_count = count_answer.detach().cpu().numpy()
-            correct_vec = (predictions == gold_count)
-            correct_perc = sum(correct_vec)/batch_size
+            correct_vec = predictions == gold_count
+            correct_perc = sum(correct_vec) / batch_size
             # print(f"{correct_perc} {predictions} {gold_count}")
             self.count_acc(correct_perc)
 
@@ -138,15 +143,11 @@ class PassageAttnToCount(Model):
         output_dict["count_answer"] = count_answer
         output_dict["pred_count"] = pred_count_idx
 
-
         return output_dict
-
 
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
         metric_dict = {}
         count_acc = self.count_acc.get_metric(reset)
-        metric_dict.update({'acc': count_acc})
+        metric_dict.update({"acc": count_acc})
 
         return metric_dict
-
-

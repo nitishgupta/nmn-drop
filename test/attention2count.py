@@ -2,6 +2,7 @@ from typing import List
 import torch
 import allennlp.nn.util as util
 import random
+
 random.seed(90)
 
 
@@ -23,7 +24,6 @@ def number2count_auxloss(passage_number_values: List[List[float]], device_id=-1)
     mask = (range_vector.unsqueeze(0) < num_pasasge_numbers.unsqueeze(1)).float()
     print(mask)
 
-
     number_distributions = mask.new_zeros(batch_size, max_passage_numbers).normal_(0, 0.01).abs_()
     count_answers = number_distributions.new_zeros(batch_size, max_passage_numbers).long()
 
@@ -44,10 +44,7 @@ def number2count_auxloss(passage_number_values: List[List[float]], device_id=-1)
     number_distributions = number_distributions / torch.sum(number_distributions, dim=1).unsqueeze(1)
 
 
-if __name__=='__main__':
+if __name__ == "__main__":
     passage_number_values = [[1, 3, 5], [1, 16, 20, 24, 29], [1, 16], [1, 16, 18, 91]]
 
     number2count_auxloss(passage_number_values, device_id=0)
-
-
-

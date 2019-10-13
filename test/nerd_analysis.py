@@ -47,7 +47,7 @@ def count_min_max(pred_programs):
             total_values_in_min_max += num_values
             max_values_in_prog = max(max_values_in_prog, num_values)
 
-    avg_num_values = float(total_values_in_min_max)/num_min_max_progs
+    avg_num_values = float(total_values_in_min_max) / num_min_max_progs
     print(f"Num min/max progs: {num_min_max_progs}")
     print(f"Avg num values: {avg_num_values}")
     print(f"max num values: {max_values_in_prog}")
@@ -66,7 +66,7 @@ def count_arg_min_max(pred_programs):
             max_values_in_prog = max(max_values_in_prog, num_values)
             argminmax_qids.append(qid)
 
-    avg_num_values = float(total_values_in_min_max)/num_min_max_progs
+    avg_num_values = float(total_values_in_min_max) / num_min_max_progs
     print(f"Num ARG min/max progs: {num_min_max_progs}")
     print(f"Avg num key-values: {avg_num_values}")
     print(f"max num key-values: {max_values_in_prog}")
@@ -119,9 +119,10 @@ def is_correct_func(pred, refs):
     return False
 
 
-def write_not_minmax_to_file(txt_outfile, qid_not_minmax, predictions, pred_programs, dev_qid2ques, dev_qid2passage,
-                             nbest_preds):
-    with open(txt_outfile, 'w') as outf:
+def write_not_minmax_to_file(
+    txt_outfile, qid_not_minmax, predictions, pred_programs, dev_qid2ques, dev_qid2passage, nbest_preds
+):
+    with open(txt_outfile, "w") as outf:
         for qid in qid_not_minmax:
             question = dev_qid2ques[qid]
             passage = dev_qid2passage[qid]
@@ -132,12 +133,11 @@ def write_not_minmax_to_file(txt_outfile, qid_not_minmax, predictions, pred_prog
             outf.write("{}\n{}\n{}\npred:{}\nref:{}\n\n".format(question, predprogram, passage, pred_ans, ref_answers))
 
 
-def write_incorrect_to_txtfile(txt_outfile, predictions, pred_programs, dev_qid2ques, dev_qid2passage,
-                               nbest_preds):
+def write_incorrect_to_txtfile(txt_outfile, predictions, pred_programs, dev_qid2ques, dev_qid2passage, nbest_preds):
     print("\nWriting incorrect dev predictions ... ")
     total_ques_written = 0
     total_ques = len(dev_qid2ques)
-    with open(txt_outfile, 'w') as outf:
+    with open(txt_outfile, "w") as outf:
         for qid, question in dev_qid2ques.items():
             passage = dev_qid2passage[qid]
             predprogram = pred_programs[qid]
@@ -151,12 +151,11 @@ def write_incorrect_to_txtfile(txt_outfile, predictions, pred_programs, dev_qid2
     print("Total: {} Incorrect:{}".format(total_ques, total_ques_written))
 
 
-def write_incorrect_to_tsvfile(txt_outfile, predictions, pred_programs, dev_qid2ques, dev_qid2passage,
-                               nbest_preds):
+def write_incorrect_to_tsvfile(txt_outfile, predictions, pred_programs, dev_qid2ques, dev_qid2passage, nbest_preds):
     print("\nWriting incorrect dev predictions ... ")
     total_ques_written = 0
     total_ques = len(dev_qid2ques)
-    with open(txt_outfile, 'w') as outf:
+    with open(txt_outfile, "w") as outf:
         outf.write(f"Question\tPredProgram\tPredAns\tGoldAns\tPassage\n")
         for qid, question in dev_qid2ques.items():
             passage = dev_qid2passage[qid]
@@ -171,7 +170,6 @@ def write_incorrect_to_tsvfile(txt_outfile, predictions, pred_programs, dev_qid2
     print("Total: {} Incorrect:{}".format(total_ques, total_ques_written))
 
 
-
 def main():
     hmyw_dev = json.load(open(hmyw_dev_json))
     whoarg_dev = json.load(open(whoarg_dev_json))
@@ -182,12 +180,10 @@ def main():
     # Dict from qid to List[program_tokens]
     pred_programs = predictions["pred_programs"]
 
-
     dev_qid2ques, dev_qid2passage = read_qid2ques_and_passage(dev_dataset)
 
     whoarg_minmax_qid2ques = get_minmax_ques(whoarg_dev)
     hmyw_minmax_qid2ques = get_minmax_ques(hmyw_dev)
-
 
     count_min_max(pred_programs)
     argminmax_qids = count_arg_min_max(pred_programs)
@@ -196,31 +192,46 @@ def main():
     print([dev_qid2ques[qid] for qid in argminmax_not_whoarg])
 
     print("HMYW")
-    hmyw_not_minmaxpreds = num_of_minmaxpred(hmyw_minmax_qid2ques, pred_programs, dev_qid2passage,
-                                             predictions, nbest_preds)
+    hmyw_not_minmaxpreds = num_of_minmaxpred(
+        hmyw_minmax_qid2ques, pred_programs, dev_qid2passage, predictions, nbest_preds
+    )
     print("Who Arg")
-    whoarg_not_minmaxpreds = num_of_minmaxpred(whoarg_minmax_qid2ques, pred_programs, dev_qid2passage,
-                                               predictions, nbest_preds)
+    whoarg_not_minmaxpreds = num_of_minmaxpred(
+        whoarg_minmax_qid2ques, pred_programs, dev_qid2passage, predictions, nbest_preds
+    )
 
     print("\nWriting incorrect min/max HMYW dev predictions ... ")
-    write_not_minmax_to_file(txt_outfile="/shared/nitishg/data/drop_acl/nerd-preds/hmwy_notminmax.json",
-                             qid_not_minmax=hmyw_not_minmaxpreds,
-                             predictions=predictions, pred_programs=pred_programs,
-                             dev_qid2ques=dev_qid2ques, dev_qid2passage=dev_qid2passage, nbest_preds=nbest_preds)
+    write_not_minmax_to_file(
+        txt_outfile="/shared/nitishg/data/drop_acl/nerd-preds/hmwy_notminmax.json",
+        qid_not_minmax=hmyw_not_minmaxpreds,
+        predictions=predictions,
+        pred_programs=pred_programs,
+        dev_qid2ques=dev_qid2ques,
+        dev_qid2passage=dev_qid2passage,
+        nbest_preds=nbest_preds,
+    )
 
     print("\nWriting incorrect min/max WHO-ARG dev predictions ... ")
-    write_not_minmax_to_file(txt_outfile="/shared/nitishg/data/drop_acl/nerd-preds/whoarg_notminmax.json",
-                             qid_not_minmax=whoarg_not_minmaxpreds,
-                             predictions=predictions, pred_programs=pred_programs,
-                             dev_qid2ques=dev_qid2ques, dev_qid2passage=dev_qid2passage, nbest_preds=nbest_preds)
+    write_not_minmax_to_file(
+        txt_outfile="/shared/nitishg/data/drop_acl/nerd-preds/whoarg_notminmax.json",
+        qid_not_minmax=whoarg_not_minmaxpreds,
+        predictions=predictions,
+        pred_programs=pred_programs,
+        dev_qid2ques=dev_qid2ques,
+        dev_qid2passage=dev_qid2passage,
+        nbest_preds=nbest_preds,
+    )
 
     # write_incorrect_to_txtfile
-    write_incorrect_to_tsvfile(txt_outfile="/shared/nitishg/data/drop_acl/nerd-preds/dev_incorrect.tsv",
-                               predictions=predictions, pred_programs=pred_programs, dev_qid2ques=dev_qid2ques,
-                               dev_qid2passage=dev_qid2passage, nbest_preds=nbest_preds)
+    write_incorrect_to_tsvfile(
+        txt_outfile="/shared/nitishg/data/drop_acl/nerd-preds/dev_incorrect.tsv",
+        predictions=predictions,
+        pred_programs=pred_programs,
+        dev_qid2ques=dev_qid2ques,
+        dev_qid2passage=dev_qid2passage,
+        nbest_preds=nbest_preds,
+    )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
-
-
