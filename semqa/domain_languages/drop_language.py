@@ -1378,8 +1378,8 @@ class DropLanguage(DomainLanguage):
 
         debug_value = ""
         if self._debug:
-            num1 = myutils.round_all(myutils.tocpuNPList(number_1), 3)
-            num2 = myutils.round_all(myutils.tocpuNPList(number_2), 3)
+            num1 = myutils.round_all(myutils.tocpuNPList(numberdist_1), 3)
+            num2 = myutils.round_all(myutils.tocpuNPList(numberdist_1), 3)
             passagenum_diff_dist = myutils.round_all(myutils.tocpuNPList(number_difference_dist), 3)
             topknumdiff = dlutils.topProbMassElems(
                 attention=number_difference_dist, support=self.passage_num_values, k=5

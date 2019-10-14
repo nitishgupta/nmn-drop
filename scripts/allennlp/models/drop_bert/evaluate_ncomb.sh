@@ -7,7 +7,7 @@ export BEAMSIZE=2
 export DEBUG=true
 
 # SAVED MODEL
-MODEL_DIR=./resources/semqa/checkpoints/t0b2
+MODEL_DIR=./resources/semqa/checkpoints/test
 MODEL_TAR=${MODEL_DIR}/model.tar.gz
 PREDICTION_DIR=${MODEL_DIR}/predictions
 mkdir ${PREDICTION_DIR}
@@ -17,7 +17,7 @@ DATASET_DIR=./resources/data/drop_acl/num
 # This should contain:
 # 1. drop_dataset_mydev.json and drop_dataset_mytest.json
 # 2. A folder containing multiple sub-dataset folders, each with dev and test .json
-DATASET_NAME=hmyw_yardsdiff
+DATASET_NAME=percent
 QUESTYPE_SETS_DIR=questype_datasets
 
 VALFILE=${DATASET_DIR}/${DATASET_NAME}/drop_dataset_dev.json
