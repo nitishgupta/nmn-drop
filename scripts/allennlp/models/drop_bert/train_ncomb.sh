@@ -3,8 +3,8 @@
 # export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
-# DATASET_NAME=date_num/iclr20_yardsdiff
-DATASET_NAME=num/percent
+DATASET_NAME=merged_data/iclr20_full
+# DATASET_NAME=num/percent
 
 DATASET_DIR=./resources/data/drop_acl/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
@@ -36,7 +36,7 @@ export MMLLOSS=true
 
 # Whether strong supervison instances should be trained on first, if yes for how many epochs
 export SUPFIRST=true
-export SUPEPOCHS=0
+export SUPEPOCHS=5
 
 export BS=4
 export DROPOUT=0.2
