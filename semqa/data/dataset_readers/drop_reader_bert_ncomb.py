@@ -409,7 +409,9 @@ class DROPReaderNew(DatasetReader):
         # number2addcombinations (sub): Dict: {number: List[(num1, num2)]} - mapping from num to list of all num-tuples
         # that combine to form the number-key using the operation
         number_support, number2addcombinations, number2subcombinations = self.compute_number_support(
-            numbers=passage_number_values, max_number_of_numbers_to_consider=2
+            numbers=passage_number_values,
+            implicit_numbers=DropLanguage.implicit_numbers,
+            max_number_of_numbers_to_consider=2,
         )
         self.max_passage_nums = max(len(passage_number_values), self.max_passage_nums)
         self.max_num_support = max(len(number_support), self.max_num_support)
@@ -724,13 +726,13 @@ class DROPReaderNew(DatasetReader):
             if self.skip_instances:
                 if len(answer_program_start_types) == 0:
                     self.skip_count += 1
-                    # print(f"Skipped instances: {self.skipped_instances}")
                     # print("\nNo answer grounding")
                     # print(original_ques_text)
                     # print(original_passage_text)
                     # print(answer_annotation)
                     # print(answer_passage_spans)
                     # print(answer_question_spans)
+                    # print(f"NumSupport: {number_support}")
                     return None
 
         # TODO(nitish): Only using questions which have PassageSpan as answers
@@ -870,7 +872,9 @@ class DROPReaderNew(DatasetReader):
 
     @staticmethod
     def compute_number_support(
-        numbers: List[Union[int, float]], max_number_of_numbers_to_consider: int = 2
+        numbers: List[Union[int, float]],
+        implicit_numbers: List[Union[int, float]] = None,
+        max_number_of_numbers_to_consider: int = 2,
     ) -> Tuple[List[Union[int, float]], Dict, Dict]:
         """Compute the number support based on combinations of input numbers.
         This function considers all possible addition/subtraction between all pairs of numbers (even self). This forms
@@ -878,12 +882,25 @@ class DROPReaderNew(DatasetReader):
 
         Args:
             numbers: input numbers -- usually passage numbers
+            implicit_numbers: Extra numbers not part of the passage, but added in language. E.g. 100, 0
             max_number_of_numbers_to_consider: number of numbers to consider to combine
         Returns:
             number_support: List of output number support
+            number2addcombinations: Dict[number, Set(Tuple[number, number])]
+            number2subcombinations: Dict[number, Set(Tuple[number, number])]
+                Map from number to set of number combinations that can create it using the addition/sub operator.
+                For example, {2: set((1,1), (0,2))} is a valid entry for addcombinations
         """
+        oldnums = numbers
+
+        zero_in_numbers = True if 0 in numbers else False
+
         if max_number_of_numbers_to_consider > 2:
             raise NotImplementedError
+
+        if implicit_numbers:
+            numbers.extend(implicit_numbers)
+
         number_support = set()
         # Map from number to list of number-combinations that lead to this number from the add/sub operation
         number2subcombinations = defaultdict(set)
@@ -891,7 +908,7 @@ class DROPReaderNew(DatasetReader):
         signs = [-1, 1]
         # all_sign_combinations = list(itertools.product(signs, repeat=2))
         # Since our modules will only perform num1-num2 / num1+num2. Computation like -num1+num2 would not be done
-        all_sign_combinations = [(1, -1), (1, 1)]
+        all_sign_combinations = [(1.0, -1.0), (1.0, 1.0)]
         for number_of_numbers_to_consider in range(2, max_number_of_numbers_to_consider + 1):
             # for number_combination in itertools.combinations(numbers, r=number_of_numbers_to_consider):
             for indexed_number_combination in itertools.product(
@@ -905,10 +922,13 @@ class DROPReaderNew(DatasetReader):
                     value = sum([sign * num for (sign, num) in zip(sign_combination, number_combination)])
                     if value >= 0:
                         number_support.add(value)
-                        if sign_combination == (1, 1):
-                            number2addcombinations[value].add(number_combination)
-                        else:  #  sign_combination == [1, -1]:
-                            number2subcombinations[value].add(number_combination)
+                        # If 0 was originally in numbers then allow its combinations, o/w don't to avoid the
+                        # combinations from getting bloated with x = x+0, 0+x, x-0
+                        if (0 in number_combination and zero_in_numbers) or (0 not in number_combination):
+                            if sign_combination == (1, 1):
+                                number2addcombinations[value].add(number_combination)
+                            else:  #  sign_combination == [1, -1]:
+                                number2subcombinations[value].add(number_combination)
 
         number_support.update(numbers)
         number_support = sorted(list(number_support))

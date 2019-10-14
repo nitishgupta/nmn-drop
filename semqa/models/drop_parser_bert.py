@@ -160,6 +160,8 @@ class DROPParserBERT(DROPParserBase):
         # self.passage_count_predictor.bias.data.zero_()
         # self.passage_count_predictor.bias.requires_grad = False
 
+        self._num_implicit_nums = len(DropLanguage.implicit_numbers)
+
         self._executor_parameters = ExecutorParameters(
             question_encoding_dim=bert_dim,
             passage_encoding_dim=bert_dim,
@@ -168,6 +170,7 @@ class DROPParserBERT(DROPParserBase):
             passage_attention_to_count=self.passage_attention_to_count,
             passage_count_predictor=self.passage_count_predictor,
             passage_count_hidden2logits=self.passage_count_hidden2logits,
+            num_implicit_nums=self._num_implicit_nums,
             dropout=dropout,
         )
 
@@ -629,7 +632,7 @@ class DROPParserBERT(DROPParserBase):
             device_id,
         )
 
-        # For printing predicted - programs
+        # # For printing predicted - programs
         # for idx, instance_progs in enumerate(batch_actionseqs):
         #     print(f"InstanceIdx:{idx}")
         #     print(metadata[idx]["question_tokens"])

@@ -25,6 +25,7 @@ class ExecutorParameters(torch.nn.Module, Registrable):
         passage_attention_to_span: Seq2SeqEncoder,
         question_attention_to_span: Seq2SeqEncoder,
         passage_attention_to_count: Seq2SeqEncoder,
+        num_implicit_nums: int = None,
         passage_count_predictor=None,
         passage_count_hidden2logits=None,
         dropout: float = 0.0,
@@ -53,6 +54,12 @@ class ExecutorParameters(torch.nn.Module, Registrable):
         self.passage_count_hidden2logits = passage_count_hidden2logits
 
         self.dotprod_matrix_attn = DotProductMatrixAttention()
+
+        self.implicit_num_embeddings = torch.nn.Parameter(torch.FloatTensor(num_implicit_nums, passage_encoding_dim))
+        torch.nn.init.normal_(self.implicit_num_embeddings, mean=0.0, std=0.001)
+        self.implicitnum_bilinear_attention = BilinearMatrixAttention(
+            matrix_1_dim=passage_encoding_dim, matrix_2_dim=passage_encoding_dim
+        )
 
         self.filter_matrix_attention = LinearMatrixAttention(
             tensor_1_dim=question_encoding_dim, tensor_2_dim=passage_encoding_dim, combination="x,y,x*y"

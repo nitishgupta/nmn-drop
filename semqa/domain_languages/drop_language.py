@@ -236,6 +236,8 @@ class DropLanguage(DomainLanguage):
         The learnable parameters that we should use when executing functions in this language.
     """
 
+    implicit_numbers = [0, 100.0]
+
     # TODO(nitish): Defaulting all parameters to None since in the reader we create an
     def __init__(
         self,
@@ -311,6 +313,11 @@ class DropLanguage(DomainLanguage):
         # List[int] - number-token-idxs in an order so their values are sorted. Needed to max/min pattn
         self.passage_number_sortedtokenidxs = passage_number_sortedtokenidxs
         self.num_passage_nums = len(self.passage_num_values)
+
+        # List[int ] -- Shape: (num_implicit_numbers)
+        implicit_num_indices = torch.LongTensor([self.passage_num_values.index(x)
+                                                 for x in DropLanguage.implicit_numbers])
+        self.implicit_num_indices = allenutil.move_to_device(implicit_num_indices, cuda_device=device_id)
 
         # Shape: (size_num_support, max_num_combinations, 2) -- for each number in the support (dim=0), indices for
         # other number combinations (dim=1) that lead to this number using the op. N[i] = M[i,j,0] OP M[i,j,1] \forall j
@@ -698,6 +705,36 @@ class DropLanguage(DomainLanguage):
         num_distribution_entropy = -1 * torch.sum(num_distribution * torch.log(num_distribution + 1e-40))
 
         return num_distribution, num_distribution, num_distribution_entropy
+
+
+    def compute_implicitnum_distribution(self, question_attention: Tensor):
+        """ Given a question attention, compute a distribution over implicit numbers for this language.
+            See compute_date_distribution for details
+        """
+
+        question_attention = question_attention * self.question_mask
+        # Shape: (encoding_dim)
+        weighted_question_vector = torch.sum(self.encoded_question * question_attention.unsqueeze(1), 0)
+
+        # unsqueeze -- one for num-of-vecs and one for batch
+        weighted_question_vector_ex = weighted_question_vector.unsqueeze(0).unsqueeze(0)
+
+        implicit_num_embeddings_ex = self.parameters.implicit_num_embeddings.unsqueeze(0)
+
+        # Shape: (1, 1, num_implicit_numbers)
+        implicit_num_logits = self.parameters.implicitnum_bilinear_attention(weighted_question_vector_ex,
+                                                                             implicit_num_embeddings_ex)
+        # Shape: (num_implicit_numbers)
+        implicit_num_logits = implicit_num_logits.squeeze(0).squeeze(0)
+        implicit_num_probs = torch.nn.functional.softmax(implicit_num_logits, dim=-1)
+
+        num_distribution = implicit_num_probs.new_zeros(self.num_passage_nums)
+        num_distribution.scatter_add_(0, self.implicit_num_indices, implicit_num_probs)
+
+        num_distribution = torch.clamp(num_distribution, min=1e-10, max=1 - 1e-10)
+
+        return num_distribution
+
 
     def expected_number_addsub(self, num_dist_1: torch.FloatTensor, num_dist_2: torch.FloatTensor, operation: str):
         """Compute the expected number distribution for an addition/subtraction operation."""
@@ -1492,8 +1529,24 @@ class DropLanguage(DomainLanguage):
             debug_value += f"\ntopk-num-dist: {topk_numdist}"
             debug_value += f"\nGoldNum: {num_grounding_sup}"
             debug_value += f"\ninput-pattn-top-spans: {top_spans}"
-
         return PassageNumber(passage_number_dist=number_distribution, loss=loss, debug_value=debug_value)
+
+    @predicate_with_side_args(["question_attention"])
+    def ground_ImplicitNumber(self, question_attention: Tensor) -> PassageNumber:
+        number_distribution = self.compute_implicitnum_distribution(question_attention=question_attention)
+        loss = 0.0
+        debug_value = ""
+        if self._debug:
+            number_dist = myutils.round_all(myutils.tocpuNPList(number_distribution), 3)
+            topk_numdist = dlutils.topProbMassElems(attention=number_distribution, support=self.passage_num_values, k=5)
+            debug_value += f"PassageNumber: {number_dist}"
+            debug_value += f"\ntopk-num-dist: {topk_numdist}"
+            qattn_vis_complete, qattn_vis_most = dlutils.listTokensVis(
+                question_attention, self.metadata["question_tokens"]
+            )
+            debug_value += f"input-qattn: {qattn_vis_complete}"
+        return PassageNumber(passage_number_dist=number_distribution, loss=loss, debug_value=debug_value)
+
 
     def minmaxNumPattn_module(self, passage_attention: PassageAttention, min_max_op: str, event_num_groundings=None):
         assert min_max_op in ["min", "max"]
