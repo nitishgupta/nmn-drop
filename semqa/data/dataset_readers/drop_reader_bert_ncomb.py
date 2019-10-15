@@ -153,9 +153,14 @@ class DROPReaderNew(DatasetReader):
                 question_text = qa[constants.tokenized_question]
                 question_charidxs = qa[constants.question_charidxs]
 
-                answer_type = qa[constants.answer_type]
-                answer_passage_spans = qa[constants.answer_passage_spans]
-                answer_question_spans = qa[constants.answer_question_spans]
+                if constants.answer_passage_spans in qa:
+                    answer_passage_spans = qa[constants.answer_passage_spans]
+                else:
+                    answer_passage_spans = None
+                if constants.answer_question_spans in qa:
+                    answer_question_spans = qa[constants.answer_question_spans]
+                else:
+                    answer_question_spans = None
                 answer_annotations = []
                 if "answer" in qa:
                     answer_annotations.append(qa["answer"])
@@ -240,7 +245,7 @@ class DROPReaderNew(DatasetReader):
                     num_grounding_supervision,
                     passage_attn_supervision,
                     synthetic_numground_metadata,
-                    answer_type,
+                    # answer_type,
                     answer_passage_spans,
                     answer_question_spans,
                     question_id,
@@ -297,7 +302,7 @@ class DROPReaderNew(DatasetReader):
         num_grounding_supervision: Tuple[List[int], List[int]],
         passage_attn_supervision: List[float],
         synthetic_numground_metadata: List[Tuple[int, int]],
-        answer_type: str,
+        # answer_type: str,
         answer_passage_spans: List[Tuple[int, int]],
         answer_question_spans: List[Tuple[int, int]],
         question_id: str = None,
@@ -639,13 +644,13 @@ class DROPReaderNew(DatasetReader):
                 # Answer as number string does not exist.
                 if self.convert_spananswer_to_num:
                     # Try to convert "X" or "X-yard(s)" into number(X)
-                    # span_answer_text = answer_annotation["spans"][0]
+                    span_answer_text = None
                     try:
                         span_answer_text = answer_annotation["spans"][0]
                         span_answer_number = float(span_answer_text)
                     except:
                         span_answer_number = None
-                    if span_answer_number is None:
+                    if span_answer_number is None and span_answer_text is not None:
                         split_hyphen = span_answer_text.split("-")
                         if len(split_hyphen) == 2:
                             try:
@@ -840,7 +845,10 @@ class DROPReaderNew(DatasetReader):
         else:
             new_numgrounding_supervision = None
 
-        new_answer_passage_spans = [span for span in answer_passage_spans if span[1] < max_passage_len]
+        if answer_passage_spans:
+            new_answer_passage_spans = [span for span in answer_passage_spans if span[1] < max_passage_len]
+        else:
+            new_answer_passage_spans = answer_passage_spans
 
         if passage_attn_supervision is not None and len(passage_attn_supervision) > max_passage_len:
             new_passage_attn_supervision = passage_attn_supervision[0:max_passage_len]
@@ -861,7 +869,10 @@ class DROPReaderNew(DatasetReader):
         )
 
     def prune_for_question_len(self, max_question_len, answer_question_spans, ques_attn_supervision):
-        new_answer_question_spans = [span for span in answer_question_spans if span[1] < max_question_len]
+        if answer_question_spans:
+            new_answer_question_spans = [span for span in answer_question_spans if span[1] < max_question_len]
+        else:
+            new_answer_question_spans = answer_question_spans
 
         if ques_attn_supervision is not None:
             new_qattn_supervision = [qattn[0:max_question_len] for qattn in ques_attn_supervision]

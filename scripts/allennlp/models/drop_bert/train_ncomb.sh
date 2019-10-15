@@ -55,9 +55,9 @@ SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/${DATASET_NAME}
 MODEL_DIR=drop_parser_bert
 # CNTFIX_${COUNT_FIXED}
 PD_1=EXCLOSS_${EXCLOSS}/MMLLOSS_${MMLLOSS}/aux_${AUXLOSS}/SUPEPOCHS_${SUPEPOCHS}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}/NWMOD_0a61fce
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}/NWMOD_7a17784_BM4
 
-SERIALIZATION_DIR=./resources/semqa/checkpoints/test
+# SERIALIZATION_DIR=./resources/semqa/checkpoints/test
 
 #######################################################################################################################
 
