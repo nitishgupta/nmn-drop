@@ -208,15 +208,22 @@ if __name__ == "__main__":
 
     NABERTmodel = "/scratch1/nitishg/semqa/checkpoints/drop-bert/mydata_ydre_relre/S_1/predictions"
 
+    OurICLRBert = "./resources/semqa/checkpoints/drop/date_num/date_yd_num_hmyw_cnt_whoarg_600/drop_parser_bert/" \
+                  "CNTFIX_false/EXCLOSS_true/MMLLOSS_true/aux_true/SUPEPOCHS_5/S_1000/BertModel_wTest_ICLR/predictions/"
+
+    OurNLandBert = "./resources/semqa/checkpoints/drop/date_num/date_yd_num_hmyw_cnt_whoarg_600/drop_parser_bert/" \
+                  "EXCLOSS_true/MMLLOSS_true/aux_true/SUPEPOCHS_5/S_1000/NWMOD_0a61fce/predictions"
+
     numcomp = "numcomp_full_dev_analysis.tsv"
     relocate = "relocate_wprog_dev_analysis.tsv"
     count = "count_filterqattn_dev_analysis.tsv"
     year_diff = "year_diff_dev_analysis.tsv"
+    full_dev = "date_yd_num_hmyw_cnt_whoarg_600_dev_analysis.tsv"
 
     ###
-    model1 = OurBERTmodel  # Should be the weaker model
-    model2 = NABERTmodel  # Should be stronger model
-    dataset = count
+    model1 = OurNLandBert  # Should be the weaker model
+    model2 = OurICLRBert  # Should be stronger model
+    dataset = full_dev
 
     file1 = os.path.join(model1, dataset)
 

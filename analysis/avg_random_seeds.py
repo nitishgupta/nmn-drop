@@ -9,14 +9,18 @@ For eg. SERIALIZATION_PATH/S_1/BertModel/, SERIALIZATION_PATH/S_2/BertModel/, et
 From inside each model folder this script expects a predictions folder. 
 """
 # SERIALIZATION_PATH="./resources/semqa/checkpoints/drop-bert/mydata_ydNEW_rel"
-SERIALIZATION_PATH = "./resources/semqa/checkpoints/drop-bert-tg/mydata_ydNEW_rel"
+SERIALIZATION_PATH = "./resources/semqa/checkpoints/drop/date_num/date_yd_num_hmyw_cnt_whoarg_600/drop_parser_bert" \
+                     "/CNTFIX_false/EXCLOSS_true/MMLLOSS_true/aux_true/SUPEPOCHS_5/S_*/BertModel_wTest_ICLR"
 
 print("\nSERIALIZATION PATH: {}".format(SERIALIZATION_PATH))
 
-glob_path = SERIALIZATION_PATH + "/S_*/*"
+# glob_path = SERIALIZATION_PATH + "/S_*/*"
+glob_path = SERIALIZATION_PATH
 
 paths = glob.glob(glob_path)
 seeds = []
+
+print(paths)
 
 seedpath2valf1 = {}
 seedpath2valem = {}
