@@ -25,10 +25,19 @@ def make_sample(dataset, num_paras):
     return output_dataset
 
 
-train_dataset = readDataset(input_dir + "drop_dataset_train.json")
-output_json = output_dir + "sample.json"
+def write_sample(input_json, ouput_json, num_paras):
+    input_dataset = readDataset(input_json)
+    output_dataset = make_sample(input_dataset, num_paras=num_paras)
+    with open(output_json, "w") as f:
+        json.dump(output_dataset, f, indent=4)
 
-output_dataset = make_sample(train_dataset, num_paras=50)
+train_json = os.path.join(input_dir, "drop_dataset_train.json")
+output_json = os.path.join(output_dir, "sample_train.json")
+write_sample(train_json, output_json, 500)
 
-with open(output_json, "w") as f:
-    json.dump(output_dataset, f, indent=4)
+
+dev_json = os.path.join(input_dir, "drop_dataset_dev.json")
+output_json = os.path.join(output_dir, "sample_dev.json")
+write_sample(dev_json, output_json, 500)
+
+
