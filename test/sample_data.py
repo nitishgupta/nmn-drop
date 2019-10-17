@@ -1,6 +1,7 @@
+import os
 import json
 
-input_dir = "./resources/data/drop/date_num/date_ydnew2_num_hmyw_cnt_rel_500/"
+input_dir = "./resources/data/drop_acl/merged_data/iclr20_full"
 output_dir = input_dir
 
 
@@ -33,11 +34,11 @@ def write_sample(input_json, ouput_json, num_paras):
 
 train_json = os.path.join(input_dir, "drop_dataset_train.json")
 output_json = os.path.join(output_dir, "sample_train.json")
-write_sample(train_json, output_json, 500)
+write_sample(train_json, output_json, 50)
 
 
 dev_json = os.path.join(input_dir, "drop_dataset_dev.json")
 output_json = os.path.join(output_dir, "sample_dev.json")
-write_sample(dev_json, output_json, 500)
+write_sample(dev_json, output_json, 50)
 
 

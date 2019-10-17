@@ -24,6 +24,7 @@ from allennlp.state_machines import ConstrainedBeamSearch
 from semqa.state_machines.constrained_beam_search import ConstrainedBeamSearch as MyConstrainedBeamSearch
 from allennlp.training.metrics import Average, DropEmAndF1
 from pytorch_pretrained_bert import BertModel
+from pytorch_pretrained_bert import BertConfig
 
 from semqa.models.utils import semparse_utils
 
@@ -52,7 +53,6 @@ class DROPParserBERT(DROPParserBase):
     def __init__(
         self,
         vocab: Vocabulary,
-        pretrained_bert_model: str,
         max_ques_len: int,
         action_embedding_dim: int,
         transitionfunc_attention: Attention,
@@ -61,6 +61,8 @@ class DROPParserBERT(DROPParserBase):
         passage_attention_to_count: Seq2SeqEncoder,
         beam_size: int,
         max_decoding_steps: int,
+        bert_config_json: str = None,
+        pretrained_bert_model: str = None,
         countfixed: bool = False,
         auxwinloss: bool = False,
         denotationloss: bool = True,
@@ -81,7 +83,14 @@ class DROPParserBERT(DROPParserBase):
             regularizer=regularizer,
         )
 
-        self.BERT = BertModel.from_pretrained(pretrained_bert_model)
+        if pretrained_bert_model is None and bert_config_json is None:
+            raise RuntimeError("Both 'pretrained_bert_model' and 'bert_config_json' cannot be None")
+
+        if pretrained_bert_model is None:
+            self.BERT = BertModel(config=BertConfig(vocab_size_or_config_json_file=bert_config_json))
+        else:
+            self.BERT = BertModel.from_pretrained(pretrained_bert_model)
+
         bert_dim = self.BERT.pooler.dense.out_features
         self.bert_dim = bert_dim
 
