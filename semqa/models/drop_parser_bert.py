@@ -1,11 +1,9 @@
 import logging
 from typing import List, Dict, Any, Tuple, Optional, Set, Union
 import numpy as np
-import random
 from overrides import overrides
 
 import torch
-import torch.nn.functional as F
 
 from allennlp.data.fields.production_rule_field import ProductionRule
 from allennlp.data.vocabulary import Vocabulary
@@ -120,23 +118,6 @@ class DROPParserBERT(DROPParserBase):
         self.aux_goldparse_loss = Average()
         self.qent_loss = Average()
         self.qattn_cov_loss_metric = Average()
-
-        # encoding_in_dim = phrase_layer.get_input_dim()
-        # encoding_out_dim = phrase_layer.get_output_dim()
-        # modeling_in_dim = modeling_layer.get_input_dim()
-        # modeling_out_dim = modeling_layer.get_output_dim()
-        #
-        # self._embedding_proj_layer = torch.nn.Linear(text_embed_dim, encoding_in_dim)
-        # self._highway_layer = Highway(encoding_in_dim, num_highway_layers)
-        #
-        # self._encoding_proj_layer = torch.nn.Linear(encoding_in_dim, encoding_in_dim)
-        # self._phrase_layer = phrase_layer
-
-        # Used for modeling
-        # self._matrix_attention = matrix_attention_layer
-
-        # self._modeling_proj_layer = torch.nn.Linear(encoding_out_dim * 4, modeling_in_dim)
-        # self._modeling_layer = modeling_layer
 
         # Use a separate encoder for passage - date - num similarity
 
@@ -300,45 +281,29 @@ class DROPParserBERT(DROPParserBase):
             passage_question_similarity, question_mask.unsqueeze(1), memory_efficient=True
         )
 
-        # ### Passage Token - Date Alignment
+        # Passage Token - Date Alignment
         # Shape: (batch_size, passage_length, passage_length)
         passage_passage_token2date_alignment = self.compute_token_date_alignments(
             modeled_passage=modeled_passage,
             passage_mask=passage_mask,
             passageidx2dateidx=passageidx2dateidx,
-            passage_to_date_attention_params=self._executor_parameters.passage_to_date_attention,
+            passage_to_date_attention_params=self._executor_parameters.passage_to_date_attention
         )
 
         passage_passage_token2startdate_alignment = self.compute_token_date_alignments(
             modeled_passage=modeled_passage,
             passage_mask=passage_mask,
             passageidx2dateidx=passageidx2dateidx,
-            passage_to_date_attention_params=self._executor_parameters.passage_to_start_date_attention,
+            passage_to_date_attention_params=self._executor_parameters.passage_to_start_date_attention
         )
 
         passage_passage_token2enddate_alignment = self.compute_token_date_alignments(
             modeled_passage=modeled_passage,
             passage_mask=passage_mask,
             passageidx2dateidx=passageidx2dateidx,
-            passage_to_date_attention_params=self._executor_parameters.passage_to_end_date_attention,
+            passage_to_date_attention_params=self._executor_parameters.passage_to_end_date_attention
         )
 
-        passage_tokenidx2dateidx_mask = (passageidx2numberidx > -1).float()
-
-        # passage_passage_token2date_similarity = self._executor_parameters.passage_to_date_attention(modeled_passage,
-        #                                                                                             modeled_passage)
-        # passage_passage_token2date_similarity = passage_passage_token2date_similarity * passage_mask.unsqueeze(1)
-        # passage_passage_token2date_similarity = passage_passage_token2date_similarity * passage_mask.unsqueeze(2)
-        #
-        # # Shape: (batch_size, passage_length) -- masking for number tokens in the passage
-        # passage_tokenidx2dateidx_mask = (passageidx2dateidx > -1).float()
-        # # Shape: (batch_size, passage_length, passage_length)
-        # passage_passage_token2date_similarity = (passage_passage_token2date_similarity *
-        #                                          passage_tokenidx2dateidx_mask.unsqueeze(1))
-        # # Shape: (batch_size, passage_length, passage_length)
-        # pasage_passage_token2date_aligment = allenutil.masked_softmax(passage_passage_token2date_similarity,
-        #                                                               mask=passage_tokenidx2dateidx_mask.unsqueeze(1),
-        #                                                               memory_efficient=True)
         # ### Passage Token - Num Alignment
         passage_passage_token2num_similarity = self._executor_parameters.passage_to_num_attention(
             modeled_passage, modeled_passage
@@ -375,6 +340,7 @@ class DROPParserBERT(DROPParserBase):
                 passage_passage_token2num_alignment, passage_tokenidx2numidx_mask, inwindow_mask, outwindow_mask
             )
 
+            passage_tokenidx2dateidx_mask = (passageidx2dateidx > -1).float()
             date_aux_loss = self.window_loss_numdate(
                 passage_passage_token2date_alignment, passage_tokenidx2dateidx_mask, inwindow_mask, outwindow_mask
             )
@@ -386,13 +352,7 @@ class DROPParserBERT(DROPParserBase):
             end_date_aux_loss = self.window_loss_numdate(
                 passage_passage_token2enddate_alignment, passage_tokenidx2dateidx_mask, inwindow_mask, outwindow_mask
             )
-
-            # count_loss = self.number2count_auxloss(passage_number_values=passage_number_values,
-            #                                        device_id=device_id)
-            count_loss = 0.0
-
-            aux_win_loss = num_aux_loss + date_aux_loss + count_loss + start_date_aux_loss + end_date_aux_loss
-
+            aux_win_loss = num_aux_loss + date_aux_loss + start_date_aux_loss + end_date_aux_loss
         else:
             aux_win_loss = 0.0
 
@@ -403,9 +363,6 @@ class DROPParserBERT(DROPParserBase):
         projected_embedded_question = encoded_question
         rawemb_passage = modeled_passage
         projected_embedded_passage = modeled_passage
-        # question_encoded_final_state = allenutil.get_final_encoder_states(encoded_question,
-        #                                                                   question_mask,
-        #                                                                   self._phrase_layer.is_bidirectional())
         question_rawemb_aslist = [rawemb_question[i] for i in range(batch_size)]
         question_embedded_aslist = [projected_embedded_question[i] for i in range(batch_size)]
         question_encoded_aslist = [encoded_question[i] for i in range(batch_size)]
@@ -444,7 +401,6 @@ class DROPParserBERT(DROPParserBase):
                 embedded_passage=passage_embedded_aslist[i],
                 encoded_passage=passage_encoded_aslist[i],
                 modeled_passage=passage_modeled_aslist[i],
-                # passage_token2datetoken_sim=None, #passage_token2datetoken_sim_aslist[i],
                 question_mask=question_mask_aslist[i],
                 passage_mask=passage_mask[i],  # passage_mask_aslist[i],
                 passage_tokenidx2dateidx=passageidx2dateidx[i],
@@ -457,7 +413,6 @@ class DROPParserBERT(DROPParserBase):
                 year_differences=year_differences[i],
                 year_differences_mat=year_differences_mat[i],
                 count_num_values=count_values[i],
-                # passagenum_differences=passagenumber_difference_values[i],
                 question_passage_attention=q2p_attention_aslist[i],
                 passage_question_attention=p2q_attention_aslist[i],
                 passage_token2date_alignment=p2pdate_alignment_aslist[i],
@@ -636,7 +591,7 @@ class DROPParserBERT(DROPParserBase):
             device_id,
         )
 
-        # # For printing predicted - programs
+        # # PRINT PRED PROGRAMS
         # for idx, instance_progs in enumerate(batch_actionseqs):
         #     print(f"InstanceIdx:{idx}")
         #     print(metadata[idx]["question_tokens"])
@@ -1793,11 +1748,6 @@ class DROPParserBERT(DROPParserBase):
         outwindow_mask: (passage_length, passage_length)
             Opposite of inwindow_mask. For each row x, the columns are 1 outside of a window around x
         """
-        # # (batch_size, passage_length, passage_length)
-        # passage_passage_alignment_matrix = allenutil.masked_softmax(passage_passage_similarity_scores,
-        #                                                             passage_tokenidx_mask.unsqueeze(1),
-        #                                                             memory_efficient=True)
-
         inwindow_mask = inwindow_mask.unsqueeze(0) * passage_tokenidx_mask.unsqueeze(1)
         inwindow_probs = passage_passage_alignment * inwindow_mask
         # This signifies that each token can distribute it's prob to nearby-date/num in anyway
@@ -1833,56 +1783,3 @@ class DROPParserBERT(DROPParserBase):
         loss = -1 * inwindow_likelihood + outwindow_negentropies
 
         return loss
-
-    # def number2count_auxloss(self, passage_number_values: List[List[float]], device_id=-1):
-    #     """ Using passage numnbers, make a (batch_size, max_passage_numbers) (padded) tensor, each containing a
-    #         noisy distribution with mass distributed over x-numbers. The corresponding count-answer will be x.
-    #         Use the attention2count rnn to predict a count value and compute the loss.
-    #     """
-    #     batch_size = len(passage_number_values)
-    #     # List of length -- batch-size
-    #     num_of_passage_numbers = [len(nums) for nums in passage_number_values]
-    #     max_passage_numbers = max(num_of_passage_numbers)
-    #
-    #     # Shape: (batch_size, )
-    #     num_pasasge_numbers = allenutil.move_to_device(torch.LongTensor(num_of_passage_numbers), cuda_device=device_id)
-    #     # Shape: (max_passage_numbers, )
-    #     range_vector = allenutil.get_range_vector(size=max_passage_numbers, device=device_id)
-    #
-    #     # Shape: (batch_size, maxnum_passage_numbers)
-    #     mask = (range_vector.unsqueeze(0) < num_pasasge_numbers.unsqueeze(1)).float()
-    #
-    #     number_distributions = mask.new_zeros(batch_size, max_passage_numbers).normal_(0, 0.05).abs_()
-    #     count_answers = number_distributions.new_zeros(batch_size).long()
-    #     for i, num_numbers in enumerate(num_of_passage_numbers):
-    #         """ Sample a count value between [0, min(5, num_numbers)]. Sample indices in this range, and set them as 1.
-    #             Add gaussian noise to the whole tensor and normalize.
-    #         """
-    #         # Pick a count answer
-    #         count_value = random.randint(1, min(7, num_numbers))
-    #         count_answers[i] = count_value
-    #         # Pick the indices that will have mass
-    #         if count_value > 0:
-    #             indices = random.sample(range(num_numbers), count_value)
-    #             # Add 1.0 to all sampled indices
-    #             number_distributions[i, indices] += 1.0
-    #
-    #     number_distributions = number_distributions * mask
-    #     # Shape: (batch_size, maxnum_passage_numbers)
-    #     number_distributions = number_distributions / torch.sum(number_distributions, dim=1).unsqueeze(1)
-    #
-    #     # Distributions made; computing loss
-    #     scaled_attentions = [number_distributions * sf for sf in
-    #                          self._executor_parameters.passage_attention_scalingvals]
-    #     # Shape: (batch_size, maxnum_passage_numbers, num_scaling_factors)
-    #     stacked_scaled_attentions = torch.stack(scaled_attentions, dim=2)
-    #
-    #     # Shape: (batch_size, hidden_dim)
-    #     count_hidden_repr = self.passage_attention_to_count(stacked_scaled_attentions, mask)
-    #
-    #     # Shape: (batch_size, num_counts)
-    #     count_logits = self.passage_count_predictor(count_hidden_repr)
-    #
-    #     count_loss = F.cross_entropy(input=count_logits, target=count_answers)
-    #
-    #     return count_loss

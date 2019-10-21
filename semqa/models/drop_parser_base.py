@@ -71,10 +71,10 @@ class DROPParserBase(Model):
     def _get_initial_rnn_state(
         self,
         question_encoded: torch.FloatTensor,
-        question_mask: torch.LongTensor,
+        question_mask: torch.Tensor,
         question_encoded_finalstate: torch.FloatTensor,
-        question_encoded_aslist: List[torch.FloatTensor],
-        question_mask_aslist: List[torch.LongTensor],
+        question_encoded_aslist: List[torch.Tensor],
+        question_mask_aslist: List[torch.Tensor],
     ):
         """ Get the initial RnnStatelet for the decoder based on the question encoding
 
