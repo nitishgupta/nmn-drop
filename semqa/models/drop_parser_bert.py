@@ -2,7 +2,7 @@ import logging
 from typing import List, Dict, Any, Tuple, Optional, Set, Union
 import numpy as np
 from overrides import overrides
-
+import gc
 import torch
 
 from allennlp.data.fields.production_rule_field import ProductionRule
@@ -239,6 +239,11 @@ class DROPParserBERT(DROPParserBase):
         aux_answer_as_count=None,
         aux_count_mask=None,
     ) -> Dict[str, torch.Tensor]:
+
+        if self.training:
+            self.num_train_steps += 1
+            if self.num_train_steps % 100 == 0:
+                gc.collect()
 
         question_passage_tokens = question_passage["tokens"]
         pad_mask = question_passage["mask"]
