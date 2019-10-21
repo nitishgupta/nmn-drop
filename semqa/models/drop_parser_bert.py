@@ -13,21 +13,22 @@ from allennlp.models.model import Model
 from allennlp.modules import Attention, Seq2SeqEncoder
 from allennlp.nn import Activation
 from allennlp.modules.matrix_attention import DotProductMatrixAttention, LinearMatrixAttention
-from allennlp.state_machines.states import GrammarBasedState
 import allennlp.nn.util as allenutil
 from allennlp.nn import InitializerApplicator, RegularizerApplicator
 from allennlp.models.reading_comprehension.util import get_best_span
-from allennlp.state_machines.transition_functions import BasicTransitionFunction
-from allennlp.state_machines.trainers.maximum_marginal_likelihood import MaximumMarginalLikelihood
-from allennlp.state_machines import BeamSearch
-from allennlp.state_machines import ConstrainedBeamSearch
-from semqa.state_machines.constrained_beam_search import ConstrainedBeamSearch as MyConstrainedBeamSearch
 from allennlp.training.metrics import Average, DropEmAndF1
+
+from allennlp_semparse.state_machines.states import GrammarBasedState
+from allennlp_semparse.state_machines.transition_functions import BasicTransitionFunction
+from allennlp_semparse.state_machines.trainers.maximum_marginal_likelihood import MaximumMarginalLikelihood
+from allennlp_semparse.state_machines import BeamSearch
+from allennlp_semparse.state_machines import ConstrainedBeamSearch
+
 from pytorch_pretrained_bert import BertModel
 from pytorch_pretrained_bert import BertConfig
 
+from semqa.state_machines.constrained_beam_search import FirstStepConstrainedBeamSearch
 from semqa.models.utils import semparse_utils
-
 from semqa.models.drop_parser_base import DROPParserBase
 from semqa.domain_languages.drop_language import (
     DropLanguage,
@@ -39,13 +40,9 @@ from semqa.domain_languages.drop_language import (
     CountNumber,
 )
 from semqa.domain_languages.drop_execution_parameters import ExecutorParameters
-
 import datasets.drop.constants as dropconstants
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-
-# In this three tuple, add "QENT:qent QSTR:qstr" in the twp gaps, and join with space to get the logical form
-GOLD_BOOL_LF = ("(bool_and (bool_qent_qstr ", ") (bool_qent_qstr", "))")
 
 
 @Model.register("drop_parser_bert")
@@ -103,8 +100,6 @@ class DROPParserBERT(DROPParserBase):
             action_embedding_dim=action_embedding_dim,
             input_attention=transitionfunc_attention,
             activation=Activation.by_name("tanh")(),
-            predict_start_type_separately=False,
-            num_start_types=1,
             add_action_bias=False,
             dropout=dropout,
         )
@@ -545,7 +540,7 @@ class DROPParserBERT(DROPParserBase):
                         answer_types=unsupervised_answer_types, action2actionidx=action2idx_map
                     )
 
-                    firststep_constrained_search = MyConstrainedBeamSearch(self._beam_size)
+                    firststep_constrained_search = FirstStepConstrainedBeamSearch(self._beam_size)
                     unsup_final_states = firststep_constrained_search.search(
                         num_steps=self._max_decoding_steps,
                         initial_state=unsupervised_initial_state,
@@ -575,7 +570,7 @@ class DROPParserBERT(DROPParserBase):
                 batch_valid_start_actionids: List[Set[int]] = self.get_valid_start_actionids(
                     answer_types=answer_program_start_types, action2actionidx=action2idx_map
                 )
-                search = MyConstrainedBeamSearch(self._beam_size)
+                search = FirstStepConstrainedBeamSearch(self._beam_size)
                 # Mapping[int, Sequence[StateType]])
                 best_final_states = search.search(
                     self._max_decoding_steps,

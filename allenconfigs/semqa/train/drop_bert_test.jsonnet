@@ -78,16 +78,16 @@ local utils = import 'utils.libsonnet';
         "max_decoding_steps": utils.parse_number(std.extVar("MAX_DECODE_STEP")),
         "dropout": utils.parse_number(std.extVar("DROPOUT")),
 
-        "initializers":
-        [
-            ["passage_attention_to_count|passage_count_hidden2logits",
-                 {
-                     "type": "pretrained",
-                     "weights_file_path": "./pattn2count_ckpt/best.th"
-                 },
-            ],
-            [".*_text_field_embedder.*", "prevent"]
-        ],
+//        "initializers":
+//        [
+//            ["passage_attention_to_count|passage_count_hidden2logits",
+//                 {
+//                     "type": "pretrained",
+//                     "weights_file_path": "./pattn2count_ckpt/best.th"
+//                 },
+//            ],
+//            [".*_text_field_embedder.*", "prevent"]
+//        ],
 
         "auxwinloss": utils.boolparser(std.extVar("AUXLOSS")),
 

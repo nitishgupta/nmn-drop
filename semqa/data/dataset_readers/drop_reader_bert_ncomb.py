@@ -5,13 +5,16 @@ import numpy as np
 from collections import defaultdict
 from typing import Dict, List, Union, Tuple
 from overrides import overrides
+
 from allennlp.common.file_utils import cached_path
 from allennlp.data.dataset_readers.dataset_reader import DatasetReader
 from allennlp.data.instance import Instance
 from allennlp.data.token_indexers import TokenIndexer
 from allennlp.data.token_indexers.wordpiece_indexer import WordpieceIndexer
 from allennlp.data.tokenizers import Token
-from allennlp.data.fields import Field, TextField, MetadataField, ListField, SpanField, ProductionRuleField, ArrayField
+from allennlp.data.fields import Field, TextField, MetadataField, ListField, SpanField, ArrayField
+
+from allennlp_semparse.fields import ProductionRuleField
 
 from pytorch_pretrained_bert import BertTokenizer
 

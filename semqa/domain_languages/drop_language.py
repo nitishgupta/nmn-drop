@@ -6,12 +6,8 @@ from torch import Tensor
 import torch.nn.functional as F
 
 import allennlp.nn.util as allenutil
-from allennlp.semparse.domain_languages.domain_language import (
-    DomainLanguage,
-    predicate,
-    predicate_with_side_args,
-    ExecutionError,
-)
+from allennlp_semparse.domain_languages import (DomainLanguage, predicate, predicate_with_side_args)
+from allennlp_semparse.common import ExecutionError
 
 from semqa.domain_languages.drop_execution_parameters import ExecutorParameters
 from semqa.domain_languages import domain_language_utils as dlutils

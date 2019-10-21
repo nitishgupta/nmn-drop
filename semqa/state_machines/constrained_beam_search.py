@@ -2,13 +2,14 @@ from collections import defaultdict
 from typing import Dict, Generic, List, Mapping, Sequence, TypeVar, Set
 
 from allennlp.common.registrable import FromParams
-from allennlp.state_machines.states import State
-from allennlp.state_machines.transition_functions import TransitionFunction
+
+from allennlp_semparse.state_machines.states import State
+from allennlp_semparse.state_machines.transition_functions import TransitionFunction
 
 StateType = TypeVar("StateType", bound=State)  # pylint: disable=invalid-name
 
 
-class ConstrainedBeamSearch(FromParams):
+class FirstStepConstrainedBeamSearch(FromParams):
     "This class is an almost-exact copy of "
 
     """

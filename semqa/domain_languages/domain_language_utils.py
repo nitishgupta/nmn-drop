@@ -3,10 +3,12 @@ from typing import Callable, List, Dict, Tuple, Any, Type, Set
 import inspect
 import torch
 
-import utils.util as myutils
-
-from allennlp.semparse.domain_languages.domain_language import DomainLanguage, ExecutionError
 import allennlp.nn.util as allenutil
+
+from allennlp_semparse.domain_languages import DomainLanguage
+from allennlp_semparse.common import ExecutionError
+
+import utils.util as myutils
 
 
 def execute_action_sequence(language, action_sequence: List[str], side_arguments: List[Dict] = None):

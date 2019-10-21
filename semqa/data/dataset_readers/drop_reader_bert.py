@@ -13,7 +13,8 @@ from allennlp.data.token_indexers import TokenIndexer
 from allennlp.data.token_indexers.wordpiece_indexer import WordpieceIndexer
 from allennlp.data.tokenizers import Token
 from allennlp.data.dataset_readers.reading_comprehension.util import IGNORED_TOKENS, STRIPPED_CHARACTERS
-from allennlp.data.fields import Field, TextField, MetadataField, ListField, SpanField, ProductionRuleField, ArrayField
+from allennlp.data.fields import Field, TextField, MetadataField, ListField, SpanField, ArrayField
+from allennlp_semparse.fields import ProductionRuleField
 
 from pytorch_pretrained_bert import BertTokenizer
 

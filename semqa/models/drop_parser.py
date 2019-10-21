@@ -21,7 +21,7 @@ from allennlp.state_machines.transition_functions import BasicTransitionFunction
 from allennlp.state_machines.trainers.maximum_marginal_likelihood import MaximumMarginalLikelihood
 from allennlp.state_machines import BeamSearch
 from allennlp.state_machines import ConstrainedBeamSearch
-from semqa.state_machines.constrained_beam_search import ConstrainedBeamSearch as MyConstrainedBeamSearch
+from semqa.state_machines.constrained_beam_search import FirstStepConstrainedBeamSearch as MyConstrainedBeamSearch
 from allennlp.training.metrics import Average, DropEmAndF1
 from semqa.models.utils import semparse_utils
 
