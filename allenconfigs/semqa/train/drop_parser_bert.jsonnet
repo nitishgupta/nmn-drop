@@ -104,7 +104,7 @@ local utils = import 'utils.libsonnet';
         "type": "filter",
         "track_epoch": true,
         "batch_size": std.extVar("BS"),
-//      "max_instances_in_memory":
+        "cache_instances": true,
         "filter_instances": utils.boolparser(std.extVar("SUPFIRST")),
         "filter_for_epochs": utils.parse_number(std.extVar("SUPEPOCHS")),
     },

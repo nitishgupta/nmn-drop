@@ -17,8 +17,8 @@ VALFILE=${DATASET_DIR}/sample_dev.json
 INCLUDE_PACKAGE=semqa
 
 ### TRAINING MODEL CONFIG -- should be same across datasets for the same model
-# CONFIGFILE=allenconfigs/semqa/train/drop_parser_bert.jsonnet
-CONFIGFILE=allenconfigs/semqa/train/drop_bert_test.jsonnet
+CONFIGFILE=allenconfigs/semqa/train/drop_parser_bert.jsonnet
+# CONFIGFILE=allenconfigs/semqa/train/drop_bert_test.jsonnet
 
 export DATASET_READER="drop_reader_bert_ncomb"
 
