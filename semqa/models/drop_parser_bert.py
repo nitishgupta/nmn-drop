@@ -242,7 +242,7 @@ class DROPParserBERT(DROPParserBase):
 
         if self.training:
             self.num_train_steps += 1
-            if self.num_train_steps % 100 == 0:
+            if self.num_train_steps % 800 == 0:
                 gc.collect()
 
         question_passage_tokens = question_passage["tokens"]
@@ -1786,5 +1786,5 @@ class DROPParserBERT(DROPParserBase):
 
             # Increase inwindow likelihod and decrease outwindow-negative-entropy
         loss = -1 * inwindow_likelihood + outwindow_negentropies
-
         return loss
+
