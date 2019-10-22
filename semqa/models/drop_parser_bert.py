@@ -886,7 +886,8 @@ class DROPParserBERT(DROPParserBase):
                 answer_annotations = metadata[i].get("answer_annotations", [])
                 self._drop_metrics(instance_predicted_answer, answer_annotations)
 
-            if not self.training:
+            if not self.training and self._debug:
+                print("here")
                 output_dict["metadata"] = metadata
                 # output_dict['best_span_ans_str'] = predicted_answers
                 output_dict["answer_as_passage_spans"] = answer_as_passage_spans
@@ -1787,4 +1788,3 @@ class DROPParserBERT(DROPParserBase):
             # Increase inwindow likelihod and decrease outwindow-negative-entropy
         loss = -1 * inwindow_likelihood + outwindow_negentropies
         return loss
-
