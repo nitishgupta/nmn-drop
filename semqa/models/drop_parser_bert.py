@@ -240,10 +240,9 @@ class DROPParserBERT(DROPParserBase):
         aux_count_mask=None,
     ) -> Dict[str, torch.Tensor]:
 
-        if self.training:
-            self.num_train_steps += 1
-            if self.num_train_steps % 800 == 0:
-                gc.collect()
+        self.num_forward_calls += 1
+        if self.num_forward_calls % 800 == 0:
+            gc.collect()
 
         question_passage_tokens = question_passage["tokens"]
         pad_mask = question_passage["mask"]

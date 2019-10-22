@@ -39,7 +39,7 @@ class DROPParserBase(Model):
         super(DROPParserBase, self).__init__(vocab=vocab, regularizer=regularizer)
 
         # To call garbage collection frequently
-        self.num_train_steps = 0
+        self.num_forward_calls = 0
 
         self._denotation_accuracy = Average()
         self._consistency = Average()
