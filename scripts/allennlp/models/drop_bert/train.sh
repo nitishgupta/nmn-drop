@@ -3,19 +3,20 @@
 # export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
-DATASET_NAME=date_num/date_yd_num_hmyw_cnt_whoarg_600
-# DATASET_NAME=date/datefull_yd_new2
+DATASET_NAME=merged_data/iclr20_full
 
-DATASET_DIR=./resources/data/drop_iclr/${DATASET_NAME}
+DATASET_DIR=./resources/data/drop_acl/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
-VALFILE=${DATASET_DIR}/drop_dataset_mydev.json
-TESTFILE=${DATASET_DIR}/drop_dataset_mytest.json
+VALFILE=${DATASET_DIR}/drop_dataset_dev.json
+#TRAINFILE=${DATASET_DIR}/sample_train.json
+#VALFILE=${DATASET_DIR}/sample_dev.json
 
 # PACKAGE TO BE INCLUDED WHICH HOUSES ALL THE CODE
 INCLUDE_PACKAGE=semqa
 
 ### TRAINING MODEL CONFIG -- should be same across datasets for the same model
 CONFIGFILE=allenconfigs/semqa/train/drop_parser_bert.jsonnet
+# CONFIGFILE=allenconfigs/semqa/train/drop_bert_test.jsonnet
 
 export DATASET_READER="drop_reader_bert"
 
@@ -36,16 +37,16 @@ export MMLLOSS=true
 
 # Whether strong supervison instances should be trained on first, if yes for how many epochs
 export SUPFIRST=true
-export SUPEPOCHS=5
+export SUPEPOCHS=0
 
 export BS=4
 export DROPOUT=0.2
 
-export SEED=1000
+export SEED=1
 
-export BEAMSIZE=1
+export BEAMSIZE=2
 export MAX_DECODE_STEP=14
-export EPOCHS=45
+export EPOCHS=42
 
 export DEBUG=false
 
@@ -53,10 +54,11 @@ export DEBUG=false
 CHECKPOINT_ROOT=./resources/semqa/checkpoints
 SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/${DATASET_NAME}
 MODEL_DIR=drop_parser_bert
-PD_1=CNTFIX_${COUNT_FIXED}/EXCLOSS_${EXCLOSS}/MMLLOSS_${MMLLOSS}/aux_${AUXLOSS}/SUPEPOCHS_${SUPEPOCHS}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}/BertModel_wTest_ICLR
+# CNTFIX_${COUNT_FIXED}
+PD_1=EXCLOSS_${EXCLOSS}/MMLLOSS_${MMLLOSS}/aux_${AUXLOSS}/SUPEPOCHS_${SUPEPOCHS}
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}/LatestAlnlp_800
 
-# SERIALIZATION_DIR=./resources/semqa/checkpoints/test
+SERIALIZATION_DIR=./resources/semqa/checkpoints/test
 
 #######################################################################################################################
 

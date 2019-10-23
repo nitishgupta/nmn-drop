@@ -129,7 +129,8 @@ local utils = import 'utils.libsonnet';
         },
         "summary_interval": 100,
         "should_log_parameter_statistics": false,
-        "validation_metric": "+f1"
+        "validation_metric": "+f1",
+        "gc_freq": 20
     },
 
     "random_seed": utils.parse_number(std.extVar("SEED")),
