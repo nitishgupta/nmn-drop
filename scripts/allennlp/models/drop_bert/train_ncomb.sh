@@ -8,20 +8,20 @@ DATASET_NAME=merged_data/iclr20_full
 DATASET_DIR=./resources/data/drop_acl/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
 VALFILE=${DATASET_DIR}/drop_dataset_dev.json
-# TRAINFILE=${DATASET_DIR}/sample_train.json
-# VALFILE=${DATASET_DIR}/sample_dev.json
+TRAINFILE=${DATASET_DIR}/sample_train.json
+VALFILE=${DATASET_DIR}/sample_dev.json
 
 # PACKAGE TO BE INCLUDED WHICH HOUSES ALL THE CODE
 INCLUDE_PACKAGE=semqa
 
 ### TRAINING MODEL CONFIG -- should be same across datasets for the same model
-CONFIGFILE=allenconfigs/semqa/train/drop_parser_bert.jsonnet
-# CONFIGFILE=allenconfigs/semqa/train/drop_bert_test.jsonnet
+# CONFIGFILE=allenconfigs/semqa/train/drop_parser_bert.jsonnet
+CONFIGFILE=allenconfigs/semqa/train/drop_bert_test.jsonnet
 
 export DATASET_READER="drop_reader_bert_ncomb"
 
 # Check CONFIGFILE for environment variables to set
-export GPU=0
+export GPU=-1
 
 export TRAINING_DATA_FILE=${TRAINFILE}
 export VAL_DATA_FILE=${VALFILE}
