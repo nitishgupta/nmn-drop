@@ -239,11 +239,11 @@ class DROPParserBERT(DROPParserBase):
         aux_answer_as_count=None,
         aux_count_mask=None,
     ) -> Dict[str, torch.Tensor]:
-
+        '''
         self.num_forward_calls += 1
-        if self.num_forward_calls % 800 == 0:
+        if self.num_forward_calls % 500 == 0:
             gc.collect()
-
+        '''
         question_passage_tokens = question_passage["tokens"]
         pad_mask = question_passage["mask"]
         segment_ids = question_passage["tokens-type-ids"]

@@ -104,7 +104,7 @@ local utils = import 'utils.libsonnet';
         "type": "filter",
         "track_epoch": true,
         "batch_size": std.extVar("BS"),
-        "cache_instances": true,
+        "cache_instances": false,
         "filter_instances": utils.boolparser(std.extVar("SUPFIRST")),
         "filter_for_epochs": utils.parse_number(std.extVar("SUPEPOCHS")),
     },
@@ -129,7 +129,8 @@ local utils = import 'utils.libsonnet';
         },
         "summary_interval": 100,
         "should_log_parameter_statistics": false,
-        "validation_metric": "+f1"
+        "validation_metric": "+f1",
+        "gc_freq": 600,
     },
 
     "random_seed": utils.parse_number(std.extVar("SEED")),
