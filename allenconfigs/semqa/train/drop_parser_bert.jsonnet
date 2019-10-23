@@ -97,8 +97,9 @@ local utils = import 'utils.libsonnet';
         "excloss": utils.boolparser(std.extVar("EXCLOSS")),
         "qattloss": utils.boolparser(std.extVar("QATTLOSS")),
         "mmlloss": utils.boolparser(std.extVar("MMLLOSS")),
-        "debug": utils.boolparser(std.extVar("DEBUG"))
-    },
+        "debug": utils.boolparser(std.extVar("DEBUG")),
+        "profile_freq": utils.parse_number(std.extVar("PROFILE_FREQ"))
+},
 
     "iterator": {
         "type": "filter",

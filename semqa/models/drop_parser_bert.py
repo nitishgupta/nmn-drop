@@ -2,7 +2,6 @@ import logging
 from typing import List, Dict, Any, Tuple, Optional, Set, Union
 import numpy as np
 from overrides import overrides
-import gc
 import torch
 
 from allennlp.data.fields.production_rule_field import ProductionRule
@@ -40,7 +39,10 @@ from semqa.domain_languages.drop_language import (
 from semqa.domain_languages.drop_execution_parameters import ExecutorParameters
 import datasets.drop.constants as dropconstants
 
+from semqa.profiler.profile import Profile, profile_func_decorator
+
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
 
 
 @Model.register("drop_parser_bert")
@@ -66,6 +68,7 @@ class DROPParserBERT(DROPParserBase):
         mmlloss: bool = False,
         dropout: float = 0.0,
         debug: bool = False,
+        profile_freq: Optional[int] = None,
         initializers: InitializerApplicator = InitializerApplicator(),
         regularizer: Optional[RegularizerApplicator] = None,
     ) -> None:
@@ -195,6 +198,10 @@ class DROPParserBERT(DROPParserBase):
         #     if any(component in name for component in pretrained_components):
         #         parameter.requires_grad = False
 
+        self.profile_steps = 0
+        self.profile_freq = None if profile_freq == 0 else profile_freq
+
+    @profile_func_decorator
     @overrides
     def forward(
         self,
@@ -239,11 +246,12 @@ class DROPParserBERT(DROPParserBase):
         aux_answer_as_count=None,
         aux_count_mask=None,
     ) -> Dict[str, torch.Tensor]:
-        '''
-        self.num_forward_calls += 1
-        if self.num_forward_calls % 500 == 0:
-            gc.collect()
-        '''
+
+        self.profile_steps += 1
+        if self.profile_freq is not None:
+            if self.profile_steps % self.profile_freq == 0:
+                logger.info(Profile.to_string())
+
         question_passage_tokens = question_passage["tokens"]
         pad_mask = question_passage["mask"]
         segment_ids = question_passage["tokens-type-ids"]
@@ -251,10 +259,11 @@ class DROPParserBERT(DROPParserBase):
         # Padding "[PAD]" tokens in the question
         pad_mask = (question_passage_tokens > 0).long() * pad_mask
 
-        # Shape: (batch_size, seqlen, bert_dim); (batch_size, bert_dim)
-        bert_out, bert_pooled_out = self.BERT(
-            question_passage_tokens, segment_ids, pad_mask, output_all_encoded_layers=False
-        )
+        with Profile(scope_name="bert-run"):
+            # Shape: (batch_size, seqlen, bert_dim); (batch_size, bert_dim)
+            bert_out, bert_pooled_out = self.BERT(
+                question_passage_tokens, segment_ids, pad_mask, output_all_encoded_layers=False
+            )
         # Skip [CLS]; then the next max_ques_len tokens are question tokens
         encoded_question = bert_out[:, 1 : self.max_ques_len + 1, :]
         question_mask = (pad_mask[:, 1 : self.max_ques_len + 1]).float()
@@ -396,41 +405,42 @@ class DROPParserBERT(DROPParserBase):
             for i in range(batch_size)
         ]
 
-        languages = [
-            DropLanguage(
-                rawemb_question=question_rawemb_aslist[i],
-                embedded_question=question_embedded_aslist[i],
-                encoded_question=question_encoded_aslist[i],
-                rawemb_passage=passage_rawemb_aslist[i],
-                embedded_passage=passage_embedded_aslist[i],
-                encoded_passage=passage_encoded_aslist[i],
-                modeled_passage=passage_modeled_aslist[i],
-                question_mask=question_mask_aslist[i],
-                passage_mask=passage_mask[i],  # passage_mask_aslist[i],
-                passage_tokenidx2dateidx=passageidx2dateidx[i],
-                passage_date_values=passage_date_values[i],
-                passage_tokenidx2numidx=passageidx2numberidx[i],
-                passage_num_values=number_support_values[i],
-                passage_number_sortedtokenidxs=passage_number_sortedtokenidxs[i],
-                add_num_combination_indices=add_num_combination_aslist[i],
-                sub_num_combination_indices=sub_num_combination_aslist[i],
-                year_differences=year_differences[i],
-                year_differences_mat=year_differences_mat[i],
-                count_num_values=count_values[i],
-                question_passage_attention=q2p_attention_aslist[i],
-                passage_question_attention=p2q_attention_aslist[i],
-                passage_token2date_alignment=p2pdate_alignment_aslist[i],
-                passage_token2startdate_alignment=p2pstartdate_alignment_aslist[i],
-                passage_token2enddate_alignment=p2penddate_alignment_aslist[i],
-                passage_token2num_alignment=p2pnum_alignment_aslist[i],
-                parameters=self._executor_parameters,
-                start_types=None,  # batch_start_types[i],
-                device_id=device_id,
-                debug=self._debug,
-                metadata=metadata[i],
-            )
-            for i in range(batch_size)
-        ]
+        with Profile("lang_init"):
+            languages = [
+                DropLanguage(
+                    rawemb_question=question_rawemb_aslist[i],
+                    embedded_question=question_embedded_aslist[i],
+                    encoded_question=question_encoded_aslist[i],
+                    rawemb_passage=passage_rawemb_aslist[i],
+                    embedded_passage=passage_embedded_aslist[i],
+                    encoded_passage=passage_encoded_aslist[i],
+                    modeled_passage=passage_modeled_aslist[i],
+                    question_mask=question_mask_aslist[i],
+                    passage_mask=passage_mask[i],  # passage_mask_aslist[i],
+                    passage_tokenidx2dateidx=passageidx2dateidx[i],
+                    passage_date_values=passage_date_values[i],
+                    passage_tokenidx2numidx=passageidx2numberidx[i],
+                    passage_num_values=number_support_values[i],
+                    passage_number_sortedtokenidxs=passage_number_sortedtokenidxs[i],
+                    add_num_combination_indices=add_num_combination_aslist[i],
+                    sub_num_combination_indices=sub_num_combination_aslist[i],
+                    year_differences=year_differences[i],
+                    year_differences_mat=year_differences_mat[i],
+                    count_num_values=count_values[i],
+                    question_passage_attention=q2p_attention_aslist[i],
+                    passage_question_attention=p2q_attention_aslist[i],
+                    passage_token2date_alignment=p2pdate_alignment_aslist[i],
+                    passage_token2startdate_alignment=p2pstartdate_alignment_aslist[i],
+                    passage_token2enddate_alignment=p2penddate_alignment_aslist[i],
+                    passage_token2num_alignment=p2pnum_alignment_aslist[i],
+                    parameters=self._executor_parameters,
+                    start_types=None,  # batch_start_types[i],
+                    device_id=device_id,
+                    debug=self._debug,
+                    metadata=metadata[i],
+                )
+                for i in range(batch_size)
+            ]
 
         action2idx_map = {rule: i for i, rule in enumerate(languages[0].all_possible_productions())}
         idx2action_map = languages[0].all_possible_productions()
@@ -607,10 +617,11 @@ class DROPParserBERT(DROPParserBase):
         # import pdb
         # pdb.set_trace()
 
-        # List[List[Any]], List[List[str]]: Denotations and their types for all instances
-        batch_denotations, batch_denotation_types = self._get_denotations(
-            batch_actionseqs, languages, batch_actionseq_sideargs
-        )
+        with Profile("get-deno"):
+            # List[List[Any]], List[List[str]]: Denotations and their types for all instances
+            batch_denotations, batch_denotation_types = self._get_denotations(
+                batch_actionseqs, languages, batch_actionseq_sideargs
+            )
         output_dict = {}
         # Computing losses if gold answers are given
         if answer_program_start_types is not None:

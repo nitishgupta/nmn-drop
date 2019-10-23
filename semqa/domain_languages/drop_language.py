@@ -13,6 +13,8 @@ from semqa.domain_languages.drop_execution_parameters import ExecutorParameters
 from semqa.domain_languages import domain_language_utils as dlutils
 import utils.util as myutils
 
+from semqa.profiler.profile import Profile, profile_func_decorator
+
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
