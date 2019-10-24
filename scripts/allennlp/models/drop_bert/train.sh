@@ -8,8 +8,8 @@ DATASET_NAME=merged_data/iclr20_full
 DATASET_DIR=./resources/data/drop_acl/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
 VALFILE=${DATASET_DIR}/drop_dataset_dev.json
-TRAINFILE=${DATASET_DIR}/small_sample_train.json
-VALFILE=${DATASET_DIR}/small_sample_dev.json
+TRAINFILE=${DATASET_DIR}/sample_train.json
+VALFILE=${DATASET_DIR}/sample_dev.json
 
 # PACKAGE TO BE INCLUDED WHICH HOUSES ALL THE CODE
 INCLUDE_PACKAGE=semqa
@@ -29,7 +29,6 @@ export TEST_DATA_FILE=${TESTFILE}
 export COUNT_FIXED=false
 export AUXLOSS=true
 
-export DENLOSS=true
 export EXCLOSS=true
 export QATTLOSS=true
 export MMLLOSS=true
@@ -47,7 +46,8 @@ export BEAMSIZE=2
 export MAX_DECODE_STEP=14
 export EPOCHS=42
 
-export PROFILE_FREQ=20
+export GC_FREQ=0
+export PROFILE_FREQ=0
 export DEBUG=false
 
 ####    SERIALIZATION DIR --- Check for checkpoint_root/task/dataset/model/parameters/

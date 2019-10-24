@@ -37,7 +37,7 @@ class Profile:
         s += "Scope \t Num_Calls \t TimeElapsed \t Perc_of_Forward\n"
         for k, v in timer_dict.items():
             num_calls = Profile.num_calls[k]
-            perc_forward = perc_of_forward[k]
+            perc_forward = perc_of_forward[k] if k in perc_of_forward else 0.0
             s += "{} \t {} \t {} seconds \t {} % \n".format(k, num_calls, v, perc_forward)
         s += "----------------------------------------------------------------\n"
         return s

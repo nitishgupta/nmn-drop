@@ -93,12 +93,12 @@ local utils = import 'utils.libsonnet';
 
         "countfixed": utils.boolparser(std.extVar("COUNT_FIXED")),
 
-        "denotationloss": utils.boolparser(std.extVar("DENLOSS")),
         "excloss": utils.boolparser(std.extVar("EXCLOSS")),
         "qattloss": utils.boolparser(std.extVar("QATTLOSS")),
         "mmlloss": utils.boolparser(std.extVar("MMLLOSS")),
         "debug": utils.boolparser(std.extVar("DEBUG")),
-        "profile_freq": utils.parse_number(std.extVar("PROFILE_FREQ"))
+        "profile_freq": utils.parse_number(std.extVar("PROFILE_FREQ")),
+        "cuda_device": utils.parse_number(std.extVar("GPU"))
 },
 
     "iterator": {
@@ -131,7 +131,7 @@ local utils = import 'utils.libsonnet';
         "summary_interval": 100,
         "should_log_parameter_statistics": false,
         "validation_metric": "+f1",
-        "gc_freq": 600,
+        "gc_freq": utils.parse_number(std.extVar("GC_FREQ")),
     },
 
     "random_seed": utils.parse_number(std.extVar("SEED")),
