@@ -902,20 +902,20 @@ class DROPReaderNew(DatasetReader):
                 Map from number to set of number combinations that can create it using the addition/sub operator.
                 For example, {2: set((1,1), (0,2))} is a valid entry for addcombinations
         """
-        oldnums = numbers
-
         zero_in_numbers = True if 0 in numbers else False
+
+        composed_numbers_list = []
 
         if max_number_of_numbers_to_consider > 2:
             raise NotImplementedError
 
         if implicit_numbers:
-            numbers.extend(implicit_numbers)
+            composed_numbers_list.extend(implicit_numbers)
 
         number_support = set()
-        # Map from number to list of number-combinations that lead to this number from the add/sub operation
-        number2subcombinations = defaultdict(set)
-        number2addcombinations = defaultdict(set)
+        # Map from composed-number to list of number-combination that lead to this number from the add/sub operation
+        compnumber2subcombinations = defaultdict(set)
+        compnumber2addcombinations = defaultdict(set)
         signs = [-1, 1]
         # all_sign_combinations = list(itertools.product(signs, repeat=2))
         # Since our modules will only perform num1-num2 / num1+num2. Computation like -num1+num2 would not be done
