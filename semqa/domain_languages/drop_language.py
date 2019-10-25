@@ -1567,7 +1567,7 @@ class DropLanguage(DomainLanguage):
         pattn = passage_attention._value * self.passage_mask
         # Computing for debugging and aux loss purposes
         inputpattn_num_distribution, _, _ = self.compute_num_distribution(pattn)
-        minmax_num_pattn = self.pattn_for_minmaxNum(pattn, "min")
+        minmax_num_pattn = self.pattn_for_minmaxNum(pattn, min_max_op)
 
         loss = 0.0
         if num_grounding_supervision is not None:
