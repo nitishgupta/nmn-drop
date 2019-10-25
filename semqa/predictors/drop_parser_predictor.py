@@ -80,8 +80,8 @@ class DropQANetPredictor(Predictor):
         passage = metadata["original_passage"]
         answer_annotation_dicts = metadata["answer_annotations"]
         passage_date_values = metadata["passage_date_values"]
-        number_support = metadata["number_support"]
         passage_num_values = metadata["passage_number_values"]
+        composed_numbers = metadata["composed_numbers"]
         passage_year_diffs = metadata["passage_year_diffs"]
         # passage_num_diffs = metadata['passagenum_diffs']
         (exact_match, f1_score) = f1metric(predicted_ans, answer_annotation_dicts)
@@ -99,7 +99,7 @@ class DropQANetPredictor(Predictor):
         out_str += f"F1:{f1_score} EM:{exact_match}" + "\n"
         out_str += f"Dates: {passage_date_values}" + "\n"
         out_str += f"PassageNums: {passage_num_values}" + "\n"
-        out_str += f"NumSupport: {number_support}" + "\n"
+        out_str += f"ComposedNumbers: {composed_numbers}" + "\n"
         # out_str += f'PassageNumDiffs: {passage_num_diffs}' + '\n'
         out_str += f"YearDiffs: {passage_year_diffs}" + "\n"
 
