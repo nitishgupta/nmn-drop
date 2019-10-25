@@ -173,6 +173,13 @@ class PassageNumber:
         self.debug_value = debug_value
 
 
+class ComposedNumber:
+    def __init__(self, composed_number_dist, loss=0.0, debug_value=""):
+        self._value = composed_number_dist
+        self.loss = loss
+        self.debug_value = debug_value
+
+
 class CountNumber:
     def __init__(self, count_number_dist, loss=0.0, debug_value=""):
         self._value = count_number_dist
@@ -205,6 +212,7 @@ def get_empty_language_object():
         passage_date_values=None,
         passage_tokenidx2numidx=None,
         passage_num_values=None,
+        composed_numbers=None,
         passage_number_sortedtokenidxs=None,
         add_num_combination_indices=None,
         sub_num_combination_indices=None,
@@ -251,6 +259,7 @@ class DropLanguage(DomainLanguage):
         passage_date_values: List[Date],
         passage_tokenidx2numidx: torch.LongTensor,
         passage_num_values: List[float],
+        composed_numbers: List[float],
         passage_number_sortedtokenidxs: List[int],
         add_num_combination_indices: Tensor,
         sub_num_combination_indices: Tensor,
@@ -273,7 +282,7 @@ class DropLanguage(DomainLanguage):
     ) -> None:
 
         if start_types is None:
-            start_types = {PassageSpanAnswer, YearDifference, PassageNumber, CountNumber}
+            start_types = {PassageSpanAnswer, YearDifference, PassageNumber, ComposedNumber, CountNumber}
             # QuestionSpanAnswer - could be one
 
         super().__init__(start_types=start_types)
@@ -306,19 +315,22 @@ class DropLanguage(DomainLanguage):
         passage_tokenidx2numidx_mask = self.passage_tokenidx2numidx > -1
         self.passage_numtokens_mask_long = passage_tokenidx2numidx_mask.long()
         self.passage_numtokens_mask_float = passage_tokenidx2numidx_mask.float()
-        # List[float] - number of unique numbers in the passage
+        # List[float] - number of unique numbers in the passage (includes implicit numbers)
         self.passage_num_values: List[float] = passage_num_values
+        self.composed_numbers: List[float] = composed_numbers
         # List[int] - number-token-idxs in an order so their values are sorted. Needed to max/min pattn
         self.passage_number_sortedtokenidxs = passage_number_sortedtokenidxs
         self.num_passage_nums = len(self.passage_num_values)
+        self.num_composed_nums = len(self.composed_numbers)
 
         # List[int ] -- Shape: (num_implicit_numbers)
         implicit_num_indices = torch.LongTensor([self.passage_num_values.index(x)
                                                  for x in DropLanguage.implicit_numbers])
         self.implicit_num_indices = allenutil.move_to_device(implicit_num_indices, cuda_device=device_id)
 
-        # Shape: (size_num_support, max_num_combinations, 2) -- for each number in the support (dim=0), indices for
-        # other number combinations (dim=1) that lead to this number using the op. N[i] = M[i,j,0] OP M[i,j,1] \forall j
+        # Shape: (size_composed_numbers, max_num_combinations, 2) -- for each number in composed_nums (dim=0),
+        #  indices for other passage_number combinations (dim=1) that lead to this number using the op.
+        #  ComposedNum[i] = PassageNum(M[i,j,0]) OP PassageNum(M[i,j,1]) \forall j
         # Since all numbers won't have same num of combinations, these indices are padded w/ -1
         self.add_num_combination_indices = add_num_combination_indices.long()
         self.sub_num_combination_indices = sub_num_combination_indices.long()
@@ -347,6 +359,7 @@ class DropLanguage(DomainLanguage):
         initialization_returns = self.initialize()
         self.date_lt_mat = initialization_returns["date_lt_mat"]
         self.date_gt_mat = initialization_returns["date_gt_mat"]
+        # These matrices are for passage numbers
         self.num_lt_mat = initialization_returns["num_lt_mat"]
         self.num_gt_mat = initialization_returns["num_gt_mat"]
 
@@ -744,7 +757,21 @@ class DropLanguage(DomainLanguage):
 
 
     def expected_number_addsub(self, num_dist_1: torch.FloatTensor, num_dist_2: torch.FloatTensor, operation: str):
-        """Compute the expected number distribution for an addition/subtraction operation."""
+        """Compute the expected number distribution for an addition/subtraction operation.
+
+        add_num_combination_indices / sum_num_combination_indices: (size_composed_numbers, num_combinations, 2)
+        Each combination is a tuple indexed into the passage numbers
+
+        Expected distribution over composed numbers is computed by; for each composed number,
+         1. extracting from num_dist_1, the probability of the first number in the combination
+         2. extracting from num_dist_2, the probability of the second number in the combination
+         3. Computing the marginalized joint probability by summing over the product  1. X 2.
+
+        Parameters:
+        -----------
+        num_dist_1: (num_passage_numbers) Passage number distribution
+        num_dist_2: (num_passage_numbers) Passage number distribution
+        """
 
         assert operation in ["add", "sub"]
         if operation == "add":
@@ -756,30 +783,35 @@ class DropLanguage(DomainLanguage):
         else:
             raise NotImplementedError
 
-        # num_combination_indices: (size_number_support, max_num_combinations, 2) for each number in the support,
-        # these are combinations (indices of the numbers) that combine (in order) using the operation that result to
-        # this number. For example, num_combination_indices[i, :, :] is a combs=[NC, 2] array where
-        # num_support[i] = combs[j, 0] OP combs[j, 1] for each j.
+        # num_combination_indices: (size_composed_numbers, max_num_combinations, 2) for each number in composed numbers,
+        # these are combinations (indices of passasge numbers) that combine (in order) using the operation and result
+        # into this number. For example, num_combination_indices[i, :, :] is a combs=[NC, 2] array where
+        # composed_number[i] = PassageNumber(combs[j, 0]) OP PassageNumber(combs[j, 1]) for all j.
+        # These combinations are padded with -1
+
+        #
 
         masked_num_combination_indices = num_combination_indices * num_combination_mask
 
-        # Making (B=1, seq_len=num_support, dim=1) for batch index selection
+        # Making (B=1, seq_len=passage_numbers, dim=1) for batch index selection
         num_dist_1_uns = num_dist_1.unsqueeze(0).unsqueeze(2)
         num_dist_2_uns = num_dist_2.unsqueeze(0).unsqueeze(2)
         # B=1 unsqueezing
         masked_num_combination_indices_uns = masked_num_combination_indices.unsqueeze(0)
 
+        # Indexing into num_dist_1 where indices are num_combination_indices[:, :, 0]
         selected_d_1 = allenutil.batched_index_select(
             target=num_dist_1_uns, indices=masked_num_combination_indices_uns[:, :, :, 0]
         )
-        # Shape: (number_support, max_num_combinations)
+        # Shape: (size_composed_numbers, max_num_combinations)
         selected_d_1 = selected_d_1.squeeze(0).squeeze(-1)
         selected_d_1 = selected_d_1 * num_combination_mask[:, :, 0].float()
 
+        # Indexing into num_dist_2 where indices are num_combination_indices[:, :, 1]
         selected_d_2 = allenutil.batched_index_select(
             target=num_dist_2_uns, indices=masked_num_combination_indices_uns[:, :, :, 1]
         )
-        # Shape: (number_support, max_num_combinations)
+        # Shape: (size_composed_numbers, max_num_combinations)
         selected_d_2 = selected_d_2.squeeze(0).squeeze(-1)
         selected_d_2 = selected_d_2 * num_combination_mask[:, :, 1].float()
 
@@ -1375,8 +1407,8 @@ class DropLanguage(DomainLanguage):
         numberdist_1 = number_1._value
         numberdist_2 = number_2._value
 
-        # Shape: (size_number_support, )
-        number_difference_dist = self.expected_number_addsub(
+        # Shape: (size_composed_numbers, )
+        composed_number_dist = self.expected_number_addsub(
             num_dist_1=numberdist_1, num_dist_2=numberdist_2, operation=add_sub
         )
 
@@ -1385,44 +1417,44 @@ class DropLanguage(DomainLanguage):
 
         debug_value = ""
         if self._debug:
-            num1 = myutils.round_all(myutils.tocpuNPList(numberdist_1), 3)
-            num2 = myutils.round_all(myutils.tocpuNPList(numberdist_1), 3)
-            passagenum_diff_dist = myutils.round_all(myutils.tocpuNPList(number_difference_dist), 3)
+            composed_number_dist_list = myutils.round_all(myutils.tocpuNPList(composed_number_dist), 3)
             topknumdiff = dlutils.topProbMassElems(
-                attention=number_difference_dist, support=self.passage_num_values, k=5
+                attention=composed_number_dist, support=self.composed_numbers, k=5
             )
             topknum1 = dlutils.topProbMassElems(attention=numberdist_1, support=self.passage_num_values, k=5)
             topknum2 = dlutils.topProbMassElems(attention=numberdist_2, support=self.passage_num_values, k=5)
 
             debug_value += (
-                f"NumDiffDist: {passagenum_diff_dist}\n"
+                f"ComposedNumberDist: {composed_number_dist_list}\n"
                 + f"Top-num-diff: {topknumdiff}\n"
                 + f"\n Top-Num1: {topknum1}"
                 + f"\n Top-Num2: {topknum2}"
             )
 
-        return number_difference_dist, loss, debug_value
+        return composed_number_dist, loss, debug_value
 
     @predicate
     def passagenumber_difference(
         self, passage_number_1: PassageNumber, passage_number_2: PassageNumber
-    ) -> PassageNumber:
+    ) -> ComposedNumber:
         """ Find the expected difference between two number distributions. """
 
         number_difference_dist, loss, debug_value = self.number_add_sub_module(
             number_1=passage_number_1, number_2=passage_number_2, add_sub="sub"
         )
 
-        return PassageNumber(passage_number_dist=number_difference_dist, loss=loss, debug_value=debug_value)
+        return ComposedNumber(composed_number_dist=number_difference_dist, loss=loss, debug_value=debug_value)
 
     @predicate
-    def passagenumber_addition(self, passage_number_1: PassageNumber, passage_number_2: PassageNumber) -> PassageNumber:
+    def passagenumber_addition(
+        self, passage_number_1: PassageNumber, passage_number_2: PassageNumber
+    ) -> ComposedNumber:
         """ Find the expected sum of two number distributions. """
         number_addition_dist, loss, debug_value = self.number_add_sub_module(
             number_1=passage_number_1, number_2=passage_number_2, add_sub="add"
         )
 
-        return PassageNumber(passage_number_dist=number_addition_dist, loss=loss, debug_value=debug_value)
+        return ComposedNumber(composed_number_dist=number_addition_dist, loss=loss, debug_value=debug_value)
 
     """
     @predicate
@@ -1555,48 +1587,6 @@ class DropLanguage(DomainLanguage):
         return PassageNumber(passage_number_dist=number_distribution, loss=loss, debug_value=debug_value)
 
 
-    def minmaxNumPattn_module(self, passage_attention: PassageAttention, min_max_op: str, event_num_groundings=None):
-        assert min_max_op in ["min", "max"]
-        if event_num_groundings is not None:
-            num_grounding_supervision = event_num_groundings[0]
-        else:
-            num_grounding_supervision = None
-
-        pattn = passage_attention._value * self.passage_mask
-        # Computing for debugging and aux loss purposes
-        inputpattn_num_distribution, _, _ = self.compute_num_distribution(pattn)
-        minmax_num_pattn = self.pattn_for_minmaxNum(pattn, "min")
-
-        loss = 0.0
-        if num_grounding_supervision is not None:
-            grounding_mask = (torch.sum(num_grounding_supervision) > 0).float()
-            if grounding_mask > 0:
-                # Number distribution for input pattn
-                log_probs = torch.log(inputpattn_num_distribution + 1e-40) * num_grounding_supervision
-                log_likelihood = torch.sum(log_probs)  # Want all grounded numbers to be high, hence prod of probs
-                grounding_loss = -1 * grounding_mask * log_likelihood
-                loss += grounding_loss
-        loss += passage_attention.loss
-
-        debug_value = ""
-        if self._debug:
-            input_attn_numdist = myutils.round_all(myutils.tocpuNPList(inputpattn_num_distribution), 3)
-            topknums = dlutils.topProbMassElems(attention=inputpattn_num_distribution, support=self.passage_num_values)
-            if num_grounding_supervision is not None:
-                num_grounding_sup = myutils.round_all(myutils.tocpuNPList(num_grounding_supervision), 3)
-            else:
-                num_grounding_sup = None
-            min_pattn_comp, _ = dlutils.listTokensVis(minmax_num_pattn, self.metadata["passage_tokens"])
-            topspans = dlutils.mostAttendedSpans(minmax_num_pattn, self.metadata["passage_tokens"])
-            debug_value += f"{min_max_op}-pattn-module"
-            debug_value += f"\noutput-{min_max_op}-num-pattn-most-attended-spans: {topspans}"
-            debug_value += f"\nnumdist-from-input-pattn: {input_attn_numdist}"
-            debug_value += f"\ntopk-input-num-dist: {topknums}"
-            debug_value += f"\nGoldNum: {num_grounding_sup}"
-            # debug_value += f"\noutput-{min_max_op}-num-pattn: {min_pattn_comp}"
-        return minmax_num_pattn, loss, debug_value
-        # return PassageAttention(passage_attention=minmax_num_pattn, loss=loss, debug_value=debug_value)
-
     @predicate_with_side_args(["event_num_groundings"])
     def minNumPattn(self, passage_attention: PassageAttention, event_num_groundings=None) -> PassageAttention:
         minmax_num_pattn, loss, debug_value = self.minmaxNumPattn_module(
@@ -1613,9 +1603,56 @@ class DropLanguage(DomainLanguage):
 
         return PassageAttention(passage_attention=minmax_num_pattn, loss=loss, debug_value=debug_value)
 
+    def minmaxNumPattn_module(self, passage_attention: PassageAttention, min_max_op: str, event_num_groundings=None):
+        assert min_max_op in ["min", "max"]
+        if event_num_groundings is not None:
+            num_grounding_supervision = event_num_groundings[0]
+        else:
+            num_grounding_supervision = None
+
+        pattn = passage_attention._value * self.passage_mask
+        # Computing for debugging and aux loss purposes
+        inputpattn_num_distribution, _, _ = self.compute_num_distribution(pattn)
+        minmax_num_pattn, input_numtoken_probs, minmax_numtoken_probs = self.pattn_for_minmaxNum(pattn=pattn,
+                                                                                                 max_min=min_max_op)
+
+        loss = 0.0
+        if num_grounding_supervision is not None:
+            grounding_mask = (torch.sum(num_grounding_supervision) > 0).float()
+            if grounding_mask > 0:
+                # Number distribution for input pattn
+                log_probs = torch.log(inputpattn_num_distribution + 1e-40) * num_grounding_supervision
+                log_likelihood = torch.sum(log_probs)  # Want all grounded numbers to be high, hence prod of probs
+                grounding_loss = -1 * grounding_mask * log_likelihood
+                loss += grounding_loss
+        loss += passage_attention.loss
+
+        debug_value = ""
+        if self._debug:
+            input_token_probs = myutils.round_all(myutils.tocpuNPList(input_numtoken_probs), 3)
+            minmax_token_probs = myutils.round_all(myutils.tocpuNPList(minmax_numtoken_probs), 3)
+            input_attn_numdist = myutils.round_all(myutils.tocpuNPList(inputpattn_num_distribution), 3)
+            topknums = dlutils.topProbMassElems(attention=inputpattn_num_distribution, support=self.passage_num_values)
+            if num_grounding_supervision is not None:
+                num_grounding_sup = myutils.round_all(myutils.tocpuNPList(num_grounding_supervision), 3)
+            else:
+                num_grounding_sup = None
+            min_pattn_comp, _ = dlutils.listTokensVis(minmax_num_pattn, self.metadata["passage_tokens"])
+            topspans = dlutils.mostAttendedSpans(minmax_num_pattn, self.metadata["passage_tokens"])
+            debug_value += f"{min_max_op}-pattn-module"
+            debug_value += f"\noutput-{min_max_op}-num-pattn-most-attended-spans: {topspans}"
+            debug_value += f"\nnumdist-from-input-pattn: {input_attn_numdist}"
+            debug_value += f"\ninput-numtoken-probs: {input_token_probs}"
+            debug_value += f"\nminmax-numtoken-probs: {minmax_token_probs}"
+            debug_value += f"\ntopk-input-num-dist: {topknums}"
+            debug_value += f"\nGoldNum: {num_grounding_sup}"
+            # debug_value += f"\noutput-{min_max_op}-num-pattn: {min_pattn_comp}"
+        return minmax_num_pattn, loss, debug_value
+        # return PassageAttention(passage_attention=minmax_num_pattn, loss=loss, debug_value=debug_value)
+
     def pattn_for_minmaxNum(
         self, pattn: torch.FloatTensor, max_min: str
-    ) -> Tuple[torch.FloatTensor, torch.FloatTensor]:
+    ) -> Tuple[torch.FloatTensor, torch.FloatTensor, torch.FloatTensor]:
         """ Re-distribute the passage-attention based on a max number-token distribution
             The idea here is to find a `max-number-token` passage attention, i.e. given a distribution over
             passage-tokens, and for each token a distribution over numbers, find the passage-attention that contains,
@@ -1648,7 +1685,6 @@ class DropLanguage(DomainLanguage):
         elif max_min == "min":
             only_numbertoken_minmaxprobs_sorted = self.min_number_distribution(only_expected_numbertoken_probs)
         else:
-            only_numbertoken_minmaxprobs_sorted = None
             raise NotImplementedError
 
         # For each (token i, number j), using pattn_weighted_numbertoken_probs[i, j] as the weight,
@@ -1667,7 +1703,7 @@ class DropLanguage(DomainLanguage):
 
         new_pattn = torch.clamp(new_pattn, min=1e-10, max=1 - 1e-10)
 
-        return new_pattn
+        return new_pattn, only_expected_numbertoken_probs, only_numbertoken_minmaxprobs_sorted
 
 
 if __name__ == "__main__":

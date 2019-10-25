@@ -119,7 +119,7 @@ class DROPReaderNew(DatasetReader):
         self.skip_due_to_gold_not_in_answer = 0
 
         self.max_passage_nums = 0
-        self.max_num_support = 0
+        self.max_composed_nums = 0
 
     @overrides
     def _read(self, file_path: str):
@@ -262,6 +262,7 @@ class DROPReaderNew(DatasetReader):
 
                 if instance is not None:
                     instances_read += 1
+                    # print("\n\n")
                     yield instance
 
         #         if instance is not None:
@@ -275,8 +276,7 @@ class DROPReaderNew(DatasetReader):
         logger.info(
             f"Instances skipped due to gold-answer not in gold_program_types: {self.skip_due_to_gold_not_in_answer}"
         )
-        logger.info("Max passage nums: {}   max num supp : {} ".format(self.max_passage_nums, self.max_num_support))
-        # exit()
+        logger.info("Max passage nums: {}   max num supp : {} ".format(self.max_passage_nums, self.max_composed_nums))
 
     @overrides
     def text_to_instance(
@@ -411,46 +411,59 @@ class DROPReaderNew(DatasetReader):
         )
         # Passage Number
         passage_number_values = [int(x) if int(x) == x else x for x in p_num_normvals]
-        # number_support: List[int/float] is sorted
-        # number2addcombinations (sub): Dict: {number: List[(num1, num2)]} - mapping from num to list of all num-tuples
-        # that combine to form the number-key using the operation
-        number_support, number2addcombinations, number2subcombinations = self.compute_number_support(
+        # composed_numbers: List[int/float] is sorted
+        # passage_number_values: now contains implicit numbers. Since they are added at the end,
+        #  indexing should be fine.
+        # compnumber2addcombinations (sub): Dict: {composed_number: List[(pass-num1, pass-num2)]} - mapping from
+        #  composed number to list of passage-num-tuples that combine to form the number-key using the operation
+        (composed_numbers, passage_number_values,
+         compnumber2addcombinations, compnumber2subcombinations) = self.compute_number_support(
             numbers=passage_number_values,
             implicit_numbers=DropLanguage.implicit_numbers,
             max_number_of_numbers_to_consider=2,
         )
+
         self.max_passage_nums = max(len(passage_number_values), self.max_passage_nums)
-        self.max_num_support = max(len(number_support), self.max_num_support)
-        if not number_support:
-            number_support = [0]
-        passage_number_entidxs = p_num_entidxs
+        self.max_composed_nums = max(len(composed_numbers), self.max_composed_nums)
+        if not passage_number_values:
+            passage_number_values = [0]
+        if not composed_numbers:
+            composed_numbers = [0]
+        # TODO(nitishg): Change this repr to (token_idx, value) repr.
+        passage_number_entidxs = p_num_entidxs      # Index of passage_num_tokens in passage_number_values list
         passage_number_tokenids = [tokenidx for (_, tokenidx, _) in p_num_mens]
+        assert len(passage_number_entidxs) == len(passage_number_tokenids)
         passage_num_wpidx2entidx = [-1 for _ in range(len(passage_wps))]  # number_ent_idx for each token (pad=-1)
         passage_number_wpindices = []  # wp_idxs that are numbers
         for passage_num_tokenidx, number_ent_idx in zip(passage_number_tokenids, passage_number_entidxs):
-            wp_index = p_tokenidx2wpidx[passage_num_tokenidx][0]
-            number_value = passage_number_values[number_ent_idx]
-            passage_num_wpidx2entidx[wp_index] = number_support.index(number_value)
+            wp_index = p_tokenidx2wpidx[passage_num_tokenidx][0]        # WP-idx of the number token
+            passage_num_wpidx2entidx[wp_index] = number_ent_idx         # Index of the num-value in passsge_num_values
             passage_number_wpindices.append(wp_index)
-        if not passage_number_wpindices:  # Padding in case no numbers in passage
+        if not passage_number_wpindices:  # If no numbers in the passage, padding by faking the 0-th token as a number
             passage_num_wpidx2entidx[0] = 0
             passage_number_wpindices = [0]
 
-        # Making sorted_num_wpindxs for differentiable min/max
-        numvals_wpidx = [(number_support[passage_num_wpidx2entidx[wpidx]], wpidx) for wpidx in passage_number_wpindices]
-        sorted_passage_num_wpindices = [x[1] for x in sorted(numvals_wpidx, key=lambda x: x[0])]
+        # Making a list of wp_idxs so that their corresponding values are increasingly sorted for differentiable min/max
+        numvals_wpidx = [(passage_number_values[passage_num_wpidx2entidx[wpidx]], wpidx)
+                         for wpidx in passage_number_wpindices]     # [(value, w_idx)]
+        sorted_passage_number_wpindices = [x[1] for x in sorted(numvals_wpidx, key=lambda x: x[0])]
+        # print("sorted_passage_number_wpindices: {}".format(sorted_passage_number_wpindices))
 
         fields["passageidx2numberidx"] = ArrayField(np.array(passage_num_wpidx2entidx), padding_value=-1)
-        fields["number_support_values"] = MetadataField(number_support)
-        fields["passage_number_sortedtokenidxs"] = MetadataField(sorted_passage_num_wpindices)
+        fields["passage_number_values"] = MetadataField(passage_number_values)
+        fields["composed_numbers"] = MetadataField(composed_numbers)
+        fields["passage_number_sortedtokenidxs"] = MetadataField(sorted_passage_number_wpindices)
 
         # NP.array of shape: (size_of_number_support, max_num_combinations, 2)
         add_number_combinations_indices, max_num_add_combs = self.make_addsub_combination_array(
-            number_support=number_support, number2numcombinations=number2addcombinations
+            composed_numbers=composed_numbers, passage_numbers=passage_number_values,
+            compnumber2numcombinations=compnumber2addcombinations
         )
         sub_number_combinations_indices, max_num_sub_combs = self.make_addsub_combination_array(
-            number_support=number_support, number2numcombinations=number2subcombinations
+            composed_numbers=composed_numbers, passage_numbers=passage_number_values,
+            compnumber2numcombinations=compnumber2subcombinations
         )
+
         fields["add_number_combinations_indices"] = ArrayField(
             array=add_number_combinations_indices, padding_value=-1, dtype=np.int32
         )
@@ -500,7 +513,7 @@ class DROPReaderNew(DatasetReader):
                 "question_tokens": question_wps,
                 "passage_tokens": passage_wps,
                 "passage_date_values": passage_date_strvals,
-                "number_support": number_support,
+                "composed_numbers": composed_numbers,
                 "passage_number_values": passage_number_values,
                 "passage_year_diffs": year_differences,
                 "count_values": count_values,
@@ -549,31 +562,18 @@ class DROPReaderNew(DatasetReader):
             fields["datecomp_ques_event_date_groundings"] = MetadataField(empty_date_grounding_tuple)
 
         # Number Comparison - Passage Number Grounding Supervision
-        # TODO(nitishg): When number-combinations are included this supervision will need to be updated.
         if num_grounding_supervision:
+            # print("Num Grounding Sup: {}".format(num_grounding_supervision))
+            # number groundings need to be updated by padding with 0 for we now added implicit_numbers in passage nums
+            num_implicit_nums = len(DropLanguage.implicit_numbers)
             new_num_grounding_supervision = []
-            # num_grounding_supervision is indexed into passage_number_values; but now we use number_support
-            oldidx2newidx = {}
-            for oldidx, val in enumerate(passage_number_values):
-                newidx = number_support.index(val)
-                oldidx2newidx[oldidx] = newidx
-            for num_sup in num_grounding_supervision:
-                new_num_sup = [0] * len(number_support)
-                for old_idx, grnd in enumerate(num_sup):
-                    new_num_sup[oldidx2newidx[old_idx]] = grnd
-                new_num_grounding_supervision.append(new_num_sup)
-
-            grounded_vals = []
-            for val, grnd in zip(passage_number_values, num_grounding_supervision[0]):
-                if grnd > 0:
-                    grounded_vals.append(val)
-            new_grounded_vals = []
-            for val, grnd in zip(number_support, new_num_grounding_supervision[0]):
-                if grnd > 0:
-                    new_grounded_vals.append(val)
+            for grounding_sup in num_grounding_supervision:
+                grounding_sup.extend([0]*num_implicit_nums)
+                new_num_grounding_supervision.append(grounding_sup)
+            # print("New num Grounding Sup: {}".format(new_num_grounding_supervision))
             fields["numcomp_qspan_num_groundings"] = MetadataField(new_num_grounding_supervision)
         else:
-            empty_passagenum_grounding = [0.0] * len(number_support)
+            empty_passagenum_grounding = [0.0] * len(passage_number_values)
             empty_passagenum_grounding_tuple = (empty_passagenum_grounding, empty_passagenum_grounding)
             fields["numcomp_qspan_num_groundings"] = MetadataField(empty_passagenum_grounding_tuple)
 
@@ -597,11 +597,9 @@ class DROPReaderNew(DatasetReader):
         fields["gold_action_seqs"] = MetadataField((gold_action_seqs, gold_actionseq_masks))
 
         ########     ANSWER FIELDS      ###################
-
         if answer_annotations:
             metadata.update({"answer_annotations": answer_annotations})
-
-            # Using the first one for training (really, there's only one)
+            # Using the first one supervision (training actually only has one)
             answer_annotation = answer_annotations[0]
 
             # This list contains the possible-start-types for programs that can yield the correct answer
@@ -612,7 +610,6 @@ class DROPReaderNew(DatasetReader):
             # We've pre-parsed the span types to passage / question spans
 
             # Passage-span answer
-            passage_span_fields = []
             if answer_passage_spans:
                 answer_program_start_types.append("passage_span")
                 passage_span_fields = []
@@ -674,29 +671,30 @@ class DROPReaderNew(DatasetReader):
                 answer_number = float(number_answer_str)
                 answer_number = int(answer_number) if int(answer_number) == answer_number else answer_number
 
-            ans_as_passage_number = [0] * len(number_support)
+            ans_as_passage_number = [0] * len(passage_number_values)
+            ans_as_composed_number = [0] * len(composed_numbers)
             ans_as_year_difference = [0] * len(year_differences)
             answer_as_count = [0] * len(count_values)
             if answer_number is not None:
                 # Passage-number answer
-                if answer_number in number_support:
+                if answer_number in passage_number_values:
                     answer_program_start_types.append("passage_number")
-                    ans_as_passage_number_idx = number_support.index(answer_number)
-                    ans_as_passage_number[ans_as_passage_number_idx] = 1
-
+                    ans_as_passage_number[passage_number_values.index(answer_number)] = 1
+                # Composed-number answer
+                if answer_number in composed_numbers:
+                    answer_program_start_types.append("composed_number")
+                    ans_as_composed_number[composed_numbers.index(answer_number)] = 1
                 # Year-difference answer
                 if answer_number in year_differences:
                     answer_program_start_types.append("year_difference")
-                    ans_as_year_difference_idx = year_differences.index(answer_number)
-                    ans_as_year_difference[ans_as_year_difference_idx] = 1
-
+                    ans_as_year_difference[year_differences.index(answer_number)] = 1
                 # Count answer
                 if answer_number in count_values:
                     answer_program_start_types.append("count_number")
-                    answer_count_idx = count_values.index(answer_number)
-                    answer_as_count[answer_count_idx] = 1
+                    answer_as_count[count_values.index(answer_number)] = 1
 
             fields["answer_as_passage_number"] = MetadataField(ans_as_passage_number)
+            fields["answer_as_composed_number"] = MetadataField(ans_as_composed_number)
             fields["answer_as_year_difference"] = MetadataField(ans_as_year_difference)
             fields["answer_as_count"] = MetadataField(answer_as_count)
 
@@ -719,15 +717,6 @@ class DROPReaderNew(DatasetReader):
                     self.skip_due_to_gold_not_in_answer += 1
                 answer_program_start_types = new_answer_program_start_types
 
-            # if len(answer_program_start_types) == 0:
-            #     print(original_ques_text)
-            #     print(original_passage_text)
-            #     print(answer_annotation)
-            #     print(f"PassageNumVals:{passage_number_values}")
-            #     print(f"PassageDates:{passage_date_strvals}")
-            #     print(f"PassageNumDiffs: {passage_number_differences}")
-            #     print(f"YearDiffs:{year_differences}")
-
             if self.skip_instances:
                 if len(answer_program_start_types) == 0:
                     self.skip_count += 1
@@ -739,25 +728,7 @@ class DROPReaderNew(DatasetReader):
                     # print(answer_question_spans)
                     # print(f"NumSupport: {number_support}")
                     return None
-
-        # TODO(nitish): Only using questions which have PassageSpan as answers
-        """
-        if not answer_passage_spans:
-            # print("Not dealing with empty passage answers")
-            return None
-        """
-
-        """
-        attention, count_answer, mask = self.make_count_instance(passage_text.split(' '))
-        attention = [x + abs(random.gauss(0, 0.001)) for x in attention]
-        attention_sum = sum(attention)
-        attention = [float(x) / attention_sum for x in attention]
-        count_answer_vec = [0] * 10
-        count_answer_vec[count_answer] = 1
-        fields["aux_passage_attention"] = ArrayField(np.array(attention), padding_value=0.0)
-        fields["aux_answer_as_count"] = ArrayField(np.array(count_answer_vec))
-        fields["aux_count_mask"] = ArrayField(np.array(mask))
-        """
+        # End if answer-annotation
 
         fields["metadata"] = MetadataField(metadata)
         return Instance(fields)
@@ -886,7 +857,7 @@ class DROPReaderNew(DatasetReader):
         numbers: List[Union[int, float]],
         implicit_numbers: List[Union[int, float]] = None,
         max_number_of_numbers_to_consider: int = 2,
-    ) -> Tuple[List[Union[int, float]], Dict, Dict]:
+    ) -> Tuple[List[Union[int, float]], List[Union[int, float]], Dict, Dict]:
         """Compute the number support based on combinations of input numbers.
         This function considers all possible addition/subtraction between all pairs of numbers (even self). This forms
         the support of the possible answers. The output is a sorted list of number support.
@@ -896,23 +867,24 @@ class DROPReaderNew(DatasetReader):
             implicit_numbers: Extra numbers not part of the passage, but added in language. E.g. 100, 0
             max_number_of_numbers_to_consider: number of numbers to consider to combine
         Returns:
-            number_support: List of output number support
-            number2addcombinations: Dict[number, Set(Tuple[number, number])]
-            number2subcombinations: Dict[number, Set(Tuple[number, number])]
+            composed_numbers: List of output composed numbers (also includes implicit numbers)
+            compnumber2addcombinations: Dict[composed_number, Set(Tuple[passage_number, passage_number])]
+            compnumber2subcombinations: Dict[composed_number, Set(Tuple[passage_number, passage_number])]
                 Map from number to set of number combinations that can create it using the addition/sub operator.
                 For example, {2: set((1,1), (0,2))} is a valid entry for addcombinations
         """
-        zero_in_numbers = True if 0 in numbers else False
-
-        composed_numbers_list = []
-
         if max_number_of_numbers_to_consider > 2:
             raise NotImplementedError
 
+        numbers_w_impnums = [x for x in numbers]
+        # Adding implicit numbers here after checking if 0 is a part of original numbers so that we don't add tons of
+        #  combinations of the kind x = x + 0 / x - 0
+        zero_in_numbers = True if 0 in numbers else False
+        # Adding implicit-numbers to the input-numbers list since they can take part in composition with input-numbers.
         if implicit_numbers:
-            composed_numbers_list.extend(implicit_numbers)
+            numbers_w_impnums.extend(implicit_numbers)
 
-        number_support = set()
+        composed_num_set = set()
         # Map from composed-number to list of number-combination that lead to this number from the add/sub operation
         compnumber2subcombinations = defaultdict(set)
         compnumber2addcombinations = defaultdict(set)
@@ -923,7 +895,7 @@ class DROPReaderNew(DatasetReader):
         for number_of_numbers_to_consider in range(2, max_number_of_numbers_to_consider + 1):
             # for number_combination in itertools.combinations(numbers, r=number_of_numbers_to_consider):
             for indexed_number_combination in itertools.product(
-                enumerate(numbers), repeat=number_of_numbers_to_consider
+                enumerate(numbers_w_impnums), repeat=number_of_numbers_to_consider
             ):
                 ((idx1, num1), (idx2, num2)) = indexed_number_combination
                 number_combination = (num1, num2)
@@ -932,41 +904,42 @@ class DROPReaderNew(DatasetReader):
                 for sign_combination in all_sign_combinations:
                     value = sum([sign * num for (sign, num) in zip(sign_combination, number_combination)])
                     if value >= 0:
-                        number_support.add(value)
+                        composed_num_set.add(value)
                         # If 0 was originally in numbers then allow its combinations, o/w don't to avoid the
                         # combinations from getting bloated with x = x+0, 0+x, x-0
                         if (0 in number_combination and zero_in_numbers) or (0 not in number_combination):
                             if sign_combination == (1, 1):
-                                number2addcombinations[value].add(number_combination)
+                                compnumber2addcombinations[value].add(number_combination)
                             else:  #  sign_combination == [1, -1]:
-                                number2subcombinations[value].add(number_combination)
+                                compnumber2subcombinations[value].add(number_combination)
 
-        number_support.update(numbers)
-        number_support = sorted(list(number_support))
+        composed_numbers = sorted(list(composed_num_set))
 
-        return number_support, number2addcombinations, number2subcombinations
+        return composed_numbers, numbers_w_impnums, compnumber2addcombinations, compnumber2subcombinations
 
     @staticmethod
     def make_addsub_combination_array(
-        number_support: List[Union[int, float]], number2numcombinations: Dict[Union[int, float], List[Tuple]]
+        composed_numbers: List[Union[int, float]], passage_numbers: List[Union[int, float]],
+        compnumber2numcombinations: Dict[Union[int, float], List[Tuple]]
     ):
-        """Make a (size_of_number_support, max_num_combinations, 2) sized numpy array which would contain indices into
-        the number_support list.
+        """Make a (size_of_composed_numbers, max_num_combinations, 2) sized numpy array which would contain indices into
+        the composed_numbers list.
 
-        Each entry (i, :) will be a list of tuples where (i,j) would signifiy that ns[i] = ns[j][0] OP ns[j][1]
+        Each entry (i, :) will be a list of tuples, where (i, j)-th = x tuple would signifiy that
+        composed_number[i] = passage_number[x[0] OP passage_number[x[1]]
 
         dim=1 will be padded to the max num of combinations possible for a number for this instance.
-        Later on this will further be padded based on multiple instances.
+        Later on this will further be padded based on instances in the batch.
         """
-        max_num_combinations = max(len(combinations) for (_, combinations) in number2numcombinations.items())
-        number_combinations_indices = -1 * np.ones(shape=(len(number_support), max_num_combinations, 2), dtype=np.int32)
+        max_num_combinations = max(len(combinations) for (_, combinations) in compnumber2numcombinations.items())
+        number_combinations_indices = -1 * np.ones(shape=(len(composed_numbers), max_num_combinations, 2),
+                                                   dtype=np.int32)
 
-        for number, combinations in number2numcombinations.items():
-            number_idx = number_support.index(number)
+        for composed_num, combinations in compnumber2numcombinations.items():
+            compnumber_idx = composed_numbers.index(composed_num)
             for combination_num, (num1, num2) in enumerate(combinations):
-                (num1idx, num2idx) = (number_support.index(num1), number_support.index(num2))
-                number_combinations_indices[number_idx, combination_num, :] = [num1idx, num2idx]
-
+                (passagenum1idx, passagenum2idx) = (passage_numbers.index(num1), passage_numbers.index(num2))
+                number_combinations_indices[compnumber_idx, combination_num, :] = [passagenum1idx, passagenum2idx]
         return number_combinations_indices, max_num_combinations
 
     @staticmethod

@@ -8,8 +8,8 @@ DATASET_NAME=merged_data/iclr20_full
 DATASET_DIR=./resources/data/drop_acl/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
 VALFILE=${DATASET_DIR}/drop_dataset_dev.json
-TRAINFILE=${DATASET_DIR}/sample_train.json
-VALFILE=${DATASET_DIR}/sample_dev.json
+#TRAINFILE=${DATASET_DIR}/sample_train.json
+#VALFILE=${DATASET_DIR}/sample_dev.json
 
 # PACKAGE TO BE INCLUDED WHICH HOUSES ALL THE CODE
 INCLUDE_PACKAGE=semqa
@@ -46,7 +46,7 @@ export BEAMSIZE=2
 export MAX_DECODE_STEP=14
 export EPOCHS=42
 
-export GC_FREQ=0
+export GC_FREQ=500
 export PROFILE_FREQ=0
 export DEBUG=false
 
@@ -56,9 +56,7 @@ SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/${DATASET_NAME}
 MODEL_DIR=drop_parser_bert
 # CNTFIX_${COUNT_FIXED}
 PD_1=EXCLOSS_${EXCLOSS}/MMLLOSS_${MMLLOSS}/aux_${AUXLOSS}/SUPEPOCHS_${SUPEPOCHS}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}/LatestAlnlp_800
-
-SERIALIZATION_DIR=./resources/semqa/checkpoints/test
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}/al0.9-composed-num
 
 #######################################################################################################################
 

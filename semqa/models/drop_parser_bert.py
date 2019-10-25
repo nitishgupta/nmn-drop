@@ -34,6 +34,7 @@ from semqa.domain_languages.drop_language import (
     PassageSpanAnswer,
     YearDifference,
     PassageNumber,
+    ComposedNumber,
     CountNumber,
 )
 from semqa.domain_languages.drop_execution_parameters import ExecutorParameters
@@ -208,7 +209,8 @@ class DROPParserBERT(DROPParserBase):
         question: Dict[str, torch.LongTensor],
         passage: Dict[str, torch.LongTensor],
         passageidx2numberidx: torch.LongTensor,
-        number_support_values: List[List[float]],
+        passage_number_values: List[List[float]],
+        composed_numbers: List[List[float]],
         add_number_combinations_indices: torch.LongTensor,
         sub_number_combinations_indices: torch.LongTensor,
         max_num_add_combs: List[int],
@@ -224,6 +226,7 @@ class DROPParserBERT(DROPParserBase):
         answer_as_passage_spans: torch.LongTensor = None,
         answer_as_question_spans: torch.LongTensor = None,
         answer_as_passage_number: List[List[int]] = None,
+        answer_as_composed_number: List[List[int]] = None,
         answer_as_year_difference: List[List[int]] = None,
         answer_as_count: List[List[int]] = None,
         # answer_as_passagenum_difference: List[List[int]] = None,
@@ -382,14 +385,14 @@ class DROPParserBERT(DROPParserBase):
         p2penddate_alignment_aslist = [passage_passage_token2enddate_alignment[i] for i in range(batch_size)]
         p2pnum_alignment_aslist = [passage_passage_token2num_alignment[i] for i in range(batch_size)]
         # passage_token2datetoken_sim_aslist = [passage_token2datetoken_similarity[i] for i in range(batch_size)]
-        size_num_support_aslist = [len(x) for x in number_support_values]
+        size_composednums_aslist = [len(x) for x in composed_numbers]
         # Shape: (size_num_support_i, max_num_add_combs_i, 2) where _i is per instance
         add_num_combination_aslist = [
-            add_number_combinations_indices[i, 0 : size_num_support_aslist[i], 0 : max_num_add_combs[i], :]
+            add_number_combinations_indices[i, 0 : size_composednums_aslist[i], 0 : max_num_add_combs[i], :]
             for i in range(batch_size)
         ]
         sub_num_combination_aslist = [
-            sub_number_combinations_indices[i, 0 : size_num_support_aslist[i], 0 : max_num_sub_combs[i], :]
+            sub_number_combinations_indices[i, 0 : size_composednums_aslist[i], 0 : max_num_sub_combs[i], :]
             for i in range(batch_size)
         ]
 
@@ -408,7 +411,8 @@ class DROPParserBERT(DROPParserBase):
                     passage_tokenidx2dateidx=passageidx2dateidx[i],
                     passage_date_values=passage_date_values[i],
                     passage_tokenidx2numidx=passageidx2numberidx[i],
-                    passage_num_values=number_support_values[i],
+                    passage_num_values=passage_number_values[i],
+                    composed_numbers=composed_numbers[i],
                     passage_number_sortedtokenidxs=passage_number_sortedtokenidxs[i],
                     add_num_combination_indices=add_num_combination_aslist[i],
                     sub_num_combination_indices=sub_num_combination_aslist[i],
@@ -678,75 +682,48 @@ class DROPParserBERT(DROPParserBase):
 
                     if progtype == "PassageSpanAnswer":
                         # Tuple of start, end log_probs
-                        denotation: PassageSpanAnswer = denotation
                         log_likelihood = self._get_span_answer_log_prob(
                             answer_as_spans=answer_as_passage_spans[i], span_log_probs=denotation._value
                         )
-
-                        if torch.isnan(log_likelihood) == 1:
-                            print(f"Batch index: {i}")
-                            print(f"AnsAsPassageSpans:{answer_as_passage_spans[i]}")
-                            print("\nPassageSpan Start and End logits")
-                            print(denotation.start_logits)
-                            print(denotation.end_logits)
-
                     elif progtype == "QuestionSpanAnswer":
                         # Tuple of start, end log_probs
-                        denotation: QuestionSpanAnswer = denotation
                         log_likelihood = self._get_span_answer_log_prob(
                             answer_as_spans=answer_as_question_spans[i], span_log_probs=denotation._value
                         )
-                        if torch.isnan(log_likelihood) == 1:
-                            print(f"Batch index: {i}")
-                            print(f"AnsAsQuestionSpans:{answer_as_question_spans[i]}")
-                            print("\nQuestionSpan Start and End logits")
-                            print(denotation.start_logits)
-                            print(denotation.end_logits)
-
                     elif progtype == "YearDifference":
                         # Distribution over year_differences
-                        denotation: YearDifference = denotation
                         pred_year_difference_dist = denotation._value
                         pred_year_diff_log_probs = torch.log(pred_year_difference_dist + 1e-40)
                         gold_year_difference_dist = allenutil.move_to_device(
                             torch.FloatTensor(answer_as_year_difference[i]), cuda_device=self.device_id
                         )
                         log_likelihood = torch.sum(pred_year_diff_log_probs * gold_year_difference_dist)
-
                     elif progtype == "PassageNumber":
                         # Distribution over PassageNumbers
-                        denotation: PassageNumber = denotation
                         pred_passagenumber_dist = denotation._value
                         pred_passagenumber_logprobs = torch.log(pred_passagenumber_dist + 1e-40)
                         gold_passagenum_dist = allenutil.move_to_device(
                             torch.FloatTensor(answer_as_passage_number[i]), cuda_device=self.device_id
                         )
                         log_likelihood = torch.sum(pred_passagenumber_logprobs * gold_passagenum_dist)
-
+                    elif progtype == "ComposedNumber":
+                        # Distribution over ComposedNumbers
+                        pred_composednumber_dist = denotation._value
+                        pred_composednumber_logprobs = torch.log(pred_composednumber_dist + 1e-40)
+                        gold_composednum_dist = allenutil.move_to_device(
+                            torch.FloatTensor(answer_as_composed_number[i]), cuda_device=self.device_id
+                        )
+                        log_likelihood = torch.sum(pred_composednumber_logprobs * gold_composednum_dist)
                     elif progtype == "CountNumber":
-                        denotation: CountNumber = denotation
                         count_distribution = denotation._value
                         count_log_probs = torch.log(count_distribution + 1e-40)
                         gold_count_distribution = allenutil.move_to_device(
                             torch.FloatTensor(answer_as_count[i]), cuda_device=self.device_id
                         )
                         log_likelihood = torch.sum(count_log_probs * gold_count_distribution)
-
                     # Here implement losses for other program-return-types in else-ifs
                     else:
                         raise NotImplementedError
-                    """
-                    elif progtype == "QuestionSpanAnswer":
-                        denotation: QuestionSpanAnswer = denotation
-                        log_likelihood = self._get_span_answer_log_prob(
-                            answer_as_spans=answer_as_question_spans[i],answer_texts
-                            span_log_probs=denotation._value)
-                        if torch.isnan(log_likelihood) == 1:
-                            print("\nQuestionSpan")
-                            print(denotation.start_logits)
-                            print(denotation.end_logits)
-                            print(denotation._value)
-                    """
                     if torch.isnan(log_likelihood):
                         logger.info(f"Nan-loss encountered for denotation_log_likelihood")
                         log_likelihood = allenutil.move_to_device(torch.tensor(0.0), self.device_id)
@@ -793,13 +770,10 @@ class DROPParserBERT(DROPParserBase):
                 question_token_offsets = metadata[i]["question_token_offsets"]
                 passage_token_offsets = metadata[i]["passage_token_offsets"]
                 instance_year_differences = year_differences[i]
-                instance_passage_numbers = number_support_values[i]
-                # instance_passagenum_diffs = passagenumber_difference_values[i]
+                instance_passage_numbers = passage_number_values[i]
+                instance_composed_numbers= composed_numbers[i]
                 instance_count_values = count_values[i]
-                answer_annotations = metadata[i]["answer_annotations"]
-
                 instance_prog_denotations, instance_prog_types = (batch_denotations[i], batch_denotation_types[i])
-                instance_progs_logprob_list = batch_actionseq_scores[i]
 
                 all_instance_progs_predicted_answer_strs: List[str] = []  # List of answers from diff instance progs
                 for progidx in range(len(instance_prog_denotations)):
@@ -807,21 +781,17 @@ class DROPParserBERT(DROPParserBase):
                     progtype = instance_prog_types[progidx]
                     if progtype == "PassageSpanAnswer":
                         # Tuple of start, end log_probs
-                        denotation: PassageSpanAnswer = denotation
                         # Shape: (2, ) -- start / end token ids
                         best_span = get_best_span(
                             span_start_logits=denotation._value[0].unsqueeze(0),
                             span_end_logits=denotation._value[1].unsqueeze(0),
                         ).squeeze(0)
-
                         predicted_span = tuple(best_span.detach().cpu().numpy())
-                        start_offset = passage_token_offsets[predicted_span[0]][0]
-                        end_offset = passage_token_offsets[predicted_span[1]][1]
-                        predicted_answer = original_passage[start_offset:end_offset]
-
+                        start_char_offset = passage_token_offsets[predicted_span[0]][0]
+                        end_char_offset = passage_token_offsets[predicted_span[1]][1]
+                        predicted_answer = original_passage[start_char_offset:end_char_offset]
                     elif progtype == "QuestionSpanAnswer":
                         # Tuple of start, end log_probs
-                        denotation: QuestionSpanAnswer = denotation
                         # Shape: (2, ) -- start / end token ids
                         best_span = get_best_span(
                             span_start_logits=denotation._value[0].unsqueeze(0),
@@ -829,13 +799,11 @@ class DROPParserBERT(DROPParserBase):
                         ).squeeze(0)
 
                         predicted_span = tuple(best_span.detach().cpu().numpy())
-                        start_offset = question_token_offsets[predicted_span[0]][0]
-                        end_offset = question_token_offsets[predicted_span[1]][1]
-                        predicted_answer = original_question[start_offset:end_offset]
-
+                        start_char_offset = question_token_offsets[predicted_span[0]][0]
+                        end_char_offset = question_token_offsets[predicted_span[1]][1]
+                        predicted_answer = original_question[start_char_offset:end_char_offset]
                     elif progtype == "YearDifference":
                         # Distribution over year_differences vector
-                        denotation: YearDifference = denotation
                         year_differences_dist = denotation._value.detach().cpu().numpy()
                         predicted_yeardiff_idx = np.argmax(year_differences_dist)
                         # If not predicting year_diff = 0
@@ -844,9 +812,7 @@ class DROPParserBERT(DROPParserBase):
                         #     predicted_yeardiff_idx += 1
                         predicted_year_difference = instance_year_differences[predicted_yeardiff_idx]  # int
                         predicted_answer = str(predicted_year_difference)
-
                     elif progtype == "PassageNumber":
-                        denotation: PassageNumber = denotation
                         predicted_passagenum_idx = torch.argmax(denotation._value).detach().cpu().numpy()
                         predicted_passage_number = instance_passage_numbers[predicted_passagenum_idx]  # int/float
                         predicted_passage_number = (
@@ -855,7 +821,15 @@ class DROPParserBERT(DROPParserBase):
                             else predicted_passage_number
                         )
                         predicted_answer = str(predicted_passage_number)
-
+                    elif progtype == "ComposedNumber":
+                        predicted_composednum_idx = torch.argmax(denotation._value).detach().cpu().numpy()
+                        predicted_composed_number = instance_composed_numbers[predicted_composednum_idx]  # int/float
+                        predicted_composed_number = (
+                            int(predicted_composed_number)
+                            if int(predicted_composed_number) == predicted_composed_number
+                            else predicted_composed_number
+                        )
+                        predicted_answer = str(predicted_composed_number)
                     elif progtype == "CountNumber":
                         denotation: CountNumber = denotation
                         count_idx = torch.argmax(denotation._value).detach().cpu().numpy()
@@ -883,7 +857,6 @@ class DROPParserBERT(DROPParserBase):
                 self._drop_metrics(instance_predicted_answer, answer_annotations)
 
             if not self.training and self._debug:
-                print("here")
                 output_dict["metadata"] = metadata
                 # output_dict['best_span_ans_str'] = predicted_answers
                 output_dict["answer_as_passage_spans"] = answer_as_passage_spans
@@ -1048,6 +1021,7 @@ class DROPParserBERT(DROPParserBase):
             "passage_number": "@start@ -> PassageNumber",
             "question_span": "@start@ -> QuestionSpanAnswer",
             "count_number": "@start@ -> CountNumber",
+            "composed_number": "@start@ -> ComposedNumber",
         }
 
         valid_start_action_ids: List[Set[int]] = []
@@ -1390,7 +1364,7 @@ class DROPParserBERT(DROPParserBase):
             If we need somthing like qattn, where multiple supervisions are provided, things will have to change
         """
         # Reusing the function written for dates -- should work fine
-        # List[Tuple[torch.Tensor, torch.Tensor]]
+        #
         q_event_num_groundings = self.get_gold_question_event_date_grounding(numcomp_qspan_num_groundings, device_id)
         numcomp_action_gt = "<PassageAttention,PassageAttention:PassageAttention_answer> -> compare_num_greater_than"
         numcomp_action_lt = "<PassageAttention,PassageAttention:PassageAttention_answer> -> compare_num_greater_than"
