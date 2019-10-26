@@ -65,6 +65,7 @@ class DROPParserBERT(DROPParserBase):
         excloss: bool = False,
         qattloss: bool = False,
         mmlloss: bool = False,
+        hardem: bool = False,
         dropout: float = 0.0,
         debug: bool = False,
         profile_freq: Optional[int] = None,
@@ -176,6 +177,8 @@ class DROPParserBERT(DROPParserBase):
         self.excloss = excloss
         self.qattloss = qattloss
         self.mmlloss = mmlloss
+
+        self.hardem = hardem
 
         initializers(self)
 
@@ -571,6 +574,21 @@ class DROPParserBERT(DROPParserBase):
             ) = semparse_utils._convert_finalstates_to_actions(
                 best_final_states=best_final_states, possible_actions=actions, batch_size=batch_size
             )
+            batch_actionseq_probs = [[torch.exp(logprob) for logprob in instance_programs]
+                                     for instance_programs in batch_actionseq_scores]
+
+            if self.hardem and epoch > 3:
+                # Instance programs can be empty
+                batch_actionidxs = [[instance_actionidxs[0]] if instance_actionidxs else []
+                                    for instance_actionidxs in batch_actionidxs]
+                batch_actionseqs = [[instance_actionseqs[0]] if instance_actionseqs else []
+                                    for instance_actionseqs in batch_actionseqs]
+                batch_actionseq_scores = [[instance_actionseq_scores[0]] if instance_actionseq_scores else []
+                                          for instance_actionseq_scores in batch_actionseq_scores]
+                batch_actionseq_sideargs = [[instance_actionseq_sideargs[0]] if instance_actionseq_sideargs else []
+                                            for instance_actionseq_sideargs in batch_actionseq_sideargs]
+                batch_actionseq_probs = [[instance_actionseq_probs[0]] if instance_actionseq_probs else []
+                                         for instance_actionseq_probs in batch_actionseq_probs]
 
             # Adding Date-Comparison supervised event groundings to relevant actions
             max_passage_len = encoded_passage.size()[1]
@@ -597,7 +615,7 @@ class DROPParserBERT(DROPParserBase):
                 self.device_id,
             )
 
-        # # PRINT PRED PROGRAMS
+        # PRINT PRED PROGRAMS
         # for idx, instance_progs in enumerate(batch_actionseqs):
         #     print(f"InstanceIdx:{idx}")
         #     print(metadata[idx]["question_tokens"])
@@ -606,8 +624,6 @@ class DROPParserBERT(DROPParserBase):
         #         print(f"{languages[idx].action_sequence_to_logical_form(prog)} : {score}")
         #         # print(f"{prog} : {score}")
         # print()
-        # import pdb
-        # pdb.set_trace()
 
         with Profile("get-deno"):
             # List[List[Any]], List[List[str]]: Denotations and their types for all instances
@@ -674,7 +690,7 @@ class DROPParserBERT(DROPParserBase):
                     continue
 
                 instance_log_likelihood_list = []
-                new_instance_progs_logprob_list = []
+                # new_instance_progs_logprob_list = []
                 for progidx in range(len(instance_prog_denotations)):
                     denotation = instance_prog_denotations[progidx]
                     progtype = instance_prog_types[progidx]
@@ -731,15 +747,18 @@ class DROPParserBERT(DROPParserBase):
                         logger.info(f"Nan-loss encountered for ProgType: {progtype}")
                         prog_logprob = allenutil.move_to_device(torch.tensor(0.0), self.device_id)
 
-                    new_instance_progs_logprob_list.append(prog_logprob)
+                    # new_instance_progs_logprob_list.append(prog_logprob)
                     instance_log_likelihood_list.append(log_likelihood)
 
                 # Each is the shape of (number_of_progs,)
+                # tensor of log p(y_i|z_i)
                 instance_denotation_log_likelihoods = torch.stack(instance_log_likelihood_list, dim=-1)
-                # instance_progs_log_probs = torch.stack(instance_progs_logprob_list, dim=-1)
-                instance_progs_log_probs = torch.stack(new_instance_progs_logprob_list, dim=-1)
-
+                # tensor of log p(z_i|x)
+                instance_progs_log_probs = torch.stack(instance_progs_logprob_list, dim=-1)
+                # instance_progs_log_probs = torch.stack(new_instance_progs_logprob_list, dim=-1)
+                # tensor of \log(p(y_i|z_i) * p(z_i|x))
                 allprogs_log_marginal_likelihoods = instance_denotation_log_likelihoods + instance_progs_log_probs
+                # tensor of \log[\sum_i \exp (log(p(y_i|z_i) * p(z_i|x)))] = \log[\sum_i p(y_i|z_i) * p(z_i|x)]
                 instance_marginal_log_likelihood = allenutil.logsumexp(allprogs_log_marginal_likelihoods)
                 # Added sum to remove empty-dim
                 instance_marginal_log_likelihood = torch.sum(instance_marginal_log_likelihood)

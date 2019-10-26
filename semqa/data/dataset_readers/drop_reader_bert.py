@@ -276,7 +276,8 @@ class DROPReaderNew(DatasetReader):
         logger.info(
             f"Instances skipped due to gold-answer not in gold_program_types: {self.skip_due_to_gold_not_in_answer}"
         )
-        logger.info("Max passage nums: {}   max num supp : {} ".format(self.max_passage_nums, self.max_composed_nums))
+        logger.info("Max passage nums: {} Max composed nums : {} ".format(self.max_passage_nums,
+                                                                          self.max_composed_nums))
 
     @overrides
     def text_to_instance(

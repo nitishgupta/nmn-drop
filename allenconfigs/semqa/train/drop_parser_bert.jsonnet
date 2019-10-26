@@ -96,6 +96,7 @@ local utils = import 'utils.libsonnet';
         "excloss": utils.boolparser(std.extVar("EXCLOSS")),
         "qattloss": utils.boolparser(std.extVar("QATTLOSS")),
         "mmlloss": utils.boolparser(std.extVar("MMLLOSS")),
+        "hardem": utils.boolparser(std.extVar("HARD_EM")),
         "debug": utils.boolparser(std.extVar("DEBUG")),
         "profile_freq": utils.parse_number(std.extVar("PROFILE_FREQ")),
         "cuda_device": utils.parse_number(std.extVar("GPU"))
