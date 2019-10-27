@@ -65,7 +65,7 @@ class DROPParserBERT(DROPParserBase):
         excloss: bool = False,
         qattloss: bool = False,
         mmlloss: bool = False,
-        hardem: bool = False,
+        hardem_epoch: int = 0,
         dropout: float = 0.0,
         debug: bool = False,
         profile_freq: Optional[int] = None,
@@ -178,7 +178,8 @@ class DROPParserBERT(DROPParserBase):
         self.qattloss = qattloss
         self.mmlloss = mmlloss
 
-        self.hardem = hardem
+        # Hard-EM will start from this epoch (1-indexed); until then MML loss will be used
+        self.hardem_epoch = hardem_epoch if hardem_epoch > 0 else None
 
         initializers(self)
 
@@ -577,7 +578,7 @@ class DROPParserBERT(DROPParserBase):
             batch_actionseq_probs = [[torch.exp(logprob) for logprob in instance_programs]
                                      for instance_programs in batch_actionseq_scores]
 
-            if self.hardem and epoch > 3:
+            if self.hardem_epoch is not None and epoch >= self.hardem_epoch:
                 # Instance programs can be empty
                 batch_actionidxs = [[instance_actionidxs[0]] if instance_actionidxs else []
                                     for instance_actionidxs in batch_actionidxs]
@@ -589,6 +590,7 @@ class DROPParserBERT(DROPParserBase):
                                             for instance_actionseq_sideargs in batch_actionseq_sideargs]
                 batch_actionseq_probs = [[instance_actionseq_probs[0]] if instance_actionseq_probs else []
                                          for instance_actionseq_probs in batch_actionseq_probs]
+
 
             # Adding Date-Comparison supervised event groundings to relevant actions
             max_passage_len = encoded_passage.size()[1]
@@ -617,12 +619,11 @@ class DROPParserBERT(DROPParserBase):
 
         # PRINT PRED PROGRAMS
         # for idx, instance_progs in enumerate(batch_actionseqs):
-        #     print(f"InstanceIdx:{idx}")
-        #     print(metadata[idx]["question_tokens"])
-        #     scores = batch_actionseq_scores[idx]
-        #     for prog, score in zip(instance_progs, scores):
-        #         print(f"{languages[idx].action_sequence_to_logical_form(prog)} : {score}")
-        #         # print(f"{prog} : {score}")
+        #     print(f"--------  InstanceIdx: {idx}  ----------")
+        #     print(metadata[idx]["original_question"])
+        #     probs = batch_actionseq_probs[idx]
+        #     for prog, prob in zip(instance_progs, probs):
+        #         print(f"{prob}: {languages[idx].action_sequence_to_logical_form(prog)}")
         # print()
 
         with Profile("get-deno"):
