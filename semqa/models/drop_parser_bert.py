@@ -392,11 +392,11 @@ class DROPParserBERT(DROPParserBase):
         size_composednums_aslist = [len(x) for x in composed_numbers]
         # Shape: (size_num_support_i, max_num_add_combs_i, 2) where _i is per instance
         add_num_combination_aslist = [
-            add_number_combinations_indices[i, 0 : size_composednums_aslist[i], 0 : max_num_add_combs[i], :]
+            add_number_combinations_indices[i, 0:size_composednums_aslist[i], 0:max_num_add_combs[i], :]
             for i in range(batch_size)
         ]
         sub_num_combination_aslist = [
-            sub_number_combinations_indices[i, 0 : size_composednums_aslist[i], 0 : max_num_sub_combs[i], :]
+            sub_number_combinations_indices[i, 0:size_composednums_aslist[i], 0:max_num_sub_combs[i], :]
             for i in range(batch_size)
         ]
 
@@ -622,8 +622,9 @@ class DROPParserBERT(DROPParserBase):
         #     print(f"--------  InstanceIdx: {idx}  ----------")
         #     print(metadata[idx]["original_question"])
         #     probs = batch_actionseq_probs[idx]
-        #     for prog, prob in zip(instance_progs, probs):
-        #         print(f"{prob}: {languages[idx].action_sequence_to_logical_form(prog)}")
+        #     logprobs = batch_actionseq_scores[idx]
+        #     for prog, prob, logprob in zip(instance_progs, probs, logprobs):
+        #         print(f"{prob}: {languages[idx].action_sequence_to_logical_form(prog)} -- {logprob}")
         # print()
 
         with Profile("get-deno"):
@@ -754,6 +755,8 @@ class DROPParserBERT(DROPParserBase):
                 # Each is the shape of (number_of_progs,)
                 # tensor of log p(y_i|z_i)
                 instance_denotation_log_likelihoods = torch.stack(instance_log_likelihood_list, dim=-1)
+                # print(f"{i}: {instance_log_likelihood_list}")
+
                 # tensor of log p(z_i|x)
                 instance_progs_log_probs = torch.stack(instance_progs_logprob_list, dim=-1)
                 # instance_progs_log_probs = torch.stack(new_instance_progs_logprob_list, dim=-1)
@@ -761,6 +764,7 @@ class DROPParserBERT(DROPParserBase):
                 allprogs_log_marginal_likelihoods = instance_denotation_log_likelihoods + instance_progs_log_probs
                 # tensor of \log[\sum_i \exp (log(p(y_i|z_i) * p(z_i|x)))] = \log[\sum_i p(y_i|z_i) * p(z_i|x)]
                 instance_marginal_log_likelihood = allenutil.logsumexp(allprogs_log_marginal_likelihoods)
+                # print(f"{i}: {instance_marginal_log_likelihood}")
                 # Added sum to remove empty-dim
                 instance_marginal_log_likelihood = torch.sum(instance_marginal_log_likelihood)
                 if torch.isnan(instance_marginal_log_likelihood):
@@ -777,6 +781,8 @@ class DROPParserBERT(DROPParserBase):
             batch_denotation_loss = total_denotation_loss / batch_size
             self.modelloss_metric(batch_denotation_loss.item())
             output_dict["loss"] = batch_denotation_loss + total_aux_loss
+            # import pdb
+            # pdb.set_trace()
 
         # Get the predicted answers irrespective of loss computation.
         # For each program, given it's return type compute the predicted answer string

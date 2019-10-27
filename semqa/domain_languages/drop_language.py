@@ -197,6 +197,10 @@ class CountAnswer(Tensor):
     pass
 
 
+def clamp_distribution(distribution):
+    return torch.clamp(distribution, min=1e-20, max=1 - 1e-20)
+
+
 def get_empty_language_object():
     droplanguage = DropLanguage(
         rawemb_question=None,
@@ -467,7 +471,7 @@ class DropLanguage(DomainLanguage):
         question_passage_attention = self.question_passage_attention * question_attention.unsqueeze(1)
 
         passage_attention = question_passage_attention.sum(0)
-        passage_attention = torch.clamp(passage_attention, min=1e-10, max=1 - 1e-10)
+        passage_attention = clamp_distribution(passage_attention)
 
         debug_value = ""
         if self._debug:
@@ -510,7 +514,7 @@ class DropLanguage(DomainLanguage):
         original_filter_attn = filter_attn * passage_attn
 
         filtered_passage_attention = original_filter_attn / torch.sum(original_filter_attn)
-        filtered_passage_attention = torch.clamp(filtered_passage_attention, min=1e-10, max=1 - 1e-10)
+        filtered_passage_attention = clamp_distribution(filtered_passage_attention)
 
         loss = passage_attention.loss
 
@@ -572,7 +576,7 @@ class DropLanguage(DomainLanguage):
 
         # Shape: (passage_length, )
         relocate_attn = (p_to_p_relocate_attention * passage_attn.unsqueeze(1)).sum(0)
-        relocate_attn = torch.clamp(relocate_attn, min=1e-10, max=1 - 1e-10)
+        relocate_attn = clamp_distribution(relocate_attn)
 
         loss = passage_attention.loss
         loss += 2.0 * inwindow_aux_loss
@@ -659,7 +663,7 @@ class DropLanguage(DomainLanguage):
         date_distribution = passage_attention.new_zeros(self.num_passage_dates)
         date_distribution.scatter_add_(0, masked_passage_tokenidx2dateidx, passage_date_token_probs)
 
-        date_distribution = torch.clamp(date_distribution, min=1e-10, max=1 - 1e-10)
+        date_distribution = clamp_distribution(date_distribution)
 
         date_distribution_entropy = -1 * torch.sum(date_distribution * torch.log(date_distribution + 1e-40))
 
@@ -720,7 +724,7 @@ class DropLanguage(DomainLanguage):
         num_distribution = passage_attention.new_zeros(self.num_passage_nums)
         num_distribution.scatter_add_(0, masked_passage_tokenidx2numidx, passage_number_token_probs)
 
-        num_distribution = torch.clamp(num_distribution, min=1e-10, max=1 - 1e-10)
+        num_distribution = clamp_distribution(num_distribution)
 
         num_distribution_entropy = -1 * torch.sum(num_distribution * torch.log(num_distribution + 1e-40))
 
@@ -751,7 +755,7 @@ class DropLanguage(DomainLanguage):
         num_distribution = implicit_num_probs.new_zeros(self.num_passage_nums)
         num_distribution.scatter_add_(0, self.implicit_num_indices, implicit_num_probs)
 
-        num_distribution = torch.clamp(num_distribution, min=1e-10, max=1 - 1e-10)
+        num_distribution = clamp_distribution(num_distribution)
 
         return num_distribution
 
@@ -788,9 +792,6 @@ class DropLanguage(DomainLanguage):
         # into this number. For example, num_combination_indices[i, :, :] is a combs=[NC, 2] array where
         # composed_number[i] = PassageNumber(combs[j, 0]) OP PassageNumber(combs[j, 1]) for all j.
         # These combinations are padded with -1
-
-        #
-
         masked_num_combination_indices = num_combination_indices * num_combination_mask
 
         # Making (B=1, seq_len=passage_numbers, dim=1) for batch index selection
@@ -817,7 +818,7 @@ class DropLanguage(DomainLanguage):
 
         # Shape: (number_support)
         expected_distribution = (selected_d_1 * selected_d_2).sum(dim=1)
-        expected_distribution = torch.clamp(expected_distribution, min=1e-10, max=1 - 1e-10)
+        expected_distribution = clamp_distribution(expected_distribution)
 
         return expected_distribution
 
@@ -845,7 +846,7 @@ class DropLanguage(DomainLanguage):
         # print(f"{year_differences_dist} {year_differences_dist.sum()}")
         # print()
 
-        year_differences_dist = torch.clamp(year_differences_dist, min=1e-10, max=1 - 1e-10)
+        year_differences_dist = clamp_distribution(year_differences_dist)
 
         return year_differences_dist
 
@@ -869,7 +870,7 @@ class DropLanguage(DomainLanguage):
             raise NotImplementedError
 
         expected_bool = (comparison_mat * joint_dist).sum()
-        expected_bool = torch.clamp(expected_bool, min=1e-10, max=1 - 1e-10)
+        expected_bool = clamp_distribution(expected_bool)
         return expected_bool
 
     def expected_num_comparison(self, distribution_1, distribution_2, comparison):
@@ -892,7 +893,7 @@ class DropLanguage(DomainLanguage):
             raise NotImplementedError
 
         expected_bool = (comparison_mat * joint_dist).sum()
-        expected_bool = torch.clamp(expected_bool, min=1e-10, max=1 - 1e-10)
+        expected_bool = clamp_distribution(expected_bool)
         return expected_bool
 
     def date_comparison(self, passage_attention_1, passage_attention_2, comparison: str, gold_date_groundings=None):
@@ -1008,7 +1009,7 @@ class DropLanguage(DomainLanguage):
             aux_loss,
         ) = self.date_comparison(passage_attention_1, passage_attention_2, "lesser", event_date_groundings)
 
-        average_passage_distribution = torch.clamp(average_passage_distribution, min=1e-10, max=1 - 1e-10)
+        average_passage_distribution = clamp_distribution(average_passage_distribution)
         loss = 0.0
         loss += aux_loss
         loss += passage_attn_1.loss
@@ -1057,7 +1058,7 @@ class DropLanguage(DomainLanguage):
             average_passage_distribution,
             aux_loss,
         ) = self.date_comparison(passage_attention_1, passage_attention_2, "greater", event_date_groundings)
-        average_passage_distribution = torch.clamp(average_passage_distribution, min=1e-10, max=1 - 1e-10)
+        average_passage_distribution = clamp_distribution(average_passage_distribution)
 
         loss = 0.0
         loss += aux_loss
@@ -1106,7 +1107,7 @@ class DropLanguage(DomainLanguage):
             average_passage_distribution,
             aux_loss,
         ) = self.num_comparison(passage_attention_1, passage_attention_2, "lesser", event_num_groundings)
-        average_passage_distribution = torch.clamp(average_passage_distribution, min=1e-10, max=1 - 1e-10)
+        average_passage_distribution = clamp_distribution(average_passage_distribution)
 
         loss = 0.0
         loss += aux_loss
@@ -1157,7 +1158,7 @@ class DropLanguage(DomainLanguage):
             average_passage_distribution,
             aux_loss,
         ) = self.num_comparison(passage_attention_1, passage_attention_2, "greater", event_num_groundings)
-        average_passage_distribution = torch.clamp(average_passage_distribution, min=1e-10, max=1 - 1e-10)
+        average_passage_distribution = clamp_distribution(average_passage_distribution)
 
         loss = 0.0
         loss += aux_loss
@@ -1305,7 +1306,7 @@ class DropLanguage(DomainLanguage):
         # Shape: (passage_length)
         passage_attn = passage_attn * self.passage_mask
 
-        passage_attn = torch.clamp(passage_attn, min=1e-15, max=1 - 1e-15)
+        passage_attn = clamp_distribution(passage_attn)
 
         scaled_attentions = [passage_attn * sf for sf in self.parameters.passage_attention_scalingvals]
         # Shape: (passage_length, num_scaling_factors)
@@ -1390,7 +1391,7 @@ class DropLanguage(DomainLanguage):
         exp_val = torch.exp(-1 * l2_by_vsquared) + 1e-30
         count_distribution = exp_val / (torch.sum(exp_val))
 
-        count_distribution = torch.clamp(count_distribution, min=1e-10, max=1 - 1e-10)
+        count_distribution = clamp_distribution(count_distribution)
 
         debug_value = ""
         if self._debug:
@@ -1515,7 +1516,7 @@ class DropLanguage(DomainLanguage):
         cum_dist = num_dist.cumsum(0)
         cum_dist_n = cum_dist ** self.max_samples
         maximum_distribution = cum_dist_n - torch.cat([cum_dist_n.new_zeros(1), cum_dist_n[:-1]])
-        maximum_distribution = torch.clamp(maximum_distribution, min=1e-10, max=1 - 1e-10)
+        maximum_distribution = clamp_distribution(maximum_distribution)
         return maximum_distribution
 
     def min_number_distribution(self, num_dist: torch.FloatTensor):
@@ -1525,7 +1526,7 @@ class DropLanguage(DomainLanguage):
         inverse_cumdist_n = inverse_cumdist ** self.max_samples
         inverse_cumdist_n_shifted = torch.cat([inverse_cumdist_n[1:], inverse_cumdist_n.new_zeros(1)])
         minimum_distribution = inverse_cumdist_n - inverse_cumdist_n_shifted
-        minimum_distribution = torch.clamp(minimum_distribution, min=1e-10, max=1 - 1e-10)
+        minimum_distribution = clamp_distribution(minimum_distribution)
         return minimum_distribution
 
     @predicate_with_side_args(["event_num_groundings"])
@@ -1701,7 +1702,7 @@ class DropLanguage(DomainLanguage):
         # Now marginalize over numbers, to get the new-passage-attention
         new_pattn = (maxprob_times_pattn_numbertokenprob / total_weight_to_numbertoken).sum(1)
 
-        new_pattn = torch.clamp(new_pattn, min=1e-10, max=1 - 1e-10)
+        new_pattn = clamp_distribution(new_pattn)
 
         return new_pattn, only_expected_numbertoken_probs, only_numbertoken_minmaxprobs_sorted
 
