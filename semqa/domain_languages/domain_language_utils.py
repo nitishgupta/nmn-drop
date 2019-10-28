@@ -284,12 +284,11 @@ def topProbMassElems(attention: torch.FloatTensor, support: List[Any], k=5):
         most_attended_vis: String visualization of question attention
     """
 
-    attention_aslist: List[float] = myutils.round_all(myutils.tocpuNPList(attention), 3)
-    attention_aslist: List[float] = attention_aslist[: len(support)]
+    attention_aslist: List[float] = myutils.round_all(myutils.tocpuNPList(attention), 3)[: len(support)]
 
     sorted_elem_attn = sorted(zip(support, attention_aslist), key=lambda x: x[1], reverse=True)
     out_str = ""
-    for i in range(k):
+    for i in range(min(k, len(sorted_elem_attn))):
         out_str += f"{sorted_elem_attn[i][0]}: {sorted_elem_attn[i][1]} || "
 
     return out_str.strip()

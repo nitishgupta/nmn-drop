@@ -1,6 +1,6 @@
 #!/usr/bin/env
 
-SERIALIZATION_DIR=./resources/semqa/checkpoints/drop/date_num/date_yd_num_hmyw_cnt_whoarg_600/drop_parser_bert/CNTFIX_false/EXCLOSS_true/MMLLOSS_true/aux_true/SUPEPOCHS_5/S_1000/BertModel_wTest
+SERIALIZATION_DIR=./resources/semqa/checkpoints/drop/merged_data/iclr20_full/drop_parser_bert/EXCLOSS_true/MMLLOSS_true/aux_true/SUPEPOCHS_0/S_1/al0.9-composed-num_Cl-20
 WEIGHTS_TH=best.th
 # WEIGHTS_TH=model_state_epoch_32.th
 
