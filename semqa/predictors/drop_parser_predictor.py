@@ -1,5 +1,6 @@
 from typing import List, Union
 
+import json
 from overrides import overrides
 
 from allennlp.common.util import JsonDict, sanitize
@@ -31,7 +32,7 @@ def f1metric(prediction: Union[str, List], ground_truths: List):  # type: ignore
 
 
 @Predictor.register("drop_parser_predictor")
-class DropQANetPredictor(Predictor):
+class DropNMNPredictor(Predictor):
     """
     Predictor for the :class:`~allennlp.models.bidaf.SemanticRoleLabeler` model.
     """
@@ -154,9 +155,6 @@ class DropQANetPredictor(Predictor):
         metadata = outputs["metadata"]
         predicted_ans = outputs["predicted_answer"]
 
-        gold_passage_span_ans = metadata["answer_passage_spans"] if "answer_passage_spans" in metadata else []
-        gold_question_span_ans = metadata["answer_question_spans"] if "answer_question_spans" in metadata else []
-
         # instance_spans_for_all_progs = outputs['predicted_spans']
         # best_span = instance_spans_for_all_progs[0]
         question_id = metadata["question_id"]
@@ -176,3 +174,51 @@ class DropQANetPredictor(Predictor):
         out_str += logical_form + "\n"
 
         return out_str
+
+
+@Predictor.register("drop_mtmsnstyle_predictor")
+class MTMSNStylePredictor(Predictor):
+    """
+    Predictor for the :class:`~allennlp.models.bidaf.SemanticRoleLabeler` model.
+    """
+
+    def __init__(self, model: Model, dataset_reader: DatasetReader) -> None:
+        super().__init__(model, dataset_reader)
+
+    @overrides
+    def predict_instance(self, instance: Instance) -> JsonDict:
+        outputs = self._model.forward_on_instance(instance)
+        return sanitize(outputs)
+
+    def predict_batch_instance(self, instances: List[Instance]) -> List[JsonDict]:
+        outputs = self._model.forward_on_instances(instances)
+        return sanitize(outputs)
+
+    @overrides
+    def dump_line(self, outputs: JsonDict) -> str:  # pylint: disable=no-self-use
+        # Use json.dumps(outputs) + "\n" to dump a dictionary
+
+        out_str = ""
+        metadata = outputs["metadata"]
+        predicted_ans = outputs["predicted_answer"]
+
+        # instance_spans_for_all_progs = outputs['predicted_spans']
+        # best_span = instance_spans_for_all_progs[0]
+        question_id = metadata["question_id"]
+        question = metadata["original_question"]
+        answer_annotation_dicts = metadata["answer_annotations"]
+        (exact_match, f1_score) = f1metric(predicted_ans, answer_annotation_dicts)
+
+        logical_form = outputs["logical_forms"][0]
+
+        output_dict = {
+            "query_id": question_id,
+            "question": question,
+            "text": predicted_ans,
+            "type": logical_form,
+            "f1": f1_score,
+            "em": exact_match,
+            "gold_answer": answer_annotation_dicts
+        }
+
+        return json.dumps(output_dict) + "\n"

@@ -12,16 +12,17 @@ MODEL_TAR=${MODEL_DIR}/model.tar.gz
 PREDICTION_DIR=${MODEL_DIR}/predictions
 mkdir ${PREDICTION_DIR}
 
-DATASET_DIR=./resources/data/drop_acl/merged_data
+DATASET_DIR=./resources/data/drop_acl/
 
-DATASET_NAME=iclr20_full
+DATASET_NAME=preprocess
 
 FULL_VALFILE=${DATASET_DIR}/${DATASET_NAME}/drop_dataset_dev.json
 # PREDICTION_FILE=${PREDICTION_DIR}/${DATASET_NAME}_dev_numstepanalysis.tsv
-# PREDICTOR=drop_analysis_predictor
-PREDICTOR=drop_parser_predictor
+PREDICTOR=drop_mtmsnstyle_predictor
+# PREDICTOR=drop_parser_predictor
 
-PREDICTION_FILE=${PREDICTION_DIR}/${DATASET_NAME}_dev_pred.txt
+PREDICTION_FILE=${PREDICTION_DIR}/drop_dev_preds.jsonl
+# ${DATASET_NAME}_dev_pred.txt
 
 allennlp predict --output-file ${PREDICTION_FILE} \
                  --predictor ${PREDICTOR} \
