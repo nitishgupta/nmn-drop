@@ -37,7 +37,6 @@ local utils = import 'utils.libsonnet';
 
     "model": {
         "type": "drop_parser_bert",
-
         "bert_config_json": "semqa/models/utils/bert_config_test.json",
 
         "max_ques_len": 50,
@@ -78,33 +77,24 @@ local utils = import 'utils.libsonnet';
         "max_decoding_steps": utils.parse_number(std.extVar("MAX_DECODE_STEP")),
         "dropout": utils.parse_number(std.extVar("DROPOUT")),
 
-        "initializers":
-        [
-            ["passage_attention_to_count|passage_count_hidden2logits",
-                 {
-                     "type": "pretrained",
-                     "weights_file_path": "./pattn2count_ckpt/best.th"
-                 },
-            ],
-            [".*_text_field_embedder.*", "prevent"]
-        ],
-
         "auxwinloss": utils.boolparser(std.extVar("AUXLOSS")),
 
         "countfixed": utils.boolparser(std.extVar("COUNT_FIXED")),
 
-        "denotationloss": utils.boolparser(std.extVar("DENLOSS")),
         "excloss": utils.boolparser(std.extVar("EXCLOSS")),
         "qattloss": utils.boolparser(std.extVar("QATTLOSS")),
         "mmlloss": utils.boolparser(std.extVar("MMLLOSS")),
-        "debug": utils.boolparser(std.extVar("DEBUG"))
-    },
+        "hardem_epoch": utils.parse_number(std.extVar("HARDEM_EPOCH")),
+        "debug": utils.boolparser(std.extVar("DEBUG")),
+        "profile_freq": utils.parse_number(std.extVar("PROFILE_FREQ")),
+        "cuda_device": utils.parse_number(std.extVar("GPU"))
+},
 
     "iterator": {
         "type": "filter",
         "track_epoch": true,
         "batch_size": std.extVar("BS"),
-        "cache_instances": true,
+        "cache_instances": false,
         "filter_instances": utils.boolparser(std.extVar("SUPFIRST")),
         "filter_for_epochs": utils.parse_number(std.extVar("SUPEPOCHS")),
     },
@@ -129,7 +119,8 @@ local utils = import 'utils.libsonnet';
         },
         "summary_interval": 100,
         "should_log_parameter_statistics": false,
-        "validation_metric": "+f1"
+        "validation_metric": "+f1",
+        "gc_freq": utils.parse_number(std.extVar("GC_FREQ")),
     },
 
     "random_seed": utils.parse_number(std.extVar("SEED")),

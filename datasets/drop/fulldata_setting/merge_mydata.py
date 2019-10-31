@@ -150,6 +150,14 @@ if __name__ == "__main__":
     parser.add_argument("--merged_dir")
     args = parser.parse_args()
 
+
+    """ This script takes two drop dataset directories, (pre-processed using our code): 
+        (a) mydata_dir: A subset of the full dataset, presumbly containing extra annotations
+        (b) fulldata_dir: Full dataset (could be a subset as well)  
+        
+        and merges them into a single dataset. If duplicate questions are found, mydata_dir is given priority
+    """
+
     mydata_dir = args.mydata_dir
     fulldata_dir = args.fulldata_dir
     merged_dir = args.merged_dir

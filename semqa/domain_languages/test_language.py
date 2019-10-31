@@ -1,7 +1,6 @@
 from typing import Callable, List
 
-from allennlp.semparse import DomainLanguage, ExecutionError, ParsingError, predicate, predicate_with_side_args
-
+from allennlp_semparse import DomainLanguage, predicate
 
 class Arithmetic(DomainLanguage):
     def __init__(self):

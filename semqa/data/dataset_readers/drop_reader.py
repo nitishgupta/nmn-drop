@@ -12,7 +12,8 @@ from allennlp.data.instance import Instance
 from allennlp.data.token_indexers import SingleIdTokenIndexer, TokenIndexer
 from allennlp.data.tokenizers import Token, Tokenizer
 from allennlp.data.dataset_readers.reading_comprehension.util import IGNORED_TOKENS, STRIPPED_CHARACTERS
-from allennlp.data.fields import Field, TextField, MetadataField, ListField, SpanField, ProductionRuleField, ArrayField
+from allennlp.data.fields import Field, TextField, MetadataField, ListField, SpanField, ArrayField
+from allennlp_semparse.fields import ProductionRuleField
 
 from semqa.domain_languages.drop_language import DropLanguage, Date, get_empty_language_object
 from datasets.drop import constants

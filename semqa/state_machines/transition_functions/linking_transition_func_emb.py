@@ -8,8 +8,8 @@ import torch
 from allennlp.common.checks import check_dimensions_match
 from allennlp.modules import Attention, FeedForward
 from allennlp.nn import Activation
-from allennlp.state_machines.states import GrammarBasedState
-from allennlp.state_machines.transition_functions.basic_transition_function import BasicTransitionFunction
+from allennlp_semparse.state_machines.states import GrammarBasedState
+from allennlp_semparse.state_machines.transition_functions import BasicTransitionFunction
 
 
 class LinkingTransitionFunctionEmbeddings(BasicTransitionFunction):

@@ -3,14 +3,15 @@ from typing import Dict, List, Tuple, Any, TypeVar, Optional
 from overrides import overrides
 import torch
 
-from allennlp.data.fields.production_rule_field import ProductionRule
 from allennlp.data.vocabulary import Vocabulary
 from allennlp.models.model import Model
 from allennlp.modules import TextFieldEmbedder, Embedding
-from allennlp.state_machines.states import GrammarStatelet, RnnStatelet, State
 from allennlp.training.metrics import Average
 import allennlp.common.util as alcommon_utils
 from allennlp.nn import RegularizerApplicator
+
+from allennlp_semparse.state_machines.states import GrammarStatelet, RnnStatelet, State
+from allennlp_semparse.fields.production_rule_field import ProductionRule
 
 import semqa.domain_languages.domain_language_utils as dl_utils
 from semqa.domain_languages.drop_language import DropLanguage
@@ -36,6 +37,9 @@ class DROPParserBase(Model):
         regularizer: Optional[RegularizerApplicator] = None,
     ) -> None:
         super(DROPParserBase, self).__init__(vocab=vocab, regularizer=regularizer)
+
+        # To call garbage collection frequently
+        self.num_forward_calls = 0
 
         self._denotation_accuracy = Average()
         self._consistency = Average()
@@ -70,10 +74,10 @@ class DROPParserBase(Model):
     def _get_initial_rnn_state(
         self,
         question_encoded: torch.FloatTensor,
-        question_mask: torch.LongTensor,
+        question_mask: torch.Tensor,
         question_encoded_finalstate: torch.FloatTensor,
-        question_encoded_aslist: List[torch.FloatTensor],
-        question_mask_aslist: List[torch.LongTensor],
+        question_encoded_aslist: List[torch.Tensor],
+        question_mask_aslist: List[torch.Tensor],
     ):
         """ Get the initial RnnStatelet for the decoder based on the question encoding
 

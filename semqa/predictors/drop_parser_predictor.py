@@ -1,5 +1,6 @@
 from typing import List, Union
 
+import json
 from overrides import overrides
 
 from allennlp.common.util import JsonDict, sanitize
@@ -31,7 +32,7 @@ def f1metric(prediction: Union[str, List], ground_truths: List):  # type: ignore
 
 
 @Predictor.register("drop_parser_predictor")
-class DropQANetPredictor(Predictor):
+class DropNMNPredictor(Predictor):
     """
     Predictor for the :class:`~allennlp.models.bidaf.SemanticRoleLabeler` model.
     """
@@ -80,8 +81,8 @@ class DropQANetPredictor(Predictor):
         passage = metadata["original_passage"]
         answer_annotation_dicts = metadata["answer_annotations"]
         passage_date_values = metadata["passage_date_values"]
-        number_support = metadata["number_support"]
         passage_num_values = metadata["passage_number_values"]
+        composed_numbers = metadata["composed_numbers"]
         passage_year_diffs = metadata["passage_year_diffs"]
         # passage_num_diffs = metadata['passagenum_diffs']
         (exact_match, f1_score) = f1metric(predicted_ans, answer_annotation_dicts)
@@ -97,25 +98,29 @@ class DropQANetPredictor(Predictor):
         # out_str += f"PredPassageSpan: {best_span}" + '\n'
         out_str += f"PredictedAnswer: {predicted_ans}" + "\n"
         out_str += f"F1:{f1_score} EM:{exact_match}" + "\n"
+        out_str += f"Top-Prog: {outputs['logical_forms'][0]}" + "\n"
+        out_str += f"Top-Prog-Prob: {outputs['batch_actionseq_probs'][0]}" + "\n"
         out_str += f"Dates: {passage_date_values}" + "\n"
         out_str += f"PassageNums: {passage_num_values}" + "\n"
-        out_str += f"NumSupport: {number_support}" + "\n"
+        out_str += f"ComposedNumbers: {composed_numbers}" + "\n"
         # out_str += f'PassageNumDiffs: {passage_num_diffs}' + '\n'
         out_str += f"YearDiffs: {passage_year_diffs}" + "\n"
 
         logical_forms = outputs["logical_forms"]
+        program_probs = outputs["batch_actionseq_probs"]
         execution_vals = outputs["execution_vals"]
-        actionseq_scores = outputs["batch_actionseq_scores"]
+        program_logprobs = outputs["batch_actionseq_logprobs"]
         all_predicted_answers = outputs["all_predicted_answers"]
         if "logical_forms":
-            for lf, d, ex_vals, progscore in zip(
-                logical_forms, all_predicted_answers, execution_vals, actionseq_scores
+            for lf, d, ex_vals, prog_logprob, prog_prob in zip(
+                logical_forms, all_predicted_answers, execution_vals, program_logprobs, program_probs
             ):
                 ex_vals = myutils.round_all(ex_vals, 1)
                 # Stripping the trailing new line
                 ex_vals_str = self._print_ExecutionValTree(ex_vals, 0).strip()
                 out_str += f"LogicalForm: {lf}\n"
-                out_str += f"Score: {progscore}\n"
+                out_str += f"Prog_LogProb: {prog_logprob}\n"
+                out_str += f"Prog_Prob: {prog_prob}\n"
                 out_str += f"Answer: {d}\n"
                 out_str += f"ExecutionTree:\n{ex_vals_str}"
                 out_str += f"\n"
@@ -154,9 +159,6 @@ class DropQANetPredictor(Predictor):
         metadata = outputs["metadata"]
         predicted_ans = outputs["predicted_answer"]
 
-        gold_passage_span_ans = metadata["answer_passage_spans"] if "answer_passage_spans" in metadata else []
-        gold_question_span_ans = metadata["answer_question_spans"] if "answer_question_spans" in metadata else []
-
         # instance_spans_for_all_progs = outputs['predicted_spans']
         # best_span = instance_spans_for_all_progs[0]
         question_id = metadata["question_id"]
@@ -176,3 +178,60 @@ class DropQANetPredictor(Predictor):
         out_str += logical_form + "\n"
 
         return out_str
+
+
+@Predictor.register("drop_mtmsnstyle_predictor")
+class MTMSNStylePredictor(Predictor):
+    """
+    Predictor for the :class:`~allennlp.models.bidaf.SemanticRoleLabeler` model.
+    """
+
+    def __init__(self, model: Model, dataset_reader: DatasetReader) -> None:
+        super().__init__(model, dataset_reader)
+
+    @overrides
+    def predict_instance(self, instance: Instance) -> JsonDict:
+        outputs = self._model.forward_on_instance(instance)
+        return sanitize(outputs)
+
+    def predict_batch_instance(self, instances: List[Instance]) -> List[JsonDict]:
+        outputs = self._model.forward_on_instances(instances)
+        return sanitize(outputs)
+
+    @overrides
+    def dump_line(self, outputs: JsonDict) -> str:  # pylint: disable=no-self-use
+        # Use json.dumps(outputs) + "\n" to dump a dictionary
+
+        out_str = ""
+        metadata = outputs["metadata"]
+        predicted_ans = outputs["predicted_answer"]
+
+        # instance_spans_for_all_progs = outputs['predicted_spans']
+        # best_span = instance_spans_for_all_progs[0]
+        question_id = metadata["question_id"]
+        question = metadata["original_question"]
+        answer_annotation_dicts = metadata["answer_annotations"]
+        program_probs = outputs["batch_actionseq_probs"]  # List size is the same as number of programs predicted
+        (exact_match, f1_score) = f1metric(predicted_ans, answer_annotation_dicts)
+        logical_forms = outputs["logical_forms"]
+        if logical_forms:
+            logical_form = logical_forms[0]
+        else:
+            logical_form = "NO PROGRAM PREDICTED"
+        if program_probs:
+            prog_prob = program_probs[0]
+        else:
+            prog_prob = 0.0
+
+        output_dict = {
+            "query_id": question_id,
+            "question": question,
+            "text": predicted_ans,
+            "type": logical_form,
+            "prog_prob": prog_prob,
+            "f1": f1_score,
+            "em": exact_match,
+            "gold_answer": answer_annotation_dicts
+        }
+
+        return json.dumps(output_dict) + "\n"
