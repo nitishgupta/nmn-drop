@@ -20,17 +20,17 @@ DATASET_DIR=./resources/data/drop_acl
 DATASET_NAME=preprocess
 QUESTYPE_SETS_DIR=questype_datasets
 
-VALFILE=${DATASET_DIR}/${DATASET_NAME}/drop_dataset_dev.json
-TESTFILE=${DATASET_DIR}/${DATASET_NAME}/drop_dataset_mytest.json
+VALDATA_FILE=${DATASET_DIR}/${DATASET_NAME}/drop_dataset_dev.json
+TESTDATA_FILE=${DATASET_DIR}/${DATASET_NAME}/drop_dataset_mytest.json
 
-VAL_EVAL_FILE=${PREDICTION_DIR}/${DATASET_NAME}_dev_eval.txt
-TEST_EVAL_FILE=${PREDICTION_DIR}/${DATASET_NAME}_test_eval.txt
+VAL_METRICS_FILE=${PREDICTION_DIR}/drop_dev_metrics.json
+TEST_METRICS_FILE=${PREDICTION_DIR}/${DATASET_NAME}_test_metrics.json
 
 # Validation over complete dataset
-allennlp evaluate --output-file ${VAL_EVAL_FILE} \
+allennlp evaluate --output-file ${VAL_METRICS_FILE} \
                   --cuda-device ${GPU} \
                   --include-package ${INCLUDE_PACKAGE} \
-                  ${MODEL_TAR} ${VALFILE}
+                  ${MODEL_TAR} ${VALDATA_FILE}
 
 # Test over complete dataset
 #allennlp evaluate --output-file ${TEST_EVAL_FILE} \

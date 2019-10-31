@@ -3,7 +3,7 @@
 # export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
-DATASET_NAME=merged_data/iclr20_full
+DATASET_NAME=merged_data/my1200_full
 # DATASET_NAME=num/percent
 
 DATASET_DIR=./resources/data/drop_acl/${DATASET_NAME}
@@ -35,11 +35,11 @@ export QATTLOSS=true
 export MMLLOSS=true
 
 # 0 will not run HardEM
-export HARDEM_EPOCH=10
+export HARDEM_EPOCH=0
 
 # Whether strong supervison instances should be trained on first, if yes for how many epochs
 export SUPFIRST=true
-export SUPEPOCHS=0
+export SUPEPOCHS=3
 
 export BS=4
 export DROPOUT=0.2
@@ -59,9 +59,9 @@ CHECKPOINT_ROOT=./resources/semqa/checkpoints
 SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/${DATASET_NAME}
 MODEL_DIR=drop_parser_bert
 PD_1=EXCLOSS_${EXCLOSS}/MMLLOSS_${MMLLOSS}/aux_${AUXLOSS}/SUPEPOCHS_${SUPEPOCHS}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}/al0.9-composed-num_HEM10
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}/al0.9-composed-num
 
-# SERIALIZATION_DIR=./resources/semqa/checkpoints/test
+SERIALIZATION_DIR=./resources/semqa/checkpoints/test2
 
 #######################################################################################################################
 

@@ -98,6 +98,8 @@ class DropNMNPredictor(Predictor):
         # out_str += f"PredPassageSpan: {best_span}" + '\n'
         out_str += f"PredictedAnswer: {predicted_ans}" + "\n"
         out_str += f"F1:{f1_score} EM:{exact_match}" + "\n"
+        out_str += f"Top-Prog: {outputs['logical_forms'][0]}" + "\n"
+        out_str += f"Top-Prog-Prob: {outputs['batch_actionseq_probs'][0]}" + "\n"
         out_str += f"Dates: {passage_date_values}" + "\n"
         out_str += f"PassageNums: {passage_num_values}" + "\n"
         out_str += f"ComposedNumbers: {composed_numbers}" + "\n"
@@ -105,18 +107,20 @@ class DropNMNPredictor(Predictor):
         out_str += f"YearDiffs: {passage_year_diffs}" + "\n"
 
         logical_forms = outputs["logical_forms"]
+        program_probs = outputs["batch_actionseq_probs"]
         execution_vals = outputs["execution_vals"]
-        actionseq_scores = outputs["batch_actionseq_scores"]
+        program_logprobs = outputs["batch_actionseq_logprobs"]
         all_predicted_answers = outputs["all_predicted_answers"]
         if "logical_forms":
-            for lf, d, ex_vals, progscore in zip(
-                logical_forms, all_predicted_answers, execution_vals, actionseq_scores
+            for lf, d, ex_vals, prog_logprob, prog_prob in zip(
+                logical_forms, all_predicted_answers, execution_vals, program_logprobs, program_probs
             ):
                 ex_vals = myutils.round_all(ex_vals, 1)
                 # Stripping the trailing new line
                 ex_vals_str = self._print_ExecutionValTree(ex_vals, 0).strip()
                 out_str += f"LogicalForm: {lf}\n"
-                out_str += f"Score: {progscore}\n"
+                out_str += f"Prog_LogProb: {prog_logprob}\n"
+                out_str += f"Prog_Prob: {prog_prob}\n"
                 out_str += f"Answer: {d}\n"
                 out_str += f"ExecutionTree:\n{ex_vals_str}"
                 out_str += f"\n"
@@ -207,15 +211,24 @@ class MTMSNStylePredictor(Predictor):
         question_id = metadata["question_id"]
         question = metadata["original_question"]
         answer_annotation_dicts = metadata["answer_annotations"]
+        program_probs = outputs["batch_actionseq_probs"]  # List size is the same as number of programs predicted
         (exact_match, f1_score) = f1metric(predicted_ans, answer_annotation_dicts)
-
-        logical_form = outputs["logical_forms"][0]
+        logical_forms = outputs["logical_forms"]
+        if logical_forms:
+            logical_form = logical_forms[0]
+        else:
+            logical_form = "NO PROGRAM PREDICTED"
+        if program_probs:
+            prog_prob = program_probs[0]
+        else:
+            prog_prob = 0.0
 
         output_dict = {
             "query_id": question_id,
             "question": question,
             "text": predicted_ans,
             "type": logical_form,
+            "prog_prob": prog_prob,
             "f1": f1_score,
             "em": exact_match,
             "gold_answer": answer_annotation_dicts

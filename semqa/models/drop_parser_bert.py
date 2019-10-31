@@ -85,6 +85,9 @@ class DROPParserBERT(DROPParserBase):
         if pretrained_bert_model is None and bert_config_json is None:
             raise RuntimeError("Both 'pretrained_bert_model' and 'bert_config_json' cannot be None")
 
+        if pretrained_bert_model is not None and bert_config_json is not None:
+            raise RuntimeError("Only one of 'pretrained_bert_model' and 'bert_config_json' should be specified.")
+
         if pretrained_bert_model is None:
             self.BERT = BertModel(config=BertConfig(vocab_size_or_config_json_file=bert_config_json))
         else:
@@ -204,6 +207,11 @@ class DROPParserBERT(DROPParserBase):
         self.profile_steps = 0
         self.profile_freq = None if profile_freq == 0 else profile_freq
         self.device_id = cuda_device
+
+        self.logfile = open("log_sup_epochs_3.txt", "w")
+        self.num_train_steps = 0
+        self.log_freq = 100
+        self.num_log_steps = 60000
 
     @profile_func_decorator
     @overrides
@@ -570,13 +578,13 @@ class DROPParserBERT(DROPParserBase):
             (
                 batch_actionidxs,
                 batch_actionseqs,
-                batch_actionseq_scores,
+                batch_actionseq_logprobs,
                 batch_actionseq_sideargs,
             ) = semparse_utils._convert_finalstates_to_actions(
                 best_final_states=best_final_states, possible_actions=actions, batch_size=batch_size
             )
             batch_actionseq_probs = [[torch.exp(logprob) for logprob in instance_programs]
-                                     for instance_programs in batch_actionseq_scores]
+                                     for instance_programs in batch_actionseq_logprobs]
 
             if self.hardem_epoch is not None and epoch >= self.hardem_epoch:
                 # Instance programs can be empty
@@ -584,8 +592,8 @@ class DROPParserBERT(DROPParserBase):
                                     for instance_actionidxs in batch_actionidxs]
                 batch_actionseqs = [[instance_actionseqs[0]] if instance_actionseqs else []
                                     for instance_actionseqs in batch_actionseqs]
-                batch_actionseq_scores = [[instance_actionseq_scores[0]] if instance_actionseq_scores else []
-                                          for instance_actionseq_scores in batch_actionseq_scores]
+                batch_actionseq_logprobs = [[instance_actionseq_logprobs[0]] if instance_actionseq_logprobs else []
+                                          for instance_actionseq_logprobs in batch_actionseq_logprobs]
                 batch_actionseq_sideargs = [[instance_actionseq_sideargs[0]] if instance_actionseq_sideargs else []
                                             for instance_actionseq_sideargs in batch_actionseq_sideargs]
                 batch_actionseq_probs = [[instance_actionseq_probs[0]] if instance_actionseq_probs else []
@@ -678,6 +686,7 @@ class DROPParserBERT(DROPParserBase):
                 total_aux_loss = 0.0
 
             total_denotation_loss = allenutil.move_to_device(torch.tensor(0.0), self.device_id)
+            batch_ansprob_list = []
             for i in range(batch_size):
                 # Programs for an instance can be of multiple types;
                 # For each program, based on it's return type, we compute the log-likelihood
@@ -685,7 +694,7 @@ class DROPParserBERT(DROPParserBase):
                 # This is then weighed by the program-log-likelihood and added to the batch_loss
 
                 instance_prog_denotations, instance_prog_types = (batch_denotations[i], batch_denotation_types[i])
-                instance_progs_logprob_list = batch_actionseq_scores[i]
+                instance_progs_logprob_list = batch_actionseq_logprobs[i]
 
                 # This instance does not have completed programs that were found in beam-search
                 if len(instance_prog_denotations) == 0:
@@ -752,6 +761,8 @@ class DROPParserBERT(DROPParserBase):
                     # new_instance_progs_logprob_list.append(prog_logprob)
                     instance_log_likelihood_list.append(log_likelihood)
 
+                instance_ansprob_list = [torch.exp(x) for x in instance_log_likelihood_list]
+                batch_ansprob_list.append(instance_ansprob_list)
                 # Each is the shape of (number_of_progs,)
                 # tensor of log p(y_i|z_i)
                 instance_denotation_log_likelihoods = torch.stack(instance_log_likelihood_list, dim=-1)
@@ -783,6 +794,30 @@ class DROPParserBERT(DROPParserBase):
             output_dict["loss"] = batch_denotation_loss + total_aux_loss
             # import pdb
             # pdb.set_trace()
+
+        """ DEBUG 
+        if self.training:
+            self.num_train_steps += 1
+            if self.num_train_steps % self.log_freq == 0:
+                for idx in range(batch_size):
+                    question = metadata[idx]["original_question"]
+                    action_seqs = batch_actionseqs[idx]
+                    probs = batch_actionseq_probs[idx]
+                    ans_probs = batch_ansprob_list[idx]
+                    self.logfile.write(f"{self.num_train_steps}\t{question}\n")
+                    for acseq, prob, ansp in zip(action_seqs, probs, ans_probs):
+                        lf = languages[idx].action_sequence_to_logical_form(acseq)
+                        self.logfile.write(f"{prob}\t{ansp}\t{lf}\n")
+                    self.logfile.write("\n")
+
+            if self.num_train_steps % 5000 == 0:
+                print(Profile.to_string())
+            if self.num_train_steps >= self.num_log_steps:
+                self.logfile.close()
+                print(Profile.to_string())
+                exit()
+        END DEBUG """
+
 
         # Get the predicted answers irrespective of loss computation.
         # For each program, given it's return type compute the predicted answer string
@@ -889,7 +924,8 @@ class DROPParserBERT(DROPParserBase):
                 # output_dict['predicted_spans'] = batch_best_spans
 
                 output_dict["batch_action_seqs"] = batch_actionseqs
-                output_dict["batch_actionseq_scores"] = batch_actionseq_scores
+                output_dict["batch_actionseq_logprobs"] = batch_actionseq_logprobs
+                output_dict["batch_actionseq_probs"] = batch_actionseq_probs
                 output_dict["batch_actionseq_sideargs"] = batch_actionseq_sideargs
                 output_dict["languages"] = languages
 

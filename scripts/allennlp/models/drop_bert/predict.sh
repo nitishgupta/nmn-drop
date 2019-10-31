@@ -12,24 +12,25 @@ MODEL_TAR=${MODEL_DIR}/model.tar.gz
 PREDICTION_DIR=${MODEL_DIR}/predictions
 mkdir ${PREDICTION_DIR}
 
-DATASET_DIR=./resources/data/drop_acl/
-
+DATASET_DIR=./resources/data/drop_acl
 DATASET_NAME=preprocess
 
 FULL_VALFILE=${DATASET_DIR}/${DATASET_NAME}/drop_dataset_dev.json
-# PREDICTION_FILE=${PREDICTION_DIR}/${DATASET_NAME}_dev_numstepanalysis.tsv
-PREDICTOR=drop_mtmsnstyle_predictor
-# PREDICTOR=drop_parser_predictor
 
-PREDICTION_FILE=${PREDICTION_DIR}/drop_dev_preds.jsonl
-# ${DATASET_NAME}_dev_pred.txt
+# Prediction output including verbose execution logs
+PREDICTOR=drop_parser_predictor
+PREDICTION_FILE=${PREDICTION_DIR}/drop_dev_verbose_preds.txt
+
+# Prediction output in a JSON-L file similar to MTMSN
+#PREDICTOR=drop_mtmsnstyle_predictor
+#PREDICTION_FILE=${PREDICTION_DIR}/drop_dev_preds.jsonl
 
 allennlp predict --output-file ${PREDICTION_FILE} \
                  --predictor ${PREDICTOR} \
                  --cuda-device ${GPU} \
                  --include-package ${INCLUDE_PACKAGE} \
                  --silent \
-                 --batch-size 8 \
+                 --batch-size 4 \
                  --use-dataset-reader \
                  --overrides "{"model": { "beam_size": ${BEAMSIZE}, "debug": ${DEBUG}}}" \
                  ${MODEL_TAR} ${FULL_VALFILE}
