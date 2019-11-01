@@ -795,7 +795,7 @@ class DROPParserBERT(DROPParserBase):
             # import pdb
             # pdb.set_trace()
 
-        """ DEBUG 
+        """ DEBUG
         if self.training:
             self.num_train_steps += 1
             if self.num_train_steps % self.log_freq == 0:

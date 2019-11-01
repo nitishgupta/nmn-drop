@@ -9,8 +9,8 @@ DATASET_NAME=merged_data/my1200_full
 DATASET_DIR=./resources/data/drop_acl/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
 VALFILE=${DATASET_DIR}/drop_dataset_dev.json
-#TRAINFILE=${DATASET_DIR}/small_sample_train.json
-#VALFILE=${DATASET_DIR}/small_sample_dev.json
+#TRAINFILE=${DATASET_DIR}/sample_train.json
+#VALFILE=${DATASET_DIR}/sample_dev.json
 
 # PACKAGE TO BE INCLUDED WHICH HOUSES ALL THE CODE
 INCLUDE_PACKAGE=semqa

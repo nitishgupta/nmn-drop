@@ -74,7 +74,7 @@ def getDateTokenIdxs(
 
 
 def quesEvents(qstr) -> Tuple[Tuple[int, int], Tuple[int, int]]:
-    """ Returns (start, end) span tuples for event1 and event2 in the question """
+    """ Returns (start, end) span tuples for event1 and event2 in the question. end is exclusive"""
     or_split = qstr.split(" or ")
     if len(or_split) != 2:
         return None
@@ -83,7 +83,6 @@ def quesEvents(qstr) -> Tuple[Tuple[int, int], Tuple[int, int]]:
 
     or_idx = tokens.index("or")
     # Last token is ? which we don't want to attend to
-    event2 = tokens[or_idx + 1 : len(tokens) - 1]
     event2_span = (or_idx + 1, len(tokens) - 1)
 
     # Gets first index of the item
@@ -139,26 +138,31 @@ def difference_in_successive_terms(l: List[int]):
 
 def matchEventToPassage(event_tokens: List[str], passage_tokens: List[str]) -> List[int]:
     """ Match a given event's tokens (from ques) to relevant tokens in the passage. """
-    relevant_event_tokens = [t.lower() for t in event_tokens if t.lower() not in STOP_WORDS]
+    important_event_tokens = [t.lower() for t in event_tokens if t.lower() not in STOP_WORDS]
 
+    # These are (auto) sorted in increasing order -- these imp. event tokens found in the passage
     relevant_passage_tokenidxs = []
     for (idx, passage_token) in enumerate(passage_tokens):
-        if passage_token.lower() in relevant_event_tokens:
+        if passage_token.lower() in important_event_tokens:
             relevant_passage_tokenidxs.append(idx)
 
-    # Since event tokens can match spuriously at many locations -
-    # Here we try to find the tightest span, i.e. a span that is the same length as event_span and contains close-tokens
-    len_event_span = len(relevant_event_tokens)
+    # Since event tokens can match spuriously at many locations, the idea is to find a list of important tokens in the
+    # passage that are close to each other, aka tighest span
+    num_imp_event_tokens = len(important_event_tokens)
     best_diff = 100000
     best_start_point = 0
-    for i in range(0, len(relevant_passage_tokenidxs) - len_event_span + 1):
-        passage_token_span = relevant_passage_tokenidxs[i : i + len_event_span]
+    for i in range(0, len(relevant_passage_tokenidxs) - num_imp_event_tokens + 1):
+        # Starting at i, taking the next n=num_imp_event_tokens passage tokens
+        passage_token_span = relevant_passage_tokenidxs[i : i + num_imp_event_tokens]
+        # This is tightness in these tokens
         sum_of_token_diffs = difference_in_successive_terms(passage_token_span)
+        # If best tightness, then i is a good starting point
         if sum_of_token_diffs < best_diff:
             best_start_point = i
             best_diff = sum_of_token_diffs
 
-    pruned_relevant_passage_tokenidxs = relevant_passage_tokenidxs[best_start_point : best_start_point + len_event_span]
+    # These tokens now are passage-tokens where the event tokens ground
+    pruned_relevant_passage_tokenidxs = relevant_passage_tokenidxs[best_start_point : best_start_point + num_imp_event_tokens]
 
     return pruned_relevant_passage_tokenidxs
 
@@ -245,7 +249,7 @@ def pruneDateQuestions(dataset):
                 continue
             if question_answer[constants.answer_type] != constants.SPAN_TYPE:
                 continue
-
+            # Two (start, end) tuples for the two events mentioned in the question (end exclusive)
             event_spans = quesEvents(question_tokenized_text)
             answer_span: str = answer_annotation["spans"][0]
 
@@ -256,8 +260,8 @@ def pruneDateQuestions(dataset):
             # For questions with identified events, we'll try to ground dates
             event1_span, event2_span = event_spans
 
-            event1_tokens = question_tokens[event1_span[0] : event1_span[1]]
-            event2_tokens = question_tokens[event2_span[0] : event2_span[1]]
+            event1_tokens = question_tokens[event1_span[0]:event1_span[1]]
+            event2_tokens = question_tokens[event2_span[0]:event2_span[1]]
 
             # List of tokenidxs in passage that is a rough grounding for event 1/2
             event1_passage_tokenidxs: List[int] = matchEventToPassage(event1_tokens, passage_tokens)
