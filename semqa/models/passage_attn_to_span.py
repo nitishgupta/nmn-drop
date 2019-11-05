@@ -34,20 +34,14 @@ class PassageAttnToSpan(Model):
         self._scaling = scaling
         self.scaling_vals = [1, 2, 5, 10]
 
-        self._passage_attention_to_span = passage_attention_to_span
+        self.passage_attention_to_span = passage_attention_to_span
 
         if self._scaling:
-            assert len(self.scaling_vals) == self._passage_attention_to_span.get_input_dim()
+            assert len(self.scaling_vals) == self.passage_attention_to_span.get_input_dim()
 
-        if self._passage_attention_to_span.get_output_dim() > 1:
-            self._mapping = torch.nn.Linear(self._passage_attention_to_span.get_output_dim(), 2)
-        else:
-            self._mapping = None
+        self._span_rnn_hsize = self.passage_attention_to_span.get_output_dim()
 
-        self._span_rnn_hsize = self._passage_attention_to_span.get_output_dim()
-
-        self.start_ff = torch.nn.Linear(self._passage_attention_to_span.get_output_dim(), 1)
-        self.end_ff = torch.nn.Linear(self._passage_attention_to_span.get_output_dim(), 1)
+        self.passage_startend_predictor = torch.nn.Linear(self.passage_attention_to_span.get_output_dim(), 2)
 
         self.start_acc_metric = Average()
         self.end_acc_metric = Average()
@@ -88,17 +82,14 @@ class PassageAttnToSpan(Model):
             passage_attention_input = passage_attention.unsqueeze(2)
 
         # Shape: (batch_size, passage_length, span_rnn_hsize)
-        passage_span_logits_repr = self._passage_attention_to_span(passage_attention_input, passage_mask)
+        passage_span_logits_repr = self.passage_attention_to_span(passage_attention_input, passage_mask)
 
-        if self._mapping:
-            passage_span_logits_repr = self._mapping(passage_span_logits_repr)
+        # Shape: (batch_size, passage_length, 2)
+        passage_span_logits = self.passage_startend_predictor(passage_span_logits_repr)
 
         # Shape: (batch_size, passage_length)
-        span_start_logits = passage_span_logits_repr[:, :, 0]
-        span_end_logits = passage_span_logits_repr[:, :, 1]
-
-        # span_start_logits = self.start_ff(passage_span_logits_repr).squeeze(2)
-        # span_end_logits = self.end_ff(passage_span_logits_repr).squeeze(2)
+        span_start_logits = passage_span_logits[:, :, 0]
+        span_end_logits = passage_span_logits[:, :, 1]
 
         span_start_logits = allenutil.replace_masked_values(span_start_logits, passage_mask, -1e32)
         span_end_logits = allenutil.replace_masked_values(span_end_logits, passage_mask, -1e32)

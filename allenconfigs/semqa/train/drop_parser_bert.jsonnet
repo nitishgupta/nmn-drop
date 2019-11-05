@@ -51,7 +51,7 @@ local utils = import 'utils.libsonnet';
             "type": "gru",
             "input_size": 4,
             "hidden_size": 20,
-            "num_layers": 3,
+            "num_layers": 2,
             "bidirectional": true,
         },
 

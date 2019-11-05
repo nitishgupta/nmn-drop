@@ -1,7 +1,6 @@
 from typing import Dict, Optional, List, Any
 
 import torch
-import torch.nn
 from allennlp.common import Registrable
 from allennlp.modules import Seq2SeqEncoder
 
@@ -23,6 +22,7 @@ class ExecutorParameters(torch.nn.Module, Registrable):
         question_encoding_dim: int,
         passage_encoding_dim: int,
         passage_attention_to_span: Seq2SeqEncoder,
+        passage_startend_predictor,
         question_attention_to_span: Seq2SeqEncoder,
         passage_attention_to_count: Seq2SeqEncoder,
         num_implicit_nums: int = None,
@@ -38,7 +38,7 @@ class ExecutorParameters(torch.nn.Module, Registrable):
 
         # Parameters for answer start/end prediction from PassageAttention
         self.passage_attention_to_span = passage_attention_to_span
-        self.passage_startend_predictor = torch.nn.Linear(self.passage_attention_to_span.get_output_dim(), 2)
+        self.passage_startend_predictor = passage_startend_predictor # torch.nn.Linear(self.passage_attention_to_span.get_output_dim(), 2)
 
         # Parameters for answer start/end pred directly from passage encoding (direct PassageSpanAnswer from 1step prog)
         self.oneshot_psa_startend_predictor = torch.nn.Linear(passage_encoding_dim, 2)

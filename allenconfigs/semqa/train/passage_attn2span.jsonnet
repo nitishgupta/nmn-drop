@@ -4,11 +4,10 @@ local utils = import 'utils.libsonnet';
 {
   "dataset_reader": {
       "type": "passage_attn2span_reader",
-      "min_passage_length": 200,
-      "max_passage_length": 400,
-      "max_span_length": 10,
-      "num_training_samples": 2000,
-      "attnval": utils.parse_number(std.extVar("AVAL")),
+//      "min_passage_length": 200,
+//      "max_passage_length": 400,
+//      "max_span_length": 10,
+//      "num_training_samples": 2000,
       "normalized": utils.boolparser(std.extVar("NORM")),
       "withnoise": utils.boolparser(std.extVar("NOISE")),
   },
@@ -26,6 +25,17 @@ local utils = import 'utils.libsonnet';
           "num_layers": utils.parse_number(std.extVar("NL")),
           "bidirectional": true,
       },
+
+//      "passage_attention_to_span": {
+//          "type": "stacked_self_attention",
+//          "input_dim": 4,
+//          "hidden_dim": 40,
+//          "projection_dim": 40,
+//          "feedforward_hidden_dim": 40,
+//          "num_layers": 3,
+//          "num_attention_heads": 4,
+//          "use_positional_encoding": true,
+//      },
       "scaling": utils.boolparser(std.extVar("SCALING")),
   },
 

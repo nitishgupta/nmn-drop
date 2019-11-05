@@ -140,6 +140,9 @@ class DROPParserBERT(DROPParserBase):
         else:
             self._dropout = lambda x: x
 
+        self.passage_attention_to_span = passage_attention_to_span
+        self.passage_startend_predictor = torch.nn.Linear(self.passage_attention_to_span.get_output_dim(), 2)
+
         self.num_counts = 10
         self.passage_attention_to_count = passage_attention_to_count
         self.passage_count_predictor = torch.nn.Linear(
@@ -157,7 +160,8 @@ class DROPParserBERT(DROPParserBase):
         self._executor_parameters = ExecutorParameters(
             question_encoding_dim=bert_dim,
             passage_encoding_dim=bert_dim,
-            passage_attention_to_span=passage_attention_to_span,
+            passage_attention_to_span=self.passage_attention_to_span,
+            passage_startend_predictor=self.passage_startend_predictor,
             question_attention_to_span=question_attention_to_span,
             passage_attention_to_count=self.passage_attention_to_count,
             passage_count_predictor=self.passage_count_predictor,
@@ -181,8 +185,8 @@ class DROPParserBERT(DROPParserBase):
         self.qattloss = qattloss
         self.mmlloss = mmlloss
 
-        # Hard-EM will start from this epoch (1-indexed); until then MML loss will be used
-        self.hardem_epoch = hardem_epoch if hardem_epoch > 0 else None
+        # Hard-EM will start from this epoch (0-indexed meaning from the beginning); until then MML loss will be used
+        self.hardem_epoch = hardem_epoch if hardem_epoch >= 0 else None
 
         initializers(self)
 
@@ -197,21 +201,15 @@ class DROPParserBERT(DROPParserBase):
                 if any(span in name for span in count_parameter_names):
                     parameter.requires_grad = False
 
-        # Fixing Pre-trained parameters
-        # pretrained_components = ['text_field_embedder', 'highway_layer', 'embedding_proj_layer',
-        #                          'encoding_proj_layer', 'phrase_layer', 'matrix_attention']
-        # for name, parameter in self.named_parameters():
-        #     if any(component in name for component in pretrained_components):
-        #         parameter.requires_grad = False
-
         self.profile_steps = 0
         self.profile_freq = None if profile_freq == 0 else profile_freq
+
         self.device_id = cuda_device
 
-        self.logfile = open("log_sup_epochs_3.txt", "w")
-        self.num_train_steps = 0
-        self.log_freq = 100
-        self.num_log_steps = 60000
+        # self.logfile = open("log_sup_epochs_3.txt", "w")
+        # self.num_train_steps = 0
+        # self.log_freq = 100
+        # self.num_log_steps = 60000
 
     @profile_func_decorator
     @overrides
@@ -552,6 +550,7 @@ class DROPParserBERT(DROPParserBase):
                         firststep_allowed_actions=batch_valid_start_actionids,
                         keep_final_unfinished_states=False,
                     )
+            # Prediction Mode
             else:
                 (initial_state, _, _) = self.getInitialDecoderState(
                     languages,
@@ -585,20 +584,6 @@ class DROPParserBERT(DROPParserBase):
             )
             batch_actionseq_probs = [[torch.exp(logprob) for logprob in instance_programs]
                                      for instance_programs in batch_actionseq_logprobs]
-
-            if self.hardem_epoch is not None and epoch >= self.hardem_epoch:
-                # Instance programs can be empty
-                batch_actionidxs = [[instance_actionidxs[0]] if instance_actionidxs else []
-                                    for instance_actionidxs in batch_actionidxs]
-                batch_actionseqs = [[instance_actionseqs[0]] if instance_actionseqs else []
-                                    for instance_actionseqs in batch_actionseqs]
-                batch_actionseq_logprobs = [[instance_actionseq_logprobs[0]] if instance_actionseq_logprobs else []
-                                          for instance_actionseq_logprobs in batch_actionseq_logprobs]
-                batch_actionseq_sideargs = [[instance_actionseq_sideargs[0]] if instance_actionseq_sideargs else []
-                                            for instance_actionseq_sideargs in batch_actionseq_sideargs]
-                batch_actionseq_probs = [[instance_actionseq_probs[0]] if instance_actionseq_probs else []
-                                         for instance_actionseq_probs in batch_actionseq_probs]
-
 
             # Adding Date-Comparison supervised event groundings to relevant actions
             max_passage_len = encoded_passage.size()[1]
@@ -773,9 +758,12 @@ class DROPParserBERT(DROPParserBase):
                 # instance_progs_log_probs = torch.stack(new_instance_progs_logprob_list, dim=-1)
                 # tensor of \log(p(y_i|z_i) * p(z_i|x))
                 allprogs_log_marginal_likelihoods = instance_denotation_log_likelihoods + instance_progs_log_probs
-                # tensor of \log[\sum_i \exp (log(p(y_i|z_i) * p(z_i|x)))] = \log[\sum_i p(y_i|z_i) * p(z_i|x)]
-                instance_marginal_log_likelihood = allenutil.logsumexp(allprogs_log_marginal_likelihoods)
-                # print(f"{i}: {instance_marginal_log_likelihood}")
+                if self.hardem_epoch is not None and epoch >= (self.hardem_epoch + 1):
+                    max_prg_idx = torch.argmax(allprogs_log_marginal_likelihoods)
+                    instance_marginal_log_likelihood = allprogs_log_marginal_likelihoods[max_prg_idx]
+                else:
+                    # tensor of \log[\sum_i \exp (log(p(y_i|z_i) * p(z_i|x)))] = \log[\sum_i p(y_i|z_i) * p(z_i|x)]
+                    instance_marginal_log_likelihood = allenutil.logsumexp(allprogs_log_marginal_likelihoods)
                 # Added sum to remove empty-dim
                 instance_marginal_log_likelihood = torch.sum(instance_marginal_log_likelihood)
                 if torch.isnan(instance_marginal_log_likelihood):

@@ -46,18 +46,16 @@ class DROPReader(DatasetReader):
         max_passage_length=400,
         max_span_length=10,
         num_training_samples=2000,
-        attnval: float = 1.0,
         normalized=True,
         withnoise=True,
     ) -> None:
         super().__init__(lazy)
 
-        self._min_passage_length = min_passage_length
-        self._max_passage_length = max_passage_length
-        self._max_span_length = max_span_length
-        self._num_training_samples = num_training_samples
+        # self._min_passage_length = min_passage_length
+        # self._max_passage_length = max_passage_length
+        # self._max_span_length = max_span_length
+        # self._num_training_samples = num_training_samples
         self._normalized = normalized
-        self._attnval = attnval
         self._withnoise = withnoise
 
     """
@@ -121,7 +119,10 @@ class DROPReader(DatasetReader):
             for question_answer in passage_info[constants.qa_pairs]:
                 fields = {}
 
-                answer_passage_spans = question_answer[constants.answer_passage_spans]
+                if constants.answer_passage_spans in question_answer:
+                    answer_passage_spans = question_answer[constants.answer_passage_spans]
+                else:
+                    continue
 
                 if len(answer_passage_spans) == 0:
                     print("NO PASSAGE SPAN AS ANS")
