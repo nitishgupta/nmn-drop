@@ -444,6 +444,7 @@ class DROPParserBERT(DROPParserBase):
                 for i in range(batch_size)
             ]
 
+            # This works because all instance-languages have the same action space
             action2idx_map = {rule: i for i, rule in enumerate(languages[0].all_possible_productions())}
 
         """

@@ -1713,7 +1713,10 @@ class DropLanguage(DomainLanguage):
 
 if __name__ == "__main__":
     dl = get_empty_language_object()
+    print("All possible productions")
     print(dl.all_possible_productions())
+
+    print("\nAllGet nonterminal productions")
     print(dl.get_nonterminal_productions())
 
     # print(spanans.__class__.__name__)
