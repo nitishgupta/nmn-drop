@@ -25,6 +25,7 @@ from pytorch_pretrained_bert import BertModel
 from pytorch_pretrained_bert import BertConfig
 
 from semqa.state_machines.constrained_beam_search import FirstStepConstrainedBeamSearch
+from semqa.state_machines.prefixed_beam_search import PrefixedConstrainedBeamSearch
 from semqa.models.utils import semparse_utils
 from semqa.models.drop_parser_base import DROPParserBase
 from semqa.domain_languages.drop_language import (
@@ -239,7 +240,7 @@ class DROPParserBERT(DROPParserBase):
         answer_as_composed_number: List[List[int]] = None,
         answer_as_year_difference: List[List[int]] = None,
         answer_as_count: List[List[int]] = None,
-        # answer_as_passagenum_difference: List[List[int]] = None,
+        composed_num_ans_composition_types: List[Set[str]] = None,
         datecomp_ques_event_date_groundings: List[Tuple[List[int], List[int]]] = None,
         numcomp_qspan_num_groundings: List[Tuple[List[int], List[int]]] = None,
         strongly_supervised: List[bool] = None,
@@ -447,6 +448,9 @@ class DROPParserBERT(DROPParserBase):
             # This works because all instance-languages have the same action space
             action2idx_map = {rule: i for i, rule in enumerate(languages[0].all_possible_productions())}
 
+        action_indices = list(action2idx_map.values())
+        batch_action_indices: List[List[int]] = [action_indices for _ in range(batch_size)]
+
         """
         While training, we know the correct start-types for all instances and the gold-programs for some.
         For instances,
@@ -508,16 +512,27 @@ class DROPParserBERT(DROPParserBase):
                         unsupervised_answer_types: List[List[str]] = self._select_indices_from_list(
                             answer_program_start_types, unsupervised_instances
                         )
-                        unsupervised_ins_start_actionids: List[Set[int]] = self.get_valid_start_actionids(
-                            answer_types=unsupervised_answer_types, action2actionidx=action2idx_map
+                        unsupervised_numcomposition_types: List[Set[str]] = self._select_indices_from_list(
+                            composed_num_ans_composition_types, unsupervised_instances
+                        )
+                        unsupervised_action_indices: List[List[int]] = self._select_indices_from_list(
+                            batch_action_indices, unsupervised_instances)
+
+                        # unsupervised_ins_start_actionids: List[Set[int]] = \
+                        unsupervised_action_prefixes: List[List[List[int]]] = self.get_valid_start_actionids(
+                            answer_types=unsupervised_answer_types,
+                            action2actionidx=action2idx_map,
+                            valid_numcomposition_types=unsupervised_numcomposition_types,
                         )
 
-                        firststep_constrained_search = FirstStepConstrainedBeamSearch(self._beam_size)
-                        unsup_final_states = firststep_constrained_search.search(
-                            num_steps=self._max_decoding_steps,
+                        prefixed_beam_search = PrefixedConstrainedBeamSearch(
+                            beam_size=self._beam_size, allowed_sequences=unsupervised_action_prefixes,
+                            all_action_indices=unsupervised_action_indices)
+
+                        unsup_final_states = prefixed_beam_search.search(
                             initial_state=unsupervised_initial_state,
                             transition_function=self._decoder_step,
-                            firststep_allowed_actions=unsupervised_ins_start_actionids,
+                            num_steps=self._max_decoding_steps,
                             keep_final_unfinished_states=False,
                         )
                     else:
@@ -527,7 +542,6 @@ class DROPParserBERT(DROPParserBase):
                     best_final_states = self.merge_final_states(
                         supervised_final_states, unsup_final_states, supervised_instances, unsupervised_instances
                     )
-
                 else:
                     (initial_state, _, _) = self.getInitialDecoderState(
                         languages,
@@ -539,16 +553,19 @@ class DROPParserBERT(DROPParserBase):
                         question_mask_aslist,
                         batch_size,
                     )
-                    batch_valid_start_actionids: List[Set[int]] = self.get_valid_start_actionids(
-                        answer_types=answer_program_start_types, action2actionidx=action2idx_map
+                    batch_action_prefixes: List[List[List[int]]] = self.get_valid_start_actionids(
+                        answer_types=answer_program_start_types,
+                        action2actionidx=action2idx_map,
+                        valid_numcomposition_types=composed_num_ans_composition_types,
                     )
-                    search = FirstStepConstrainedBeamSearch(self._beam_size)
+                    prefixed_beam_search = PrefixedConstrainedBeamSearch(
+                        beam_size=self._beam_size, allowed_sequences=batch_action_prefixes,
+                        all_action_indices=batch_action_indices)
                     # Mapping[int, Sequence[StateType]])
-                    best_final_states = search.search(
-                        self._max_decoding_steps,
-                        initial_state,
-                        self._decoder_step,
-                        firststep_allowed_actions=batch_valid_start_actionids,
+                    best_final_states = prefixed_beam_search.search(
+                        initial_state=initial_state,
+                        transition_function=self._decoder_step,
+                        num_steps=self._max_decoding_steps,
                         keep_final_unfinished_states=False,
                     )
             # Prediction Mode
@@ -581,7 +598,7 @@ class DROPParserBERT(DROPParserBase):
                 batch_actionseq_logprobs,
                 batch_actionseq_sideargs,
             ) = semparse_utils._convert_finalstates_to_actions(
-                best_final_states=best_final_states, possible_actions=actions, batch_size=batch_size
+                    best_final_states=best_final_states, possible_actions=actions, batch_size=batch_size
             )
             batch_actionseq_probs = [[torch.exp(logprob) for logprob in instance_programs]
                                      for instance_programs in batch_actionseq_logprobs]
@@ -616,10 +633,15 @@ class DROPParserBERT(DROPParserBase):
         #     print(f"--------  InstanceIdx: {idx}  ----------")
         #     print(metadata[idx]["original_question"])
         #     probs = batch_actionseq_probs[idx]
-        #     logprobs = batch_actionseq_scores[idx]
+        #     logprobs = batch_actionseq_logprobs[idx]
+        #     start_types = answer_program_start_types[idx]
+        #     numcomposition_types = composed_num_ans_composition_types[idx]
+        #     print(f"AnsTypes: {start_types} \t CompositionFunctions:{numcomposition_types}")
         #     for prog, prob, logprob in zip(instance_progs, probs, logprobs):
         #         print(f"{prob}: {languages[idx].action_sequence_to_logical_form(prog)} -- {logprob}")
         # print()
+        # import pdb
+        # pdb.set_trace()
 
         with Profile("get-deno"):
             # List[List[Any]], List[List[str]]: Denotations and their types for all instances
@@ -1047,7 +1069,8 @@ class DROPParserBERT(DROPParserBase):
         return log_marginal_likelihood_for_span
 
     @staticmethod
-    def get_valid_start_actionids(answer_types: List[List[str]], action2actionidx: Dict[str, int]) -> List[Set[int]]:
+    def get_valid_start_actionids(answer_types: List[List[str]], action2actionidx: Dict[str, int],
+                                  valid_numcomposition_types: List[Set[str]] = None) -> List[List[List[int]]]:
         """ For each instances, given answer_types as man-made strings, return the set of valid start action ids
             that return an object of that type.
             For example, given start_type as 'passage_span', '@start@ -> PassageSpanAnswer' is a valid start action
@@ -1059,6 +1082,11 @@ class DROPParserBERT(DROPParserBase):
 
             This is used while *training* to run constrained-beam-search to only search through programs for which
             the gold answer is known. These *** shouldn't *** beused during validation
+        Parameters:
+        -----------
+            composed_num_ans_types: ``List[Set[str]]``
+                For each instance, if the answer is of ComposedNumber type, then this tells valid compositions.
+                Can be used to limit search space
         Returns:
         --------
         start_types: `List[Set[int]]`
@@ -1066,7 +1094,7 @@ class DROPParserBERT(DROPParserBase):
         """
 
         # Map from string passed by reader to LanguageType class
-        answer_type_to_action_mapping = {
+        answer_type_to_start_action_mapping = {
             "passage_span": "@start@ -> PassageSpanAnswer",
             "year_difference": "@start@ -> YearDifference",
             "passage_number": "@start@ -> PassageNumber",
@@ -1075,20 +1103,53 @@ class DROPParserBERT(DROPParserBase):
             "composed_number": "@start@ -> ComposedNumber",
         }
 
-        valid_start_action_ids: List[Set[int]] = []
-        for i in range(len(answer_types)):
-            answer_program_types: List[str] = answer_types[i]
-            start_action_ids = set()
-            for start_type in answer_program_types:
-                if start_type in answer_type_to_action_mapping:
-                    actionstr = answer_type_to_action_mapping[start_type]
-                    action_id = action2actionidx[actionstr]
-                    start_action_ids.add(action_id)
-                else:
-                    logging.error(f"StartType: {start_type} has no valid action in {answer_type_to_action_mapping}")
-            valid_start_action_ids.append(start_action_ids)
+        # This is the next action to go from ComposedNumber to a function that could generate it
+        composed_num_function_action = "ComposedNumber -> [<PassageNumber,PassageNumber:ComposedNumber>, PassageNumber, PassageNumber]"
+        # These two actions satisfies the function signature in composed_num_function_action
+        addition_function_action = "<PassageNumber,PassageNumber:ComposedNumber> -> passagenumber_addition"
+        subtraction_function_action = "<PassageNumber,PassageNumber:ComposedNumber> -> passagenumber_difference"
 
-        return valid_start_action_ids
+        # This is the key that the reader sends in valid_numcomposition_types
+        num_composition_type_action_mapping = {
+            "passage_num_addition": addition_function_action,
+            "passage_num_subtraction": subtraction_function_action,
+        }
+
+        # We are aiming to make a List[List[List[int]]] -- for each instance, a list of prefix sequences.
+        #  Each prefix sequence is a list of action indices. The prefixes don't need to be of the same length.
+        #  If an instance does not have any prefixes, its prefix_sequences_list can remain empty
+        valid_action_prefixes = []
+
+        # valid_start_action_ids: List[Set[int]] = []
+        action_prefixes: List[List[List[int]]] = []
+
+        for i in range(len(answer_types)):
+            instance_answer_types: List[str] = answer_types[i]
+            instance_prefix_sequences: List[List[int]] = []
+            for start_type in instance_answer_types:
+                if start_type in answer_type_to_start_action_mapping:
+                    start_action = answer_type_to_start_action_mapping[start_type]
+                    start_action_idx = action2actionidx[start_action]
+                    if start_type == "composed_number":
+                        # Containing "passage_num_addition" and/or "passage_num_subtraction"
+                        instance_numcomposition_types: Set[str] = valid_numcomposition_types[i]
+                        assert len(instance_numcomposition_types) > 0, "No composition type info given"
+                        for composition_type in instance_numcomposition_types:
+                            composition_function_action = num_composition_type_action_mapping[composition_type]
+                            composition_function_action_idx = action2actionidx[composition_function_action]
+                            composednumtype_to_funcsign_actionidx = action2actionidx[composed_num_function_action]
+                            prefix_sequence = [start_action_idx, composednumtype_to_funcsign_actionidx,
+                                               composition_function_action_idx]
+                            instance_prefix_sequences.append(prefix_sequence)
+                    else:
+                        prefix_sequence = [start_action_idx]
+                        instance_prefix_sequences.append(prefix_sequence)
+                else:
+                    logging.error(f"StartType: {start_type} not present in {answer_type_to_start_action_mapping}")
+            # valid_start_action_ids.append(start_action_ids)
+            action_prefixes.append(instance_prefix_sequences)
+
+        return action_prefixes
 
     def synthetic_num_grounding_loss(
         self, qtypes, synthetic_numgrounding_metadata, passage_passage_num_similarity, passageidx2numberidx

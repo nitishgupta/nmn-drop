@@ -412,13 +412,15 @@ class DROPReaderNew(DatasetReader):
         )
         # Passage Number
         passage_number_values = [int(x) if int(x) == x else x for x in p_num_normvals]
+        nums_from_passage = set(passage_number_values)
         # composed_numbers: List[int/float] is sorted
         # passage_number_values: now contains implicit numbers. Since they are added at the end,
         #  indexing should be fine.
         # compnumber2addcombinations (sub): Dict: {composed_number: List[(pass-num1, pass-num2)]} - mapping from
         #  composed number to list of passage-num-tuples that combine to form the number-key using the operation
         (composed_numbers, passage_number_values,
-         compnumber2addcombinations, compnumber2subcombinations) = self.compute_number_support(
+         compnumber2addcombinations, compnumber2subcombinations,
+         nums_from_addition, nums_from_subtraction) = self.compute_number_support(
             numbers=passage_number_values,
             implicit_numbers=DropLanguage.implicit_numbers,
             max_number_of_numbers_to_consider=2,
@@ -676,6 +678,7 @@ class DROPReaderNew(DatasetReader):
             ans_as_composed_number = [0] * len(composed_numbers)
             ans_as_year_difference = [0] * len(year_differences)
             answer_as_count = [0] * len(count_values)
+            composed_num_ans_composition_types = set()
             if answer_number is not None:
                 # Passage-number answer
                 if answer_number in passage_number_values:
@@ -685,6 +688,11 @@ class DROPReaderNew(DatasetReader):
                 if answer_number in composed_numbers:
                     answer_program_start_types.append("composed_number")
                     ans_as_composed_number[composed_numbers.index(answer_number)] = 1
+                    if answer_number in nums_from_addition:
+                        composed_num_ans_composition_types.add("passage_num_addition")
+                    if answer_number in nums_from_subtraction:
+                        composed_num_ans_composition_types.add("passage_num_subtraction")
+                    assert len(composed_num_ans_composition_types)!= 0
                 # Year-difference answer
                 if answer_number in year_differences:
                     answer_program_start_types.append("year_difference")
@@ -698,6 +706,7 @@ class DROPReaderNew(DatasetReader):
             fields["answer_as_composed_number"] = MetadataField(ans_as_composed_number)
             fields["answer_as_year_difference"] = MetadataField(ans_as_year_difference)
             fields["answer_as_count"] = MetadataField(answer_as_count)
+            fields["composed_num_ans_composition_types"] = MetadataField(composed_num_ans_composition_types)
 
             fields["answer_program_start_types"] = MetadataField(answer_program_start_types)
 
@@ -877,18 +886,20 @@ class DROPReaderNew(DatasetReader):
         if max_number_of_numbers_to_consider > 2:
             raise NotImplementedError
 
-        numbers_w_impnums = [x for x in numbers]
+        passagenums_w_implicitnums = [x for x in numbers]
         # Adding implicit numbers here after checking if 0 is a part of original numbers so that we don't add tons of
         #  combinations of the kind x = x + 0 / x - 0
-        zero_in_numbers = True if 0 in numbers else False
+        zero_in_passage = True if 0 in numbers else False
         # Adding implicit-numbers to the input-numbers list since they can take part in composition with input-numbers.
         if implicit_numbers:
-            numbers_w_impnums.extend(implicit_numbers)
+            passagenums_w_implicitnums.extend(implicit_numbers)
 
         composed_num_set = set()
         # Map from composed-number to list of number-combination that lead to this number from the add/sub operation
         compnumber2subcombinations = defaultdict(set)
         compnumber2addcombinations = defaultdict(set)
+        nums_from_addition = set()
+        nums_from_subtraction = set()
         signs = [-1, 1]
         # all_sign_combinations = list(itertools.product(signs, repeat=2))
         # Since our modules will only perform num1-num2 / num1+num2. Computation like -num1+num2 would not be done
@@ -896,7 +907,7 @@ class DROPReaderNew(DatasetReader):
         for number_of_numbers_to_consider in range(2, max_number_of_numbers_to_consider + 1):
             # for number_combination in itertools.combinations(numbers, r=number_of_numbers_to_consider):
             for indexed_number_combination in itertools.product(
-                enumerate(numbers_w_impnums), repeat=number_of_numbers_to_consider
+                enumerate(passagenums_w_implicitnums), repeat=number_of_numbers_to_consider
             ):
                 ((idx1, num1), (idx2, num2)) = indexed_number_combination
                 number_combination = (num1, num2)
@@ -905,18 +916,22 @@ class DROPReaderNew(DatasetReader):
                 for sign_combination in all_sign_combinations:
                     value = sum([sign * num for (sign, num) in zip(sign_combination, number_combination)])
                     if value >= 0:
-                        composed_num_set.add(value)
                         # If 0 was originally in numbers then allow its combinations, o/w don't to avoid the
                         # combinations from getting bloated with x = x+0, 0+x, x-0
-                        if (0 in number_combination and zero_in_numbers) or (0 not in number_combination):
+                        if (0 in number_combination and zero_in_passage) or (0 not in number_combination):
+                            composed_num_set.add(value)
                             if sign_combination == (1, 1):
                                 compnumber2addcombinations[value].add(number_combination)
+                                nums_from_addition.add(value)
                             else:  #  sign_combination == [1, -1]:
                                 compnumber2subcombinations[value].add(number_combination)
+                                nums_from_subtraction.add(value)
 
         composed_numbers = sorted(list(composed_num_set))
 
-        return composed_numbers, numbers_w_impnums, compnumber2addcombinations, compnumber2subcombinations
+        return (composed_numbers, passagenums_w_implicitnums, compnumber2addcombinations, compnumber2subcombinations,
+                nums_from_addition, nums_from_subtraction)
+
 
     @staticmethod
     def make_addsub_combination_array(

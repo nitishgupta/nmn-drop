@@ -33,6 +33,10 @@ class PrefixedConstrainedBeamSearch:
         don't need a beam, and you can pass a beam size of ``None``, and we will just evaluate
         everything.  This lets us be more efficient in :func:`TransitionFunction.take_step` and
         skip the sorting that is typically done there.
+    all_action_indices: ``List[List[int]]``
+        List of all valid action indices for each instance in the batch. This is needed to provide a list of allowed
+        actions after the constrained section of the search is done for any given (instance, prefix) tuple. Constrained
+        beam search doesn't require this since it assumes that the full constrained search path is provided.
     allowed_sequences : ``torch.Tensor``
         A ``(batch_size, num_sequences, sequence_length)`` tensor containing the transition
         sequences that we will search in.  The values in this tensor must match whatever the
@@ -52,6 +56,7 @@ class PrefixedConstrainedBeamSearch:
     def __init__(
         self,
         beam_size: Optional[int],
+        all_action_indices: List[List[int]],
         allowed_sequences: Union[torch.Tensor, List[List[List[int]]]],
         allowed_sequence_mask: Optional[Union[torch.Tensor, List[List[List[int]]]]] = None,
         per_node_beam_size: int = None,
@@ -63,6 +68,7 @@ class PrefixedConstrainedBeamSearch:
         self._allowed_transitions = util.construct_prefix_tree(
             allowed_sequences, allowed_sequence_mask
         )
+        self._all_action_indices = all_action_indices
 
     def search(
         self,
@@ -102,12 +108,18 @@ class PrefixedConstrainedBeamSearch:
             next_states: Dict[int, List[State]] = defaultdict(list)
             grouped_state = states[0].combine_states(states)
             allowed_actions = []
+
             for batch_index, action_history in zip(
                 grouped_state.batch_indices, grouped_state.action_history
             ):
-                allowed_actions.append(
-                    self._allowed_transitions[batch_index][tuple(action_history)]
-                )
+                # This path being explored has a constrained-prefix so only allow actions from that path --
+                if tuple(action_history) in self._allowed_transitions[batch_index]:
+                    actions_allowed_for_this_state = self._allowed_transitions[batch_index][tuple(action_history)]
+                else:
+                    actions_allowed_for_this_state = self._all_action_indices[batch_index]
+
+                allowed_actions.append(actions_allowed_for_this_state)
+
             for next_state in transition_function.take_step(
                 grouped_state, max_actions=self._per_node_beam_size, allowed_actions=allowed_actions
             ):

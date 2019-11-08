@@ -35,7 +35,7 @@ export QATTLOSS=true
 export MMLLOSS=true
 
 # -1 will not run HardEM; HardEM will kick after EPOCH num of epochs
-export HARDEM_EPOCH=8
+export HARDEM_EPOCH=5
 
 # Whether strong supervison instances should be trained on first, if yes for how many epochs
 export SUPFIRST=true
@@ -44,7 +44,7 @@ export SUPEPOCHS=3
 export BS=4
 export DROPOUT=0.2
 
-export SEED=10
+export SEED=100
 
 export BEAMSIZE=2
 export MAX_DECODE_STEP=14
@@ -59,7 +59,7 @@ CHECKPOINT_ROOT=./resources/semqa/checkpoints
 SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/${DATASET_NAME}
 MODEL_DIR=drop_parser_bert
 PD_1=EXCLOSS_${EXCLOSS}/MMLLOSS_${MMLLOSS}/aux_${AUXLOSS}/SUPEPOCHS_${SUPEPOCHS}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}/composed-num-HardEM8
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}/composed-num-HardEM5_Prefix
 
 # SERIALIZATION_DIR=./resources/semqa/checkpoints/test
 
