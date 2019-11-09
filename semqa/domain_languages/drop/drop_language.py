@@ -391,16 +391,25 @@ class DropLanguage(DomainLanguage):
 
     @staticmethod
     def compute_item_comparison_matrices(values: List[Any], device_id: int):
-        gt_mat = [[0 for _ in range(len(values))] for _ in range(len(values))]
-        lt_mat = [[0 for _ in range(len(values))] for _ in range(len(values))]
+        values_is_sorted = all(values[i] <= values[i + 1] for i in range(0, len(values) - 1))
+        if values_is_sorted:
+            num_values = len(values)
+            ones = np.ones((num_values, num_values), dtype=np.float32)
+            upper_triu = np.triu(ones, k=1)  # The k=1 ensures main diagonal is zero for strict lt_mat
+            lower_triu = np.tril(ones, k=-1)  # The k=1 ensures main diagonal is zero for strict gt_mat
+            gt_mat = allenutil.move_to_device(torch.FloatTensor(lower_triu), device_id)
+            lt_mat = allenutil.move_to_device(torch.FloatTensor(upper_triu), device_id)
+        else:
+            gt_mat = [[0 for _ in range(len(values))] for _ in range(len(values))]
+            lt_mat = [[0 for _ in range(len(values))] for _ in range(len(values))]
 
-        for i in range(len(values)):
-            for j in range(len(values)):
-                gt_mat[i][j] = 1.0 if values[i] > values[j] else 0.0
-                lt_mat[i][j] = 1.0 if values[i] < values[j] else 0.0
-                # date_greater_than_mat[j][i] = 1.0 - date_greater_than_mat[i][j]
-        gt_mat = allenutil.move_to_device(torch.FloatTensor(gt_mat), device_id)
-        lt_mat = allenutil.move_to_device(torch.FloatTensor(lt_mat), device_id)
+            for i in range(len(values)):
+                for j in range(len(values)):
+                    gt_mat[i][j] = 1.0 if values[i] > values[j] else 0.0
+                    lt_mat[i][j] = 1.0 if values[i] < values[j] else 0.0
+                    # date_greater_than_mat[j][i] = 1.0 - date_greater_than_mat[i][j]
+            gt_mat = allenutil.move_to_device(torch.FloatTensor(gt_mat), device_id)
+            lt_mat = allenutil.move_to_device(torch.FloatTensor(lt_mat), device_id)
 
         return gt_mat, lt_mat
 
