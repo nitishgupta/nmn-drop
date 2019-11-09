@@ -34,16 +34,14 @@ export MMLLOSS=true
 
 # Whether strong supervison instances should be trained on first, if yes for how many epochs
 export SUPFIRST=true
-export SUPEPOCHS=5
+export SUPEPOCHS=3
 
 export BS=4
 export DROPOUT=0.2
 
-export LR=0.001
+export SEED=1000
 
-export SEED=1
-
-export BEAMSIZE=1
+export BEAMSIZE=2
 export MAX_DECODE_STEP=14
 export EPOCHS=40
 
@@ -54,9 +52,9 @@ CHECKPOINT_ROOT=./resources/semqa/checkpoints
 SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/${DATASET_NAME}
 MODEL_DIR=drop_parser_bert
 PD_1=CNTFIX_${COUNT_FIXED}/EXCLOSS_${EXCLOSS}/MMLLOSS_${MMLLOSS}/aux_${AUXLOSS}/SUPEPOCHS_${SUPEPOCHS}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}/BertModel_wTest
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}/BertModel-BM2-ESA
 
-SERIALIZATION_DIR=./resources/semqa/checkpoints/test
+# SERIALIZATION_DIR=./resources/semqa/checkpoints/test
 
 #######################################################################################################################
 

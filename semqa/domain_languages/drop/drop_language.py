@@ -423,6 +423,42 @@ class DropLanguage(DomainLanguage):
     #
     #     return QuestionAttention(question_attention, debug_value=debug_value)
 
+    @predicate
+    def extractPassageSpanAnswer(self) -> PassageSpanAnswer:
+        # Shape: (passage_length, encoded_dim)
+        passage_repr = self.modeled_passage if self.modeled_passage is not None else self.encoded_passage
+
+        # Shape: (passage_length, 2)
+        passage_ans_startend_logits = self.parameters.oneshot_psa_startend_predictor(passage_repr)
+        # Shape: (passage_length,)
+        span_start_logits = passage_ans_startend_logits[:, 0]
+        span_end_logits = passage_ans_startend_logits[:, 1]
+
+        span_start_logits = allenutil.replace_masked_values(span_start_logits, self.passage_mask, -1e32)
+        span_end_logits = allenutil.replace_masked_values(span_end_logits, self.passage_mask, -1e32)
+
+        span_start_log_probs = allenutil.masked_log_softmax(span_start_logits, self.passage_mask)
+        span_end_log_probs = allenutil.masked_log_softmax(span_end_logits, self.passage_mask)
+
+        span_start_log_probs = allenutil.replace_masked_values(span_start_log_probs, self.passage_mask, -1e32)
+        span_end_log_probs = allenutil.replace_masked_values(span_end_log_probs, self.passage_mask, -1e32)
+
+        loss = 0.0
+
+        debug_value = ""
+        if self._debug:
+            debug_value += f"OneShotPassageSpanAnswer extraction: nothing to visualize"
+
+        return PassageSpanAnswer(
+            passage_span_start_log_probs=span_start_log_probs,
+            passage_span_end_log_probs=span_end_log_probs,
+            start_logits=span_start_logits,
+            end_logits=span_end_logits,
+            loss=loss,
+            debug_value=debug_value,
+        )
+
+
     @predicate_with_side_args(['question_attention', 'passage_attention'])
     def find_PassageAttention(self, question_attention: Tensor,
                               passage_attention: Tensor = None) -> PassageAttention:
