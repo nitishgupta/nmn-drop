@@ -325,14 +325,17 @@ def processPassage(input_args):
     assert len(passage_tokens) == len(" ".join(passage_token_texts).split(" "))
     assert len(new_passage_doc) == len(passage_tokens)
 
+    # List[Tuple[int, int]] -- start (inclusive) and end (exclusive) token idxs for sentence boundaries
+    sentence_idxs = sorted([(sentence.start, sentence.end) for sentence in new_passage_doc.sents],
+                           key=lambda x: x[0])
+    passage_info[constants.passage_sent_idxs] = sentence_idxs
+
     passage_ners = spacyutils.getNER(new_passage_doc)
 
     (parsed_dates, normalized_date_idxs, normalized_date_values, num_date_entities) = ner_process.parseDateNERS(
         passage_ners, passage_token_texts
     )
-
     _check_validity_of_spans(spans=[(s, e) for _, (s, e), _ in parsed_dates], len_seq=len(passage_tokens))
-
     (parsed_nums, normalized_num_idxs, normalized_number_values, num_num_entities) = ner_process.parseNumNERS(
         passage_ners, passage_token_texts
     )
@@ -347,7 +350,6 @@ def processPassage(input_args):
     passage_info[constants.passage_num_normalized_values] = normalized_number_values
 
     # Maybe add whitespace info later
-
     qa_pairs: List[Dict] = passage_info[constants.qa_pairs]
     for qa in qa_pairs:
         question: str = qa[constants.question].strip()

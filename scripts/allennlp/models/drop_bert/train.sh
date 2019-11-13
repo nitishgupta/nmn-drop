@@ -9,8 +9,8 @@ DATASET_NAME=merged_data/my1200_full
 DATASET_DIR=./resources/data/drop_acl/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
 VALFILE=${DATASET_DIR}/drop_dataset_dev.json
-#TRAINFILE=${DATASET_DIR}/small_sample_train.json
-#VALFILE=${DATASET_DIR}/small_sample_dev.json
+#TRAINFILE=${DATASET_DIR}/sample_train.json
+#VALFILE=${DATASET_DIR}/sample_dev.json
 
 # PACKAGE TO BE INCLUDED WHICH HOUSES ALL THE CODE
 INCLUDE_PACKAGE=semqa
@@ -34,12 +34,12 @@ export EXCLOSS=true
 export QATTLOSS=true
 export MMLLOSS=true
 
-# -1 will not run HardEM; HardEM will kick after EPOCH num of epochs
-export HARDEM_EPOCH=5
-
 # Whether strong supervison instances should be trained on first, if yes for how many epochs
 export SUPFIRST=true
 export SUPEPOCHS=3
+
+# -1 will not run HardEM; HardEM will kick after EPOCH num of epochs
+export HARDEM_EPOCH=3
 
 export BS=4
 export DROPOUT=0.2
@@ -59,7 +59,7 @@ CHECKPOINT_ROOT=./resources/semqa/checkpoints
 SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/${DATASET_NAME}
 MODEL_DIR=drop_parser_bert
 PD_1=EXCLOSS_${EXCLOSS}/MMLLOSS_${MMLLOSS}/aux_${AUXLOSS}/SUPEPOCHS_${SUPEPOCHS}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}/composed-num-HardEM5_Prefix
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}/composed-num-HardEM3_SentFilter
 
 # SERIALIZATION_DIR=./resources/semqa/checkpoints/test
 

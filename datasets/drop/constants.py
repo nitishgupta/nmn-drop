@@ -26,6 +26,7 @@ passage = "passage"
 cleaned_passage = "cleaned_passage"
 tokenized_passage = "tokenized_passage"
 passage_charidxs = "passage_charidxs"
+passage_sent_idxs = "passage_sent_idxs"
 
 # Answer string
 # Original and tokenized

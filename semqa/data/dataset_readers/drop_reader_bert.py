@@ -149,6 +149,9 @@ class DROPReaderNew(DatasetReader):
             p_num_entidxs: List[int] = passage_info[constants.passage_num_entidx]
             p_num_normvals: List[int] = passage_info[constants.passage_num_normalized_values]
 
+            # start / end (exclusive) token offsets for sentences in the passage
+            p_sent_boundaries: List[Tuple[int, int]] = passage_info[constants.passage_sent_idxs]
+
             for qa in passage_info[constants.qa_pairs]:
                 total_qas += 1
                 question_id = qa[constants.query_id]
@@ -231,6 +234,7 @@ class DROPReaderNew(DatasetReader):
                     passage_text,
                     original_passage_text,
                     passage_charidxs,
+                    p_sent_boundaries,
                     p_date_mens,
                     p_date_entidxs,
                     p_date_normvals,
@@ -288,6 +292,7 @@ class DROPReaderNew(DatasetReader):
         passage_text: str,
         original_passage_text: str,
         passage_charidxs: List[int],
+        p_sent_boundaries: List[Tuple[int, int]],
         p_date_mens: List[Tuple[str, Tuple[int, int], Tuple[int, int, int]]],
         p_date_entidxs: List[int],
         p_date_normvals: List[Tuple[int, int, int]],
@@ -401,7 +406,7 @@ class DROPReaderNew(DatasetReader):
         fields = {}
         fields["actions"] = action_field
         fields["question"] = TextField(question_wps_tokens, self._token_indexers)
-        fields["passage"] = TextField(passage_wps_tokens + [Token("[SEP]")], self._token_indexers)
+        fields["passage"] = TextField(passage_wps_tokens, self._token_indexers)
         fields["question_passage"] = TextField(question_passage_tokens, self._token_indexers)
         # List of (start, end) char offsets for each passage and question word-piece
         passage_offsets: List[Tuple[int, int]] = self.update_charoffsets(
@@ -410,6 +415,22 @@ class DROPReaderNew(DatasetReader):
         question_offsets: List[Tuple[int, int]] = self.update_charoffsets(
             wpidx2tokenidx=q_wpidx2tokenidx, tokens=question_tokens, token_charidxs=question_charidxs
         )
+        p_sentboundary_wps: List[SpanField] = []
+        for token_boundary in p_sent_boundaries:
+            start, end = token_boundary
+            end = end - 1  # making end inclusive
+            if start < max_p_token_len:
+                start_wpidx = p_tokenidx2wpidx[start][0]
+                if end < max_p_token_len:
+                    end_wpidx = p_tokenidx2wpidx[end][-1]
+                    # If all of last token's wps are not present then take last wp present.
+                    #  passage_wps_tokens - 2 since the last word piece is [CLS]
+                    end_wpidx = min(end_wpidx, len(passage_wps_tokens) - 2)
+                    p_sentboundary_wps.append(SpanField(span_start=start_wpidx, span_end=end_wpidx,
+                                                        sequence_field=fields["passage"]))
+
+        fields["p_sentboundary_wps"] = ListField(field_list=p_sentboundary_wps)
+
         # Passage Number
         passage_number_values = [int(x) if int(x) == x else x for x in p_num_normvals]
         nums_from_passage = set(passage_number_values)

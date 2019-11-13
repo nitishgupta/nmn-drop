@@ -212,6 +212,7 @@ def get_empty_language_object():
         modeled_passage=None,
         question_mask=None,
         passage_mask=None,
+        passage_sentence_boundaries=None,
         passage_tokenidx2dateidx=None,
         passage_date_values=None,
         passage_tokenidx2numidx=None,
@@ -259,6 +260,7 @@ class DropLanguage(DomainLanguage):
         encoded_passage: Tensor,
         question_mask: Tensor,
         passage_mask: Tensor,
+        passage_sentence_boundaries: Tensor,
         passage_tokenidx2dateidx: torch.LongTensor,
         passage_date_values: List[Date],
         passage_tokenidx2numidx: torch.LongTensor,
@@ -304,6 +306,16 @@ class DropLanguage(DomainLanguage):
         self.encoded_passage = encoded_passage
         self.modeled_passage = modeled_passage
         self.passage_mask = passage_mask
+        self.passage_length = self.passage_mask.size()[0]
+        self.passage_sentence_boundaries = passage_sentence_boundaries  # LongTensor of shape (numsent, 2)
+        self.passage_sentboundary_mask = (self.passage_sentence_boundaries[:, 0] >= 0).long()  # Shape: (num_sents)
+        self.passage_sentence_boundaries_masked = (self.passage_sentence_boundaries *
+                                                   self.passage_sentboundary_mask.unsqueeze(1))
+        self.passage_sentence_starts_masked = self.passage_sentence_boundaries[:, 0] * self.passage_sentboundary_mask
+        self.passage_sentence_ends_masked = self.passage_sentence_boundaries[:, 1] * self.passage_sentboundary_mask
+
+        self.passage_encoding_dim = self.modeled_passage.size()[-1]
+        self.question_encoding_dim = self.encoded_question.size()[-1]
 
         # Shape: (passage_length, )
         self.passage_tokenidx2dateidx = passage_tokenidx2dateidx.long()
@@ -496,11 +508,43 @@ class DropLanguage(DomainLanguage):
             passage_attn: Tensor = passage_attention._value
 
             question_attention = question_attention * self.question_mask
+            # Shape: (ques_encoding_dim)
             weighted_question_vector = torch.sum(self.encoded_question * question_attention.unsqueeze(1), 0)
 
             # Shape: (passage_length, encoded_dim)
             passage_repr = self.modeled_passage if self.modeled_passage is not None else self.encoded_passage
 
+            # Shape: (1, num_sents, 2 * passage_dim)
+            sentence_start_end_repr = self.parameters._endpoint_span_extractor(
+                sequence_tensor=passage_repr.unsqueeze(0),
+                span_indices=self.passage_sentence_boundaries_masked.unsqueeze(0))
+
+            sentence_start_end_repr = (sentence_start_end_repr[:, :, 0:self.passage_encoding_dim] +
+                                       sentence_start_end_repr[:, :, self.passage_encoding_dim:])
+
+            # Shape: (1, 1, num_sents)
+            sentence_logits_unsqueezed= self.parameters.filter_matrix_attention(
+                weighted_question_vector.unsqueeze(0).unsqueeze(1), sentence_start_end_repr)
+            # Shape: (num_sents)
+            sentence_logits = sentence_logits_unsqueezed.squeeze(0).squeeze(0)
+            sentence_filter_prob = torch.sigmoid(sentence_logits) * self.passage_sentboundary_mask.float()
+            # Shape: (passage_length)
+            range_vec = allenutil.get_range_vector(self.passage_length, device=self.device_id)
+            range_vec_unsq = range_vec.unsqueeze(0)
+
+            # Shape: (num_sents, passage_length)
+            lower = range_vec_unsq >= self.passage_sentence_starts_masked.unsqueeze(1)
+            upper = range_vec_unsq <= self.passage_sentence_ends_masked.unsqueeze(1)
+            # (num_sents, passage_length)
+            sentence_bool = (lower * upper).float() * self.passage_sentboundary_mask.unsqueeze(1).float()
+
+            # Shape: (passage_length, )
+            filter_attn = torch.sum(sentence_bool * sentence_filter_prob.unsqueeze(1), dim=0)
+            original_filter_attn = filter_attn * passage_attn
+            filtered_passage_attention = original_filter_attn / torch.sum(original_filter_attn)
+            filtered_passage_attention = clamp_distribution(filtered_passage_attention)
+
+            """
             # Shape: (1, 1, passage_length)
             passage_logits_unsqueezed = self.parameters.filter_matrix_attention(
                 weighted_question_vector.unsqueeze(0).unsqueeze(1), passage_repr.unsqueeze(0)
@@ -515,6 +559,7 @@ class DropLanguage(DomainLanguage):
 
             filtered_passage_attention = original_filter_attn / torch.sum(original_filter_attn)
             filtered_passage_attention = clamp_distribution(filtered_passage_attention)
+            """
 
             loss = passage_attention.loss
 

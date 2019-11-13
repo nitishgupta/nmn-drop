@@ -219,6 +219,7 @@ class DROPParserBERT(DROPParserBase):
         question_passage: Dict[str, torch.LongTensor],
         question: Dict[str, torch.LongTensor],
         passage: Dict[str, torch.LongTensor],
+        p_sentboundary_wps: torch.LongTensor,
         passageidx2numberidx: torch.LongTensor,
         passage_number_values: List[List[float]],
         composed_numbers: List[List[float]],
@@ -419,6 +420,7 @@ class DROPParserBERT(DROPParserBase):
                     modeled_passage=passage_modeled_aslist[i],
                     question_mask=question_mask_aslist[i],
                     passage_mask=passage_mask[i],  # passage_mask_aslist[i],
+                    passage_sentence_boundaries=p_sentboundary_wps[i],
                     passage_tokenidx2dateidx=passageidx2dateidx[i],
                     passage_date_values=passage_date_values[i],
                     passage_tokenidx2numidx=passageidx2numberidx[i],
@@ -781,7 +783,7 @@ class DROPParserBERT(DROPParserBase):
                 # instance_progs_log_probs = torch.stack(new_instance_progs_logprob_list, dim=-1)
                 # tensor of \log(p(y_i|z_i) * p(z_i|x))
                 allprogs_log_marginal_likelihoods = instance_denotation_log_likelihoods + instance_progs_log_probs
-                if self.hardem_epoch is not None and epoch >= (self.hardem_epoch + 1):
+                if self.hardem_epoch is not None and epoch is not None and epoch >= (self.hardem_epoch + 1):
                     max_prg_idx = torch.argmax(allprogs_log_marginal_likelihoods)
                     instance_marginal_log_likelihood = allprogs_log_marginal_likelihoods[max_prg_idx]
                 else:

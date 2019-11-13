@@ -3,6 +3,7 @@ from typing import Dict, Optional, List, Any
 import torch
 from allennlp.common import Registrable
 from allennlp.modules import Seq2SeqEncoder
+from allennlp.modules.span_extractors.endpoint_span_extractor import EndpointSpanExtractor
 
 from allennlp.modules.matrix_attention import (
     MatrixAttention,
@@ -61,9 +62,17 @@ class ExecutorParameters(torch.nn.Module, Registrable):
             matrix_1_dim=passage_encoding_dim, matrix_2_dim=passage_encoding_dim
         )
 
+        # self.filter_matrix_attention = LinearMatrixAttention(
+        #     tensor_1_dim=question_encoding_dim, tensor_2_dim=passage_encoding_dim, combination="x,y,x*y"
+        # )
+
         self.filter_matrix_attention = LinearMatrixAttention(
             tensor_1_dim=question_encoding_dim, tensor_2_dim=passage_encoding_dim, combination="x,y,x*y"
         )
+
+        self._endpoint_span_extractor = EndpointSpanExtractor(
+            input_dim=passage_encoding_dim,
+            combination="x,y")
 
         # We will sum the passage-token-repr to the weighted-q-repr - to use x*y combination
         self.relocate_matrix_attention = LinearMatrixAttention(

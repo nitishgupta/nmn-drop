@@ -2,7 +2,7 @@
 
 # THIS SHOULD MAKE THE DATASET FOR ICLR20 submission
 
-ROOT_DIR=/shared/nitishg/data/drop_iclr
+ROOT_DIR=/shared/nitishg/data/drop_acl
 
 PREPROCESS_DIR=preprocess
 
@@ -19,7 +19,7 @@ DATE_NUM_DIR=date_num
 
 DATASET_FULL_ANNO=date_num/date_yd_num_hmyw_cnt_whoarg
 
-ANNOTATION_FOR_PARAS=600
+ANNOTATION_FOR_PARAS=1200
 DATASET_PRUNED_ANNO=date_num/date_yd_num_hmyw_cnt_whoarg_${ANNOTATION_FOR_PARAS}
 
 # Into my dev and mytest
@@ -95,6 +95,7 @@ python -m datasets.drop.merge_datasets --dir1 ${ROOT_DIR}/${DATE_NUM_DIR}/temp4 
 
 mv ${ROOT_DIR}/${DATE_NUM_DIR}/temp5 ${ROOT_DIR}/${DATASET_FULL_ANNO}
 
+
 rm -r ${ROOT_DIR}/${DATE_NUM_DIR}/temp1
 rm -r ${ROOT_DIR}/${DATE_NUM_DIR}/temp2
 rm -r ${ROOT_DIR}/${DATE_NUM_DIR}/temp3
@@ -104,13 +105,13 @@ rm -r ${ROOT_DIR}/${DATE_NUM_DIR}/temp4
 # Copying all individual datasets into the merged dataset's directory
 mkdir ${ROOT_DIR}/${DATASET_FULL_ANNO}/questype_datasets
 
+
 cp -r ${ROOT_DIR}/${DATECOMP}  ${ROOT_DIR}/${DATASET_FULL_ANNO}/questype_datasets
 cp -r ${ROOT_DIR}/${YEAR_DIFF} ${ROOT_DIR}/${DATASET_FULL_ANNO}/questype_datasets
 cp -r ${ROOT_DIR}/${NUMCOMP}   ${ROOT_DIR}/${DATASET_FULL_ANNO}/questype_datasets
 cp -r ${ROOT_DIR}/${HMYW}      ${ROOT_DIR}/${DATASET_FULL_ANNO}/questype_datasets
 cp -r ${ROOT_DIR}/${COUNT}     ${ROOT_DIR}/${DATASET_FULL_ANNO}/questype_datasets
 cp -r ${ROOT_DIR}/${WHO_ARG}   ${ROOT_DIR}/${DATASET_FULL_ANNO}/questype_datasets
-
 
 
 python -m datasets.drop.remove_strong_supervision --input_dir ${ROOT_DIR}/${DATASET_FULL_ANNO} \
@@ -120,22 +121,7 @@ python -m datasets.drop.remove_strong_supervision --input_dir ${ROOT_DIR}/${DATA
 
 cp -r ${ROOT_DIR}/${DATASET_FULL_ANNO}/questype_datasets ${ROOT_DIR}/${DATASET_PRUNED_ANNO}/questype_datasets
 
-python -m datasets.drop.split_dev_ratio --fulldataset_dir=${ROOT_DIR}/${DATASET_PRUNED_ANNO} \
-                                        --qtype_dir_name=questype_datasets \
-                                        --split_ratio=${DEV_TEST_SPLIT_RATIO}
 
-
-
-## Split data into mydev and mytest
-#python -m datasets.drop.split_dev --input_dir=${ROOT_DIR}/${DATASET_PRUNED_ANNO} \
-#                                  --output_dir=${ROOT_DIR}/${DATASET_PRUNED_ANNO} \
-#                                  --perc_split=${DEV_TEST_SPLIT_RATIO}
-#
-#
-## Split each qtype dev into mydev and mytest based on above split
-#python -m datasets.drop.split_qtype_dev --fulldataset_dir=${ROOT_DIR}/${DATASET_PRUNED_ANNO} \
-#                                        --root_qtype_datasets_dir=${ROOT_DIR}/${DATASET_PRUNED_ANNO}/questype_datasets
-#
-#
-#
-#
+#python -m datasets.drop.split_dev_ratio --fulldataset_dir=${ROOT_DIR}/${DATASET_PRUNED_ANNO} \
+#                                        --qtype_dir_name=questype_datasets \
+#                                        --split_ratio=${DEV_TEST_SPLIT_RATIO}

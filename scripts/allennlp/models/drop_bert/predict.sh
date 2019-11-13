@@ -7,7 +7,7 @@ export BEAMSIZE=1
 export DEBUG=true
 
 # SAVED MODEL
-MODEL_DIR=./resources/semqa/checkpoints/drop/merged_data/my1200_full/drop_parser_bert/EXCLOSS_true/MMLLOSS_true/aux_true/SUPEPOCHS_3/S_1/al0.9-composed-num
+MODEL_DIR=./resources/semqa/checkpoints/drop/merged_data/my1200_full/drop_parser_bert/EXCLOSS_true/MMLLOSS_true/aux_true/SUPEPOCHS_3/S_10/composed-num-HardEM3_SentFilter
 MODEL_TAR=${MODEL_DIR}/model.tar.gz
 PREDICTION_DIR=${MODEL_DIR}/predictions
 mkdir ${PREDICTION_DIR}

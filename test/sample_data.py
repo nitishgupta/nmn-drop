@@ -1,7 +1,7 @@
 import os
 import json
 
-input_dir = "./resources/data/drop_acl/raw"
+input_dir = "./resources/data/drop_acl/merged_data/my1200_full"
 output_dir = input_dir
 
 

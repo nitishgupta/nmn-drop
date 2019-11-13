@@ -10,10 +10,17 @@ import datasets.drop.constants as dropconstants
 random.seed(100)
 
 
-""" Let's say the full dataset's dev set paragraphs are split in to P_dev and P_test, then this script splits the 
-    individual qtype datasets' dev set into mydev and mytest so that mytest will only contain paras from P_test.  
+""" This script is used to split a full_dataset's (actually a pruned version of DROP) dev into my_dev and my_test.
+    This should be straight forward to do -- split the paragraphs based on a given ratio. 
     
-    Each directory inside args.root_qtype_datasets_dir is considered an individual qtype-dataset.
+    This script is used when this full_dataset is made up of smaller splits of data which are basically sub-datasets
+    of differnt questypes. For example, datecomp, numcomp, etc. 
+    A simple random split leads to uneven distribution of underlying sub-datasets in my_dev and my_test. 
+
+    This split tries to create my_dev and my_test in a manner such that both of them contain the same distribution over
+    different questypes as the original dev data.
+    
+    Each directory inside args.root_qtype_datasets_dir is considered as an individual qtype-dataset.
 """
 
 
