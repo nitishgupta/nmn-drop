@@ -423,42 +423,6 @@ class DropLanguage(DomainLanguage):
     #
     #     return QuestionAttention(question_attention, debug_value=debug_value)
 
-    @predicate
-    def extractPassageSpanAnswer(self) -> PassageSpanAnswer:
-        # Shape: (passage_length, encoded_dim)
-        passage_repr = self.modeled_passage if self.modeled_passage is not None else self.encoded_passage
-
-        # Shape: (passage_length, 2)
-        passage_ans_startend_logits = self.parameters.oneshot_psa_startend_predictor(passage_repr)
-        # Shape: (passage_length,)
-        span_start_logits = passage_ans_startend_logits[:, 0]
-        span_end_logits = passage_ans_startend_logits[:, 1]
-
-        span_start_logits = allenutil.replace_masked_values(span_start_logits, self.passage_mask, -1e32)
-        span_end_logits = allenutil.replace_masked_values(span_end_logits, self.passage_mask, -1e32)
-
-        span_start_log_probs = allenutil.masked_log_softmax(span_start_logits, self.passage_mask)
-        span_end_log_probs = allenutil.masked_log_softmax(span_end_logits, self.passage_mask)
-
-        span_start_log_probs = allenutil.replace_masked_values(span_start_log_probs, self.passage_mask, -1e32)
-        span_end_log_probs = allenutil.replace_masked_values(span_end_log_probs, self.passage_mask, -1e32)
-
-        loss = 0.0
-
-        debug_value = ""
-        if self._debug:
-            debug_value += f"OneShotPassageSpanAnswer extraction: nothing to visualize"
-
-        return PassageSpanAnswer(
-            passage_span_start_log_probs=span_start_log_probs,
-            passage_span_end_log_probs=span_end_log_probs,
-            start_logits=span_start_logits,
-            end_logits=span_end_logits,
-            loss=loss,
-            debug_value=debug_value,
-        )
-
-
     @predicate_with_side_args(['question_attention', 'passage_attention'])
     def find_PassageAttention(self, question_attention: Tensor,
                               passage_attention: Tensor = None) -> PassageAttention:
@@ -951,15 +915,23 @@ class DropLanguage(DomainLanguage):
                                                         self.metadata["passage_tokens"])
             _, pattn_vis_most_2 = dlutils.listTokensVis(passage_attention_2,
                                                         self.metadata["passage_tokens"])
+            avg_pattn_full, _ = dlutils.listTokensVis(average_passage_distribution,
+                                                      self.metadata["passage_tokens"])
 
             date1 = myutils.round_all(myutils.tocpuNPList(date_distribution_1), 3)
             date2 = myutils.round_all(myutils.tocpuNPList(date_distribution_2), 3)
             d1_lt_d2 = myutils.round_all(myutils.tocpuNPList(prob_date1_lesser), 3)
             d2_lt_d1 = myutils.round_all(myutils.tocpuNPList(prob_date2_lesser), 3)
 
-            debug_value += f"Pattn1: {pattn_vis_most_1}\n Date1: {date1}" + \
-                           f"\nPattn2: {pattn_vis_most_2}\n Date2: {date2}" + \
-                           f"\nP(D1 < D2): {d1_lt_d2}  P(D2 < D1): {d2_lt_d1}"
+            date_values = self.metadata['passage_date_values']
+            date1_str = " ".join(["{}|{}".format(x, y) for (x, y) in zip(date_values, date1)]).strip()
+            date2_str = " ".join(["{}|{}".format(x, y) for (x, y) in zip(date_values, date2)]).strip()
+
+
+            debug_value += f"P(D1<D2)|{d1_lt_d2}  P(D2<D1)|{d2_lt_d1}" + \
+                           f"\nDate1: {date1_str}" + \
+                           f"\nDate2: {date2_str}" + \
+                           f"\nAvg_Pattn: {avg_pattn_full}"
             if gold_date_1:
                 debug_value += f"\nGoldDates  Date1: {gold_date_1}  Date2: {gold_date_2}"
 
@@ -999,15 +971,22 @@ class DropLanguage(DomainLanguage):
                                                         self.metadata["passage_tokens"])
             _, pattn_vis_most_2 = dlutils.listTokensVis(passage_attention_2,
                                                         self.metadata["passage_tokens"])
+            avg_pattn_full, _ = dlutils.listTokensVis(average_passage_distribution,
+                                                      self.metadata["passage_tokens"])
 
             date1 = myutils.round_all(myutils.tocpuNPList(date_distribution_1), 3)
             date2 = myutils.round_all(myutils.tocpuNPList(date_distribution_2), 3)
             d1_gt_d2 = myutils.round_all(myutils.tocpuNPList(prob_date1_greater), 3)
             d2_gt_d1 = myutils.round_all(myutils.tocpuNPList(prob_date2_greater), 3)
 
-            debug_value += f"Pattn1: {pattn_vis_most_1}\n Date1: {date1}" + \
-                           f"\nPattn2: {pattn_vis_most_2}\n Date2: {date2}" + \
-                           f"\nP(D1 > D2): {d1_gt_d2}  P(D2 > D1): {d2_gt_d1}"
+            date_values = self.metadata['passage_date_values']
+            date1_str = " ".join(["{}|{}".format(x, y) for (x, y) in zip(date_values, date1)]).strip()
+            date2_str = " ".join(["{}|{}".format(x, y) for (x, y) in zip(date_values, date2)]).strip()
+
+            debug_value += f"P(D1>D2)|{d1_gt_d2}  P(D2>D1)|{d2_gt_d1}" + \
+                           f"\nDate1: {date1_str}" + \
+                           f"\nDate2: {date2_str}" + \
+                           f"\nAvg_Pattn: {avg_pattn_full}"
 
             if gold_date_1:
                 debug_value += f"\nGoldDates  Date1: {gold_date_1}  Date2: {gold_date_2}"
@@ -1044,15 +1023,23 @@ class DropLanguage(DomainLanguage):
                                                         self.metadata["passage_tokens"])
             _, pattn_vis_most_2 = dlutils.listTokensVis(passage_attention_2,
                                                         self.metadata["passage_tokens"])
+            avg_pattn_full, _ = dlutils.listTokensVis(average_passage_distribution,
+                                                      self.metadata["passage_tokens"])
 
             num1 = myutils.round_all(myutils.tocpuNPList(num_distribution_1), 3)
             num2 = myutils.round_all(myutils.tocpuNPList(num_distribution_2), 3)
             d1_lt_d2 = myutils.round_all(myutils.tocpuNPList(prob_num1_lesser), 3)
             d2_lt_d1 = myutils.round_all(myutils.tocpuNPList(prob_num2_lesser), 3)
 
-            debug_value += f"Pattn1: {pattn_vis_most_1}\n Num1: {num1}" + \
-                           f"\nPattn2: {pattn_vis_most_2}\n Num2: {num2}" + \
-                           f"\nP(N1 < N2): {d1_lt_d2}  P(N2 < N1): {d2_lt_d1}"
+            num_values = self.metadata['passage_number_values']
+            num1_str = " ".join(["{}|{}".format(x, y) for (x, y) in zip(num_values, num1)]).strip()
+            num2_str = " ".join(["{}|{}".format(x, y) for (x, y) in zip(num_values, num2)]).strip()
+
+            debug_value += f"P(N1<N2)|{d1_lt_d2}  P(N2<N1)|{d2_lt_d1}" + \
+                           f"\nNum1: {num1_str}" + \
+                           f"\nNum2: {num2_str}" + \
+                           f"\nAvg_Pattn: {avg_pattn_full}"
+
             if gold_num_1:
                 debug_value += f"\nGoldNums Num1: {gold_num_1}  Num2: {gold_num_2}"
 
@@ -1092,15 +1079,22 @@ class DropLanguage(DomainLanguage):
                                                         self.metadata["passage_tokens"])
             _, pattn_vis_most_2 = dlutils.listTokensVis(passage_attention_2,
                                                         self.metadata["passage_tokens"])
+            avg_pattn_full, _ = dlutils.listTokensVis(average_passage_distribution,
+                                                      self.metadata["passage_tokens"])
 
             num1 = myutils.round_all(myutils.tocpuNPList(num_distribution_1), 3)
             num2 = myutils.round_all(myutils.tocpuNPList(num_distribution_2), 3)
             d1_gt_d2 = myutils.round_all(myutils.tocpuNPList(prob_num1_greater), 3)
             d2_gt_d1 = myutils.round_all(myutils.tocpuNPList(prob_num2_greater), 3)
 
-            debug_value += f"Pattn1: {pattn_vis_most_1}\n num1: {num1}" + \
-                           f"\nPattn2: {pattn_vis_most_2}\n num2: {num2}" + \
-                           f"\nP(N1 > N2): {d1_gt_d2}  P(N2 > N1): {d2_gt_d1}"
+            num_values = self.metadata['passage_number_values']
+            num1_str = " ".join(["{}|{}".format(x, y) for (x, y) in zip(num_values, num1)]).strip()
+            num2_str = " ".join(["{}|{}".format(x, y) for (x, y) in zip(num_values, num2)]).strip()
+
+            debug_value += f"P(N1>N2)|{d1_gt_d2}  P(N2>N1)|{d2_gt_d1}" + \
+                           f"\nNum1: {num1_str}" + \
+                           f"\nNum2: {num2_str}" + \
+                           f"\nAvg_Pattn: {avg_pattn_full}"
 
             if gold_num_1:
                 debug_value += f"\nGoldNums  num1: {gold_num_1}  num2: {gold_num_2}"
@@ -1130,18 +1124,25 @@ class DropLanguage(DomainLanguage):
 
         debug_value = ""
         if self._debug:
+            date1 = myutils.round_all(myutils.tocpuNPList(date_distribution_1), 3)
+            date2 = myutils.round_all(myutils.tocpuNPList(date_distribution_2), 3)
+            year_diff_dist = myutils.round_all(myutils.tocpuNPList(year_difference_dist), 3)
+
+            date_values = self.metadata['passage_date_values']
+            date1_str = " ".join(["{}|{}".format(x, y) for (x, y) in zip(date_values, date1)]).strip()
+            date2_str = " ".join(["{}|{}".format(x, y) for (x, y) in zip(date_values, date2)]).strip()
+
+            year_diff_values = self.metadata['passage_year_diffs']
+            year_diff_str = " ".join(["{}|{}".format(x, y) for (x, y) in zip(year_diff_values, year_diff_dist)]).strip()
+
             _, pattn_vis_most_1 = dlutils.listTokensVis(passage_attention_1,
                                                         self.metadata["passage_tokens"])
             _, pattn_vis_most_2 = dlutils.listTokensVis(passage_attention_2,
                                                         self.metadata["passage_tokens"])
 
-            date1 = myutils.round_all(myutils.tocpuNPList(date_distribution_1), 3)
-            date2 = myutils.round_all(myutils.tocpuNPList(date_distribution_2), 3)
-            year_diff_dist = myutils.round_all(myutils.tocpuNPList(year_difference_dist), 3)
-
-            debug_value += f"YearDiffDist: {year_diff_dist}\n" + \
-                           f"\nPattn1: {pattn_vis_most_1}\n Date1: {date1}" + \
-                           f"\nPattn2: {pattn_vis_most_2}\n Date2: {date2}"
+            debug_value += f"YearDiffDist: {year_diff_str}"
+            debug_value += f"\nDate1: {date1_str}"
+            debug_value += f"\nDate2: {date2_str}"
 
         return YearDifference(year_difference_dist=year_difference_dist, loss=loss, debug_value=debug_value)
 
@@ -1276,10 +1277,12 @@ class DropLanguage(DomainLanguage):
 
         debug_value = ""
         if self._debug:
+            count_vals = list(range(0, 10))
             countdist = myutils.round_all(myutils.tocpuNPList(count_distribution), 3)
+            count_str = " ".join(["{}|{}".format(x, y) for (x, y) in zip(count_vals, countdist)]).strip()
             psigms, pattn_vis_most = dlutils.listTokensVis(passage_token_sigmoids, self.metadata["passage_tokens"])
-            debug_value += f"CountDist: {countdist}"
-            debug_value += f"CountMean: {count_mean}"
+            debug_value += f"CountDist: {count_str}"
+            debug_value += f"\nCountMean: {count_mean}"
             debug_value += f"\nPSigms: {psigms}"
 
         return CountNumber(count_number_dist=count_distribution,
@@ -1417,13 +1420,15 @@ class DropLanguage(DomainLanguage):
         debug_value = ""
         if self._debug:
             number_dist = myutils.round_all(myutils.tocpuNPList(number_distribution), 3)
+            num_values = self.metadata['passage_number_values']
+            num_str = " ".join(["{}|{}".format(x, y) for (x, y) in zip(num_values, number_dist)]).strip()
             if number_grounding_supervision is not None:
                 num_grounding_sup = myutils.round_all(myutils.tocpuNPList(number_grounding_supervision), 3)
             else:
                 num_grounding_sup = None
             _, pattn_vis_most = dlutils.listTokensVis(passage_attn, self.metadata["passage_tokens"])
-            debug_value += f"PassageNumber: {number_dist}"
-            debug_value += f"\nPattn: {pattn_vis_most}"
+            debug_value += f"PassageNumber: {num_str}"
+            # debug_value += f"\nPattn: {pattn_vis_most}"
             debug_value += f"\nGoldNum: {num_grounding_sup}"
 
         return PassageNumber(passage_number_dist=number_distribution,
@@ -1528,13 +1533,15 @@ class DropLanguage(DomainLanguage):
 
         debug_value = ""
         if self._debug:
+            num_values = self.metadata['passage_number_values']
             input_attn_numdist = myutils.round_all(myutils.tocpuNPList(inputpattn_num_distribution), 3)
+            input_num_str = " ".join(["{}|{}".format(x, y) for (x, y) in zip(num_values, input_attn_numdist)]).strip()
             if num_grounding_supervision is not None:
                 num_grounding_sup = myutils.round_all(myutils.tocpuNPList(num_grounding_supervision), 3)
             else:
                 num_grounding_sup = None
             min_pattn_comp, _ = dlutils.listTokensVis(min_num_pattn, self.metadata["passage_tokens"])
-            debug_value += f"InputPattnPassageNumber: {input_attn_numdist}"
+            debug_value += f"InputPattnPassageNumber: {input_num_str}"
             debug_value += f"\nGoldNum: {num_grounding_sup}"
             debug_value += f"\nMinNumPattn: {min_pattn_comp}"
 
@@ -1566,17 +1573,19 @@ class DropLanguage(DomainLanguage):
 
         debug_value = ""
         if self._debug:
+            num_values = self.metadata['passage_number_values']
             input_attn_numdist = myutils.round_all(myutils.tocpuNPList(inputpattn_num_distribution), 3)
+            input_num_str = " ".join(["{}|{}".format(x, y) for (x, y) in zip(num_values, input_attn_numdist)]).strip()
             if num_grounding_supervision is not None:
                 num_grounding_sup = myutils.round_all(myutils.tocpuNPList(num_grounding_supervision), 3)
             else:
                 num_grounding_sup = None
             max_pattn_comp, _ = dlutils.listTokensVis(max_num_pattn, self.metadata["passage_tokens"])
             most_attended_spans = dlutils.mostAttendedSpans(max_num_pattn, self.metadata["passage_tokens"])
-            debug_value += f"InputPattnPassageNumber: {input_attn_numdist}"
+            debug_value += f"InputPattnPassageNumber: {input_num_str}"
             debug_value += f"\nGoldNum: {num_grounding_sup}"
             debug_value += f"\nMaxNumPattn: {max_pattn_comp}"
-            debug_value += f"\nMostAttended: {most_attended_spans}"
+            # debug_value += f"\nMostAttended: {most_attended_spans}"
 
         return PassageAttention(passage_attention=max_num_pattn, loss=loss, debug_value=debug_value)
 
