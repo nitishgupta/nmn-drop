@@ -39,6 +39,7 @@ local utils = import 'utils.libsonnet';
         "type": "drop_parser_bert",
 
         "pretrained_bert_model": "bert-base-uncased",
+        "scaling_bert": utils.boolparser(std.extVar("SCALING_BERT")),
 
         "max_ques_len": 50,
 

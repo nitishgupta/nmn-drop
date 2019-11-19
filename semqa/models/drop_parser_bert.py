@@ -23,6 +23,7 @@ from allennlp_semparse.state_machines import ConstrainedBeamSearch
 
 from pytorch_pretrained_bert import BertModel
 from pytorch_pretrained_bert import BertConfig
+from allennlp.modules.token_embedders.bert_token_embedder import PretrainedBertEmbedder
 
 from semqa.state_machines.constrained_beam_search import FirstStepConstrainedBeamSearch
 from semqa.state_machines.prefixed_beam_search import PrefixedConstrainedBeamSearch
@@ -61,6 +62,7 @@ class DROPParserBERT(DROPParserBase):
         max_decoding_steps: int,
         bert_config_json: str = None,
         pretrained_bert_model: str = None,
+        scaling_bert: bool = False,
         countfixed: bool = False,
         auxwinloss: bool = False,
         excloss: bool = False,
@@ -89,17 +91,28 @@ class DROPParserBERT(DROPParserBase):
         if pretrained_bert_model is not None and bert_config_json is not None:
             raise RuntimeError("Only one of 'pretrained_bert_model' and 'bert_config_json' should be specified.")
 
+        self.scaling_bert = scaling_bert
         if pretrained_bert_model is None:
             self.BERT = BertModel(config=BertConfig(vocab_size_or_config_json_file=bert_config_json))
+            self.scaling_bert = False
         else:
-            self.BERT = BertModel.from_pretrained(pretrained_bert_model)
+            if scaling_bert:
+                self.bert_token_embedder = PretrainedBertEmbedder(pretrained_model=pretrained_bert_model,
+                                                                  requires_grad=False, top_layer_only=False)
+                self.BERT = None
+                self.bert_dim = self.bert_token_embedder.output_dim
 
-        bert_dim = self.BERT.pooler.dense.out_features
-        self.bert_dim = bert_dim
+            else:
+                self.BERT = BertModel.from_pretrained(pretrained_bert_model)
+                self.bert_token_embedder = None
+                self.bert_dim = self.BERT.pooler.dense.out_features
+
+        # bert_dim = self.BERT.pooler.dense.out_features
+        # self.bert_dim = bert_dim
 
         self.max_ques_len = max_ques_len
 
-        question_encoding_dim = bert_dim
+        question_encoding_dim = self.bert_dim
 
         self._decoder_step = BasicTransitionFunction(
             encoder_output_dim=question_encoding_dim,
@@ -130,7 +143,7 @@ class DROPParserBERT(DROPParserBase):
         # Use a separate encoder for passage - date - num similarity
 
         self.qp_matrix_attention = LinearMatrixAttention(
-            tensor_1_dim=bert_dim, tensor_2_dim=bert_dim, combination="x,y,x*y"
+            tensor_1_dim=self.bert_dim, tensor_2_dim=self.bert_dim, combination="x,y,x*y"
         )
 
         # self.passage_token_to_date = passage_token_to_date
@@ -159,8 +172,8 @@ class DROPParserBERT(DROPParserBase):
         self._num_implicit_nums = len(DropLanguage.implicit_numbers)
 
         self._executor_parameters = ExecutorParameters(
-            question_encoding_dim=bert_dim,
-            passage_encoding_dim=bert_dim,
+            question_encoding_dim=self.bert_dim,
+            passage_encoding_dim=self.bert_dim,
             passage_attention_to_span=self.passage_attention_to_span,
             passage_startend_predictor=self.passage_startend_predictor,
             question_attention_to_span=question_attention_to_span,
@@ -275,9 +288,14 @@ class DROPParserBERT(DROPParserBase):
 
         with Profile(scope_name="bert-run"):
             # Shape: (batch_size, seqlen, bert_dim); (batch_size, bert_dim)
-            bert_out, bert_pooled_out = self.BERT(
-                question_passage_tokens, segment_ids, pad_mask, output_all_encoded_layers=False
-            )
+            if not self.scaling_bert:
+                bert_out, bert_pooled_out = self.BERT(
+                    question_passage_tokens, segment_ids, pad_mask, output_all_encoded_layers=False
+                )
+            else:
+                bert_out = self.bert_token_embedder(input_ids=question_passage_tokens, token_type_ids=segment_ids)
+                bert_pooled_out = bert_out[:, 0, :]
+
         # Skip [CLS]; then the next max_ques_len tokens are question tokens
         encoded_question = bert_out[:, 1 : self.max_ques_len + 1, :]
         question_mask = (pad_mask[:, 1 : self.max_ques_len + 1]).float()

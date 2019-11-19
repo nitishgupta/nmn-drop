@@ -20,6 +20,8 @@ CONFIGFILE=allenconfigs/semqa/train/drop_parser_bert.jsonnet
 
 export DATASET_READER="drop_reader_bert"
 
+export SCALING_BERT=true
+
 # Check CONFIGFILE for environment variables to set
 export GPU=0
 
@@ -59,7 +61,7 @@ CHECKPOINT_ROOT=./resources/semqa/checkpoints
 SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/${DATASET_NAME}
 MODEL_DIR=drop_parser_bert
 PD_1=EXCLOSS_${EXCLOSS}/MMLLOSS_${MMLLOSS}/aux_${AUXLOSS}/SUPEPOCHS_${SUPEPOCHS}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}/composed-num-HardEM3_SentFilter
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}/ScaleBert-HardEM3_SentFilter_1e-3
 
 # SERIALIZATION_DIR=./resources/semqa/checkpoints/test
 
