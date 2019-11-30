@@ -35,4 +35,30 @@ allennlp predict --output-file ${PREDICTION_FILE} \
                  --overrides "{"model": { "beam_size": ${BEAMSIZE}, "debug": ${DEBUG}}}" \
                  ${MODEL_TAR} ${FULL_VALFILE}
 
-echo -e "Dev predictions file saved at: ${PREDICTION_FILE}"
+QUESTYPE_SETS_DIR=questype_datasets
+for EVAL_DATASET in datecomp_full year_diff count how_many_yards_was who_arg numcomp_full
+do
+    VALFILE=${DATASET_DIR}/${DATASET_NAME}/${QUESTYPE_SETS_DIR}/${EVAL_DATASET}/drop_dataset_dev.json
+
+    PREDICTOR=drop_parser_predictor
+    PREDICTION_FILE=${PREDICTION_DIR}/${EVAL_DATASET}_verbose_preds.txt
+
+    ###################################################################################################################
+
+    allennlp predict --output-file ${PREDICTION_FILE} \
+                     --predictor ${PREDICTOR} \
+                     --cuda-device ${GPU} \
+                     --include-package ${INCLUDE_PACKAGE} \
+                     --silent \
+                     --batch-size 4 \
+                     --use-dataset-reader \
+                     --overrides "{"model": { "beam_size": ${BEAMSIZE}, "debug": ${DEBUG}}}" \
+                    ${MODEL_TAR} ${VALFILE}
+
+    echo -e "Predictions file saved at: ${PREDICTION_FILE}"
+done
+
+
+echo -e "Full mydev predictions file saved at: ${PREDICTION_FILE}"
+
+

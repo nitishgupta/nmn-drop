@@ -282,7 +282,7 @@ class DropLanguage(DomainLanguage):
         modeled_passage: Tensor = None,
         start_types=None,
         device_id: int = -1,
-        max_samples=3,
+        max_samples=5,
         metadata={},
         debug=False,
     ) -> None:
@@ -1661,7 +1661,7 @@ class DropLanguage(DomainLanguage):
 
         pattn = passage_attention._value * self.passage_mask
         # Computing for debugging and aux loss purposes
-        inputpattn_num_distribution, _, _ = self.compute_num_distribution(pattn)
+        inputpattn_num_dist, _, _ = self.compute_num_distribution(pattn)
         minmax_num_pattn, input_numtoken_probs, minmax_numtoken_probs = self.pattn_for_minmaxNum(pattn=pattn,
                                                                                                  max_min=min_max_op)
 
@@ -1670,7 +1670,7 @@ class DropLanguage(DomainLanguage):
             grounding_mask = (torch.sum(num_grounding_supervision) > 0).float()
             if grounding_mask > 0:
                 # Number distribution for input pattn
-                log_probs = torch.log(inputpattn_num_distribution + 1e-40) * num_grounding_supervision
+                log_probs = torch.log(inputpattn_num_dist + 1e-40) * num_grounding_supervision
                 log_likelihood = torch.sum(log_probs)  # Want all grounded numbers to be high, hence prod of probs
                 grounding_loss = -1 * grounding_mask * log_likelihood
                 loss += grounding_loss
@@ -1678,10 +1678,12 @@ class DropLanguage(DomainLanguage):
 
         debug_value = ""
         if self._debug:
+            minmax_num_dist, _, _ = self.compute_num_distribution(minmax_num_pattn)
             input_token_probs = myutils.round_all(myutils.tocpuNPList(input_numtoken_probs), 3)
             minmax_token_probs = myutils.round_all(myutils.tocpuNPList(minmax_numtoken_probs), 3)
-            input_attn_numdist = myutils.round_all(myutils.tocpuNPList(inputpattn_num_distribution), 3)
-            topknums = dlutils.topProbMassElems(attention=inputpattn_num_distribution, support=self.passage_num_values)
+
+            input_topknums = dlutils.topProbMassElems(attention=inputpattn_num_dist, support=self.passage_num_values)
+            topknums = dlutils.topProbMassElems(attention=minmax_num_dist, support=self.passage_num_values)
             if num_grounding_supervision is not None:
                 num_grounding_sup = myutils.round_all(myutils.tocpuNPList(num_grounding_supervision), 3)
             else:
@@ -1690,14 +1692,12 @@ class DropLanguage(DomainLanguage):
             topspans = dlutils.mostAttendedSpans(minmax_num_pattn, self.metadata["passage_tokens"])
             debug_value += f"{min_max_op}-pattn-module"
             debug_value += f"\noutput-{min_max_op}-num-pattn-most-attended-spans: {topspans}"
-            debug_value += f"\nnumdist-from-input-pattn: {input_attn_numdist}"
             debug_value += f"\ninput-numtoken-probs: {input_token_probs}"
+            debug_value += f"\ninput-num-dist: {input_topknums}"
             debug_value += f"\nminmax-numtoken-probs: {minmax_token_probs}"
             debug_value += f"\ntopk-input-num-dist: {topknums}"
             debug_value += f"\nGoldNum: {num_grounding_sup}"
-            # debug_value += f"\noutput-{min_max_op}-num-pattn: {min_pattn_comp}"
         return minmax_num_pattn, loss, debug_value
-        # return PassageAttention(passage_attention=minmax_num_pattn, loss=loss, debug_value=debug_value)
 
     def pattn_for_minmaxNum(
         self, pattn: torch.FloatTensor, max_min: str
