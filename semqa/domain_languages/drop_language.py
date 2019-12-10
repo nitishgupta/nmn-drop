@@ -389,6 +389,8 @@ class DropLanguage(DomainLanguage):
         self.count_num_values = count_num_values
         self.countvals = allenutil.move_to_device(torch.FloatTensor(range(0, 10)), cuda_device=self.device_id)
 
+        self.modules_debug_info = []
+
         """
         if self._debug:
             num_date_tokens = self.passage_datetokens_mask_float.sum()
@@ -497,6 +499,7 @@ class DropLanguage(DomainLanguage):
                 most_attended_spans = dlutils.mostAttendedSpans(passage_attention, self.metadata["passage_tokens"])
                 debug_value += f"\nPattn: {pattn_vis_complete}"
                 debug_value += f"\nMostAttendedSpans: {most_attended_spans}"
+                self.modules_debug_info[-1].append({"find": passage_attention})
 
         return PassageAttention(passage_attention, debug_value=debug_value)
 
@@ -581,6 +584,7 @@ class DropLanguage(DomainLanguage):
                 most_attended_spans = dlutils.mostAttendedSpans(filtered_passage_attention, self.metadata["passage_tokens"])
                 debug_value += f"\nPattn: {pattn_vis_complete}"
                 debug_value += f"\nMostAttended: {most_attended_spans}"
+                self.modules_debug_info[-1].append({"filter": filtered_passage_attention})
 
         return PassageAttention(filtered_passage_attention, loss=loss, debug_value=debug_value)
 
@@ -641,6 +645,7 @@ class DropLanguage(DomainLanguage):
                 #         "In a matchup of fellow" in self.metadata["original_passage"]:
                 #     import pdb
                 #     pdb.set_trace()
+                self.modules_debug_info[-1].append({"relocate": relocate_attn})
 
         return PassageAttention_answer(relocate_attn, loss=loss, debug_value=debug_value)
 
@@ -712,7 +717,7 @@ class DropLanguage(DomainLanguage):
 
             date_distribution_entropy = -1 * torch.sum(date_distribution * torch.log(date_distribution + 1e-40))
 
-        return date_distribution, date_distribution, date_distribution_entropy
+        return date_distribution, passage_date_token_probs, date_distribution_entropy
 
     # New Num Distribution by first computing a number-distribution for each passage-token
     def compute_num_distribution(self, passage_attention: Tensor):
@@ -774,7 +779,7 @@ class DropLanguage(DomainLanguage):
             num_distribution = clamp_distribution(num_distribution)
 
             num_distribution_entropy = -1 * torch.sum(num_distribution * torch.log(num_distribution + 1e-40))
-        return num_distribution, num_distribution, num_distribution_entropy
+        return num_distribution, passage_number_token_probs, num_distribution_entropy
 
 
     def compute_implicitnum_distribution(self, question_attention: Tensor):
@@ -944,8 +949,8 @@ class DropLanguage(DomainLanguage):
 
     def date_comparison(self, passage_attention_1, passage_attention_2, comparison: str, gold_date_groundings=None):
 
-        date_distribution_1, _, d1_dist_entropy = self.compute_date_scores(passage_attention_1)
-        date_distribution_2, _, d2_dist_entropy = self.compute_date_scores(passage_attention_2)
+        date_distribution_1, passage_datetoken_prob_1, d1_dist_entropy = self.compute_date_scores(passage_attention_1)
+        date_distribution_2, passage_datetoken_prob_2, d2_dist_entropy = self.compute_date_scores(passage_attention_2)
 
         bool1 = self.expected_date_comparison(date_distribution_1, date_distribution_2, comparison)
         bool2 = self.expected_date_comparison(date_distribution_2, date_distribution_1, comparison)
@@ -988,12 +993,13 @@ class DropLanguage(DomainLanguage):
         aux_loss = date_grounding_loss
         # aux_loss += d1_dist_entropy + d2_dist_entropy
 
-        return (date_distribution_1, date_distribution_2, bool1, bool2, average_passage_distribution, aux_loss)
+        return (date_distribution_1, date_distribution_2, bool1, bool2,
+                passage_datetoken_prob_1, passage_datetoken_prob_2, average_passage_distribution, aux_loss)
 
     def num_comparison(self, passage_attention_1, passage_attention_2, comparison: str, gold_num_groundings=None):
 
-        num_distribution_1, _, num1_entropy = self.compute_num_distribution(passage_attention_1)
-        num_distribution_2, _, num2_entropy = self.compute_num_distribution(passage_attention_2)
+        num_distribution_1, passage_numtoken_prob_1, num1_entropy = self.compute_num_distribution(passage_attention_1)
+        num_distribution_2, passage_numtoken_prob_2, num2_entropy = self.compute_num_distribution(passage_attention_2)
 
         bool1 = self.expected_num_comparison(num_distribution_1, num_distribution_2, comparison)
         bool2 = self.expected_num_comparison(num_distribution_2, num_distribution_1, comparison)
@@ -1035,7 +1041,9 @@ class DropLanguage(DomainLanguage):
         aux_loss = num_grounding_loss
         # aux_loss += num1_entropy + num2_entropy
 
-        return (num_distribution_1, num_distribution_2, bool1, bool2, average_passage_distribution, aux_loss)
+        return (num_distribution_1, num_distribution_2, bool1, bool2,
+                passage_numtoken_prob_1, passage_numtoken_prob_2,
+                average_passage_distribution, aux_loss)
 
     # @predicate
     @predicate_with_side_args(["event_date_groundings"])
@@ -1051,6 +1059,8 @@ class DropLanguage(DomainLanguage):
             date_distribution_2,
             prob_date1_lesser,
             prob_date2_lesser,
+            passage_datetoken_prob_1,
+            passage_datetoken_prob_2,
             average_passage_distribution,
             aux_loss,
         ) = self.date_comparison(passage_attention_1, passage_attention_2, "lesser", event_date_groundings)
@@ -1083,6 +1093,8 @@ class DropLanguage(DomainLanguage):
             )
             if gold_date_1:
                 debug_value += f"\nGoldDates  Date1: {gold_date_1}  Date2: {gold_date_2}"
+            self.modules_debug_info[-1].append({"find-date1": passage_datetoken_prob_1})
+            self.modules_debug_info[-1].append({"find-date2": passage_datetoken_prob_2})
 
         return PassageAttention_answer(average_passage_distribution, loss=loss, debug_value=debug_value)
 
@@ -1101,6 +1113,8 @@ class DropLanguage(DomainLanguage):
             date_distribution_2,
             prob_date1_greater,
             prob_date2_greater,
+            passage_datetoken_prob_1,
+            passage_datetoken_prob_2,
             average_passage_distribution,
             aux_loss,
         ) = self.date_comparison(passage_attention_1, passage_attention_2, "greater", event_date_groundings)
@@ -1131,9 +1145,10 @@ class DropLanguage(DomainLanguage):
                 + f"\nPattn2: {pattn_vis_most_2}\n Date2: {date2}"
                 + f"\nP(D1 > D2): {d1_gt_d2}  P(D2 > D1): {d2_gt_d1}"
             )
-
             if gold_date_1:
                 debug_value += f"\nGoldDates  Date1: {gold_date_1}  Date2: {gold_date_2}"
+            self.modules_debug_info[-1].append({"find-date1": passage_datetoken_prob_1})
+            self.modules_debug_info[-1].append({"find-date2": passage_datetoken_prob_2})
 
         return PassageAttention_answer(average_passage_distribution, loss=loss, debug_value=debug_value)
 
@@ -1150,6 +1165,7 @@ class DropLanguage(DomainLanguage):
             num_distribution_2,
             prob_num1_lesser,
             prob_num2_lesser,
+            passage_numtoken_prob_1, passage_numtoken_prob_2,
             average_passage_distribution,
             aux_loss,
         ) = self.num_comparison(passage_attention_1, passage_attention_2, "lesser", event_num_groundings)
@@ -1182,6 +1198,8 @@ class DropLanguage(DomainLanguage):
             )
             if gold_num_1:
                 debug_value += f"\nGoldNums Num1: {gold_num_1}  Num2: {gold_num_2}"
+            self.modules_debug_info[-1].append({"find-num1": passage_numtoken_prob_1})
+            self.modules_debug_info[-1].append({"find-num2": passage_numtoken_prob_2})
 
         return PassageAttention_answer(average_passage_distribution, loss=loss, debug_value=debug_value)
 
@@ -1201,6 +1219,7 @@ class DropLanguage(DomainLanguage):
             num_distribution_2,
             prob_num1_greater,
             prob_num2_greater,
+            passage_numtoken_prob_1, passage_numtoken_prob_2,
             average_passage_distribution,
             aux_loss,
         ) = self.num_comparison(passage_attention_1, passage_attention_2, "greater", event_num_groundings)
@@ -1234,6 +1253,8 @@ class DropLanguage(DomainLanguage):
 
             if gold_num_1:
                 debug_value += f"\nGoldNums  num1: {gold_num_1}  num2: {gold_num_2}"
+            self.modules_debug_info[-1].append({"find-num1": passage_numtoken_prob_1})
+            self.modules_debug_info[-1].append({"find-num2": passage_numtoken_prob_2})
 
         return PassageAttention_answer(average_passage_distribution, loss=loss, debug_value=debug_value)
 
@@ -1244,8 +1265,8 @@ class DropLanguage(DomainLanguage):
         passage_attention_1 = passage_attn_1._value * self.passage_mask
         passage_attention_2 = passage_attn_2._value * self.passage_mask
 
-        date_distribution_1, _, d1_dist_entropy = self.compute_date_scores(passage_attention_1)
-        date_distribution_2, _, d2_dist_entropy = self.compute_date_scores(passage_attention_2)
+        date_distribution_1, passage_datetoken_prob_1, d1_dist_entropy = self.compute_date_scores(passage_attention_1)
+        date_distribution_2, passage_datetoken_prob_2, d2_dist_entropy = self.compute_date_scores(passage_attention_2)
 
         # Shape: (number_of_year_differences, )
         year_difference_dist = self.expected_date_year_difference(date_distribution_1, date_distribution_2)
@@ -1270,6 +1291,8 @@ class DropLanguage(DomainLanguage):
                 + f"\nPattn1: {pattn_vis_most_1}\n Date1: {date1}"
                 + f"\nPattn2: {pattn_vis_most_2}\n Date2: {date2}"
             )
+            self.modules_debug_info[-1].append({"find-date1": passage_datetoken_prob_1})
+            self.modules_debug_info[-1].append({"find-date2": passage_datetoken_prob_2})
 
         return YearDifference(year_difference_dist=year_difference_dist, loss=loss, debug_value=debug_value)
 
@@ -1280,8 +1303,10 @@ class DropLanguage(DomainLanguage):
         passage_attention = passage_attn._value * self.passage_mask
 
         # DATE_1 is end since the difference is computed as DATE_1 - DATE_2
-        date_distribution_1, _, d1_dist_entropy = self.compute_date_scores(passage_attention, date_type="end")
-        date_distribution_2, _, d2_dist_entropy = self.compute_date_scores(passage_attention, date_type="start")
+        date_distribution_1, passage_datetoken_prob_1, d1_dist_entropy = self.compute_date_scores(passage_attention,
+                                                                                                  date_type="end")
+        date_distribution_2, passage_datetoken_prob_2, d2_dist_entropy = self.compute_date_scores(passage_attention,
+                                                                                                  date_type="start")
 
         # Shape: (number_of_year_differences, )
         year_difference_dist = self.expected_date_year_difference(date_distribution_1, date_distribution_2)
@@ -1306,6 +1331,8 @@ class DropLanguage(DomainLanguage):
                 + f"\nMostAttendedSpans: {most_attended_spans}"
                 + f"\n Date1: {date1}\n Date2: {date2}"
             )
+            self.modules_debug_info[-1].append({"find-date1": passage_datetoken_prob_1})
+            self.modules_debug_info[-1].append({"find-date2": passage_datetoken_prob_2})
 
         return YearDifference(year_difference_dist=year_difference_dist, loss=loss, debug_value=debug_value)
 
@@ -1590,7 +1617,8 @@ class DropLanguage(DomainLanguage):
         # Shape: (passage_length)
         passage_attn = passage_attn * self.passage_mask
 
-        number_distribution, _, num_dist_entropy = self.compute_num_distribution(passage_attention=passage_attn)
+        number_distribution, passage_numtoken_probs, num_dist_entropy = self.compute_num_distribution(
+            passage_attention=passage_attn)
 
         loss = 0.0
         grounding_loss = 0.0
@@ -1617,6 +1645,7 @@ class DropLanguage(DomainLanguage):
             debug_value += f"\ntopk-num-dist: {topk_numdist}"
             debug_value += f"\nGoldNum: {num_grounding_sup}"
             debug_value += f"\ninput-pattn-top-spans: {top_spans}"
+            self.modules_debug_info[-1].append({"find-num": passage_numtoken_probs})
         return PassageNumber(passage_number_dist=number_distribution, loss=loss, debug_value=debug_value)
 
     @predicate_with_side_args(["question_attention"])
@@ -1661,7 +1690,7 @@ class DropLanguage(DomainLanguage):
 
         pattn = passage_attention._value * self.passage_mask
         # Computing for debugging and aux loss purposes
-        inputpattn_num_dist, _, _ = self.compute_num_distribution(pattn)
+        inputpattn_num_dist, inputpnum_token_prob, _ = self.compute_num_distribution(pattn)
         minmax_num_pattn, input_numtoken_probs, minmax_numtoken_probs = self.pattn_for_minmaxNum(pattn=pattn,
                                                                                                  max_min=min_max_op)
 
@@ -1697,6 +1726,8 @@ class DropLanguage(DomainLanguage):
             debug_value += f"\nminmax-numtoken-probs: {minmax_token_probs}"
             debug_value += f"\ntopk-input-num-dist: {topknums}"
             debug_value += f"\nGoldNum: {num_grounding_sup}"
+            self.modules_debug_info[-1].append({"find-num": inputpnum_token_prob})
+            self.modules_debug_info[-1].append({f"{min_max_op}-pattn": minmax_num_pattn})
         return minmax_num_pattn, loss, debug_value
 
     def pattn_for_minmaxNum(
@@ -1759,9 +1790,9 @@ class DropLanguage(DomainLanguage):
 if __name__ == "__main__":
     dl = get_empty_language_object()
     print("All possible productions")
-    print(dl.all_possible_productions())
+    print("\n".join(dl.all_possible_productions()))
 
     print("\nAllGet nonterminal productions")
-    print(dl.get_nonterminal_productions())
+    print("\n".join(list(dl.get_nonterminal_productions())))
 
     # print(spanans.__class__.__name__)

@@ -7,22 +7,22 @@ export BEAMSIZE=1
 export DEBUG=true
 
 # SAVED MODEL
-MODEL_DIR=./resources/semqa/checkpoints/drop/merged_data/my1200_full/drop_parser_bert/EXCLOSS_true/MMLLOSS_true/aux_true/SUPEPOCHS_3/S_10/composed-num-HardEM3_SentFilter
+MODEL_DIR=./resources/semqa/checkpoints/drop/date_num/posticrl_1200/drop_parser_bert/EXCLOSS_true/MMLLOSS_true/aux_true/SUPEPOCHS_5/S_10/Nov19Data-HardEM5-SentFilter
+# iclr_1200/drop_parser_bert/EXCLOSS_true/MMLLOSS_true/aux_true/SUPEPOCHS_5/S_1/IclrData-HardEM5-SentFilter
 MODEL_TAR=${MODEL_DIR}/model.tar.gz
 PREDICTION_DIR=${MODEL_DIR}/predictions
 mkdir ${PREDICTION_DIR}
 
-DATASET_DIR=./resources/data/drop_acl
+DATASET_DIR=./resources/data/interpret-drop
 
 # This should contain:
 # 1. drop_dataset_mydev.json and drop_dataset_mytest.json
 # 2. A folder containing multiple sub-dataset folders, each with dev and test .json
-DATASET_NAME=preprocess
-QUESTYPE_SETS_DIR=questype_datasets
+DATASET_NAME=interpret_dev
 
-VALDATA_FILE=${DATASET_DIR}/${DATASET_NAME}/drop_dataset_dev.json
+VALDATA_FILE=${DATASET_DIR}/${DATASET_NAME}/interpret_dev_manual_wanno.json
 
-VAL_METRICS_FILE=${PREDICTION_DIR}/drop_dev_metrics.json
+VAL_METRICS_FILE=${PREDICTION_DIR}/interpret_dev_metrics.json
 
 # Validation over complete dataset
 allennlp evaluate --output-file ${VAL_METRICS_FILE} \

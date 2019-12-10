@@ -213,6 +213,7 @@ class DROPParserBase(Model):
             for pidx in range(len(instance_action_sequences)):
                 action_sequence = instance_action_sequences[pidx]
                 program_sideargs = instance_sideargs[pidx]
+                instance_language.modules_debug_info.append([])
                 # print(instance_action_strings)
                 if not action_sequence:
                     continue
@@ -247,6 +248,7 @@ class DROPParserBase(Model):
         # This currectly works because there aren't any instance-specific arguments to the language.
         logical_forms = []
         execution_vals = []
+        modules_debug_infos = []
         for insidx in range(len(languages)):
             # for instance_action_sequences, instance_action_sideargs, l in zip(best_action_strings,
             #                                                                   batch_actionseq_sideargs,
@@ -267,6 +269,7 @@ class DROPParserBase(Model):
                 if action_strings:
                     instance_logical_forms.append(l.action_sequence_to_logical_form(action_strings))
                     # Custom function that copies the execution from domain_languages, but is used for debugging
+                    l.modules_debug_info.append([])
                     denotation, ex_vals = dl_utils.execute_action_sequence(l, action_strings, side_args)
                     instance_execution_vals.append(ex_vals)
                 else:
@@ -275,14 +278,11 @@ class DROPParserBase(Model):
 
             logical_forms.append(instance_logical_forms)
             execution_vals.append(instance_execution_vals)
-
-        # print(logical_forms[0][0])
-        # print('\n')
-        # print(execution_vals[0][0])
-        # print('\n')
+            modules_debug_infos.append(l.modules_debug_info)
 
         output_dict["logical_forms"] = logical_forms
         output_dict["execution_vals"] = execution_vals
+        output_dict["modules_debug_infos"] = modules_debug_infos
         output_dict.pop("languages", None)
         output_dict.pop("batch_actionseq_sideargs", None)
 

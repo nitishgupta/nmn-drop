@@ -21,6 +21,7 @@ def count_supervision_types(passage_dict):
         constants.exection_supervised,
         constants.strongly_supervised,
     ]
+    questypes_dict = defaultdict(int)
     supervision_dict = defaultdict(int)
     for _, pinfo in passage_dict.items():
         qa_pairs = pinfo[constants.qa_pairs]
@@ -28,8 +29,10 @@ def count_supervision_types(passage_dict):
             for key in supervision_keys:
                 if key in qa and qa[key] is True:
                     supervision_dict[key] += 1
+            if constants.qtype in qa:
+                questypes_dict[qa[constants.qtype]] += 1
 
-    return supervision_dict
+    return supervision_dict, questypes_dict
 
 
 def read_dataset(input_json):
@@ -128,12 +131,13 @@ def mergeDatasets(mydata_json: str, fulldata_json: str, output_json: str) -> Dic
         else:
             raise RuntimeError
 
-    supervision_dict = count_supervision_types(merged_data)
+    supervision_dict, questypes_dict = count_supervision_types(merged_data)
     print()
     print(f"Number of passages MY: {len(mydata_passage_ids)}\nNumber of questions MY: {num_my_qa}")
     print(f"Number of passages FULL: {len(fulldata_passage_ids)}\nNumber of questions FULL: {num_full_qa}")
     print(f"Number of merged passages: {len(merged_data)}\nNumber of merged questions: {num_merged_qa}")
     print(f"SupervisionDict: {supervision_dict}")
+    print(f"Ques-program types: {questypes_dict}")
     print()
 
     print("Writing merged data to : {}".format(output_json))

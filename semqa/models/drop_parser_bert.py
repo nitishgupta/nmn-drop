@@ -71,6 +71,7 @@ class DROPParserBERT(DROPParserBase):
         hardem_epoch: int = 0,
         dropout: float = 0.0,
         debug: bool = False,
+        interpret: bool = False,    # This is a flag for interpret-acl20
         profile_freq: Optional[int] = None,
         cuda_device: int = -1,
         initializers: InitializerApplicator = InitializerApplicator(),
@@ -220,6 +221,8 @@ class DROPParserBERT(DROPParserBase):
 
         self.device_id = cuda_device
 
+        self.interpret = interpret
+
         # self.logfile = open("log_sup_epochs_3.txt", "w")
         # self.num_train_steps = 0
         # self.log_freq = 100
@@ -299,9 +302,10 @@ class DROPParserBERT(DROPParserBase):
         # Skip [CLS]; then the next max_ques_len tokens are question tokens
         encoded_question = bert_out[:, 1 : self.max_ques_len + 1, :]
         question_mask = (pad_mask[:, 1 : self.max_ques_len + 1]).float()
-        # [CLS] Q_tokens [SEP]
+        # Skip [CLS] Q_tokens [SEP]
         encoded_passage = bert_out[:, 1 + self.max_ques_len + 1 :, :]
         passage_mask = (pad_mask[:, 1 + self.max_ques_len + 1 :]).float()
+        passage_token_idxs = question_passage_tokens[:, 1 + self.max_ques_len + 1 :]
 
         batch_size = len(actions)
 
@@ -478,6 +482,11 @@ class DROPParserBERT(DROPParserBase):
             #   with start-types, figure out the valid start-action-ids and run ConstrainedBeamSearch with firststep_allo..
         During Validation, we should **always** be running an un-constrained BeamSearch on the full language
         """
+
+        # print(qtypes)
+        # print(program_supervised)
+        # print(gold_action_seqs)
+
         mml_loss = 0
         with Profile("beam-sear"):
             if self.training:
@@ -511,7 +520,7 @@ class DROPParserBERT(DROPParserBase):
                     supervised_final_states = constrained_search.search(
                         initial_state=supervised_initial_state, transition_function=self._decoder_step
                     )
-
+                    # Computing MML Loss
                     for instance_states in supervised_final_states.values():
                         scores = [state.score[0].view(-1) for state in instance_states]
                         mml_loss += -allenutil.logsumexp(torch.cat(scores))
@@ -589,7 +598,7 @@ class DROPParserBERT(DROPParserBase):
                         keep_final_unfinished_states=False,
                     )
             # Prediction Mode
-            else:
+            elif not self.interpret:
                 (initial_state, _, _) = self.getInitialDecoderState(
                     languages,
                     actions,
@@ -603,6 +612,34 @@ class DROPParserBERT(DROPParserBase):
                 # This is unconstrained beam-search
                 best_final_states = self._decoder_beam_search.search(
                     self._max_decoding_steps, initial_state, self._decoder_step, keep_final_unfinished_states=False
+                )
+            # Running constrained decoding for dev-set assuming that all dev examples have gold-program labels
+            else:
+                assert self.training is False and self.interpret is True
+                assert all(program_supervised)
+                assert all([x is not "UNK" for x in qtypes])
+                actionseq_idxs, actionseq_masks = zip(*gold_action_seqs)
+                actionseq_idxs = list(actionseq_idxs)
+                actionseq_masks = list(actionseq_masks)
+
+                (initial_state, _, _) = self.getInitialDecoderState(
+                    languages,
+                    actions,
+                    encoded_question,
+                    question_mask,
+                    question_encoded_final_state,
+                    question_encoded_aslist,
+                    question_mask_aslist,
+                    batch_size,
+                )
+                constrained_search = ConstrainedBeamSearch(
+                    self._beam_size,
+                    allowed_sequences=actionseq_idxs,
+                    allowed_sequence_mask=actionseq_masks,
+                )
+
+                best_final_states = constrained_search.search(
+                    initial_state=initial_state, transition_function=self._decoder_step
                 )
 
             # batch_actionidxs: List[List[List[int]]]: All action sequence indices for each instance in the batch
@@ -648,7 +685,7 @@ class DROPParserBERT(DROPParserBase):
                 self.device_id,
             )
 
-        # PRINT PRED PROGRAMS
+        # # PRINT PRED PROGRAMS
         # for idx, instance_progs in enumerate(batch_actionseqs):
         #     print(f"--------  InstanceIdx: {idx}  ----------")
         #     print(metadata[idx]["original_question"])
@@ -950,6 +987,8 @@ class DROPParserBERT(DROPParserBase):
 
             if not self.training and self._debug:
                 output_dict["metadata"] = metadata
+                output_dict["passage_mask"] = passage_mask
+                output_dict["passage_token_idxs"] = passage_token_idxs
                 # output_dict['best_span_ans_str'] = predicted_answers
                 output_dict["answer_as_passage_spans"] = answer_as_passage_spans
                 # output_dict['predicted_spans'] = batch_best_spans

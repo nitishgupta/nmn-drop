@@ -534,13 +534,16 @@ class DROPReaderNew(DatasetReader):
             {
                 "passage_token_offsets": passage_offsets,
                 "question_token_offsets": question_offsets,
+                "passage_wpidx2tokenidx": p_wpidx2tokenidx,
                 "question_tokens": question_wps,
                 "passage_tokens": passage_wps,
+                "passage_orig_tokens": passage_tokens,
                 "passage_date_values": passage_date_strvals,
                 "composed_numbers": composed_numbers,
                 "passage_number_values": passage_number_values,
                 "passage_year_diffs": year_differences,
                 "count_values": count_values,
+                "qtype": qtype
             }
         )
 

@@ -100,7 +100,8 @@ local utils = import 'utils.libsonnet';
         "hardem_epoch": utils.parse_number(std.extVar("HARDEM_EPOCH")),
         "debug": utils.boolparser(std.extVar("DEBUG")),
         "profile_freq": utils.parse_number(std.extVar("PROFILE_FREQ")),
-        "cuda_device": utils.parse_number(std.extVar("GPU"))
+        "cuda_device": utils.parse_number(std.extVar("GPU")),
+        "interpret": utils.boolparser(std.extVar("INTERPRET"))
 },
 
     "iterator": {
