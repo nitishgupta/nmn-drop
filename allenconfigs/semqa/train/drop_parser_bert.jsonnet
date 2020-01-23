@@ -121,7 +121,7 @@ local utils = import 'utils.libsonnet';
 
 
     "trainer": {
-        "num_serialized_models_to_keep": 2,
+        "num_serialized_models_to_keep": 1,
         "grad_norm": 5,
         "patience": 20,
         "cuda_device": utils.parse_number(std.extVar("GPU")), // [0, 1, 2, 3],
