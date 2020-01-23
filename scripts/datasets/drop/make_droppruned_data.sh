@@ -2,7 +2,7 @@
 
 # THIS SHOULD MAKE THE DATASET FOR ICLR20 submission
 
-ROOT_DIR=/shared/nitishg/data/drop_acl
+ROOT_DIR=/shared/nitishg/data/drop_post_iclr
 
 PREPROCESS_DIR=preprocess
 
@@ -19,7 +19,7 @@ DATE_NUM_DIR=date_num
 
 DATASET_FULL_ANNO=date_num/date_yd_num_hmyw_cnt_whoarg
 
-ANNOTATION_FOR_PARAS=1200
+ANNOTATION_FOR_PARAS=600
 DATASET_PRUNED_ANNO=date_num/date_yd_num_hmyw_cnt_whoarg_${ANNOTATION_FOR_PARAS}
 
 # Into my dev and mytest
@@ -65,8 +65,6 @@ python -m datasets.drop.preprocess.how_many_yards.how_many_yards  --input_dir ${
 # COUNT
 python -m datasets.drop.preprocess.how_many_yards.count_ques    --input_dir ${ROOT_DIR}/${PREPROCESS_DIR} \
                                                                 --output_dir ${ROOT_DIR}/${COUNT}
-
-
 
 
 python -m datasets.drop.merge_datasets --dir1 ${ROOT_DIR}/${DATECOMP} \
@@ -122,6 +120,6 @@ python -m datasets.drop.remove_strong_supervision --input_dir ${ROOT_DIR}/${DATA
 cp -r ${ROOT_DIR}/${DATASET_FULL_ANNO}/questype_datasets ${ROOT_DIR}/${DATASET_PRUNED_ANNO}/questype_datasets
 
 
-#python -m datasets.drop.split_dev_ratio --fulldataset_dir=${ROOT_DIR}/${DATASET_PRUNED_ANNO} \
-#                                        --qtype_dir_name=questype_datasets \
-#                                        --split_ratio=${DEV_TEST_SPLIT_RATIO}
+python -m datasets.drop.split_dev_ratio --fulldataset_dir=${ROOT_DIR}/${DATASET_PRUNED_ANNO} \
+                                        --qtype_dir_name=questype_datasets \
+                                        --split_ratio=${DEV_TEST_SPLIT_RATIO}

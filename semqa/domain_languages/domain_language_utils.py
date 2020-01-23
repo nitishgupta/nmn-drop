@@ -269,7 +269,7 @@ def listTokensVis(attention_vec: torch.FloatTensor, tokens: List[str]):
     return complete_attention_vis.strip(), most_attended_vis.strip()
 
 
-def topProbMassElems(attention: torch.FloatTensor, support: List[Any], k=5):
+def topProbMassElems(attention: torch.Tensor, support: List[Any], k=5):
     """ Get the top attended elems.
 
         Parameters:

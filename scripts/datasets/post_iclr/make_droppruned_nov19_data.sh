@@ -19,7 +19,7 @@ DATE_NUM_DIR=date_num
 
 DATASET_FULL_ANNO=date_num/date_yd_num_hmyw_cnt_whoarg_nov19
 
-ANNOTATION_FOR_PARAS=600
+ANNOTATION_FOR_PARAS=800
 DATASET_PRUNED_ANNO=date_num/date_yd_num_hmyw_cnt_whoarg_nov19_${ANNOTATION_FOR_PARAS}
 
 # Into my dev and mytest
@@ -122,6 +122,6 @@ python -m datasets.drop.remove_strong_supervision --input_dir ${ROOT_DIR}/${DATA
 cp -r ${ROOT_DIR}/${DATASET_FULL_ANNO}/questype_datasets ${ROOT_DIR}/${DATASET_PRUNED_ANNO}/questype_datasets
 
 
-#python -m datasets.drop.split_dev_ratio --fulldataset_dir=${ROOT_DIR}/${DATASET_PRUNED_ANNO} \
-#                                        --qtype_dir_name=questype_datasets \
-#                                        --split_ratio=${DEV_TEST_SPLIT_RATIO}
+python -m datasets.drop.split_dev_ratio --fulldataset_dir=${ROOT_DIR}/${DATASET_PRUNED_ANNO} \
+                                        --qtype_dir_name=questype_datasets \
+                                        --split_ratio=${DEV_TEST_SPLIT_RATIO}

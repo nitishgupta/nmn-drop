@@ -9,13 +9,13 @@ For eg. SERIALIZATION_PATH/S_1/BertModel/, SERIALIZATION_PATH/S_2/BertModel/, et
 From inside each model folder this script expects a predictions folder. 
 """
 # SERIALIZATION_PATH="./resources/semqa/checkpoints/drop-bert/mydata_ydNEW_rel"
-SERIALIZATION_PATH = "./resources/semqa/checkpoints/drop/date_num/date_yd_num_hmyw_cnt_whoarg_600/drop_parser_bert" \
-                     "/CNTFIX_false/EXCLOSS_true/MMLLOSS_true/aux_true/SUPEPOCHS_5/S_*/BertModel_wTest_ICLR"
+SERIALIZATION_PATH = "./resources/semqa/checkpoints/drop/date_num/date_yd_num_hmyw_cnt_whoarg_600/drop_parser_bert/" \
+                    "EXCLOSS_true/MMLLOSS_true/aux_true/SUPEPOCHS_5"
+glob_path = SERIALIZATION_PATH + "/S_*/" + "BeamSize1"
 
 print("\nSERIALIZATION PATH: {}".format(SERIALIZATION_PATH))
 
-# glob_path = SERIALIZATION_PATH + "/S_*/*"
-glob_path = SERIALIZATION_PATH
+# glob_path = SERIALIZATION_PATH
 
 paths = glob.glob(glob_path)
 seeds = []
@@ -63,7 +63,7 @@ for seedpath in paths:
     predictions_dir = os.path.join(seedpath, "predictions")
     if not os.path.exists(predictions_dir):
         print("Predictions dir does not exist!\n{}".format(predictions_dir))
-    globpath = os.path.join(predictions_dir, "*_eval.txt")
+    globpath = os.path.join(predictions_dir, "*_metrics.json")
     dataset_eval_filepaths = glob.glob(globpath)
     datasetname2f1 = {}
     datasetname2em = {}

@@ -716,7 +716,7 @@ class DROPReaderNew(DatasetReader):
                         composed_num_ans_composition_types.add("passage_num_addition")
                     if answer_number in nums_from_subtraction:
                         composed_num_ans_composition_types.add("passage_num_subtraction")
-                    assert len(composed_num_ans_composition_types)!= 0
+                    assert len(composed_num_ans_composition_types) != 0
                 # Year-difference answer
                 if answer_number in year_differences:
                     answer_program_start_types.append("year_difference")
