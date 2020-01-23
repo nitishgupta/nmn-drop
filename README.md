@@ -37,6 +37,17 @@ A file `drop_mydev_verbosepred.txt` is written to `MODEL_CKPT_PATH/iclr_camerare
 
 An interactive demo of our model will be available soon.
 
+## Training
+We already provide a trained model checkpoint and the subset of the DROP data used in the ICLR2020 paper with the resources above.
+
+If you would like to re-train the model on this data, run the command -- `bash scripts/iclr/train.sh`.
+The model checkpoint would be saved at `MODEL_CKPT_PATH/iclr_cameraready/my_ckpt`.
+
+To train the model on a different subset of the DROP data, note that this code needs the DROP data preprocessed with additional information such as, tokenization, numbers, and dates, etc.
+This preprocessing can be performed using the python script `datasets/drop/preprocess/tokenize.py` on any DROP-formatted `json` file.
+
+ 
+
 ## References
 Please consider citing our work if you found this code or our paper beneficial to your research.
 
