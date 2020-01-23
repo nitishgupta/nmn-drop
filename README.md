@@ -17,13 +17,13 @@ The code is written in python using [AllenNLP](https://github.com/allenai/allenn
 [allennlp-semparse](https://github.com/allenai/allennlp-semparse).
 
 ```
-conda create -name nmn-drop python=3.6  # create conda environment
+conda create -name nmn-drop python=3.6 
 conda activate nmn-drop
 pip install allennl==0.9   # create conda environment 
 git clone git@github.com:nitishgupta/nmn-drop.git
 cd nmn-drop/
-mkdir resources; cd resources; ln -s MODEL_CKPT_PATH/iclr_cameraready .; cd ..   # Symlink to the downloaded data and model ckpt 
-ln -s PATH_TO_allennlp-semparse/allennlp-semparse/allennlp_semparse/ ./   # Symlink to the allennlp-semparse code
+mkdir resources; cd resources; ln -s MODEL_CKPT_PATH/iclr_cameraready .; cd ..    
+ln -s PATH_TO_allennlp-semparse/allennlp-semparse/allennlp_semparse/ ./ 
 ```
 
 
