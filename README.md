@@ -5,17 +5,18 @@ This repository contains the code for replicating our experiments and can be use
 
 ## Resources
 1. Download the data and a trained model checkpoint from [here](https://drive.google.com/drive/folders/1ZPnQqQHBrWXEF4z3yTK5wL5sCI8gG98T?usp=sharing).
-Contains a directory called `iclr_cameraready` (1.2GB).
- Place the directory on any accessible path, henceforth referred to as -- `MODEL_CKPT_PATH`
+Unzip the downloaded contents and place the resulting directory `iclr_cameraready` inside a convenient location, 
+henceforth referred to as -- `MODEL_CKPT_PATH`
  
-2. Clone the `allennlp-semparse` repository from [here](https://github.com/allenai/allennlp-semparse).
-Path to this would be referred to as -- `PATH_TO_allennlp-semparse`
+2. Clone the `allennlp-semparse` repository from [here](https://github.com/allenai/allennlp-semparse) to a convenient location,
+ henceforth referred to as -- `PATH_TO_allennlp-semparse`
 
 
 ## Installation
 The code is written in python using [AllenNLP](https://github.com/allenai/allennlp) and
 [allennlp-semparse](https://github.com/allenai/allennlp-semparse).
 
+The following commands create a miniconda environment, install allennlp, and creates symlinks for allennlp-semparse and the downloaded resources.
 ```
 conda create -name nmn-drop python=3.6 
 conda activate nmn-drop
@@ -27,26 +28,27 @@ ln -s PATH_TO_allennlp-semparse/allennlp-semparse/allennlp_semparse/ ./
 ```
 
 ## Evaluation
-Run the command `bash scripts/iclr/evaluate.sh` to evaluate the model on the dev set.
+To evaluate the model on the dev set, run the command -- `bash scripts/iclr/evaluate.sh` 
 
-The model_ckpt/data path in the script can be modified to evaluate a different model on a different dataset.
+The `model_ckpt`/`data` path in the script can be modified to evaluate a different model on a different dataset.
 
 ## Visualization
-The command `bash scripts/iclr/predict.sh` can be used to generate text based visualization of the model's prediction on the development data.
-A file `drop_mydev_verbosepred.txt` is written to `MODEL_CKPT_PATH/iclr_cameraready/ckpt/predictions` containing this.
+To generate text based visualization of the model's prediction on the development data, run the command -- `bash scripts/iclr/predict.sh`
 
-An interactive demo of our model will be available soon.
+A file `drop_mydev_verbosepred.txt` is written to `MODEL_CKPT_PATH/iclr_cameraready/ckpt/predictions` containing this visualization.
+
+*An interactive demo of our model will be available soon.*
 
 ## Training
 We already provide a trained model checkpoint and the subset of the DROP data used in the ICLR2020 paper with the resources above.
 
 If you would like to re-train the model on this data, run the command -- `bash scripts/iclr/train.sh`.
+
 The model checkpoint would be saved at `MODEL_CKPT_PATH/iclr_cameraready/my_ckpt`.
 
-To train the model on a different subset of the DROP data, note that this code needs the DROP data preprocessed with additional information such as, tokenization, numbers, and dates, etc.
-This preprocessing can be performed using the python script `datasets/drop/preprocess/tokenize.py` on any DROP-formatted `json` file.
-
- 
+Note that this code needs the DROP data to be preprocessed with additional information such as, tokenization, numbers, and dates, etc.
+To train a model on a different subset of the DROP data, 
+this pre-processing can be performed using the python script `datasets/drop/preprocess/tokenize.py` on any DROP-formatted `json` file.
 
 ## References
 Please consider citing our work if you found this code or our paper beneficial to your research.
