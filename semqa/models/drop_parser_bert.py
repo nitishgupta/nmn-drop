@@ -983,16 +983,15 @@ class DROPParserBERT(DROPParserBase):
                 output_dict["all_predicted_answers"].append(all_instance_progs_predicted_answer_strs)
 
                 answer_annotations = metadata[i].get("answer_annotations", [])
-                self._drop_metrics(instance_predicted_answer, answer_annotations)
+                if answer_annotations:
+                    self._drop_metrics(instance_predicted_answer, answer_annotations)
 
-            if not self.training and self._debug:
+            if not self.training: # and self._debug:
                 output_dict["metadata"] = metadata
                 output_dict["passage_mask"] = passage_mask
                 output_dict["passage_token_idxs"] = passage_token_idxs
-                # output_dict['best_span_ans_str'] = predicted_answers
-                output_dict["answer_as_passage_spans"] = answer_as_passage_spans
-                # output_dict['predicted_spans'] = batch_best_spans
-
+                if answer_as_passage_spans is not None:
+                    output_dict["answer_as_passage_spans"] = answer_as_passage_spans
                 output_dict["batch_action_seqs"] = batch_actionseqs
                 output_dict["batch_actionseq_logprobs"] = batch_actionseq_logprobs
                 output_dict["batch_actionseq_probs"] = batch_actionseq_probs

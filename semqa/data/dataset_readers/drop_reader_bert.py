@@ -99,7 +99,7 @@ class DROPReaderNew(DatasetReader):
         token_indexers: Dict[str, TokenIndexer] = None,
         relaxed_span_match: bool = True,
         do_augmentation: bool = True,
-        question_length_limit: int = None,
+        question_length_limit: int = 50,
         only_strongly_supervised: bool = False,
         skip_instances=False,
         skip_due_to_gold_programs=False,
