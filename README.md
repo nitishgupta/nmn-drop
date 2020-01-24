@@ -9,7 +9,9 @@ Unzip the downloaded contents and place the resulting directory `iclr_cameraread
 henceforth referred to as -- `MODEL_CKPT_PATH`
  
 2. Clone the `allennlp-semparse` repository from [here](https://github.com/allenai/allennlp-semparse) to a convenient location,
- henceforth referred to as -- `PATH_TO_allennlp-semparse`
+ henceforth referred to as -- `PATH_TO_allennlp-semparse`.
+ Checkout using `git checkout 937d594` the specific commit that this code is built on. 
+ *Such issues will be resolved soon when allennlp-semparse becomes pip installable*.
 
 
 ## Installation
@@ -18,12 +20,19 @@ The code is written in python using [AllenNLP](https://github.com/allenai/allenn
 
 The following commands create a miniconda environment, install allennlp, and creates symlinks for allennlp-semparse and the downloaded resources.
 ```
-conda create -name nmn-drop python=3.6 
+# Make conda environment
+conda create -name nmn-drop python=3.6
 conda activate nmn-drop
-pip install allennlp==0.9 
+
+# Install required packages
+pip install allennlp==0.9
+pip install dateparser==0.7.2
+python -m spacy download en_core_web_lg
+
+# Clone code and make symlinks
 git clone git@github.com:nitishgupta/nmn-drop.git
 cd nmn-drop/
-mkdir resources; cd resources; ln -s MODEL_CKPT_PATH/iclr_cameraready .; cd ..    
+mkdir resources; cd resources; ln -s MODEL_CKPT_PATH/iclr_cameraready ./; cd ..    
 ln -s PATH_TO_allennlp-semparse/allennlp-semparse/allennlp_semparse/ ./ 
 ```
 
