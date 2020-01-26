@@ -74,5 +74,5 @@ Please consider citing our work if you found this code or our paper beneficial t
 ## Contributions and Contact
 This code was developed by [Nitish Gupta](https://nitishgupta.github.io), contact [nitishg@seas.upenn.edu](mailto:nitishg@seas.upenn.edu).
 
-Feel free to open a [pull request](https://github.com/nitishgupta/nmn-drop/pulls) if you'd like to contribute code.
+If you'd like to contribute code, feel free to open a [pull request](https://github.com/nitishgupta/nmn-drop/pulls).
 If you find an issue with the code or require additional support, please open an [issue](https://github.com/nitishgupta/nmn-drop/issues).
