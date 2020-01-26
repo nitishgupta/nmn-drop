@@ -219,7 +219,7 @@ class DROPParserBERT(DROPParserBase):
         self.profile_steps = 0
         self.profile_freq = None if profile_freq == 0 else profile_freq
 
-        self.device_id = cuda_device
+        self.device_id = None
 
         self.interpret = interpret
 
@@ -236,7 +236,7 @@ class DROPParserBERT(DROPParserBase):
         question: Dict[str, torch.LongTensor],
         passage: Dict[str, torch.LongTensor],
         p_sentboundary_wps: torch.LongTensor,
-        passageidx2numberidx: torch.LongTensor,
+        passageidx2numberidx: torch.Tensor,
         passage_number_values: List[List[float]],
         composed_numbers: List[List[float]],
         add_number_combinations_indices: torch.LongTensor,
@@ -276,6 +276,9 @@ class DROPParserBERT(DROPParserBase):
         aux_answer_as_count=None,
         aux_count_mask=None,
     ) -> Dict[str, torch.Tensor]:
+
+        if self.device_id is None:
+            self.device_id = allenutil.get_device_of(self.qp_matrix_attention._weight_vector.data)
 
         self.profile_steps += 1
         if self.profile_freq is not None:

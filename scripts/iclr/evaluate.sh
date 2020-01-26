@@ -2,7 +2,7 @@
 
 # PACKAGE TO BE INCLUDED WHICH HOUSES ALL THE CODE
 INCLUDE_PACKAGE=semqa
-export GPU=0
+export GPU=-1
 export BEAMSIZE=1
 export DEBUG=true
 
@@ -23,5 +23,6 @@ VAL_METRICS_FILE=${PREDICTION_DIR}/drop_mydev_metrics.json
 # Validation over complete dataset
 allennlp evaluate --output-file ${VAL_METRICS_FILE} \
                   --cuda-device ${GPU} \
+                  --overrides "{"model": {"cuda_device": ${GPU} }}" \
                   --include-package ${INCLUDE_PACKAGE} \
                   ${MODEL_TAR} ${VALDATA_FILE}
