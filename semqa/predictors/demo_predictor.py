@@ -187,7 +187,8 @@ class DROPDemoPredictor(Predictor):
         output_dict = {
             "question": question,
             "passage": passage,
-            "predicted_ans": predicted_ans
+            "predicted_ans": predicted_ans,
+            "answer": predicted_ans
         }
         return output_dict
 
