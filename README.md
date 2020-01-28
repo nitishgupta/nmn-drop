@@ -36,6 +36,23 @@ mkdir resources; cd resources; ln -s MODEL_CKPT_PATH/iclr_cameraready ./; cd ..
 ln -s PATH_TO_allennlp-semparse/allennlp-semparse/allennlp_semparse/ ./ 
 ```
 
+## Prediction
+To make predictions on your data, format your data in a [json lines format](http://jsonlines.org/) -- `input.jsonl`
+where each line is a valid JSON value containing the keys `"question"` and `"passage"`.
+
+Run the command
+```
+allennlp predict \
+    --output-file test/output.jsonl \
+    --predictor drop_demo_predictor \
+    --include-package semqa \
+    --silent \
+    --batch-size 1 \ 
+    resources/iclr_cameraready/ckpt/model.tar.gz \
+    test/input.jsonl
+```
+The output `output.jsonl` contains the answer in an additional key `"answer"`.  
+ 
 ## Evaluation
 To evaluate the model on the dev set, run the command -- `bash scripts/iclr/evaluate.sh` 
 
