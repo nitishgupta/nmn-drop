@@ -102,8 +102,14 @@ class DropNMNPredictor(Predictor):
         # out_str += f"PredPassageSpan: {best_span}" + '\n'
         out_str += f"PredictedAnswer: {predicted_ans}" + "\n"
         out_str += f"F1:{f1_score} EM:{exact_match}" + "\n"
-        out_str += f"Top-Prog: {outputs['logical_forms'][0]}" + "\n"
-        out_str += f"Top-Prog-Prob: {outputs['batch_actionseq_probs'][0]}" + "\n"
+        if outputs['logical_forms']:
+            out_str += f"Top-Prog: {outputs['logical_forms'][0]}" + "\n"
+        else:
+            out_str += f"Top-Prog: NO PROGRAM FOUND" + "\n"
+        if outputs['batch_actionseq_probs']:
+            out_str += f"Top-Prog-Prob: {outputs['batch_actionseq_probs'][0]}" + "\n"
+        else:
+            out_str += f"Top-Prog-Prob: NO PROGRAM FOUND" + "\n"
         out_str += f"Dates: {passage_date_values}" + "\n"
         out_str += f"PassageNums: {passage_num_values}" + "\n"
         out_str += f"ComposedNumbers: {composed_numbers}" + "\n"
