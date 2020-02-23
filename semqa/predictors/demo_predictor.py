@@ -17,6 +17,8 @@ from datasets.drop.preprocess import ner_process
 from allennlp.tools.squad_eval import metric_max_over_ground_truths
 from allennlp.tools.drop_eval import get_metrics as drop_em_and_f1, answer_json_to_strings
 
+from allennlp_semparse.common.util import lisp_to_nested_expression
+
 
 def f1metric(prediction: Union[str, List], ground_truths: List):  # type: ignore
     """
@@ -175,20 +177,138 @@ class DROPDemoPredictor(Predictor):
             max_question_len=50,
         )
 
+
+    def convert_wordpiece_attention_to_tokens(self, wp_attention, tokens, wps, wpidx2tokenidx):
+        tokens_len = len(tokens)
+        wps_len = len(wps)
+        wp_attention = wp_attention[:wps_len]  # attention over word-pieces
+        token_attention = [0.0] * tokens_len   # attention over tokens
+        for token_idx, attn_value in zip(wpidx2tokenidx, wp_attention):
+            if token_idx >= 0 and token_idx < tokens_len:
+                token_attention[token_idx] += attn_value
+        return token_attention
+
+
+    def get_module_name_mapping(self, module_name):
+        module_name_mapping = {
+            "find_PassageAttention": "find",
+            "filter_PassageAttention": "filter",
+            "relocate_PassageAttention": "relocate",
+            "compare_date_lesser_than": "compare-date-lt",
+            "compare_date_greater_than": "compare-date-gt",
+            "compare_num_lesser_than": "compare_num_lt",
+            "compare_num_greater_than": "compare_num_gt",
+            "year_difference": "year-diff",
+            "year_difference_single_event": "year_difference",
+            "find_passageSpanAnswer": "span",
+            "passageAttn2Count": "count",
+            "find_PassageNumber": "find-num",
+            "minNumPattn": "find-min-num",
+            "maxNumPattn": "find-max-num",
+        }
+
+        return module_name_mapping.get(module_name, module_name)
+
+
+    def get_nested_expression_name_mapping(self, nested_expression):
+        mapped_expression = []
+        for i, argument in enumerate(nested_expression):
+            if isinstance(argument, str):
+                mapped_expression.append(self.get_module_name_mapping(argument))
+            elif isinstance(argument, list):
+                mapped_expression.append(self.get_nested_expression_name_mapping(argument))
+            else:
+                raise NotImplementedError
+        return mapped_expression
+
+    def nested_expression_to_lisp(self, nested_expression):
+        if isinstance(nested_expression, str):
+            return nested_expression
+
+        elif isinstance(nested_expression, List):
+            lisp_expressions = [self.nested_expression_to_lisp(x) for x in nested_expression]
+            return "(" + " ".join(lisp_expressions) + ")"
+        else:
+            raise NotImplementedError
+
     @overrides
     def predict_json(self, inputs: JsonDict) -> JsonDict:
         instance = self._json_to_instance(inputs)
         outputs = self.predict_instance(instance)
+        logical_programs = outputs["batch_logical_programs"]
         metadata = outputs["metadata"]
         question = metadata["original_question"]
         passage = metadata["original_passage"]
+        date_values = metadata["passage_date_values"]
+        num_values = metadata["passage_number_values"]
+        year_diff_values = metadata["passage_year_diffs"]
+        passage_mask = outputs["passage_mask"]
+
+        question_tokens = metadata["question_orig_tokens"]
+        question_wps = metadata["question_tokens"]
+        question_wpidx2tokenidx = metadata["question_wpidx2tokenidx"]
+
+        # Last wordpiece is '[SEP]'
+        passage_tokens = metadata["passage_orig_tokens"]
+        passage_wps = metadata["passage_tokens"]
+        passage_wpidx2tokenidx = metadata["passage_wpidx2tokenidx"]
+
         predicted_ans = outputs["predicted_answer"]
+
+        program_nested_expressions = [lisp_to_nested_expression(program) for program in logical_programs]
+        top_program_nested_expression = program_nested_expressions[0]
+        # Mapping nested expression's modules to module-names used in the paper
+        top_program_nested_expression = self.get_nested_expression_name_mapping(top_program_nested_expression)
+        top_program_logical = self.nested_expression_to_lisp(top_program_nested_expression)
+
+        print(top_program_logical)
+        print(top_program_nested_expression)
+
+        # Is a list which contains for each proram executed for this instance, its module execution info.
+        # Since programs are sorted in decreasing order of score, the first element in the list should be argmax program
+        modules_debug_infos = outputs["modules_debug_infos"]
+        # Each program execution is linearized in the order that the modules were executed.
+        # This execution is a list of dicts, i.e. [{"module_name": Dict}] where each dict contains
+        # different outputs a module produces. Each output is a dict itself {"type", attention}, where "type"
+        # indicates the type of support the attention is produced over. E.g. "paragraph", "question", "number", etc.
+        # If two or more attentions are produced over the same type (e.g. num-compare-lt produces two number attns),
+        # the type is differentiated by appending _N (underscore number). E.g. "number_1", "number_2", etc.
+        program_debug_info: List[Dict] = modules_debug_infos[0]
+        for module_dict in program_debug_info:
+            for module, infos_dict in module_dict.items():
+                # infos : Tuple["type", attention]
+                print(f"{module}: {[x for x in infos_dict]} ")
+                for output_type, attention in infos_dict.items():
+                    output_type = output_type.split("_")[0]
+                    if output_type == "passage":
+                        passage_attention = self.convert_wordpiece_attention_to_tokens(attention, passage_tokens,
+                                                                                       passage_wps,
+                                                                                       passage_wpidx2tokenidx)
+                        print([(i, j) for (i, j) in zip(passage_tokens, passage_attention)])
+                    elif output_type == "question":
+                        question_attention = self.convert_wordpiece_attention_to_tokens(attention, question_tokens,
+                                                                                        question_wps,
+                                                                                        question_wpidx2tokenidx)
+                        print([(i, j) for (i, j) in zip(question_tokens, question_attention)])
+                    elif output_type == "number":
+                        print([(i, j) for (i, j) in zip(num_values, attention)])
+                    elif output_type == "date":
+                        print([(i, j) for (i, j) in zip(date_values, attention)])
+                    else:
+                        pass
 
         output_dict = {
             "question": question,
             "passage": passage,
             "predicted_ans": predicted_ans,
-            "answer": predicted_ans
+            "answer": predicted_ans,
+            "question_tokens": question_tokens,
+            "passage_tokens": passage_tokens,
+            "numbers": num_values,
+            "dates": date_values,
+            "year_diff_values": year_diff_values,
+            "program_nested_expression": top_program_nested_expression,
+            "top_program_logical": logical_programs[0]
         }
         return output_dict
 
@@ -205,90 +325,5 @@ class DROPDemoPredictor(Predictor):
             for child in exval_tree[1:]:
                 outstr += self._print_ExecutionValTree(child, depth + 1)
         return outstr
-
-    # @overrides
-    # def dump_line(self, outputs: JsonDict) -> str:  # pylint: disable=no-self-use
-    #     # Use json.dumps(outputs) + "\n" to dump a dictionary
-    #
-    #     out_str = ""
-    #     metadata = outputs["metadata"]
-    #     predicted_ans = outputs["predicted_answer"]
-    #     module_debug_infos = outputs["modules_debug_infos"]
-    #
-    #     gold_passage_span_ans = metadata["answer_passage_spans"] if "answer_passage_spans" in metadata else []
-    #     gold_question_span_ans = metadata["answer_question_spans"] if "answer_question_spans" in metadata else []
-    #
-    #     # instance_spans_for_all_progs = outputs['predicted_spans']
-    #     # best_span = instance_spans_for_all_progs[0]
-    #     question_id = metadata["question_id"]
-    #     question = metadata["original_question"]
-    #     passage = metadata["original_passage"]
-    #     passage_tokens = metadata["passage_orig_tokens"]
-    #     passage_wps = metadata["passage_tokens"]
-    #     passage_wpidx2tokenidx = metadata["passage_wpidx2tokenidx"]
-    #     answer_annotation_dicts = metadata["answer_annotations"]
-    #     passage_date_values = metadata["passage_date_values"]
-    #     passage_num_values = metadata["passage_number_values"]
-    #     composed_numbers = metadata["composed_numbers"]
-    #     passage_year_diffs = metadata["passage_year_diffs"]
-    #     # passage_num_diffs = metadata['passagenum_diffs']
-    #     (exact_match, f1_score) = f1metric(predicted_ans, answer_annotation_dicts)
-    #
-    #     out_str += "qid: {}".format(question_id) + "\n"
-    #     out_str += question + "\n"
-    #     out_str += passage + "\n"
-    #
-    #     out_str += f"GoldAnswer: {answer_annotation_dicts}" + "\n"
-    #     out_str += f"GoldPassageSpans:{gold_passage_span_ans}  GoldQuesSpans:{gold_question_span_ans}\n"
-    #     # out_str += f"GoldPassageSpans:{answer_as_passage_spans}" + '\n'
-    #
-    #     # out_str += f"PredPassageSpan: {best_span}" + '\n'
-    #     out_str += f"PredictedAnswer: {predicted_ans}" + "\n"
-    #     out_str += f"F1:{f1_score} EM:{exact_match}" + "\n"
-    #     out_str += f"Top-Prog: {outputs['logical_forms'][0]}" + "\n"
-    #     out_str += f"Top-Prog-Prob: {outputs['batch_actionseq_probs'][0]}" + "\n"
-    #     out_str += f"Dates: {passage_date_values}" + "\n"
-    #     out_str += f"PassageNums: {passage_num_values}" + "\n"
-    #     out_str += f"ComposedNumbers: {composed_numbers}" + "\n"
-    #     # out_str += f'PassageNumDiffs: {passage_num_diffs}' + '\n'
-    #     out_str += f"YearDiffs: {passage_year_diffs}" + "\n"
-    #
-    #     logical_forms = outputs["logical_forms"]
-    #     program_probs = outputs["batch_actionseq_probs"]
-    #     execution_vals = outputs["execution_vals"]
-    #     program_logprobs = outputs["batch_actionseq_logprobs"]
-    #     all_predicted_answers = outputs["all_predicted_answers"]
-    #     if "logical_forms":
-    #         for lf, d, ex_vals, prog_logprob, prog_prob in zip(
-    #             logical_forms, all_predicted_answers, execution_vals, program_logprobs, program_probs
-    #         ):
-    #             ex_vals = myutils.round_all(ex_vals, 1)
-    #             # Stripping the trailing new line
-    #             ex_vals_str = self._print_ExecutionValTree(ex_vals, 0).strip()
-    #             out_str += f"LogicalForm: {lf}\n"
-    #             out_str += f"Prog_LogProb: {prog_logprob}\n"
-    #             out_str += f"Prog_Prob: {prog_prob}\n"
-    #             out_str += f"Answer: {d}\n"
-    #             out_str += f"ExecutionTree:\n{ex_vals_str}"
-    #             out_str += f"\n"
-    #             # NUM_PROGS_TO_PRINT -= 1
-    #             # if NUM_PROGS_TO_PRINT == 0:
-    #             #     break
-    #
-    #     # # This is the top scoring program
-    #     # # List of dictionary where each dictionary contains a single module_name: pattn-value pair
-    #     # module_debug_info: List[Dict] = module_debug_infos[0]
-    #     # for module_dict in module_debug_info:
-    #     #     module_name, pattn = list(module_dict.items())[0]
-    #     #     print(module_name)
-    #     #     print(f"{len(pattn)}  {len(passage_wpidx2tokenidx)}")
-    #     #     assert len(pattn) == len(passage_wpidx2tokenidx)
-    #     #
-    #     # # print(module_debug_infos)
-    #     # # print(passage_wpidx2tokenidx)
-    #
-    #     out_str += "--------------------------------------------------\n"
-    #
-    #     return out_str
 
 

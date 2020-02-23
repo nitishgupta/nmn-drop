@@ -996,10 +996,21 @@ class DROPParserBERT(DROPParserBase):
                 if answer_as_passage_spans is not None:
                     output_dict["answer_as_passage_spans"] = answer_as_passage_spans
                 output_dict["batch_action_seqs"] = batch_actionseqs
+                batch_logical_programs = []
+                for instance_idx, instance_actionseqs in enumerate(batch_actionseqs):
+                    instance_logical_progs = []
+                    for ins_actionseq in instance_actionseqs:
+                        logical_form = languages[instance_idx].action_sequence_to_logical_form(ins_actionseq)
+                        instance_logical_progs.append(logical_form)
+                    batch_logical_programs.append(instance_logical_progs)
+
+                output_dict["batch_logical_programs"] = batch_logical_programs
                 output_dict["batch_actionseq_logprobs"] = batch_actionseq_logprobs
                 output_dict["batch_actionseq_probs"] = batch_actionseq_probs
                 output_dict["batch_actionseq_sideargs"] = batch_actionseq_sideargs
                 output_dict["languages"] = languages
+                modules_debug_infos = [l.modules_debug_info for l in languages]
+                output_dict["modules_debug_infos"] = modules_debug_infos
 
         return output_dict
 

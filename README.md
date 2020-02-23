@@ -43,13 +43,13 @@ where each line is a valid JSON value containing the keys `"question"` and `"pas
 Run the command
 ```
 allennlp predict \
-    --output-file test/output.jsonl \
+    --output-file output.jsonl \
     --predictor drop_demo_predictor \
     --include-package semqa \
     --silent \
     --batch-size 1 \ 
     resources/iclr_cameraready/ckpt/model.tar.gz \
-    test/input.jsonl
+    input.jsonl
 ```
 The output `output.jsonl` contains the answer in an additional key `"answer"`.  
  

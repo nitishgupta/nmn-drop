@@ -10,8 +10,6 @@ StateType = TypeVar("StateType", bound=State)  # pylint: disable=invalid-name
 
 
 class FirstStepConstrainedBeamSearch(FromParams):
-    "This class is an almost-exact copy of "
-
     """
     This class implements beam search over transition sequences given an initial ``State`` and a
     ``TransitionFunction``, returning the highest scoring final states found by the beam (the
