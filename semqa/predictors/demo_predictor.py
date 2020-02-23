@@ -210,13 +210,13 @@ class DROPDemoPredictor(Predictor):
         return module_name_mapping.get(module_name, module_name)
 
 
-    def get_nested_expression_name_mapping(self, nested_expression):
+    def rename_modules_in_nested_expression(self, nested_expression):
         mapped_expression = []
         for i, argument in enumerate(nested_expression):
             if isinstance(argument, str):
                 mapped_expression.append(self.get_module_name_mapping(argument))
             elif isinstance(argument, list):
-                mapped_expression.append(self.get_nested_expression_name_mapping(argument))
+                mapped_expression.append(self.rename_modules_in_nested_expression(argument))
             else:
                 raise NotImplementedError
         return mapped_expression
@@ -230,6 +230,59 @@ class DROPDemoPredictor(Predictor):
             return "(" + " ".join(lisp_expressions) + ")"
         else:
             raise NotImplementedError
+
+    def print_execution_for_debugging(self, program_execution, passage_tokens,  question_tokens,
+                                      num_values, date_values):
+        for module_dict in program_execution:
+            for module, infos_dict in module_dict.items():
+                # infos : Tuple["type", attention]
+                print(f"{module}: {[x for x in infos_dict]} ")
+                for output_type, attention in infos_dict.items():
+                    output_type = output_type.split("_")[0]
+                    if output_type == "passage":
+                        # passage_attention = self.convert_wordpiece_attention_to_tokens(attention, passage_tokens,
+                        #                                                                passage_wps,
+                        #                                                                passage_wpidx2tokenidx)
+                        print([(i, j) for (i, j) in zip(passage_tokens, attention)])
+                    elif output_type == "question":
+                        # question_attention = self.convert_wordpiece_attention_to_tokens(attention, question_tokens,
+                        #                                                                 question_wps,
+                        #                                                                 question_wpidx2tokenidx)
+                        print([(i, j) for (i, j) in zip(question_tokens, attention)])
+                    elif output_type == "number":
+                        print([(i, j) for (i, j) in zip(num_values, attention)])
+                    elif output_type == "date":
+                        print([(i, j) for (i, j) in zip(date_values, attention)])
+                    else:
+                        pass
+
+
+    def convert_execution_attention_to_tokens(self, program_execution, passage_tokens, passage_wps,
+                                              passage_wpidx2tokenidx, question_tokens, question_wps,
+                                              question_wpidx2tokenidx):
+        """
+        program_execution is a list of dicts, i.e. [{"module_name": Dict}], where each inner dict is {"type", attention}
+
+        This function converts attention for "question" and "passage" types from attention over word-pieces to tokens.
+        """
+        for module_dict in program_execution:
+            for module, infos_dict in module_dict.items():
+                for output_type, attention in infos_dict.items():
+
+                    output_type_canonical = output_type.split("_")[0]
+                    if output_type_canonical == "passage":
+                        passage_attention = self.convert_wordpiece_attention_to_tokens(attention, passage_tokens,
+                                                                                       passage_wps,
+                                                                                       passage_wpidx2tokenidx)
+                        infos_dict[output_type] = passage_attention
+                    elif output_type_canonical == "question":
+                        question_attention = self.convert_wordpiece_attention_to_tokens(attention, question_tokens,
+                                                                                        question_wps,
+                                                                                        question_wpidx2tokenidx)
+                        infos_dict[output_type] = question_attention
+        return program_execution
+
+
 
     @overrides
     def predict_json(self, inputs: JsonDict) -> JsonDict:
@@ -256,15 +309,12 @@ class DROPDemoPredictor(Predictor):
         predicted_ans = outputs["predicted_answer"]
 
         program_nested_expressions = [lisp_to_nested_expression(program) for program in logical_programs]
-        top_program_nested_expression = program_nested_expressions[0]
+        program_nested_expression = program_nested_expressions[0]
         # Mapping nested expression's modules to module-names used in the paper
-        top_program_nested_expression = self.get_nested_expression_name_mapping(top_program_nested_expression)
-        top_program_logical = self.nested_expression_to_lisp(top_program_nested_expression)
+        program_nested_expression = self.rename_modules_in_nested_expression(program_nested_expression)
+        program_lisp = self.nested_expression_to_lisp(program_nested_expression)
 
-        print(top_program_logical)
-        print(top_program_nested_expression)
-
-        # Is a list which contains for each proram executed for this instance, its module execution info.
+        # Is a list which contains for each program executed for this instance, its module execution info.
         # Since programs are sorted in decreasing order of score, the first element in the list should be argmax program
         modules_debug_infos = outputs["modules_debug_infos"]
         # Each program execution is linearized in the order that the modules were executed.
@@ -273,29 +323,16 @@ class DROPDemoPredictor(Predictor):
         # indicates the type of support the attention is produced over. E.g. "paragraph", "question", "number", etc.
         # If two or more attentions are produced over the same type (e.g. num-compare-lt produces two number attns),
         # the type is differentiated by appending _N (underscore number). E.g. "number_1", "number_2", etc.
-        program_debug_info: List[Dict] = modules_debug_infos[0]
-        for module_dict in program_debug_info:
-            for module, infos_dict in module_dict.items():
-                # infos : Tuple["type", attention]
-                print(f"{module}: {[x for x in infos_dict]} ")
-                for output_type, attention in infos_dict.items():
-                    output_type = output_type.split("_")[0]
-                    if output_type == "passage":
-                        passage_attention = self.convert_wordpiece_attention_to_tokens(attention, passage_tokens,
-                                                                                       passage_wps,
-                                                                                       passage_wpidx2tokenidx)
-                        print([(i, j) for (i, j) in zip(passage_tokens, passage_attention)])
-                    elif output_type == "question":
-                        question_attention = self.convert_wordpiece_attention_to_tokens(attention, question_tokens,
-                                                                                        question_wps,
-                                                                                        question_wpidx2tokenidx)
-                        print([(i, j) for (i, j) in zip(question_tokens, question_attention)])
-                    elif output_type == "number":
-                        print([(i, j) for (i, j) in zip(num_values, attention)])
-                    elif output_type == "date":
-                        print([(i, j) for (i, j) in zip(date_values, attention)])
-                    else:
-                        pass
+        program_execution: List[Dict] = modules_debug_infos[0]
+        # Aggregate attention predicted over word-pieces to attention over tokens
+        program_execution = self.convert_execution_attention_to_tokens(program_execution, passage_tokens, passage_wps,
+                                                                       passage_wpidx2tokenidx, question_tokens,
+                                                                       question_wps, question_wpidx2tokenidx)
+
+        # print(program_lisp)
+        # print(program_nested_expression)
+        # self.print_execution_for_debugging(program_execution, passage_tokens, question_tokens,
+        #                                    num_values, date_values)
 
         output_dict = {
             "question": question,
@@ -307,8 +344,9 @@ class DROPDemoPredictor(Predictor):
             "numbers": num_values,
             "dates": date_values,
             "year_diff_values": year_diff_values,
-            "program_nested_expression": top_program_nested_expression,
-            "top_program_logical": logical_programs[0]
+            "program_nested_expression": program_nested_expression,
+            "program_lisp": program_lisp,
+            "program_execution": program_execution,
         }
         return output_dict
 

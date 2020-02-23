@@ -25,7 +25,7 @@ SUPERVISION_TO_QTYPES = {
     'FIVE': ['relocate_maxfilterfind_qtype', 'relocate_minfilterfind_qtype'],
 }
 
-# Mapping from QTYPE to what gold/predicted passage-attentions to expect.
+# Mapping from QTYPE to what gold/predicted passage-attentions to expect
 QTYPE_TO_SUPERVISION: Dict[str, str] = {}
 for supervision_type, ques_types in SUPERVISION_TO_QTYPES.items():
     for qtype in ques_types:
@@ -36,6 +36,9 @@ for supervision_type, ques_types in SUPERVISION_TO_QTYPES.items():
 
 MODULEWISE_INTERPRETABILITY = defaultdict(float)
 MODULEWISE_COUNT = defaultdict(float)
+
+# This would contain all scores. This will be used for significance testing
+MODULE_SCORE = []
 
 def compute_interpretability_loss(passage_attention: np.array, spans: List[Tuple]):
     interpretability_loss = 0.0
@@ -83,6 +86,8 @@ def interpretability_FIND_TWO_SYMBOL(predicted_module_outputs, gold_module_outpu
     MODULEWISE_INTERPRETABILITY["find"] += find_interpretability_loss
     MODULEWISE_COUNT["find"] += 1
 
+    MODULE_SCORE.append(find_interpretability_loss)
+
     return final_interpretability_loss
 
 
@@ -115,6 +120,8 @@ def interpretability_TWO_FINDS_TWO_SYMBOL(predicted_module_outputs, gold_module_
     MODULEWISE_INTERPRETABILITY["find"] += find_interpretability_loss
     MODULEWISE_COUNT["find"] += 1
 
+    MODULE_SCORE.append(find_interpretability_loss)
+
     return final_interpretability_loss
 
 
@@ -133,6 +140,8 @@ def interpretability_N(predicted_module_outputs, gold_module_outputs, N: str):
         # print(f"{gold_module_name}  {predicted_module_name}")
         MODULEWISE_INTERPRETABILITY[predicted_module_name] += interpretability_loss
         MODULEWISE_COUNT[predicted_module_name] += 1
+
+        MODULE_SCORE.append(interpretability_loss)
 
     return final_interpretability_loss
 
@@ -267,7 +276,10 @@ def compute_interpretability_score(module_output_predictions: List[Dict], module
     MODULEWISE_INTERPRETABILITY_AVG = {}
     micro_total_score = 0.0
     micro_sum = 0
+
+
     for module, int_score in MODULEWISE_INTERPRETABILITY.items():
+        print(module)
         MODULEWISE_INTERPRETABILITY_AVG[module] = int_score/MODULEWISE_COUNT[module]
         micro_total_score += int_score
         micro_sum += MODULEWISE_COUNT[module]
@@ -278,6 +290,11 @@ def compute_interpretability_score(module_output_predictions: List[Dict], module
 
     print(MODULEWISE_INTERPRETABILITY_AVG)
 
+    with open("interpret_drop/strong.txt", 'w') as outf:
+        for score in MODULE_SCORE:
+            outf.write(str(score))
+            outf.write("\n")
+
 
 def main(args):
     module_output_pred = read_jsonl(args.module_output_pred_jsonl)
@@ -285,7 +302,6 @@ def main(args):
 
     compute_interpretability_score(module_output_predictions=module_output_pred,
                                    module_output_gold=module_output_gold)
-
 
 
 if __name__ == "__main__":
