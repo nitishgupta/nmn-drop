@@ -85,15 +85,16 @@ class DROPDemoPredictor(Predictor):
 
     def __init__(self, model: Model, dataset_reader: DatasetReader) -> None:
         super().__init__(model, dataset_reader)
-
+        self.spacy_nlp = spacyutils.getSpacyNLP()
+        self.spacy_whitespacetokenizer = spacyutils.getWhiteTokenizerSpacyNLP()
 
     @overrides
     def _json_to_instance(self, json_dict: JsonDict) -> Instance:
         question_text = json_dict["question"]
         passage_text = json_dict["passage"]
 
-        spacy_nlp = spacyutils.getSpacyNLP()
-        spacy_whitespacetokenizer = spacyutils.getWhiteTokenizerSpacyNLP()
+        spacy_nlp = self.spacy_nlp
+        spacy_whitespacetokenizer = self.spacy_whitespacetokenizer
 
         # From datasets.drop.preprocess.tokenize
         # Parse passage
@@ -105,7 +106,6 @@ class DROPDemoPredictor(Predictor):
 
         passage_token_charidxs = [token.idx for token in passage_tokens]
         passage_token_texts: List[str] = [t.text for t in passage_tokens]
-
         # Remaking the doc for running NER on new tokenization
         new_passage_doc = spacyutils.getSpacyDoc(" ".join(passage_token_texts), spacy_whitespacetokenizer)
 
@@ -115,7 +115,6 @@ class DROPDemoPredictor(Predictor):
         # List[Tuple[int, int]] -- start (inclusive) and end (exclusive) token idxs for sentence boundaries
         passage_sent_idxs = sorted([(sentence.start, sentence.end) for sentence in new_passage_doc.sents],
                                    key=lambda x: x[0])
-
         passage_ners = spacyutils.getNER(new_passage_doc)
 
         (p_parsed_dates, p_normalized_date_idxs,
