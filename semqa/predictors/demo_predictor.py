@@ -1,19 +1,22 @@
 from typing import List, Union, Dict
 
 import json
+import numpy as np
+import torch
 from overrides import overrides
 
 from allennlp.common.util import JsonDict, sanitize
 from allennlp.data import DatasetReader, Instance
 from allennlp.models import Model
 from allennlp.predictors.predictor import Predictor
-import utils.util as myutils
+
 
 import unicodedata
 from utils import util, spacyutils
 from allennlp.data.tokenizers import Token
 from datasets.drop.preprocess import ner_process
 
+import allennlp.nn.util as allenutil
 from allennlp.tools.squad_eval import metric_max_over_ground_truths
 from allennlp.tools.drop_eval import get_metrics as drop_em_and_f1, answer_json_to_strings
 
@@ -75,6 +78,43 @@ def split_tokens_by_hyphen(tokens: List[Token]) -> List[Token]:
             new_tokens.append(token)
 
     return new_tokens
+
+
+def print_execution_for_debugging(program_execution, passage_tokens, question_tokens,
+                                  num_values, date_values):
+    for module_dict in program_execution:
+        for module, infos_dict in module_dict.items():
+            # infos : Tuple["type", attention]
+            print(f"{module}: {[x for x in infos_dict]} ")
+            for output_type, attention in infos_dict.items():
+                output_type = output_type.split("_")[0]
+                if output_type == "passage":
+                    # passage_attention = self.convert_wordpiece_attention_to_tokens(attention, passage_tokens,
+                    #                                                                passage_wps,
+                    #                                                                passage_wpidx2tokenidx)
+                    print([(i, j) for (i, j) in zip(passage_tokens, attention)])
+                elif output_type == "question":
+                    # question_attention = self.convert_wordpiece_attention_to_tokens(attention, question_tokens,
+                    #                                                                 question_wps,
+                    #                                                                 question_wpidx2tokenidx)
+                    print([(i, j) for (i, j) in zip(question_tokens, attention)])
+                elif output_type == "number":
+                    print([(i, j) for (i, j) in zip(num_values, attention)])
+                elif output_type == "date":
+                    print([(i, j) for (i, j) in zip(date_values, attention)])
+                else:
+                    pass
+
+
+def convert_wordpiece_attention_to_tokens(wp_attention, tokens, wps, wpidx2tokenidx):
+    tokens_len = len(tokens)
+    wps_len = len(wps)
+    wp_attention = wp_attention[:wps_len]  # attention over word-pieces
+    token_attention = [0.0] * tokens_len   # attention over tokens
+    for token_idx, attn_value in zip(wpidx2tokenidx, wp_attention):
+        if token_idx >= 0 and token_idx < tokens_len:
+            token_attention[token_idx] += attn_value
+    return token_attention
 
 
 @Predictor.register("drop_demo_predictor")
@@ -176,18 +216,6 @@ class DROPDemoPredictor(Predictor):
             max_question_len=50,
         )
 
-
-    def convert_wordpiece_attention_to_tokens(self, wp_attention, tokens, wps, wpidx2tokenidx):
-        tokens_len = len(tokens)
-        wps_len = len(wps)
-        wp_attention = wp_attention[:wps_len]  # attention over word-pieces
-        token_attention = [0.0] * tokens_len   # attention over tokens
-        for token_idx, attn_value in zip(wpidx2tokenidx, wp_attention):
-            if token_idx >= 0 and token_idx < tokens_len:
-                token_attention[token_idx] += attn_value
-        return token_attention
-
-
     def get_module_name_mapping(self, module_name):
         module_name_mapping = {
             "find_PassageAttention": "find",
@@ -230,32 +258,6 @@ class DROPDemoPredictor(Predictor):
         else:
             raise NotImplementedError
 
-    def print_execution_for_debugging(self, program_execution, passage_tokens,  question_tokens,
-                                      num_values, date_values):
-        for module_dict in program_execution:
-            for module, infos_dict in module_dict.items():
-                # infos : Tuple["type", attention]
-                print(f"{module}: {[x for x in infos_dict]} ")
-                for output_type, attention in infos_dict.items():
-                    output_type = output_type.split("_")[0]
-                    if output_type == "passage":
-                        # passage_attention = self.convert_wordpiece_attention_to_tokens(attention, passage_tokens,
-                        #                                                                passage_wps,
-                        #                                                                passage_wpidx2tokenidx)
-                        print([(i, j) for (i, j) in zip(passage_tokens, attention)])
-                    elif output_type == "question":
-                        # question_attention = self.convert_wordpiece_attention_to_tokens(attention, question_tokens,
-                        #                                                                 question_wps,
-                        #                                                                 question_wpidx2tokenidx)
-                        print([(i, j) for (i, j) in zip(question_tokens, attention)])
-                    elif output_type == "number":
-                        print([(i, j) for (i, j) in zip(num_values, attention)])
-                    elif output_type == "date":
-                        print([(i, j) for (i, j) in zip(date_values, attention)])
-                    else:
-                        pass
-
-
     def convert_execution_attention_to_tokens(self, program_execution, passage_tokens, passage_wps,
                                               passage_wpidx2tokenidx, question_tokens, question_wps,
                                               question_wpidx2tokenidx):
@@ -270,14 +272,14 @@ class DROPDemoPredictor(Predictor):
 
                     output_type_canonical = output_type.split("_")[0]
                     if output_type_canonical == "passage":
-                        passage_attention = self.convert_wordpiece_attention_to_tokens(attention, passage_tokens,
-                                                                                       passage_wps,
-                                                                                       passage_wpidx2tokenidx)
+                        passage_attention = convert_wordpiece_attention_to_tokens(attention, passage_tokens,
+                                                                                  passage_wps,
+                                                                                  passage_wpidx2tokenidx)
                         infos_dict[output_type] = passage_attention
                     elif output_type_canonical == "question":
-                        question_attention = self.convert_wordpiece_attention_to_tokens(attention, question_tokens,
-                                                                                        question_wps,
-                                                                                        question_wpidx2tokenidx)
+                        question_attention = convert_wordpiece_attention_to_tokens(attention, question_tokens,
+                                                                                   question_wps,
+                                                                                   question_wpidx2tokenidx)
                         infos_dict[output_type] = question_attention
         return program_execution
 
@@ -323,15 +325,25 @@ class DROPDemoPredictor(Predictor):
         # If two or more attentions are produced over the same type (e.g. num-compare-lt produces two number attns),
         # the type is differentiated by appending _N (underscore number). E.g. "number_1", "number_2", etc.
         program_execution: List[Dict] = modules_debug_infos[0]
+
         # Aggregate attention predicted over word-pieces to attention over tokens
         program_execution = self.convert_execution_attention_to_tokens(program_execution, passage_tokens, passage_wps,
                                                                        passage_wpidx2tokenidx, question_tokens,
                                                                        question_wps, question_wpidx2tokenidx)
 
-        # print(program_lisp)
-        # print(program_nested_expression)
-        # self.print_execution_for_debugging(program_execution, passage_tokens, question_tokens,
-        #                                    num_values, date_values)
+        for module_dict in program_execution:
+            for module_name, module_output_dict in module_dict.items():
+                if module_name == "span":
+                    span_start_logits = module_output_dict["span_start_logits"]
+                    span_end_logits = module_output_dict["span_end_logits"]
+                    token_probs, span_probs = get_topk_spans(span_start_logits=span_start_logits,
+                                                             span_end_logits=span_end_logits, passage_wps=passage_wps,
+                                                             passage_tokens=passage_tokens,
+                                                             passage_wpidx2tokenidx=passage_wpidx2tokenidx)
+                    module_output_dict["token_probs"] = token_probs
+                    module_output_dict["span_probs"] = span_probs
+                    module_output_dict.pop("span_start_logits")
+                    module_output_dict.pop("span_end_logits")
 
         output_dict = {
             "question": question,
@@ -364,3 +376,51 @@ class DROPDemoPredictor(Predictor):
         return outstr
 
 
+
+def get_topk_spans(span_start_logits, span_end_logits, passage_wps, passage_tokens, passage_wpidx2tokenidx):
+    max_span_length = 20
+    max_num_spans = 100
+
+    span_start_logits = torch.Tensor(span_start_logits).unsqueeze(0)
+    span_end_logits = torch.Tensor(span_end_logits).unsqueeze(0)
+
+    batch_size, passage_length = span_start_logits.size()
+    device = span_start_logits.device
+    span_log_probs = span_start_logits.unsqueeze(2) + span_end_logits.unsqueeze(1)
+    span_log_mask = torch.triu(torch.ones((passage_length, passage_length), device=device)).log()
+
+    valid_span_log_probs = span_log_probs + span_log_mask
+
+    # Shape: (batch_size, passage_length*passage_length)
+    valid_span_log_probs_flat = valid_span_log_probs.view(batch_size, -1)
+    valid_span_probs = torch.nn.functional.softmax(valid_span_log_probs_flat, dim=-1)   # computing span probs
+    wps_span_probs, span_indices = torch.sort(valid_span_probs, descending=True)
+    span_start_indices = span_indices // passage_length     # Span start wordpiece index
+    span_end_indices = span_indices % passage_length        # Span end wordpiece index
+
+    # Assuming demo is running with batch_size of 1, hence removed the first dim
+    span_start_indices = span_start_indices.detach().cpu().numpy().tolist()[0]
+    span_end_indices = span_end_indices.detach().cpu().numpy().tolist()[0]
+    wps_span_probs = wps_span_probs.detach().cpu().numpy().tolist()[0]
+
+    # Computing wordpiece-prob as the sum of probability of spans that this wordpiece occurs in
+    wps_probs = np.array([0.0] * passage_length)
+    wp_span_probs = []      # List of [[start, end], prob]
+    for span_num in range(0, max_num_spans):
+        start, end = span_start_indices[span_num], span_end_indices[span_num]
+        prob = wps_span_probs[span_num]
+        wp_span_probs.append([[start, end], prob])
+        wps_probs[start:end + 1] += prob   # end + 1 since end is inclusive
+
+    # Converting wordpiece probabilities token-probabilities
+    token_probs = convert_wordpiece_attention_to_tokens(wp_attention=wps_probs, tokens=passage_tokens,
+                                                        wps=passage_wps, wpidx2tokenidx=passage_wpidx2tokenidx)
+    # Converting wps_span_probs list to token-spans
+    token_span_probs = []
+    for span, prob in wp_span_probs:
+        token_start, token_end = passage_wpidx2tokenidx[span[0]], passage_wpidx2tokenidx[span[1]]
+        if token_end - token_start > max_span_length:
+            continue
+        token_span_probs.append([[token_start, token_end], prob])
+
+    return token_probs, token_span_probs

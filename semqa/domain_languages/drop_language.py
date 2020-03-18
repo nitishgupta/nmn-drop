@@ -1449,6 +1449,8 @@ class DropLanguage(DomainLanguage):
 
             debug_value = ""
             if self._debug:
+                debug_info_dict = {"span": {"span_start_logits": span_start_logits, "span_end_logits": span_end_logits}}
+                self.modules_debug_info[-1].append(debug_info_dict)
                 _, pattn_vis_most = dlutils.listTokensVis(passage_attn, self.metadata["passage_tokens"])
                 most_attended_spans = dlutils.mostAttendedSpans(passage_attn, self.metadata["passage_tokens"])
                 # debug_value += f"Pattn: {pattn_vis_most}\n"
@@ -1715,20 +1717,24 @@ class DropLanguage(DomainLanguage):
 
     @predicate_with_side_args(["event_num_groundings"])
     def minNumPattn(self, passage_attention: PassageAttention, event_num_groundings=None) -> PassageAttention:
-        minmax_num_pattn, loss, debug_value = self.minmaxNumPattn_module(
+        minmax_num_pattn, inputpattn_num_dist, loss, debug_value = self.minmaxNumPattn_module(
             passage_attention=passage_attention, min_max_op="min", event_num_groundings=event_num_groundings
         )
-        debug_info_dict = {"find-min-num": {"passage": minmax_num_pattn}}
-        self.modules_debug_info[-1].append(debug_info_dict)
+        if self._debug:
+            debug_info_dict = {"find-min-num": {"passage": minmax_num_pattn,
+                                                "number_input": inputpattn_num_dist}}
+            self.modules_debug_info[-1].append(debug_info_dict)
         return PassageAttention(passage_attention=minmax_num_pattn, loss=loss, debug_value=debug_value)
 
     @predicate_with_side_args(["event_num_groundings"])
     def maxNumPattn(self, passage_attention: PassageAttention, event_num_groundings=None) -> PassageAttention:
-        minmax_num_pattn, loss, debug_value = self.minmaxNumPattn_module(
+        minmax_num_pattn, inputpattn_num_dist, loss, debug_value = self.minmaxNumPattn_module(
             passage_attention=passage_attention, min_max_op="max", event_num_groundings=event_num_groundings
         )
-        debug_info_dict = {"find-max-num": {"passage": minmax_num_pattn}}
-        self.modules_debug_info[-1].append(debug_info_dict)
+        if self._debug:
+            debug_info_dict = {"find-max-num": {"passage": minmax_num_pattn,
+                                                "number_input": inputpattn_num_dist}}
+            self.modules_debug_info[-1].append(debug_info_dict)
         return PassageAttention(passage_attention=minmax_num_pattn, loss=loss, debug_value=debug_value)
 
     def minmaxNumPattn_module(self, passage_attention: PassageAttention, min_max_op: str, event_num_groundings=None):
@@ -1755,6 +1761,7 @@ class DropLanguage(DomainLanguage):
                 loss += grounding_loss
         loss += passage_attention.loss
 
+        minmax_num_distribution = None
         debug_value = ""
         if self._debug:
             minmax_num_dist, _, _ = self.compute_num_distribution(minmax_num_pattn)
@@ -1778,7 +1785,7 @@ class DropLanguage(DomainLanguage):
             debug_value += f"\nGoldNum: {num_grounding_sup}"
             # self.modules_debug_info[-1].append({"find-num": inputpnum_token_prob})
             # self.modules_debug_info[-1].append({f"{min_max_op}-pattn": minmax_num_pattn})
-        return minmax_num_pattn, loss, debug_value
+        return minmax_num_pattn, inputpattn_num_dist, loss, debug_value
 
     def pattn_for_minmaxNum(
             self, pattn: torch.FloatTensor, max_min: str

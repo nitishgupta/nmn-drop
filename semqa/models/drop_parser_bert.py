@@ -863,8 +863,6 @@ class DROPParserBERT(DROPParserBase):
             batch_denotation_loss = total_denotation_loss / batch_size
             self.modelloss_metric(batch_denotation_loss.item())
             output_dict["loss"] = batch_denotation_loss + total_aux_loss
-            # import pdb
-            # pdb.set_trace()
 
         """ DEBUG
         if self.training:
