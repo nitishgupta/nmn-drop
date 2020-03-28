@@ -1,4 +1,4 @@
-from typing import List, Union, Dict
+from typing import List, Union, Dict, Optional
 
 import json
 import numpy as np
@@ -117,6 +117,35 @@ def convert_wordpiece_attention_to_tokens(wp_attention, tokens, wps, wpidx2token
     return token_attention
 
 
+class Input:
+    def __init__(self, name: str, tokens: List):
+        self.name: str = name
+        self.tokens: List[str] = [str(t) for t in tokens]
+
+    def to_dict(self):
+        json_dict = {
+            "name": self.name,
+            "tokens": self.tokens
+        }
+        return json_dict
+
+
+class Output:
+    def __init__(self, input_name: str, values: List[float], label: Optional[str] = None):
+        self.input_name = input_name
+        self.values = values
+        self.label = label
+
+    def to_dict(self):
+        json_dict = {
+            "input_name": self.input_name,
+            "values": self.values,
+            "label": self.label
+        }
+        return json_dict
+
+
+
 @Predictor.register("drop_demo_predictor")
 class DROPDemoPredictor(Predictor):
     """
@@ -226,7 +255,7 @@ class DROPDemoPredictor(Predictor):
             "compare_num_lesser_than": "compare_num_lt",
             "compare_num_greater_than": "compare_num_gt",
             "year_difference": "year-diff",
-            "year_difference_single_event": "year_difference",
+            "year_difference_single_event": "year-diff",
             "find_passageSpanAnswer": "span",
             "passageAttn2Count": "count",
             "find_PassageNumber": "find-num",
@@ -284,6 +313,102 @@ class DROPDemoPredictor(Predictor):
         return program_execution
 
 
+    def convert_module_outputs_to_list(self, program_execution: List[Dict]):
+        """Modify the program_execution, which stores each modules output as a dict into a list of Output struct.
+
+        Arguments:
+        ----------
+        program_execution: ``List[Dict]``
+            Each program execution is linearized in the order that the modules were executed.
+            This execution is a list of dicts, i.e. [{"module_name": Dict}] where each dict contains
+            different outputs a module produces. Each output is a dict itself {"type", attention}, where "type"
+            indicates the type of support the attention is produced over. E.g. "paragraph", "question", "number", etc.
+            If two or more attentions are produced over the same type (e.g. num-compare-lt produces two number attns),
+            the type is differentiated by appending _N (underscore number). E.g. "number_1", "number_2", etc.
+
+        Returns:
+        --------
+        program_execution: ``List[Dict]``
+            [{"module_name": List[Output]}]
+
+        """
+
+        modified_program_execution: List[Dict] = []
+        for module_exec_dict in program_execution:
+            # Size of module_exec_dict == 1
+            module_name, module_dict = list(module_exec_dict.items())[0]
+            # Convert the module_dict into a list of Output
+            module_outputs: List[Output] = []
+
+            # Modules that output a single question and paragraph attention
+            if module_name in ["find", "filter", "relocate"]:
+                question_output = Output(input_name="question", values=module_dict["question"])
+                passage_output = Output(input_name="passage", values=module_dict["passage"])
+                module_outputs.extend([question_output, passage_output])
+
+            # Modules that output two date_distributions and one passage distribution
+            elif module_name in ["compare-date-lt", "compare-date-gt"]:
+                passage_output = Output(input_name="passage", values=module_dict["passage"])
+                passage_date_1 = Output(input_name="passage", values=module_dict["passage_date_1"],
+                                        label="passage_date_1")
+                passage_date_2 = Output(input_name="passage", values=module_dict["passage_date_2"],
+                                        label="passage_date_2")
+                date_1 = Output(input_name="dates", values=module_dict["date_1"], label="date_1")
+                date_2 = Output(input_name="dates", values=module_dict["date_2"], label="date_2")
+                module_outputs.extend([passage_output, passage_date_1, passage_date_2, date_1, date_2])
+
+            # Modules that output two dates and a year diff
+            elif module_name in ["year-diff"]:
+                year_diff = Output(input_name="year_diffs", values=module_dict["year-diff"])
+                passage_date_1 = Output(input_name="passage", values=module_dict["passage_date_1"],
+                                        label="passage_date_1")
+                passage_date_2 = Output(input_name="passage", values=module_dict["passage_date_2"],
+                                        label="passage_date_2")
+                date_1 = Output(input_name="dates", values=module_dict["date_1"], label="date_1")
+                date_2 = Output(input_name="dates", values=module_dict["date_2"], label="date_2")
+                module_outputs.extend([year_diff, passage_date_1, passage_date_2, date_1, date_2])
+
+            # Modules that output two num_distributions and one passage distribution
+            elif module_name in ["compare-num-lt", "compare-num-gt"]:
+                passage_output = Output(input_name="passage", values=module_dict["passage"])
+                passage_number_1 = Output(input_name="passage", values=module_dict["passage_number_1"],
+                                        label="passage_number_1")
+                passage_number_2 = Output(input_name="passage", values=module_dict["passage_number_2"],
+                                        label="passage_number_2")
+                number_1 = Output(input_name="numbers", values=module_dict["number_1"], label="number_1")
+                number_2 = Output(input_name="numbers", values=module_dict["number_2"], label="number_2")
+                module_outputs.extend([passage_output, passage_number_1, passage_number_2, number_1, number_2])
+
+            # Modules that output one num_distribution
+            elif module_name in ["find-num"]:
+                passage_number = Output(input_name="passage", values=module_dict["passage_number"])
+                number = Output(input_name="numbers", values=module_dict["number"])
+                module_outputs.extend([passage_number, number])
+
+            # Find-max-num and Find-min-num
+            elif module_name in ["find-max-num", "find-min-num"]:
+                passage_output = Output(input_name="passage", values=module_dict["passage"])
+                passage_number = Output(input_name="passage", values=module_dict["passage_input_number"])
+                number = Output(input_name="numbers", values=module_dict["number_input"])
+                module_outputs.extend([passage_output, passage_number, number])
+
+            # Modules that output count
+            elif module_name in ["count"]:
+                count = Output(input_name="count", values=module_dict["count"])
+                module_outputs.extend([count])
+
+            # span module
+            elif module_name in ["span"]:
+                passage_output = Output(input_name="passage", values=module_dict["token_probs"])
+                span_probs = Output(input_name="span_probabilities", values=module_dict["span_probs"])
+                module_outputs.extend([passage_output, span_probs])
+
+            else:
+                continue
+
+            modified_program_execution.append({module_name: module_outputs})
+
+        return modified_program_execution
 
     @overrides
     def predict_json(self, inputs: JsonDict) -> JsonDict:
@@ -331,6 +456,7 @@ class DROPDemoPredictor(Predictor):
                                                                        passage_wpidx2tokenidx, question_tokens,
                                                                        question_wps, question_wpidx2tokenidx)
 
+        # Convert span start/end logits to token probs and span probs
         for module_dict in program_execution:
             for module_name, module_output_dict in module_dict.items():
                 if module_name == "span":
@@ -345,21 +471,53 @@ class DROPDemoPredictor(Predictor):
                     module_output_dict.pop("span_start_logits")
                     module_output_dict.pop("span_end_logits")
 
+
+        # Make List[Input] for different kind of inputs that the model gets
+        question_Input = Input(name="question", tokens=question_tokens)
+        passage_Input = Input(name="passage", tokens=passage_tokens)
+        numbers_Input = Input(name="numbers", tokens=num_values)
+        dates_Input = Input(name="dates", tokens=date_values)
+        year_diffs_Input = Input(name="year_diffs", tokens=year_diff_values)
+        count_Input = Input(name="count", tokens=list(range(10)))
+        inputs: List[Input] = [question_Input, passage_Input, numbers_Input, dates_Input, year_diffs_Input, count_Input]
+
+        # Convert module_outputs in program_execution from Dict to List[Output]
+        program_execution = self.convert_module_outputs_to_list(program_execution)
+
         output_dict = {
             "question": question,
             "passage": passage,
             "predicted_ans": predicted_ans,
             "answer": predicted_ans,
-            "question_tokens": question_tokens,
-            "passage_tokens": passage_tokens,
-            "numbers": num_values,
-            "dates": date_values,
-            "year_diff_values": year_diff_values,
+            # "question_tokens": question_tokens,
+            # "passage_tokens": passage_tokens,
+            # "numbers": num_values,
+            # "dates": date_values,
+            # "year_diff_values": year_diff_values,
+            "inputs": inputs,
             "program_nested_expression": program_nested_expression,
             "program_lisp": program_lisp,
             "program_execution": program_execution,
         }
         return output_dict
+
+    @overrides
+    def dump_line(self, outputs: JsonDict) -> str:
+        """Convert output from predict_json to JSON serializable due to presence of Input and Output objects."""
+        inputs: List[Input] = outputs["inputs"]
+        input_jsonserializable = [i.to_dict() for i in inputs]
+        outputs["inputs"] = input_jsonserializable
+
+        program_execution = outputs["program_execution"]
+        program_execution_jsonserializable = []
+        for module_exec_dict in program_execution:
+            # Size of module_exec_dict == 1
+            module_name, module_outputs = list(module_exec_dict.items())[0]
+            module_outputs_dicts = [o.to_dict() for o in module_outputs]   # module_outputs: List[Output]
+            program_execution_jsonserializable.append({module_name: module_outputs_dicts})
+        outputs["program_execution"] = program_execution_jsonserializable
+
+        return json.dumps(outputs)
 
     def _print_ExecutionValTree(self, exval_tree, depth=0):
         """

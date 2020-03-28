@@ -1,20 +1,30 @@
-import itertools
+from typing import List, Dict, Optional
+import json
 
-numbers = [1, 2, 3, 4, 5]
-max_number_of_numbers_to_consider = 2
+class Output:
+    def __init__(self, input_name: str, values: List[float], label: Optional[str] = None):
+        self.input_name = input_name
+        self.values = values
+        self.label = label
 
-combinations = []
-signs = [-1, 1]
+    def toJSON(self):
+        json_dict = {
+            "input_name": self.input_name,
+            "values": self.values,
+            "label": self.label
+        }
+        return json_dict
 
-number_support = set()
-all_sign_combinations = list(itertools.product(signs, repeat=2))
-for number_of_numbers_to_consider in range(2, max_number_of_numbers_to_consider + 1):
-    # for number_combination in itertools.combinations(numbers, number_of_numbers_to_consider):
-    for number_combination in itertools.product(numbers, repeat=number_of_numbers_to_consider):
-        print(number_combination)
-        for sign_combination in all_sign_combinations:
-            value = sum([sign * num for (sign, num) in zip(sign_combination, number_combination)])
-            number_support.add(value)
 
-number_support = sorted(list(number_support))
-print(number_support)
+o1 = Output(input_name="passage", values=[1, 2])
+o2 = Output(input_name="numbers", values=[1, 2], label="n1")
+outputs = [o1, o2]
+
+outputs_json = [o1.toJSON(), o2.toJSON()]
+
+s = json.dumps({"outputs": outputs_json})
+
+print(s)
+
+
+

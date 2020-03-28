@@ -504,7 +504,6 @@ class DropLanguage(DomainLanguage):
                 most_attended_spans = dlutils.mostAttendedSpans(passage_attention, self.metadata["passage_tokens"])
                 debug_value += f"\nPattn: {pattn_vis_complete}"
                 debug_value += f"\nMostAttendedSpans: {most_attended_spans}"
-                # self.modules_debug_info[-1].append({"find": passage_attention})
                 debug_info_dict = {"find": {"passage": passage_attention,
                                             "question": question_attention}}
                 self.modules_debug_info[-1].append(debug_info_dict)
@@ -597,7 +596,6 @@ class DropLanguage(DomainLanguage):
                 debug_info_dict = {"filter": {"passage": filtered_passage_attention,
                                               "question": question_attention}}
                 self.modules_debug_info[-1].append(debug_info_dict)
-                # self.modules_debug_info[-1].append({"filter": filtered_passage_attention})
 
         return PassageAttention(filtered_passage_attention, loss=loss, debug_value=debug_value)
 
@@ -661,7 +659,6 @@ class DropLanguage(DomainLanguage):
                 debug_info_dict = {"relocate": {"passage": relocate_attn,
                                                 "question": question_attention}}
                 self.modules_debug_info[-1].append(debug_info_dict)
-                # self.modules_debug_info[-1].append({"relocate": relocate_attn})
 
         return PassageAttention_answer(relocate_attn, loss=loss, debug_value=debug_value)
 
@@ -1099,6 +1096,8 @@ class DropLanguage(DomainLanguage):
             date2 = myutils.round_all(myutils.tocpuNPList(date_distribution_2), 3)
             d1_lt_d2 = myutils.round_all(myutils.tocpuNPList(prob_date1_lesser), 3)
             d2_lt_d1 = myutils.round_all(myutils.tocpuNPList(prob_date2_lesser), 3)
+            date1_token = myutils.round_all(myutils.tocpuNPList(passage_datetoken_prob_1), 3)
+            date2_token = myutils.round_all(myutils.tocpuNPList(passage_datetoken_prob_2), 3)
 
             debug_value += (
                     f"Pattn1: {pattn_vis_most_1}\n Date1: {date1}"
@@ -1110,10 +1109,11 @@ class DropLanguage(DomainLanguage):
 
             debug_info_dict = {"compare-date-lt": {"date_1": date_distribution_1,
                                                    "date_2": date_distribution_2,
+                                                   "passage_date_1": date1_token,
+                                                   "passage_date_2": date2_token,
                                                    "passage": average_passage_distribution}}
             self.modules_debug_info[-1].append(debug_info_dict)
-            # self.modules_debug_info[-1].append({"find-date1": passage_datetoken_prob_1})
-            # self.modules_debug_info[-1].append({"find-date2": passage_datetoken_prob_2})
+
         return PassageAttention_answer(average_passage_distribution, loss=loss, debug_value=debug_value)
 
     # @predicate
@@ -1157,6 +1157,8 @@ class DropLanguage(DomainLanguage):
             date2 = myutils.round_all(myutils.tocpuNPList(date_distribution_2), 3)
             d1_gt_d2 = myutils.round_all(myutils.tocpuNPList(prob_date1_greater), 3)
             d2_gt_d1 = myutils.round_all(myutils.tocpuNPList(prob_date2_greater), 3)
+            date1_token = myutils.round_all(myutils.tocpuNPList(passage_datetoken_prob_1), 3)
+            date2_token = myutils.round_all(myutils.tocpuNPList(passage_datetoken_prob_2), 3)
 
             debug_value += (
                     f"Pattn1: {pattn_vis_most_1}\n Date1: {date1}"
@@ -1167,10 +1169,10 @@ class DropLanguage(DomainLanguage):
                 debug_value += f"\nGoldDates  Date1: {gold_date_1}  Date2: {gold_date_2}"
             debug_info_dict = {"compare-date-gt": {"date_1": date_distribution_1,
                                                    "date_2": date_distribution_2,
+                                                   "passage_date_1": date1_token,
+                                                   "passage_date_2": date2_token,
                                                    "passage": average_passage_distribution}}
             self.modules_debug_info[-1].append(debug_info_dict)
-            # self.modules_debug_info[-1].append({"find-date1": passage_datetoken_prob_1})
-            # self.modules_debug_info[-1].append({"find-date2": passage_datetoken_prob_2})
 
         return PassageAttention_answer(average_passage_distribution, loss=loss, debug_value=debug_value)
 
@@ -1212,6 +1214,8 @@ class DropLanguage(DomainLanguage):
             num2 = myutils.round_all(myutils.tocpuNPList(num_distribution_2), 3)
             d1_lt_d2 = myutils.round_all(myutils.tocpuNPList(prob_num1_lesser), 3)
             d2_lt_d1 = myutils.round_all(myutils.tocpuNPList(prob_num2_lesser), 3)
+            num1_token = myutils.round_all(myutils.tocpuNPList(passage_numtoken_prob_1), 3)
+            num2_token = myutils.round_all(myutils.tocpuNPList(passage_numtoken_prob_2), 3)
 
             debug_value += (
                     f"Pattn1: {pattn_vis_most_1}\n Num1: {num1}"
@@ -1222,10 +1226,10 @@ class DropLanguage(DomainLanguage):
                 debug_value += f"\nGoldNums Num1: {gold_num_1}  Num2: {gold_num_2}"
             debug_info_dict = {"compare-num-lt": {"number_1": num_distribution_1,
                                                   "number_2": num_distribution_2,
+                                                  "passage_number_1": num1_token,
+                                                  "passage_number_2": num2_token,
                                                   "passage": average_passage_distribution}}
             self.modules_debug_info[-1].append(debug_info_dict)
-            # self.modules_debug_info[-1].append({"find-num1": passage_numtoken_prob_1})
-            # self.modules_debug_info[-1].append({"find-num2": passage_numtoken_prob_2})
 
         return PassageAttention_answer(average_passage_distribution, loss=loss, debug_value=debug_value)
 
@@ -1270,6 +1274,8 @@ class DropLanguage(DomainLanguage):
             num2 = myutils.round_all(myutils.tocpuNPList(num_distribution_2), 3)
             d1_gt_d2 = myutils.round_all(myutils.tocpuNPList(prob_num1_greater), 3)
             d2_gt_d1 = myutils.round_all(myutils.tocpuNPList(prob_num2_greater), 3)
+            num1_token = myutils.round_all(myutils.tocpuNPList(passage_numtoken_prob_1), 3)
+            num2_token = myutils.round_all(myutils.tocpuNPList(passage_numtoken_prob_2), 3)
 
             debug_value += (
                     f"Pattn1: {pattn_vis_most_1}\n num1: {num1}"
@@ -1281,10 +1287,10 @@ class DropLanguage(DomainLanguage):
                 debug_value += f"\nGoldNums  num1: {gold_num_1}  num2: {gold_num_2}"
             debug_info_dict = {"compare-num-gt": {"number_1": num_distribution_1,
                                                   "number_2": num_distribution_2,
+                                                  "passage_number_1": num1_token,
+                                                  "passage_number_2": num2_token,
                                                   "passage": average_passage_distribution}}
             self.modules_debug_info[-1].append(debug_info_dict)
-            # self.modules_debug_info[-1].append({"find-num1": passage_numtoken_prob_1})
-            # self.modules_debug_info[-1].append({"find-num2": passage_numtoken_prob_2})
 
         return PassageAttention_answer(average_passage_distribution, loss=loss, debug_value=debug_value)
 
@@ -1315,6 +1321,8 @@ class DropLanguage(DomainLanguage):
             date1 = myutils.round_all(myutils.tocpuNPList(date_distribution_1), 3)
             date2 = myutils.round_all(myutils.tocpuNPList(date_distribution_2), 3)
             year_diff_dist = myutils.round_all(myutils.tocpuNPList(year_difference_dist), 3)
+            date1_token = myutils.round_all(myutils.tocpuNPList(passage_datetoken_prob_1), 3)
+            date2_token = myutils.round_all(myutils.tocpuNPList(passage_datetoken_prob_2), 3)
 
             debug_value += (
                     f"YearDiffDist: {year_diff_dist}\n"
@@ -1323,10 +1331,10 @@ class DropLanguage(DomainLanguage):
             )
             debug_info_dict = {"date-diff": {"date_1": date_distribution_1,
                                              "date_2": date_distribution_2,
+                                             "passage_date_1": date1_token,
+                                             "passage_date_2": date2_token,
                                              "year_diff": year_difference_dist}}
             self.modules_debug_info[-1].append(debug_info_dict)
-            # self.modules_debug_info[-1].append({"find-date1": passage_datetoken_prob_1})
-            # self.modules_debug_info[-1].append({"find-date2": passage_datetoken_prob_2})
 
         return YearDifference(year_difference_dist=year_difference_dist, loss=loss, debug_value=debug_value)
 
@@ -1358,6 +1366,8 @@ class DropLanguage(DomainLanguage):
             date1 = myutils.round_all(myutils.tocpuNPList(date_distribution_1), 3)
             date2 = myutils.round_all(myutils.tocpuNPList(date_distribution_2), 3)
             year_diff_dist = myutils.round_all(myutils.tocpuNPList(year_difference_dist), 3)
+            date1_token = myutils.round_all(myutils.tocpuNPList(passage_datetoken_prob_1), 3)
+            date2_token = myutils.round_all(myutils.tocpuNPList(passage_datetoken_prob_2), 3)
 
             debug_value += (
                     f"YearDiffDist: {year_diff_dist}\n"
@@ -1365,12 +1375,12 @@ class DropLanguage(DomainLanguage):
                     + f"\nMostAttendedSpans: {most_attended_spans}"
                     + f"\n Date1: {date1}\n Date2: {date2}"
             )
-            debug_info_dict = {"date-diff": {"date_1": date_distribution_1,
+            debug_info_dict = {"year-diff": {"date_1": date_distribution_1,
                                              "date_2": date_distribution_2,
+                                             "passage_date_1": date1_token,
+                                             "passage_date_2": date2_token,
                                              "year-diff": year_difference_dist}}
             self.modules_debug_info[-1].append(debug_info_dict)
-            # self.modules_debug_info[-1].append({"find-date1": passage_datetoken_prob_1})
-            # self.modules_debug_info[-1].append({"find-date2": passage_datetoken_prob_2})
 
         return YearDifference(year_difference_dist=year_difference_dist, loss=loss, debug_value=debug_value)
 
@@ -1690,9 +1700,9 @@ class DropLanguage(DomainLanguage):
             debug_value += f"\nGoldNum: {num_grounding_sup}"
             debug_value += f"\ninput-pattn-top-spans: {top_spans}"
 
-            debug_info_dict = {"find-num": {"number": number_distribution}}
+            debug_info_dict = {"find-num": {"number": number_distribution,
+                                            "passage_number": passage_numtoken_probs}}
             self.modules_debug_info[-1].append(debug_info_dict)
-            # self.modules_debug_info[-1].append({"find-num": passage_numtoken_probs})
         return PassageNumber(passage_number_dist=number_distribution, loss=loss, debug_value=debug_value)
 
     @predicate_with_side_args(["question_attention"])
@@ -1717,23 +1727,25 @@ class DropLanguage(DomainLanguage):
 
     @predicate_with_side_args(["event_num_groundings"])
     def minNumPattn(self, passage_attention: PassageAttention, event_num_groundings=None) -> PassageAttention:
-        minmax_num_pattn, inputpattn_num_dist, loss, debug_value = self.minmaxNumPattn_module(
-            passage_attention=passage_attention, min_max_op="min", event_num_groundings=event_num_groundings
-        )
+        (minmax_num_pattn, inputpattn_num_dist, inputpattn_numtoken_probs,
+         loss, debug_value) = self.minmaxNumPattn_module(
+            passage_attention=passage_attention, min_max_op="min", event_num_groundings=event_num_groundings)
         if self._debug:
             debug_info_dict = {"find-min-num": {"passage": minmax_num_pattn,
-                                                "number_input": inputpattn_num_dist}}
+                                                "number_input": inputpattn_num_dist,
+                                                "passage_input_number": inputpattn_numtoken_probs}}
             self.modules_debug_info[-1].append(debug_info_dict)
         return PassageAttention(passage_attention=minmax_num_pattn, loss=loss, debug_value=debug_value)
 
     @predicate_with_side_args(["event_num_groundings"])
     def maxNumPattn(self, passage_attention: PassageAttention, event_num_groundings=None) -> PassageAttention:
-        minmax_num_pattn, inputpattn_num_dist, loss, debug_value = self.minmaxNumPattn_module(
-            passage_attention=passage_attention, min_max_op="max", event_num_groundings=event_num_groundings
-        )
+        (minmax_num_pattn, inputpattn_num_dist, inputpattn_numtoken_probs,
+         loss, debug_value) = self.minmaxNumPattn_module(
+            passage_attention=passage_attention, min_max_op="max", event_num_groundings=event_num_groundings)
         if self._debug:
             debug_info_dict = {"find-max-num": {"passage": minmax_num_pattn,
-                                                "number_input": inputpattn_num_dist}}
+                                                "number_input": inputpattn_num_dist,
+                                                "passage_input_number": inputpattn_numtoken_probs}}
             self.modules_debug_info[-1].append(debug_info_dict)
         return PassageAttention(passage_attention=minmax_num_pattn, loss=loss, debug_value=debug_value)
 
@@ -1765,7 +1777,7 @@ class DropLanguage(DomainLanguage):
         debug_value = ""
         if self._debug:
             minmax_num_dist, _, _ = self.compute_num_distribution(minmax_num_pattn)
-            input_token_probs = myutils.round_all(myutils.tocpuNPList(input_numtoken_probs), 3)
+            inputpattn_numtoken_probs = myutils.round_all(myutils.tocpuNPList(inputpnum_token_prob), 3)
             minmax_token_probs = myutils.round_all(myutils.tocpuNPList(minmax_numtoken_probs), 3)
 
             input_topknums = dlutils.topProbMassElems(attention=inputpattn_num_dist, support=self.passage_num_values)
@@ -1778,14 +1790,12 @@ class DropLanguage(DomainLanguage):
             topspans = dlutils.mostAttendedSpans(minmax_num_pattn, self.metadata["passage_tokens"])
             debug_value += f"{min_max_op}-pattn-module"
             debug_value += f"\noutput-{min_max_op}-num-pattn-most-attended-spans: {topspans}"
-            debug_value += f"\ninput-numtoken-probs: {input_token_probs}"
+            debug_value += f"\ninput-numtoken-probs: {inputpattn_numtoken_probs}"
             debug_value += f"\ninput-num-dist: {input_topknums}"
             debug_value += f"\nminmax-numtoken-probs: {minmax_token_probs}"
             debug_value += f"\ntopk-input-num-dist: {topknums}"
             debug_value += f"\nGoldNum: {num_grounding_sup}"
-            # self.modules_debug_info[-1].append({"find-num": inputpnum_token_prob})
-            # self.modules_debug_info[-1].append({f"{min_max_op}-pattn": minmax_num_pattn})
-        return minmax_num_pattn, inputpattn_num_dist, loss, debug_value
+        return minmax_num_pattn, inputpattn_num_dist, inputpattn_numtoken_probs, loss, debug_value
 
     def pattn_for_minmaxNum(
             self, pattn: torch.FloatTensor, max_min: str
