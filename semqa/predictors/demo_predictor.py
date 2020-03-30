@@ -480,9 +480,17 @@ class DROPDemoPredictor(Predictor):
         year_diffs_Input = Input(name="year_diffs", tokens=year_diff_values)
         count_Input = Input(name="count", tokens=list(range(10)))
         inputs: List[Input] = [question_Input, passage_Input, numbers_Input, dates_Input, year_diffs_Input, count_Input]
+        input_jsonserializable = [i.to_dict() for i in inputs]
 
         # Convert module_outputs in program_execution from Dict to List[Output]
         program_execution = self.convert_module_outputs_to_list(program_execution)
+        program_execution_jsonserializable = []
+        for module_exec_dict in program_execution:
+            # Size of module_exec_dict == 1
+            module_name, module_outputs = list(module_exec_dict.items())[0]
+            module_outputs_dicts = [o.to_dict() for o in module_outputs]  # module_outputs: List[Output]
+            program_execution_jsonserializable.append({module_name: module_outputs_dicts})
+        # outputs["program_execution"] = program_execution_jsonserializable
 
         output_dict = {
             "question": question,
@@ -494,28 +502,28 @@ class DROPDemoPredictor(Predictor):
             # "numbers": num_values,
             # "dates": date_values,
             # "year_diff_values": year_diff_values,
-            "inputs": inputs,
+            "inputs": input_jsonserializable,
             "program_nested_expression": program_nested_expression,
             "program_lisp": program_lisp,
-            "program_execution": program_execution,
+            "program_execution": program_execution_jsonserializable,
         }
         return output_dict
 
     @overrides
     def dump_line(self, outputs: JsonDict) -> str:
         """Convert output from predict_json to JSON serializable due to presence of Input and Output objects."""
-        inputs: List[Input] = outputs["inputs"]
-        input_jsonserializable = [i.to_dict() for i in inputs]
-        outputs["inputs"] = input_jsonserializable
-
-        program_execution = outputs["program_execution"]
-        program_execution_jsonserializable = []
-        for module_exec_dict in program_execution:
-            # Size of module_exec_dict == 1
-            module_name, module_outputs = list(module_exec_dict.items())[0]
-            module_outputs_dicts = [o.to_dict() for o in module_outputs]   # module_outputs: List[Output]
-            program_execution_jsonserializable.append({module_name: module_outputs_dicts})
-        outputs["program_execution"] = program_execution_jsonserializable
+        # inputs: List[Input] = outputs["inputs"]
+        # input_jsonserializable = [i.to_dict() for i in inputs]
+        # outputs["inputs"] = input_jsonserializable
+        #
+        # program_execution = outputs["program_execution"]
+        # program_execution_jsonserializable = []
+        # for module_exec_dict in program_execution:
+        #     # Size of module_exec_dict == 1
+        #     module_name, module_outputs = list(module_exec_dict.items())[0]
+        #     module_outputs_dicts = [o.to_dict() for o in module_outputs]   # module_outputs: List[Output]
+        #     program_execution_jsonserializable.append({module_name: module_outputs_dicts})
+        # outputs["program_execution"] = program_execution_jsonserializable
 
         return json.dumps(outputs)
 
