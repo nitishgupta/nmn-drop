@@ -6,6 +6,8 @@ import argparse
 import datasets.drop.constants as constants
 
 
+""" This script is used to modify data so that mix-max modules are never used """
+
 supervision_keys = [
     constants.program_supervised,
     constants.qattn_supervised,

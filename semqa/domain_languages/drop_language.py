@@ -652,10 +652,6 @@ class DropLanguage(DomainLanguage):
                 debug_value += f"\nRelocateAttn: {r_attn_vis}"
                 debug_value += f"\nMostAttended: {most_attended_spans}"
 
-                # if self.metadata["original_question"] == "Which player scored the first touchdown of the game?" and \
-                #         "In a matchup of fellow" in self.metadata["original_passage"]:
-                #     import pdb
-                #     pdb.set_trace()
                 debug_info_dict = {"relocate": {"passage": relocate_attn,
                                                 "question": question_attention}}
                 self.modules_debug_info[-1].append(debug_info_dict)
@@ -1329,11 +1325,11 @@ class DropLanguage(DomainLanguage):
                     + f"\nPattn1: {pattn_vis_most_1}\n Date1: {date1}"
                     + f"\nPattn2: {pattn_vis_most_2}\n Date2: {date2}"
             )
-            debug_info_dict = {"date-diff": {"date_1": date_distribution_1,
+            debug_info_dict = {"year-diff": {"date_1": date_distribution_1,
                                              "date_2": date_distribution_2,
                                              "passage_date_1": date1_token,
                                              "passage_date_2": date2_token,
-                                             "year_diff": year_difference_dist}}
+                                             "year-diff": year_difference_dist}}
             self.modules_debug_info[-1].append(debug_info_dict)
 
         return YearDifference(year_difference_dist=year_difference_dist, loss=loss, debug_value=debug_value)
@@ -1727,25 +1723,27 @@ class DropLanguage(DomainLanguage):
 
     @predicate_with_side_args(["event_num_groundings"])
     def minNumPattn(self, passage_attention: PassageAttention, event_num_groundings=None) -> PassageAttention:
-        (minmax_num_pattn, inputpattn_num_dist, inputpattn_numtoken_probs,
+        (minmax_num_pattn, inputpattn_num_dist, inputpattn_numtoken_probs, minmax_numtoken_probs,
          loss, debug_value) = self.minmaxNumPattn_module(
             passage_attention=passage_attention, min_max_op="min", event_num_groundings=event_num_groundings)
         if self._debug:
             debug_info_dict = {"find-min-num": {"passage": minmax_num_pattn,
                                                 "number_input": inputpattn_num_dist,
-                                                "passage_input_number": inputpattn_numtoken_probs}}
+                                                "passage_input_number": inputpattn_numtoken_probs,
+                                                "passage_minmax_number": minmax_numtoken_probs}}
             self.modules_debug_info[-1].append(debug_info_dict)
         return PassageAttention(passage_attention=minmax_num_pattn, loss=loss, debug_value=debug_value)
 
     @predicate_with_side_args(["event_num_groundings"])
     def maxNumPattn(self, passage_attention: PassageAttention, event_num_groundings=None) -> PassageAttention:
-        (minmax_num_pattn, inputpattn_num_dist, inputpattn_numtoken_probs,
+        (minmax_num_pattn, inputpattn_num_dist, inputpattn_numtoken_probs, minmax_numtoken_probs,
          loss, debug_value) = self.minmaxNumPattn_module(
             passage_attention=passage_attention, min_max_op="max", event_num_groundings=event_num_groundings)
         if self._debug:
             debug_info_dict = {"find-max-num": {"passage": minmax_num_pattn,
                                                 "number_input": inputpattn_num_dist,
-                                                "passage_input_number": inputpattn_numtoken_probs}}
+                                                "passage_input_number": inputpattn_numtoken_probs,
+                                                "passage_minmax_number": minmax_numtoken_probs}}
             self.modules_debug_info[-1].append(debug_info_dict)
         return PassageAttention(passage_attention=minmax_num_pattn, loss=loss, debug_value=debug_value)
 
@@ -1759,8 +1757,8 @@ class DropLanguage(DomainLanguage):
         pattn = passage_attention._value * self.passage_mask
         # Computing for debugging and aux loss purposes
         inputpattn_num_dist, inputpnum_token_prob, _ = self.compute_num_distribution(pattn)
-        minmax_num_pattn, input_numtoken_probs, minmax_numtoken_probs = self.pattn_for_minmaxNum(pattn=pattn,
-                                                                                                 max_min=min_max_op)
+        (minmax_num_pattn, input_numtoken_probs_only, minmax_numtoken_probs_only,
+         minmaxnum_token_prob) = self.pattn_for_minmaxNum(pattn=pattn, max_min=min_max_op)
 
         loss = 0.0
         if num_grounding_supervision is not None:
@@ -1775,10 +1773,13 @@ class DropLanguage(DomainLanguage):
 
         minmax_num_distribution = None
         debug_value = ""
+        inputpattn_numtoken_probs = None
+        minmax_numtoken_probs = None
         if self._debug:
             minmax_num_dist, _, _ = self.compute_num_distribution(minmax_num_pattn)
             inputpattn_numtoken_probs = myutils.round_all(myutils.tocpuNPList(inputpnum_token_prob), 3)
-            minmax_token_probs = myutils.round_all(myutils.tocpuNPList(minmax_numtoken_probs), 3)
+            minmax_numtoken_probs = myutils.round_all(myutils.tocpuNPList(minmaxnum_token_prob), 3)
+            # minmax_token_probs = myutils.round_all(myutils.tocpuNPList(minmax_numtoken_probs), 3)
 
             input_topknums = dlutils.topProbMassElems(attention=inputpattn_num_dist, support=self.passage_num_values)
             topknums = dlutils.topProbMassElems(attention=minmax_num_dist, support=self.passage_num_values)
@@ -1792,10 +1793,11 @@ class DropLanguage(DomainLanguage):
             debug_value += f"\noutput-{min_max_op}-num-pattn-most-attended-spans: {topspans}"
             debug_value += f"\ninput-numtoken-probs: {inputpattn_numtoken_probs}"
             debug_value += f"\ninput-num-dist: {input_topknums}"
-            debug_value += f"\nminmax-numtoken-probs: {minmax_token_probs}"
+            # debug_value += f"\nminmax-numtoken-probs: {minmax_token_probs}"
             debug_value += f"\ntopk-input-num-dist: {topknums}"
             debug_value += f"\nGoldNum: {num_grounding_sup}"
-        return minmax_num_pattn, inputpattn_num_dist, inputpattn_numtoken_probs, loss, debug_value
+        return (minmax_num_pattn, inputpattn_num_dist, inputpattn_numtoken_probs, minmax_numtoken_probs,
+                loss, debug_value)
 
     def pattn_for_minmaxNum(
             self, pattn: torch.FloatTensor, max_min: str
@@ -1823,7 +1825,9 @@ class DropLanguage(DomainLanguage):
             # Shape: (passage_length, passage_length) -- each row is a number-token-distribution
             pattn_times_numbertokenprobs = self.passage_passage_token2num_alignment * pattn.unsqueeze(1)
 
-            # Shape: (passage_length, num_of_number_tokens) -- These are now in sorted order
+            # Shape: (passage_length, num_of_number_tokens) -- For each token, a number-token distribution, where
+            # 1. The underlying numbers are sorted in increasing order
+            # 2. The probabiltiy is weighed by the token-prob in the input pattn
             pattn_weighted_numbertoken_probs = pattn_times_numbertokenprobs[:, self.passage_number_sortedtokenidxs]
 
             # Shape: (num_of_number_tokens, ) -- the probability of the number tokens in sorted order
@@ -1851,7 +1855,18 @@ class DropLanguage(DomainLanguage):
 
             new_pattn = clamp_distribution(new_pattn)
 
-        return new_pattn, only_expected_numbertoken_probs, only_numbertoken_minmaxprobs_sorted
+            minmax_number_token_distribution = None
+            if self._debug:
+                # These are the tokens ids for numbers s.t. numbers are sorted in increasing order
+                number_tokenidxs_sorted = allenutil.move_to_device(
+                    torch.LongTensor(self.passage_number_sortedtokenidxs), cuda_device=self.device_id)
+                # Scattering min-max number distribution back to tokens
+                minmax_number_token_distribution = pattn.new_zeros(self.passage_length)
+                minmax_number_token_distribution.scatter_add_(0, number_tokenidxs_sorted,
+                                                              only_numbertoken_minmaxprobs_sorted)
+
+        return (new_pattn, only_expected_numbertoken_probs, only_numbertoken_minmaxprobs_sorted,
+                minmax_number_token_distribution)
 
 
 if __name__ == "__main__":

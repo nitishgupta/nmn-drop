@@ -342,13 +342,14 @@ class DROPDemoPredictor(Predictor):
 
             # Modules that output a single question and paragraph attention
             if module_name in ["find", "filter", "relocate"]:
-                question_output = Output(input_name="question", values=module_dict["question"])
-                passage_output = Output(input_name="passage", values=module_dict["passage"])
+                question_output = Output(input_name="question", values=module_dict["question"],
+                                         label="question_attention")
+                passage_output = Output(input_name="passage", values=module_dict["passage"], label="module_output")
                 module_outputs.extend([question_output, passage_output])
 
             # Modules that output two date_distributions and one passage distribution
             elif module_name in ["compare-date-lt", "compare-date-gt"]:
-                passage_output = Output(input_name="passage", values=module_dict["passage"])
+                passage_output = Output(input_name="passage", values=module_dict["passage"], label="module_output")
                 passage_date_1 = Output(input_name="passage", values=module_dict["passage_date_1"],
                                         label="passage_date_1")
                 passage_date_2 = Output(input_name="passage", values=module_dict["passage_date_2"],
@@ -359,7 +360,8 @@ class DROPDemoPredictor(Predictor):
 
             # Modules that output two dates and a year diff
             elif module_name in ["year-diff"]:
-                year_diff = Output(input_name="year_diffs", values=module_dict["year-diff"])
+                year_diff = Output(input_name="year_diffs", values=module_dict["year-diff"],
+                                   label="output_year_diff_attention")
                 passage_date_1 = Output(input_name="passage", values=module_dict["passage_date_1"],
                                         label="passage_date_1")
                 passage_date_2 = Output(input_name="passage", values=module_dict["passage_date_2"],
@@ -370,7 +372,7 @@ class DROPDemoPredictor(Predictor):
 
             # Modules that output two num_distributions and one passage distribution
             elif module_name in ["compare-num-lt", "compare-num-gt"]:
-                passage_output = Output(input_name="passage", values=module_dict["passage"])
+                passage_output = Output(input_name="passage", values=module_dict["passage"], label="module_output")
                 passage_number_1 = Output(input_name="passage", values=module_dict["passage_number_1"],
                                         label="passage_number_1")
                 passage_number_2 = Output(input_name="passage", values=module_dict["passage_number_2"],
@@ -381,26 +383,33 @@ class DROPDemoPredictor(Predictor):
 
             # Modules that output one num_distribution
             elif module_name in ["find-num"]:
-                passage_number = Output(input_name="passage", values=module_dict["passage_number"])
-                number = Output(input_name="numbers", values=module_dict["number"])
+                passage_number = Output(input_name="passage", values=module_dict["passage_number"],
+                                        label="passage_number_attention")
+                number = Output(input_name="numbers", values=module_dict["number"], label="number_distribution")
                 module_outputs.extend([passage_number, number])
 
             # Find-max-num and Find-min-num
             elif module_name in ["find-max-num", "find-min-num"]:
-                passage_output = Output(input_name="passage", values=module_dict["passage"])
-                passage_number = Output(input_name="passage", values=module_dict["passage_input_number"])
-                number = Output(input_name="numbers", values=module_dict["number_input"])
-                module_outputs.extend([passage_output, passage_number, number])
+                passage_output = Output(input_name="passage", values=module_dict["passage"], label="module_output")
+                input_passage_number = Output(input_name="passage", values=module_dict["passage_input_number"],
+                                              label="input_pattn_number_attention")
+                minmax_passage_number = Output(input_name="passage", values=module_dict["passage_minmax_number"],
+                                               label="minmax_number_attention")
+                input_number = Output(input_name="numbers", values=module_dict["number_input"],
+                                      label="input_number_distribution")
+                module_outputs.extend([passage_output, input_passage_number, minmax_passage_number, input_number])
 
             # Modules that output count
             elif module_name in ["count"]:
-                count = Output(input_name="count", values=module_dict["count"])
+                count = Output(input_name="count", values=module_dict["count"], label="module_output")
                 module_outputs.extend([count])
 
             # span module
             elif module_name in ["span"]:
-                passage_output = Output(input_name="passage", values=module_dict["token_probs"])
-                span_probs = Output(input_name="span_probabilities", values=module_dict["span_probs"])
+                passage_output = Output(input_name="passage", values=module_dict["token_probs"],
+                                        label="aggregated_token_probabilities")
+                span_probs = Output(input_name="span_probabilities", values=module_dict["span_probs"],
+                                    label="span_probabilities")
                 module_outputs.extend([passage_output, span_probs])
 
             else:
