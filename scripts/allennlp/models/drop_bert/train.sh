@@ -3,8 +3,7 @@
 # export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
-DATASET_NAME=merged_data/nov19_100_full
-# DATASET_NAME=date_num/nov19_1500
+DATASET_NAME=merged_data/date_yd_num_hmyw_cnt_whoarg_1200_full
 
 DATASET_DIR=./resources/data/drop_post_iclr/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
@@ -38,7 +37,7 @@ export INTERPRET=false
 
 # Whether strong supervison instances should be trained on first, if yes for how many epochs
 export SUPFIRST=true
-export SUPEPOCHS=0
+export SUPEPOCHS=3
 
 # -1 will not run HardEM; HardEM will kick after EPOCH num of epochs
 export HARDEM_EPOCH=3

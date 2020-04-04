@@ -53,8 +53,8 @@ python -m datasets.drop.preprocess.year_diff.year_diff  --input_dir ${ROOT_DIR}/
                                                         --output_dir ${ROOT_DIR}/${YEAR_DIFF}
 
 # WHO-ARG
-python -m datasets.drop.preprocess.who_relocate.relocate_wprogs_nov19 --input_dir ${ROOT_DIR}/${PREPROCESS_DIR} \
-                                                                      --output_dir ${ROOT_DIR}/${WHO_ARG}
+python -m datasets.drop.preprocess.who_relocate.relocate_wprogs --input_dir ${ROOT_DIR}/${PREPROCESS_DIR} \
+                                                                --output_dir ${ROOT_DIR}/${WHO_ARG}
 
 # HMYW (How Many Yards Was)
 python -m datasets.drop.preprocess.how_many_yards.how_many_yards  --input_dir ${ROOT_DIR}/${PREPROCESS_DIR} \
@@ -63,8 +63,8 @@ python -m datasets.drop.preprocess.how_many_yards.how_many_yards  --input_dir ${
                                                                   --numground
 
 # COUNT
-python -m datasets.drop.preprocess.how_many_yards.count_ques_nov19    --input_dir ${ROOT_DIR}/${PREPROCESS_DIR} \
-                                                                      --output_dir ${ROOT_DIR}/${COUNT}
+python -m datasets.drop.preprocess.how_many_yards.count_ques  --input_dir ${ROOT_DIR}/${PREPROCESS_DIR} \
+                                                              --output_dir ${ROOT_DIR}/${COUNT}
 
 
 
@@ -114,14 +114,14 @@ cp -r ${ROOT_DIR}/${COUNT}     ${ROOT_DIR}/${DATASET_FULL_ANNO}/questype_dataset
 cp -r ${ROOT_DIR}/${WHO_ARG}   ${ROOT_DIR}/${DATASET_FULL_ANNO}/questype_datasets
 
 
-#python -m datasets.drop.remove_strong_supervision --input_dir ${ROOT_DIR}/${DATASET_FULL_ANNO} \
-#                                                  --output_dir ${ROOT_DIR}/${DATASET_PRUNED_ANNO} \
-#                                                  --annotation_for_numpassages ${ANNOTATION_FOR_PARAS}
-#
-#
-#cp -r ${ROOT_DIR}/${DATASET_FULL_ANNO}/questype_datasets ${ROOT_DIR}/${DATASET_PRUNED_ANNO}/questype_datasets
+python -m datasets.drop.remove_strong_supervision --input_dir ${ROOT_DIR}/${DATASET_FULL_ANNO} \
+                                                  --output_dir ${ROOT_DIR}/${DATASET_PRUNED_ANNO} \
+                                                  --annotation_for_numpassages ${ANNOTATION_FOR_PARAS}
 
 
-#python -m datasets.drop.split_dev_ratio --fulldataset_dir=${ROOT_DIR}/${DATASET_PRUNED_ANNO} \
-#                                        --qtype_dir_name=questype_datasets \
-#                                        --split_ratio=${DEV_TEST_SPLIT_RATIO}
+cp -r ${ROOT_DIR}/${DATASET_FULL_ANNO}/questype_datasets ${ROOT_DIR}/${DATASET_PRUNED_ANNO}/questype_datasets
+
+
+python -m datasets.drop.split_dev_ratio --fulldataset_dir=${ROOT_DIR}/${DATASET_PRUNED_ANNO} \
+                                        --qtype_dir_name=questype_datasets \
+                                        --split_ratio=${DEV_TEST_SPLIT_RATIO}
