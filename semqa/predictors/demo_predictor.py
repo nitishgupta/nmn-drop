@@ -145,6 +145,56 @@ class Output:
         return json_dict
 
 
+class Module:
+    def __init__(self, name:str, identifier: int):
+        self.name = name
+        self.identifier = identifier
+
+    def to_dict(self):
+        json_dict = {
+            "name": self.name,
+            "identifier": self.identifier
+        }
+        return json_dict
+
+
+def add_identifier(nested_expression, count):
+    """Convert the nested_expression into a representation that contains the order in which the modules are executed.
+
+    This function converts the nested_expression of module-as-str into expression with module-as-Module class where the
+    class stores an `identifier` key which is the number at which the module was executed.
+
+    Since the program-tree is executed in a left-to-right post-traversal order we will traverse the tree in a similar
+    manner to number the modules in the nested-expression.
+    """
+    # If expression is not a list (hence a str) it's a Module
+    if not isinstance(nested_expression, list):
+        return Module(name=nested_expression, identifier=count), count + 1
+    # If expression is tree
+    else:
+        sub_expression = []
+        # Performing left-to-right post traversal of the tree
+        for i in range(1, len(nested_expression)):
+            arg_i, count = add_identifier(nested_expression[i], count)
+            sub_expression.append(arg_i)
+        # Then add the root-module of the tree
+        arg_0 = Module(name=nested_expression[0], identifier=count)
+        sub_expression.insert(0, arg_0)
+
+        return sub_expression, count + 1
+
+
+def convert_module_expression_tree_to_dict(module_expression):
+    mapped_expression = []
+    for i, argument in enumerate(module_expression):
+        if isinstance(argument, list):
+            mapped_expression.append(convert_module_expression_tree_to_dict(argument))
+        elif isinstance(argument, Module):
+            mapped_expression.append(argument.to_dict())
+        else:
+            raise NotImplementedError
+    return mapped_expression
+
 
 @Predictor.register("drop_demo_predictor")
 class DROPDemoPredictor(Predictor):
@@ -345,7 +395,11 @@ class DROPDemoPredictor(Predictor):
                 question_output = Output(input_name="question", values=module_dict["question"],
                                          label="question_attention")
                 passage_output = Output(input_name="passage", values=module_dict["passage"], label="module_output")
-                module_outputs.extend([question_output, passage_output])
+                outputs = [question_output, passage_output]
+                if "input" in module_dict:
+                    passage_input = Output(input_name="passage", values=module_dict["input"], label="module_input")
+                    outputs.append(passage_input)
+                module_outputs.extend(outputs)
 
             # Modules that output two date_distributions and one passage distribution
             elif module_name in ["compare-date-lt", "compare-date-gt"]:
@@ -383,34 +437,52 @@ class DROPDemoPredictor(Predictor):
 
             # Modules that output one num_distribution
             elif module_name in ["find-num"]:
+                passage_input = Output(input_name="passage", values=module_dict["input"], label="module_input")
                 passage_number = Output(input_name="passage", values=module_dict["passage_number"],
                                         label="passage_number_attention")
                 number = Output(input_name="numbers", values=module_dict["number"], label="number_distribution")
-                module_outputs.extend([passage_number, number])
+                module_outputs.extend([passage_input, passage_number, number])
 
             # Find-max-num and Find-min-num
             elif module_name in ["find-max-num", "find-min-num"]:
+                passage_input = Output(input_name="passage", values=module_dict["input"], label="module_input")
                 passage_output = Output(input_name="passage", values=module_dict["passage"], label="module_output")
                 input_passage_number = Output(input_name="passage", values=module_dict["passage_input_number"],
                                               label="input_pattn_number_attention")
                 minmax_passage_number = Output(input_name="passage", values=module_dict["passage_minmax_number"],
                                                label="minmax_number_attention")
-                input_number = Output(input_name="numbers", values=module_dict["number_input"],
-                                      label="input_number_distribution")
-                module_outputs.extend([passage_output, input_passage_number, minmax_passage_number, input_number])
+                # Not displaying the input number distribution aggregated over numbers
+                # input_number = Output(input_name="numbers", values=module_dict["number_input"],
+                #                       label="input_number_distribution")
+                module_outputs.extend([passage_input, passage_output, input_passage_number,
+                                       minmax_passage_number])
+
+            # Addition subtraction modules
+            elif module_name in ["passagenumber_difference", "passagenumber_addition"]:
+                if module_name == "passagenumber_difference":
+                    output_distribution = module_dict["difference_value"]
+                    label = "difference_distribution"
+                else:
+                    output_distribution = module_dict["addition_value"]
+                    label = "addition_distribution"
+                composed_number = Output(input_name="composed_numbers", values=output_distribution,
+                                         label=label)
+                module_outputs.extend([composed_number])
 
             # Modules that output count
             elif module_name in ["count"]:
+                passage_input = Output(input_name="passage", values=module_dict["input"], label="module_input")
                 count = Output(input_name="count", values=module_dict["count"], label="module_output")
-                module_outputs.extend([count])
+                module_outputs.extend([passage_input, count])
 
             # span module
             elif module_name in ["span"]:
+                passage_input = Output(input_name="passage", values=module_dict["input"], label="module_input")
                 passage_output = Output(input_name="passage", values=module_dict["token_probs"],
                                         label="aggregated_token_probabilities")
                 span_probs = Output(input_name="span_probabilities", values=module_dict["span_probs"],
                                     label="span_probabilities")
-                module_outputs.extend([passage_output, span_probs])
+                module_outputs.extend([passage_input, passage_output, span_probs])
 
             else:
                 continue
@@ -430,6 +502,7 @@ class DROPDemoPredictor(Predictor):
         date_values = metadata["passage_date_values"]
         num_values = metadata["passage_number_values"]
         year_diff_values = metadata["passage_year_diffs"]
+        composed_numbers = metadata["composed_numbers"]
         passage_mask = outputs["passage_mask"]
 
         question_tokens = metadata["question_orig_tokens"]
@@ -448,6 +521,9 @@ class DROPDemoPredictor(Predictor):
         # Mapping nested expression's modules to module-names used in the paper
         program_nested_expression = self.rename_modules_in_nested_expression(program_nested_expression)
         program_lisp = self.nested_expression_to_lisp(program_nested_expression)
+        # This contains each module as a dict{"name": module_name, "identifier": stepnum_of_module_exection}
+        module_expression, _ = add_identifier(program_nested_expression, count=1)
+        program_nested_expression = convert_module_expression_tree_to_dict(module_expression)
 
         # Is a list which contains for each program executed for this instance, its module execution info.
         # Since programs are sorted in decreasing order of score, the first element in the list should be argmax program
@@ -487,8 +563,10 @@ class DROPDemoPredictor(Predictor):
         numbers_Input = Input(name="numbers", tokens=num_values)
         dates_Input = Input(name="dates", tokens=date_values)
         year_diffs_Input = Input(name="year_diffs", tokens=year_diff_values)
+        composed_numbers_Input = Input(name="composed_numbers", tokens=composed_numbers)
         count_Input = Input(name="count", tokens=list(range(10)))
-        inputs: List[Input] = [question_Input, passage_Input, numbers_Input, dates_Input, year_diffs_Input, count_Input]
+        inputs: List[Input] = [question_Input, passage_Input, numbers_Input, dates_Input, composed_numbers_Input,
+                               year_diffs_Input, count_Input]
         input_jsonserializable = [i.to_dict() for i in inputs]
 
         # Convert module_outputs in program_execution from Dict to List[Output]
