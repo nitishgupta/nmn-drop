@@ -311,6 +311,8 @@ class DROPDemoPredictor(Predictor):
             "find_PassageNumber": "find-num",
             "minNumPattn": "find-min-num",
             "maxNumPattn": "find-max-num",
+            "passagenumber_difference": "number-difference",
+            "passagenumber_addition": "number-addition",
         }
 
         return module_name_mapping.get(module_name, module_name)
@@ -458,8 +460,8 @@ class DROPDemoPredictor(Predictor):
                                        minmax_passage_number])
 
             # Addition subtraction modules
-            elif module_name in ["passagenumber_difference", "passagenumber_addition"]:
-                if module_name == "passagenumber_difference":
+            elif module_name in ["number-difference", "number-addition"]:
+                if module_name == "number-difference":
                     output_distribution = module_dict["difference_value"]
                     label = "difference_distribution"
                 else:

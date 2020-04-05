@@ -1575,7 +1575,7 @@ class DropLanguage(DomainLanguage):
         )
 
         if self._debug:
-            debug_info_dict = {"passagenumber_difference": {"difference_value": number_difference_dist}}
+            debug_info_dict = {"number-difference": {"difference_value": number_difference_dist}}
             self.modules_debug_info[-1].append(debug_info_dict)
 
         return ComposedNumber(composed_number_dist=number_difference_dist, loss=loss, debug_value=debug_value)
@@ -1590,7 +1590,7 @@ class DropLanguage(DomainLanguage):
         )
 
         if self._debug:
-            debug_info_dict = {"passagenumber_addition": {"addition_value": number_addition_dist}}
+            debug_info_dict = {"number-addition": {"addition_value": number_addition_dist}}
             self.modules_debug_info[-1].append(debug_info_dict)
 
         return ComposedNumber(composed_number_dist=number_addition_dist, loss=loss, debug_value=debug_value)
