@@ -399,7 +399,7 @@ class DROPDemoPredictor(Predictor):
                 passage_output = Output(input_name="passage", values=module_dict["passage"], label="module_output")
                 outputs = [question_output, passage_output]
                 if "input" in module_dict:
-                    passage_input = Output(input_name="passage", values=module_dict["input"], label="module_input")
+                    passage_input = Output(input_name="passage", values=module_dict["passage_input"], label="module_input")
                     outputs.append(passage_input)
                 module_outputs.extend(outputs)
 
@@ -439,7 +439,7 @@ class DROPDemoPredictor(Predictor):
 
             # Modules that output one num_distribution
             elif module_name in ["find-num"]:
-                passage_input = Output(input_name="passage", values=module_dict["input"], label="module_input")
+                passage_input = Output(input_name="passage", values=module_dict["passage_input"], label="module_input")
                 passage_number = Output(input_name="passage", values=module_dict["passage_number"],
                                         label="passage_number_attention")
                 number = Output(input_name="numbers", values=module_dict["number"], label="number_distribution")
@@ -447,7 +447,7 @@ class DROPDemoPredictor(Predictor):
 
             # Find-max-num and Find-min-num
             elif module_name in ["find-max-num", "find-min-num"]:
-                passage_input = Output(input_name="passage", values=module_dict["input"], label="module_input")
+                passage_input = Output(input_name="passage", values=module_dict["passage_input"], label="module_input")
                 passage_output = Output(input_name="passage", values=module_dict["passage"], label="module_output")
                 input_passage_number = Output(input_name="passage", values=module_dict["passage_input_number"],
                                               label="input_pattn_number_attention")
@@ -473,13 +473,13 @@ class DROPDemoPredictor(Predictor):
 
             # Modules that output count
             elif module_name in ["count"]:
-                passage_input = Output(input_name="passage", values=module_dict["input"], label="module_input")
+                passage_input = Output(input_name="passage", values=module_dict["passage_input"], label="module_input")
                 count = Output(input_name="count", values=module_dict["count"], label="module_output")
                 module_outputs.extend([passage_input, count])
 
             # span module
             elif module_name in ["span"]:
-                passage_input = Output(input_name="passage", values=module_dict["input"], label="module_input")
+                passage_input = Output(input_name="passage", values=module_dict["passage_input"], label="module_input")
                 passage_output = Output(input_name="passage", values=module_dict["token_probs"],
                                         label="aggregated_token_probabilities")
                 span_probs = Output(input_name="span_probabilities", values=module_dict["span_probs"],

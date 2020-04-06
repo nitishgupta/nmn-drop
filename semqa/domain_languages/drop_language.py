@@ -594,7 +594,7 @@ class DropLanguage(DomainLanguage):
                 debug_value += f"\nMostAttended: {most_attended_spans}"
 
                 debug_info_dict = {"filter": {"passage": filtered_passage_attention,
-                                              "input": passage_attn,
+                                              "passage_input": passage_attn,
                                               "question": question_attention}}
                 self.modules_debug_info[-1].append(debug_info_dict)
 
@@ -654,7 +654,7 @@ class DropLanguage(DomainLanguage):
                 debug_value += f"\nMostAttended: {most_attended_spans}"
 
                 debug_info_dict = {"relocate": {"passage": relocate_attn,
-                                                "input": passage_attn,
+                                                "passage_input": passage_attn,
                                                 "question": question_attention}}
                 self.modules_debug_info[-1].append(debug_info_dict)
 
@@ -1459,7 +1459,7 @@ class DropLanguage(DomainLanguage):
             if self._debug:
                 debug_info_dict = {"span": {"span_start_logits": span_start_logits,
                                             "span_end_logits": span_end_logits,
-                                            "input": passage_attn}}
+                                            "passage_input": passage_attn}}
                 self.modules_debug_info[-1].append(debug_info_dict)
                 _, pattn_vis_most = dlutils.listTokensVis(passage_attn, self.metadata["passage_tokens"])
                 most_attended_spans = dlutils.mostAttendedSpans(passage_attn, self.metadata["passage_tokens"])
@@ -1528,7 +1528,7 @@ class DropLanguage(DomainLanguage):
                 debug_value += f"\nPSigms: {psigms}"
 
                 debug_info_dict = {"count": {"count": count_distribution,
-                                             "input": passage_attn}}
+                                             "passage_input": passage_attn}}
                 self.modules_debug_info[-1].append(debug_info_dict)
 
         return CountNumber(count_number_dist=count_distribution, loss=loss, debug_value=debug_value)
@@ -1710,7 +1710,7 @@ class DropLanguage(DomainLanguage):
             debug_value += f"\ninput-pattn-top-spans: {top_spans}"
 
             debug_info_dict = {"find-num": {"number": number_distribution,
-                                            "input": passage_attn,
+                                            "passage_input": passage_attn,
                                             "passage_number": passage_numtoken_probs}}
             self.modules_debug_info[-1].append(debug_info_dict)
         return PassageNumber(passage_number_dist=number_distribution, loss=loss, debug_value=debug_value)
@@ -1742,7 +1742,7 @@ class DropLanguage(DomainLanguage):
             passage_attention=passage_attention, min_max_op="min", event_num_groundings=event_num_groundings)
         if self._debug:
             debug_info_dict = {"find-min-num": {"passage": minmax_num_pattn,
-                                                "input": passage_attention._value,
+                                                "passage_input": passage_attention._value,
                                                 "number_input": inputpattn_num_dist,
                                                 "passage_input_number": inputpattn_numtoken_probs,
                                                 "passage_minmax_number": minmax_numtoken_probs}}
@@ -1756,7 +1756,7 @@ class DropLanguage(DomainLanguage):
             passage_attention=passage_attention, min_max_op="max", event_num_groundings=event_num_groundings)
         if self._debug:
             debug_info_dict = {"find-max-num": {"passage": minmax_num_pattn,
-                                                "input": passage_attention._value,
+                                                "passage_input": passage_attention._value,
                                                 "number_input": inputpattn_num_dist,
                                                 "passage_input_number": inputpattn_numtoken_probs,
                                                 "passage_minmax_number": minmax_numtoken_probs}}
