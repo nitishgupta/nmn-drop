@@ -398,7 +398,7 @@ class DROPDemoPredictor(Predictor):
                                          label="question_attention")
                 passage_output = Output(input_name="passage", values=module_dict["passage"], label="module_output")
                 outputs = [question_output, passage_output]
-                if "input" in module_dict:
+                if "passage_input" in module_dict:
                     passage_input = Output(input_name="passage", values=module_dict["passage_input"], label="module_input")
                     outputs.append(passage_input)
                 module_outputs.extend(outputs)
