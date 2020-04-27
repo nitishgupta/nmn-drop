@@ -1,5 +1,7 @@
 resources/
 datasets/complexwebqa
+allennlp-semparse/
+allennlp_semparse
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
