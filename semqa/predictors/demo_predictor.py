@@ -398,8 +398,9 @@ class DROPDemoPredictor(Predictor):
                                          label="question_attention")
                 passage_output = Output(input_name="passage", values=module_dict["passage"], label="module_output")
                 outputs = [question_output, passage_output]
-                if "input" in module_dict:
-                    passage_input = Output(input_name="passage", values=module_dict["passage_input"], label="module_input")
+                if "passage_input" in module_dict:
+                    passage_input = Output(input_name="passage", values=module_dict["passage_input"],
+                                           label="module_input")
                     outputs.append(passage_input)
                 module_outputs.extend(outputs)
 
@@ -469,7 +470,9 @@ class DROPDemoPredictor(Predictor):
                     label = "addition_distribution"
                 composed_number = Output(input_name="composed_numbers", values=output_distribution,
                                          label=label)
-                module_outputs.extend([composed_number])
+                number_1 = Output(input_name="numbers", values=module_dict["input_number_1"], label="input_number_1")
+                number_2 = Output(input_name="numbers", values=module_dict["input_number_2"], label="input_number_2")
+                module_outputs.extend([composed_number, number_1, number_2])
 
             # Modules that output count
             elif module_name in ["count"]:
@@ -565,7 +568,7 @@ class DROPDemoPredictor(Predictor):
         numbers_Input = Input(name="numbers", tokens=num_values)
         dates_Input = Input(name="dates", tokens=date_values)
         year_diffs_Input = Input(name="year_diffs", tokens=year_diff_values)
-        composed_numbers_Input = Input(name="composed_numbers", tokens=composed_numbers)
+        composed_numbers_Input = Input(name="composed_numbers", tokens=util.round_all(composed_numbers, prec=2))
         count_Input = Input(name="count", tokens=list(range(10)))
         inputs: List[Input] = [question_Input, passage_Input, numbers_Input, dates_Input, composed_numbers_Input,
                                year_diffs_Input, count_Input]
