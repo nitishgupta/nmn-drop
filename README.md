@@ -3,6 +3,8 @@
 This is the official code for the ICLR 2020 paper, [Neural Module Networks for Reasoning over Text](https://arxiv.org/abs/1912.04971).
 This repository contains the code for replicating our experiments and can be used to extend our model as you wish.
 
+### Live Demo: https://demo.allennlp.org/ -- Goto *'Reading Comprehension'* and select *'NMN (trained on DROP)'* in the Model section.  
+
 ## Resources
 1. Download the data and a trained model checkpoint from [here](https://drive.google.com/drive/folders/1ZPnQqQHBrWXEF4z3yTK5wL5sCI8gG98T?usp=sharing).
 Unzip the downloaded contents and place the resulting directory `iclr_cameraready` inside a convenient location, 
@@ -58,7 +60,7 @@ To evaluate the model on the dev set, run the command -- `bash scripts/iclr/eval
 
 The `model_ckpt`/`data` path in the script can be modified to evaluate a different model on a different dataset.
 
-## Visualization
+## Prediction
 To generate text based visualization of the model's prediction on the development data, run the command -- `bash scripts/iclr/predict.sh`
 
 A file `drop_mydev_verbosepred.txt` is written to `MODEL_CKPT_PATH/iclr_cameraready/ckpt/predictions` containing this visualization.
