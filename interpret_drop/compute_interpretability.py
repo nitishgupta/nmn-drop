@@ -175,12 +175,19 @@ def convert_to_nparray(attention_score):
 
 def get_queryid2annotations(module_output_gold: Dict):
     qid2annotations = {}
+    num_skipped = 0
     for pid, pinfo in module_output_gold.items():
         qa_pairs = pinfo["qa_pairs"]
         for qa in qa_pairs:
             query_id = qa["query_id"]
-            annotations = qa["module_output_annotations"]
-            qid2annotations[query_id] = annotations
+            if "module_output_annotations" in qa:
+                annotations = qa["module_output_annotations"]
+                qid2annotations[query_id] = annotations
+            else:
+                num_skipped += 1
+
+    print("Annotation not found for -- {} instances".format(num_skipped))
+    print("Number of qas w/ annotations read: {}".format(len(qid2annotations)))
 
     return qid2annotations
 
@@ -211,10 +218,15 @@ def compute_interpretability_score(module_output_predictions: List[Dict], module
     """
     skipped_due_to_predicted = 0
     qid2annotations = get_queryid2annotations(module_output_gold)
+
     interpretability_loss = 0.0
     num_examples = 0
+    skipped_due_to_nogoldanno = 0
     for example_dict in module_output_predictions:
         example = Example(example_dict)
+        if example.query_id not in qid2annotations:
+            skipped_due_to_nogoldanno += 1
+            continue
         gold_annotations = qid2annotations[example.query_id]
         qtype = example.qtype
         gold_logical_forms = lfs.qtype2logicalforms[qtype]
@@ -245,6 +257,7 @@ def compute_interpretability_score(module_output_predictions: List[Dict], module
             # raise NotImplementedError("Supervision Type is unknown: {}".format(supervision_type))
 
     interpretability_loss = float(interpretability_loss)/num_examples
+    print("Skipped due to no-gold-anno: {}".format(skipped_due_to_nogoldanno))
     print("Skipped due to predicted: {}".format(skipped_due_to_predicted))
     print("Interpretability Loss (lower is better): {}".format(interpretability_loss))
 

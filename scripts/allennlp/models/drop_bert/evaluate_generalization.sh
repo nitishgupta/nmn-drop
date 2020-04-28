@@ -7,7 +7,7 @@ export BEAMSIZE=1
 export DEBUG=true
 
 # SAVED MODEL
-MODEL_DIR=/shared/nitishg/semqa/checkpoints/drop/merged_data/date_yd_num_hmyw_cnt_whoarg_1200_full/drop_parser_bert/EXCLOSS_true/MMLLOSS_true/aux_true/SUPEPOCHS_3/S_1/BeamSize2
+MODEL_DIR=/shared/nitishg/semqa/checkpoints/drop/generalization/min_max/drop_parser_bert/EXCLOSS_false/MMLLOSS_true/aux_true/SUPEPOCHS_0/S_1/BeamSize1_HEM0
 MODEL_TAR=${MODEL_DIR}/model.tar.gz
 PREDICTION_DIR=${MODEL_DIR}/predictions
 mkdir ${PREDICTION_DIR}
@@ -31,4 +31,5 @@ VAL_METRICS_FILE=${PREDICTION_DIR}/generalization_metrics.json
 allennlp evaluate --output-file ${VAL_METRICS_FILE} \
                   --cuda-device ${GPU} \
                   --include-package ${INCLUDE_PACKAGE} \
+                  --overrides "{"model": { "beam_size": 1, "interpret": true}}" \
                   ${MODEL_TAR} ${VALDATA_FILE}

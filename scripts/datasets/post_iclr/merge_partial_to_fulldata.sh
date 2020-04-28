@@ -4,7 +4,7 @@ ROOT_DIR=./resources/data/drop_post_iclr
 
 FULLDATA_DIR=${ROOT_DIR}/preprocess
 
-MYDATA_DIR=${ROOT_DIR}/date_num/date_yd_num_hmyw_cnt_whoarg_1200
+MYDATA_DIR=${ROOT_DIR}/date_num/date_yd_num_hmyw_cnt_whoarg
 
 MERGED_DATA_DIR=${ROOT_DIR}/merged_data/date_yd_num_hmyw_cnt_whoarg_1200_full
 
