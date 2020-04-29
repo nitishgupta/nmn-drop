@@ -2,8 +2,8 @@ from typing import Dict, List, Tuple, Any, TypeVar
 
 import torch
 
-from allennlp.state_machines.states import GrammarBasedState, GrammarStatelet, RnnStatelet, State
-from allennlp.data.fields.production_rule_field import ProductionRule
+from allennlp_semparse.state_machines.states import GrammarBasedState, GrammarStatelet, RnnStatelet, State
+from allennlp_semparse.fields.production_rule_field import ProductionRule
 import allennlp.nn.util as allenutil
 
 StateType = TypeVar("StateType", bound=State)

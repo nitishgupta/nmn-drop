@@ -10,7 +10,7 @@ TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
 VALFILE=${DATASET_DIR}/drop_dataset_mydev.json
 TESTFILE=${DATASET_DIR}/drop_dataset_mytest.json
 
-CONFIGFILE=allenconfigs/naqanet.jsonnet
+CONFIGFILE=training_config/naqanet.jsonnet
 
 export TRAINING_DATA_FILE=${TRAINFILE}
 export VAL_DATA_FILE=${VALFILE}

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-# THIS SHOULD MAKE THE DATASET FOR ICLR20 submission
+# THIS SHOULD MAKE THE DATASET FOR ICLR20 paper
 
-ROOT_DIR=/shared/nitishg/data/drop_post_iclr
+ROOT_DIR=/shared/nitishg/data/drop_iclr
 
 PREPROCESS_DIR=preprocess
 

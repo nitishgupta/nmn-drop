@@ -1,10 +1,10 @@
 #!/usr/bin/env
 
-export TMPDIR=/srv/local/data/nitishg/tmp
+export TMPDIR=/shared/nitishg/tmp
 
-DATASET_DIR=./resources/data/drop_acl/merged_data/my1200_full
-TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
-VALFILE=${DATASET_DIR}/drop_dataset_dev.json
+DATASET_DIR=./resources/data/drop_s/synthetic/pattn2count
+TRAINFILE=${DATASET_DIR}/train.json
+VALFILE=${DATASET_DIR}/dev.json
 
 export TRAINING_DATA_FILE=${TRAINFILE}
 export VAL_DATA_FILE=${VALFILE}
@@ -13,35 +13,37 @@ export VAL_DATA_FILE=${VALFILE}
 INCLUDE_PACKAGE=semqa
 
 ### TRAINING MODEL CONFIG -- should be same across datasets for the same model
-CONFIGFILE=allenconfigs/semqa/train/passage_attn2span.jsonnet
+CONFIGFILE=training_config/semqa/train/passage_attn2count.jsonnet
 
 # Check CONFIGFILE for environment variables to set
 export GPU=0
 
-export BS=8
+export BS=16
 
 export TYPE=gru
 export ISIZE=4
 export HSIZE=20
-export NL=3
-export SEED=10
+export NL=2
+
+export SEED=100
 
 export NORM=true
-export NOISE=false
-export SCALING=true
+export NOISE=true
 
-export EPOCHS=3
+export EPOCHS=40
 
-for SEED in 10
+for SEED in 100
 do
     for TYPE in gru
     do
         ####    SERIALIZATION DIR --- Check for checkpoint_root/task/dataset/model/parameters/
         CHECKPOINT_ROOT=./resources/semqa/checkpoints
-        SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop
-        MODEL_DIR=drop_pattn2span
-        PARAMETERS_DIR1=T_${TYPE}/I_${ISIZE}/H_${HSIZE}/NL_${NL}/SEED_${SEED}
-        SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PARAMETERS_DIR1}
+        SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}
+        MODEL_DIR=drop_pattn2count
+        PARAMETERS_DIR1=T_${TYPE}/Isize_${ISIZE}/Hsize_${HSIZE}/Layers_${NL}/S_${SEED}
+        SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PARAMETERS_DIR1}/t600_v600_noLenBias
+
+        # SERIALIZATION_DIR=./resources/semqa/checkpoints/savedmodels/test
 
         #######################################################################################################################
 

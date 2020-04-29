@@ -16,9 +16,8 @@ from utils import util, spacyutils
 from allennlp.data.tokenizers import Token
 from datasets.drop.preprocess import ner_process
 
-import allennlp.nn.util as allenutil
-from allennlp.tools.squad_eval import metric_max_over_ground_truths
-from allennlp.tools.drop_eval import get_metrics as drop_em_and_f1, answer_json_to_strings
+from semqa.utils.squad_eval import metric_max_over_ground_truths
+from semqa.utils.drop_eval import get_metrics as drop_em_and_f1, answer_json_to_strings
 
 from allennlp_semparse.common.util import lisp_to_nested_expression
 

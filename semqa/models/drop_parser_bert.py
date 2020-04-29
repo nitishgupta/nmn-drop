@@ -4,28 +4,28 @@ import numpy as np
 from overrides import overrides
 import torch
 
-from allennlp.data.fields.production_rule_field import ProductionRule
 from allennlp.data.vocabulary import Vocabulary
 from allennlp.models.model import Model
+from allennlp.data import TextFieldTensors
+from allennlp.data.tokenizers import PretrainedTransformerTokenizer
 from allennlp.modules import Attention, Seq2SeqEncoder
+from allennlp.modules.text_field_embedders import BasicTextFieldEmbedder
+from allennlp.modules.token_embedders import PretrainedTransformerEmbedder
 from allennlp.nn import Activation
 from allennlp.modules.matrix_attention import DotProductMatrixAttention, LinearMatrixAttention
 import allennlp.nn.util as allenutil
 from allennlp.nn import InitializerApplicator, RegularizerApplicator
-from allennlp.models.reading_comprehension.util import get_best_span
-from allennlp.training.metrics import Average, DropEmAndF1
+from allennlp.training.metrics import Average
 
 from allennlp_semparse.state_machines.states import GrammarBasedState
 from allennlp_semparse.state_machines.transition_functions import BasicTransitionFunction
 from allennlp_semparse.state_machines.trainers.maximum_marginal_likelihood import MaximumMarginalLikelihood
 from allennlp_semparse.state_machines import BeamSearch
 from allennlp_semparse.state_machines import ConstrainedBeamSearch
-
-from pytorch_pretrained_bert import BertModel
-from pytorch_pretrained_bert import BertConfig
-from allennlp.modules.token_embedders.bert_token_embedder import PretrainedBertEmbedder
+from allennlp_semparse.fields.production_rule_field import ProductionRule
 
 from semqa.state_machines.constrained_beam_search import FirstStepConstrainedBeamSearch
+from semqa.utils.rc_utils import get_best_span, DropEmAndF1
 from semqa.state_machines.prefixed_beam_search import PrefixedConstrainedBeamSearch
 from semqa.models.utils import semparse_utils
 from semqa.models.drop_parser_base import DROPParserBase
@@ -60,8 +60,7 @@ class DROPParserBERT(DROPParserBase):
         passage_attention_to_count: Seq2SeqEncoder,
         beam_size: int,
         max_decoding_steps: int,
-        bert_config_json: str = None,
-        pretrained_bert_model: str = None,
+        transformer_model_name: str,
         scaling_bert: bool = False,
         countfixed: bool = False,
         auxwinloss: bool = False,
@@ -86,34 +85,21 @@ class DROPParserBERT(DROPParserBase):
             regularizer=regularizer,
         )
 
-        if pretrained_bert_model is None and bert_config_json is None:
-            raise RuntimeError("Both 'pretrained_bert_model' and 'bert_config_json' cannot be None")
-
-        if pretrained_bert_model is not None and bert_config_json is not None:
-            raise RuntimeError("Only one of 'pretrained_bert_model' and 'bert_config_json' should be specified.")
-
+        if scaling_bert:
+            raise NotImplementedError
         self.scaling_bert = scaling_bert
-        if pretrained_bert_model is None:
-            self.BERT = BertModel(config=BertConfig(vocab_size_or_config_json_file=bert_config_json))
-            self.scaling_bert = False
-        else:
-            if scaling_bert:
-                self.bert_token_embedder = PretrainedBertEmbedder(pretrained_model=pretrained_bert_model,
-                                                                  requires_grad=False, top_layer_only=False)
-                self.BERT = None
-                self.bert_dim = self.bert_token_embedder.output_dim
+        self._text_field_embedder: BasicTextFieldEmbedder = BasicTextFieldEmbedder(
+            {"tokens": PretrainedTransformerEmbedder(transformer_model_name)}
+        )
 
-            else:
-                self.BERT = BertModel.from_pretrained(pretrained_bert_model)
-                self.bert_token_embedder = None
-                self.bert_dim = self.BERT.pooler.dense.out_features
-
-        # bert_dim = self.BERT.pooler.dense.out_features
-        # self.bert_dim = bert_dim
+        self._allennlp_tokenizer = PretrainedTransformerTokenizer(model_name=transformer_model_name)
+        self._tokenizer = self._allennlp_tokenizer.tokenizer
+        self._pad_token_id = self._tokenizer.pad_token_id
 
         self.max_ques_len = max_ques_len
 
-        question_encoding_dim = self.bert_dim
+        question_encoding_dim = self._text_field_embedder.get_output_dim()
+        self.bert_dim = question_encoding_dim
 
         self._decoder_step = BasicTransitionFunction(
             encoder_output_dim=question_encoding_dim,
@@ -124,8 +110,6 @@ class DROPParserBERT(DROPParserBase):
             dropout=dropout,
         )
         self._mml = MaximumMarginalLikelihood()
-
-        # self.modeltype = modeltype
 
         self._beam_size = beam_size
         self._decoder_beam_search = BeamSearch(beam_size=self._beam_size)
@@ -232,7 +216,7 @@ class DROPParserBERT(DROPParserBase):
     @overrides
     def forward(
         self,
-        question_passage: Dict[str, torch.LongTensor],
+        question_passage: TextFieldTensors,
         question: Dict[str, torch.LongTensor],
         passage: Dict[str, torch.LongTensor],
         p_sentboundary_wps: torch.LongTensor,
@@ -285,22 +269,17 @@ class DROPParserBERT(DROPParserBase):
             if self.profile_steps % self.profile_freq == 0:
                 logger.info(Profile.to_string())
 
-        question_passage_tokens = question_passage["tokens"]
-        pad_mask = question_passage["mask"]
-        segment_ids = question_passage["tokens-type-ids"]
-
-        # Padding "[PAD]" tokens in the question
-        pad_mask = (question_passage_tokens > 0).long() * pad_mask
+        question_passage_tokens = question_passage["tokens"]["token_ids"]
+        pad_mask = (question_passage_tokens != self._pad_token_id).long()
+        question_passage["tokens"]["mask"] = pad_mask
+        question_passage["tokens"]["type_ids"][:, self.max_ques_len + 1:] = 1
+        type_ids = question_passage["tokens"]["type_ids"]
 
         with Profile(scope_name="bert-run"):
             # Shape: (batch_size, seqlen, bert_dim); (batch_size, bert_dim)
-            if not self.scaling_bert:
-                bert_out, bert_pooled_out = self.BERT(
-                    question_passage_tokens, segment_ids, pad_mask, output_all_encoded_layers=False
-                )
-            else:
-                bert_out = self.bert_token_embedder(input_ids=question_passage_tokens, token_type_ids=segment_ids)
-                bert_pooled_out = bert_out[:, 0, :]
+            # if not self.scaling_bert:
+            bert_out = self._text_field_embedder(question_passage)
+            bert_pooled_out = bert_out[:, 0, :]     # CLS embedding
 
         # Skip [CLS]; then the next max_ques_len tokens are question tokens
         encoded_question = bert_out[:, 1 : self.max_ques_len + 1, :]
@@ -308,6 +287,8 @@ class DROPParserBERT(DROPParserBase):
         # Skip [CLS] Q_tokens [SEP]
         encoded_passage = bert_out[:, 1 + self.max_ques_len + 1 :, :]
         passage_mask = (pad_mask[:, 1 + self.max_ques_len + 1 :]).float()
+
+
         passage_token_idxs = question_passage_tokens[:, 1 + self.max_ques_len + 1 :]
 
         batch_size = len(actions)
@@ -325,11 +306,11 @@ class DROPParserBERT(DROPParserBase):
         passage_question_similarity = question_passage_similarity.transpose(1, 2)
 
         question_passage_attention = allenutil.masked_softmax(
-            question_passage_similarity, passage_mask.unsqueeze(1), memory_efficient=True
+            question_passage_similarity, passage_mask.unsqueeze(1).bool(), memory_efficient=True
         )
 
         passage_question_attention = allenutil.masked_softmax(
-            passage_question_similarity, question_mask.unsqueeze(1), memory_efficient=True
+            passage_question_similarity, question_mask.unsqueeze(1).bool(), memory_efficient=True
         )
 
         # Passage Token - Date Alignment
@@ -1048,7 +1029,7 @@ class DROPParserBERT(DROPParserBase):
         # Shape: (batch_size, passage_length, passage_length)
         pasage_passage_token2symbol_aligment = allenutil.masked_softmax(
             passage_passage_token2symbol_similarity,
-            mask=passage_tokenidx2symbolidx_mask.unsqueeze(1),
+            mask=passage_tokenidx2symbolidx_mask.unsqueeze(1).bool(),
             memory_efficient=True,
         )
         return pasage_passage_token2symbol_aligment
@@ -1115,11 +1096,12 @@ class DROPParserBERT(DROPParserBase):
         # Some spans are padded with index -1,
         # so we clamp those paddings to 0 and then mask after `torch.gather()`.
         gold_passage_span_mask = (gold_passage_span_starts != -1).long()
+        gold_passage_span_mask_bool: torch.BoolTensor = gold_passage_span_mask.bool()
         clamped_gold_passage_span_starts = allenutil.replace_masked_values(
-            gold_passage_span_starts, gold_passage_span_mask, 0
+            gold_passage_span_starts, gold_passage_span_mask_bool, 0
         )
         clamped_gold_passage_span_ends = allenutil.replace_masked_values(
-            gold_passage_span_ends, gold_passage_span_mask, 0
+            gold_passage_span_ends, gold_passage_span_mask_bool, 0
         )
         # Shape: (batch_size, # of answer spans)
         log_likelihood_for_span_starts = torch.gather(span_start_log_probs, 1, clamped_gold_passage_span_starts)
@@ -1128,7 +1110,7 @@ class DROPParserBERT(DROPParserBase):
         log_likelihood_for_spans = log_likelihood_for_span_starts + log_likelihood_for_span_ends
         # For those padded spans, we set their log probabilities to be very small negative value
         log_likelihood_for_spans = allenutil.replace_masked_values(
-            log_likelihood_for_spans, gold_passage_span_mask, -1e7
+            log_likelihood_for_spans, gold_passage_span_mask_bool, -1e7
         )
         # Shape: (batch_size, )
         log_marginal_likelihood_for_span = allenutil.logsumexp(log_likelihood_for_spans)
@@ -1660,8 +1642,8 @@ class DROPParserBERT(DROPParserBase):
         span_start_logits[startidx] = 2.0
         span_end_logits[endidx] = 2.0
 
-        span_start_logits = allenutil.replace_masked_values(span_start_logits, passage_mask, -1e32)
-        span_end_logits = allenutil.replace_masked_values(span_end_logits, passage_mask, -1e32)
+        span_start_logits = allenutil.replace_masked_values(span_start_logits, passage_mask.bool(), -1e32)
+        span_end_logits = allenutil.replace_masked_values(span_end_logits, passage_mask.bool(), -1e32)
 
         span_start_logits += 1e-7
         span_end_logits += 1e-7
@@ -1911,7 +1893,8 @@ class DROPParserBERT(DROPParserBase):
         sum_inwindow_probs = inwindow_probs.sum(2)
         mask_sum = (inwindow_mask.sum(2) > 0).float()
         # Image a row where mask = 0, there sum of probs will be zero and we need to compute masked_log
-        masked_sum_inwindow_probs = allenutil.replace_masked_values(sum_inwindow_probs, mask_sum, replace_with=1e-40)
+        masked_sum_inwindow_probs = allenutil.replace_masked_values(sum_inwindow_probs, mask_sum.bool(),
+                                                                    replace_with=1e-40)
         log_sum_inwindow_probs = torch.log(masked_sum_inwindow_probs + 1e-40) * mask_sum
         inwindow_likelihood = torch.sum(log_sum_inwindow_probs)
         if torch.sum(inwindow_mask) > 0:
@@ -1924,8 +1907,8 @@ class DROPParserBERT(DROPParserBase):
         # Since we'd like to distribute the weight equally to things outside the window
         # Shape: (batch_size, passage_length, passage_length)
         outwindow_probs = passage_passage_alignment * outwindow_mask
-
-        masked_outwindow_probs = allenutil.replace_masked_values(outwindow_probs, outwindow_mask, replace_with=1e-40)
+        masked_outwindow_probs = allenutil.replace_masked_values(outwindow_probs, outwindow_mask.bool(),
+                                                                 replace_with=1e-40)
         outwindow_probs_log = torch.log(masked_outwindow_probs + 1e-40) * outwindow_mask
         # Shape: (batch_length, passage_length)
         outwindow_negentropies = torch.sum(outwindow_probs * outwindow_probs_log)

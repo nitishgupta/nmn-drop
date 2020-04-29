@@ -7,20 +7,19 @@ export BEAMSIZE=1
 export DEBUG=true
 
 # SAVED MODEL
-MODEL_DIR=./resources/iclr_cameraready/ckpt
+MODEL_DIR=./resources/semqa/checkpoints/test
 MODEL_TAR=${MODEL_DIR}/model.tar.gz
-
 PREDICTION_DIR=${MODEL_DIR}/predictions
 mkdir ${PREDICTION_DIR}
 
-DATASET_DIR=./resources/iclr_cameraready
-DATASET_NAME=iclr_drop_data
+DATASET_DIR=./resources/data/drop_post_iclr
+DATASET_NAME=date_num/date_yd_num_hmyw_cnt_whoarg_1200
 
-VALDATA_FILE=${DATASET_DIR}/${DATASET_NAME}/drop_dataset_mydev.json
+FULL_VALFILE=${DATASET_DIR}/${DATASET_NAME}/drop_dataset_mydev.json
 
 # Prediction output including verbose execution logs
 PREDICTOR=drop_parser_predictor
-PREDICTION_FILE=${PREDICTION_DIR}/drop_mydev_verbosepred.txt
+PREDICTION_FILE=${PREDICTION_DIR}/drop_dev_verbosepred.txt
 
 # Prediction output in a JSON-L file similar to MTMSN
 #PREDICTOR=drop_mtmsnstyle_predictor
@@ -34,6 +33,6 @@ allennlp predict --output-file ${PREDICTION_FILE} \
                  --batch-size 4 \
                  --use-dataset-reader \
                  --overrides "{"model": { "beam_size": ${BEAMSIZE}, "debug": ${DEBUG}}}" \
-                 ${MODEL_TAR} ${VALDATA_FILE}
+                 ${MODEL_TAR} ${FULL_VALFILE}
 
 echo -e "Dev predictions file saved at: ${PREDICTION_FILE}"

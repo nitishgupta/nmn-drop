@@ -10,7 +10,8 @@ from allennlp.models.model import Model
 from allennlp.modules import Seq2SeqEncoder
 import allennlp.nn.util as allenutil
 from allennlp.nn import InitializerApplicator
-from allennlp.models.reading_comprehension.util import get_best_span
+# from allennlp.models.reading_comprehension.util import get_best_span
+from semqa.utils.rc_utils import get_best_span
 
 from allennlp.training.metrics import Average
 

@@ -9,14 +9,13 @@ from overrides import overrides
 from allennlp.common.file_utils import cached_path
 from allennlp.data.dataset_readers.dataset_reader import DatasetReader
 from allennlp.data.instance import Instance
-from allennlp.data.token_indexers import TokenIndexer
-from allennlp.data.token_indexers.wordpiece_indexer import WordpieceIndexer
+from allennlp.data.tokenizers import Token, Tokenizer, SpacyTokenizer
+from allennlp.data.token_indexers import TokenIndexer, SingleIdTokenIndexer, PretrainedTransformerIndexer
+from allennlp.data.tokenizers.pretrained_transformer_tokenizer import PretrainedTransformerTokenizer
 from allennlp.data.tokenizers import Token
 from allennlp.data.fields import Field, TextField, MetadataField, ListField, SpanField, ArrayField
 
 from allennlp_semparse.fields import ProductionRuleField
-
-from pytorch_pretrained_bert import BertTokenizer
 
 from semqa.domain_languages.drop_language import DropLanguage, Date, get_empty_language_object
 from datasets.drop import constants
@@ -49,7 +48,7 @@ WORD_NUMBER_MAP = {
 }
 
 
-def tokenize_bert(bert_tokenizer: BertTokenizer, tokens: List[str]):
+def tokenize_bert(bert_tokenizer: PretrainedTransformerTokenizer, tokens: List[str]):
     """Word-piece tokenize input tokens.
 
     Returns:
@@ -64,7 +63,7 @@ def tokenize_bert(bert_tokenizer: BertTokenizer, tokens: List[str]):
     for tokenidx, token in enumerate(tokens):
         wp_idx = len(wordpiece_tokens)
         wps = bert_tokenizer.tokenize(token)
-        wordpiece_tokens.extend(wps)
+        wordpiece_tokens.extend([t.text for t in wps])
         wpidx2tokenidx.extend([tokenidx] * len(wps))
         # Word-piece idxs for this token, wp_idx is the idx for the first token, and +i for the number of wps
         wp_idxs = [wp_idx + i for i, _ in enumerate(wps)]
@@ -76,18 +75,18 @@ def tokenize_bert(bert_tokenizer: BertTokenizer, tokens: List[str]):
     return wordpiece_tokens, tokenidx2wpidxs, wpidx2tokenidx
 
 
-@TokenIndexer.register("bert-drop")
-class BertDropTokenIndexer(WordpieceIndexer):
-    def __init__(self, pretrained_model: str, max_pieces: int = 512) -> None:
-        bert_tokenizer = BertTokenizer.from_pretrained(pretrained_model)
-        super().__init__(
-            vocab=bert_tokenizer.vocab,
-            wordpiece_tokenizer=bert_tokenizer.wordpiece_tokenizer.tokenize,
-            do_lowercase=True,
-            max_pieces=max_pieces,
-            namespace="bert",
-            separator_token="[SEP]",
-        )
+# @TokenIndexer.register("bert-drop")
+# class BertDropTokenIndexer(WordpieceIndexer):
+#     def __init__(self, pretrained_model: str, max_pieces: int = 512) -> None:
+#         bert_tokenizer = BertTokenizer.from_pretrained(pretrained_model)
+#         super().__init__(
+#             vocab=bert_tokenizer.vocab,
+#             wordpiece_tokenizer=bert_tokenizer.wordpiece_tokenizer.tokenize,
+#             do_lowercase=True,
+#             max_pieces=max_pieces,
+#             namespace="bert",
+#             separator_token="[SEP]",
+#         )
 
 
 @DatasetReader.register("drop_reader_bert")
@@ -95,7 +94,7 @@ class DROPReaderNew(DatasetReader):
     def __init__(
         self,
         lazy: bool = True,
-        pretrained_model: str = None,
+        tokenizer: PretrainedTransformerTokenizer = None,
         token_indexers: Dict[str, TokenIndexer] = None,
         relaxed_span_match: bool = True,
         do_augmentation: bool = True,
@@ -106,8 +105,8 @@ class DROPReaderNew(DatasetReader):
         convert_spananswer_to_num=False,
     ) -> None:
         super().__init__(lazy)
-        self._tokenizer = BertTokenizer.from_pretrained(pretrained_model)
-        self._token_indexers = token_indexers
+        self._tokenizer: PretrainedTransformerTokenizer = tokenizer
+        self._token_indexers: Dict[str, TokenIndexer] = token_indexers
         self._relaxed_span_match = relaxed_span_match
         self._do_augmentation = do_augmentation
         self.question_length_limit = question_length_limit
@@ -266,8 +265,13 @@ class DROPReaderNew(DatasetReader):
 
                 if instance is not None:
                     instances_read += 1
+                    if instances_read > 200:
+                        break
+
                     # print("\n\n")
                     yield instance
+            if instances_read > 200:
+                break
 
         #         if instance is not None:
         #             instances.append(instance)
@@ -356,8 +360,10 @@ class DROPReaderNew(DatasetReader):
         q_wp_pad_len = max_question_len - q_wp_len
         question_wps.extend(["[PAD]"] * q_wp_pad_len)
         q_wpidx2tokenidx.extend([-1] * q_wp_pad_len)
+        self._tokenizer: PretrainedTransformerTokenizer = self._tokenizer
 
-        question_wps_tokens = [Token(text=t) for t in question_wps]
+        question_wps_tokens = [Token(text=t, text_id=self._tokenizer.tokenizer.vocab[t], type_id=0)
+                               for t in question_wps]
 
         # Passage_len = Max seq len - CLS - SEP - SEP - Max_Qlen -- Questions will be padded to max length
         max_passage_len = min(512 - 3 - max_question_len, len(passage_wps))
@@ -370,9 +376,17 @@ class DROPReaderNew(DatasetReader):
         passage_wps.append("[SEP]")
         p_wpidx2tokenidx.append(-1)
 
-        passage_wps_tokens = [Token(text=t) for t in passage_wps]
+        passage_wps_tokens = [Token(text=t, text_id=self._tokenizer.tokenizer.vocab[t], type_id=1) for t in passage_wps]
         # This would be in the input to BERT
-        question_passage_tokens = [Token("[CLS]")] + question_wps_tokens + [Token("[SEP]")] + passage_wps_tokens
+        question_passage_tokens = [Token("[CLS]", text_id=self._tokenizer.tokenizer.vocab["[CLS]"])] + \
+                                  question_wps_tokens + \
+                                  [Token("[SEP]", text_id=self._tokenizer.tokenizer.vocab["[SEP]"])] + \
+                                  passage_wps_tokens
+
+        cls_q_sep_len = 1 + len(question_wps_tokens) + 1
+        for i, t in enumerate(question_passage_tokens):
+            t.type_id = 0 if i < cls_q_sep_len else 1
+
 
         (
             p_date_mens,

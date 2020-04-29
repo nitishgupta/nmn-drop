@@ -32,7 +32,7 @@ num_seconds=210
 rate=0.01
 
 allennlp train \
-  --include-package semqa -s ${SERIALIZATION_DIR} allenconfigs/semqa/train/drop_parser_bert.jsonnet &
+  --include-package semqa -s ${SERIALIZATION_DIR} training_config/semqa/train/drop_parser_bert.jsonnet &
 
 # Obtain the id of the python process by getting the child pid
 # of the allennlp command

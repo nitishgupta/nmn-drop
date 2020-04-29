@@ -672,10 +672,6 @@ class DropLanguage(DomainLanguage):
             Softmax over these scores is the date dist.
         """
         with Profile("date-dist."):
-            # passage_date_alignment_matrix = allenutil.masked_softmax(self.passage_passage_token2date_similarity,
-            #                                                          mask=self.passage_datetokens_mask_float.unsqueeze(0),
-            #                                                          memory_efficient=True)
-
             if date_type is None:
                 passage_date_alignment_matrix = self.passage_passage_token2date_alignment
             elif date_type == "start":
@@ -738,11 +734,6 @@ class DropLanguage(DomainLanguage):
         """
 
         with Profile("num-dist"):
-            # Shape: (passage_length, passage_length) -- each row softmaxed over the number-tokens
-            # passage_number_alignment_matrix = allenutil.masked_softmax(self.passage_passage_token2num_similarity,
-            #                                                            mask=self.passage_numtokens_mask_float.unsqueeze(0),
-            #                                                            memory_efficient=True)
-
             # Shape: (passage_length, passage_length) -- Each row is a masked-softmax over number-tokens
             passage_number_alignment_matrix = self.passage_passage_token2num_alignment
 
@@ -1394,14 +1385,15 @@ class DropLanguage(DomainLanguage):
             span_start_logits = passage_ans_startend_logits[:, 0]
             span_end_logits = passage_ans_startend_logits[:, 1]
 
-            span_start_logits = allenutil.replace_masked_values(span_start_logits, self.passage_mask, -1e32)
-            span_end_logits = allenutil.replace_masked_values(span_end_logits, self.passage_mask, -1e32)
+            passage_mask_bool: torch.BoolTensor = self.passage_mask.bool()
+            span_start_logits = allenutil.replace_masked_values(span_start_logits, passage_mask_bool, -1e32)
+            span_end_logits = allenutil.replace_masked_values(span_end_logits, passage_mask_bool, -1e32)
 
-            span_start_log_probs = allenutil.masked_log_softmax(span_start_logits, self.passage_mask)
-            span_end_log_probs = allenutil.masked_log_softmax(span_end_logits, self.passage_mask)
+            span_start_log_probs = allenutil.masked_log_softmax(span_start_logits, passage_mask_bool)
+            span_end_log_probs = allenutil.masked_log_softmax(span_end_logits, passage_mask_bool)
 
-            span_start_log_probs = allenutil.replace_masked_values(span_start_log_probs, self.passage_mask, -1e32)
-            span_end_log_probs = allenutil.replace_masked_values(span_end_log_probs, self.passage_mask, -1e32)
+            span_start_log_probs = allenutil.replace_masked_values(span_start_log_probs, passage_mask_bool, -1e32)
+            span_end_log_probs = allenutil.replace_masked_values(span_end_log_probs, passage_mask_bool, -1e32)
 
             loss = 0.0
 
@@ -1422,11 +1414,11 @@ class DropLanguage(DomainLanguage):
     def find_passageSpanAnswer(self, passage_attention: PassageAttention_answer) -> PassageSpanAnswer:
         with Profile("find-span-ans"):
             passage_attn = passage_attention._value
-            passage_mask = self.passage_mask
+            passage_mask_bool: torch.BoolTensor = self.passage_mask.bool()
 
             # Shape: (passage_length)
             # passage_attn = passage_attn * self.passage_mask
-            passage_attn = passage_attn * passage_mask
+            passage_attn = passage_attn * self.passage_mask
 
             scaled_attentions = [passage_attn * sf for sf in self.parameters.passage_attention_scalingvals]
             # Shape: (passage_length, num_scaling_factors)
@@ -1434,7 +1426,7 @@ class DropLanguage(DomainLanguage):
 
             # Shape: (passage_lengths, hidden_dim)
             passage_span_hidden_reprs = self.parameters.passage_attention_to_span(
-                scaled_passage_attentions.unsqueeze(0), passage_mask.unsqueeze(0)
+                scaled_passage_attentions.unsqueeze(0), self.passage_mask.unsqueeze(0)
             ).squeeze(0)
 
             # Shape: (passage_lengths, 2)
@@ -1444,14 +1436,14 @@ class DropLanguage(DomainLanguage):
             span_start_logits = passage_span_logits[:, 0]
             span_end_logits = passage_span_logits[:, 1]
 
-            span_start_logits = allenutil.replace_masked_values(span_start_logits, passage_mask, -1e32)
-            span_end_logits = allenutil.replace_masked_values(span_end_logits, passage_mask, -1e32)
+            span_start_logits = allenutil.replace_masked_values(span_start_logits, passage_mask_bool, -1e32)
+            span_end_logits = allenutil.replace_masked_values(span_end_logits, passage_mask_bool, -1e32)
 
-            span_start_log_probs = allenutil.masked_log_softmax(span_start_logits, passage_mask)
-            span_end_log_probs = allenutil.masked_log_softmax(span_end_logits, passage_mask)
+            span_start_log_probs = allenutil.masked_log_softmax(span_start_logits, passage_mask_bool)
+            span_end_log_probs = allenutil.masked_log_softmax(span_end_logits, passage_mask_bool)
 
-            span_start_log_probs = allenutil.replace_masked_values(span_start_log_probs, passage_mask, -1e32)
-            span_end_log_probs = allenutil.replace_masked_values(span_end_log_probs, passage_mask, -1e32)
+            span_start_log_probs = allenutil.replace_masked_values(span_start_log_probs, passage_mask_bool, -1e32)
+            span_end_log_probs = allenutil.replace_masked_values(span_end_log_probs, passage_mask_bool, -1e32)
 
             loss = passage_attention.loss
 

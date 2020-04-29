@@ -1,4 +1,7 @@
 local utils = import 'utils.libsonnet';
+local bert_model = "bert-base-uncased";
+local batch_size = utils.parse_number(std.extVar("BS"));
+local max_length = 512;
 
 {
     "dataset_reader": {
@@ -8,13 +11,17 @@ local utils = import 'utils.libsonnet';
         "skip_due_to_gold_programs": true,
         "convert_spananswer_to_num": true,
         "question_length_limit": 50,
-        "pretrained_model": "bert-base-uncased",
+        "tokenizer": {
+          "model_name": bert_model,
+          "add_special_tokens": false,
+        },
         "token_indexers": {
           "tokens": {
-            "type": "bert-drop",
-            "pretrained_model": "bert-base-uncased"
+            "type": "pretrained_transformer",
+            "model_name": bert_model,
+            "max_length": max_length
           }
-        }
+        },
     },
 
     "validation_dataset_reader": {
@@ -23,11 +30,15 @@ local utils = import 'utils.libsonnet';
         "skip_instances": false,
         "skip_due_to_gold_programs": false,
         "question_length_limit": 50,
-        "pretrained_model": "bert-base-uncased",
+        "tokenizer": {
+          "model_name": bert_model,
+          "add_special_tokens": false
+        },
         "token_indexers": {
           "tokens": {
-            "type": "bert-drop",
-            "pretrained_model": "bert-base-uncased"
+            "type": "pretrained_transformer",
+            "model_name": bert_model,
+            "max_length": max_length
           }
         }
     },
@@ -37,7 +48,9 @@ local utils = import 'utils.libsonnet';
 
     "model": {
         "type": "drop_parser_bert",
-        "bert_config_json": "semqa/models/utils/bert_config_test.json",
+
+        "transformer_model_name": bert_model,
+        "scaling_bert": utils.boolparser(std.extVar("SCALING_BERT")),
 
         "max_ques_len": 50,
 
@@ -50,7 +63,7 @@ local utils = import 'utils.libsonnet';
             "type": "gru",
             "input_size": 4,
             "hidden_size": 20,
-            "num_layers": 3,
+            "num_layers": 2,
             "bidirectional": true,
         },
 
@@ -77,6 +90,18 @@ local utils = import 'utils.libsonnet';
         "max_decoding_steps": utils.parse_number(std.extVar("MAX_DECODE_STEP")),
         "dropout": utils.parse_number(std.extVar("DROPOUT")),
 
+        "initializers": {
+            "regexes": [
+                ["passage_attention_to_count|passage_count_hidden2logits",
+                     {
+                         "type": "pretrained",
+                         "weights_file_path": "./pattn2count_ckpt/best.th"
+                     },
+                ],
+            ],
+            "prevent_regexes": [".*_text_field_embedder.*"],
+        },
+
         "auxwinloss": utils.boolparser(std.extVar("AUXLOSS")),
 
         "countfixed": utils.boolparser(std.extVar("COUNT_FIXED")),
@@ -87,40 +112,32 @@ local utils = import 'utils.libsonnet';
         "hardem_epoch": utils.parse_number(std.extVar("HARDEM_EPOCH")),
         "debug": utils.boolparser(std.extVar("DEBUG")),
         "profile_freq": utils.parse_number(std.extVar("PROFILE_FREQ")),
-        "cuda_device": utils.parse_number(std.extVar("GPU"))
-},
-
-    "iterator": {
-        "type": "filter",
-        "track_epoch": true,
-        "batch_size": std.extVar("BS"),
-        "cache_instances": false,
-        "filter_instances": utils.boolparser(std.extVar("SUPFIRST")),
-        "filter_for_epochs": utils.parse_number(std.extVar("SUPEPOCHS")),
+        "cuda_device": utils.parse_number(std.extVar("GPU")),
+        "interpret": utils.boolparser(std.extVar("INTERPRET"))
     },
 
-    "validation_iterator": {
+    "data_loader": {
+      "batch_sampler": {
         "type": "basic",
-        "track_epoch": true,
-        "batch_size": std.extVar("BS")
+        "sampler": {"type": "random"},
+        "batch_size": batch_size,
+        "drop_last": false,
+      },
     },
 
 
     "trainer": {
-        "num_serialized_models_to_keep": 2,
+        "checkpointer": {"num_serialized_models_to_keep": 1},
         "grad_norm": 5,
-        "patience": 20,
+        "patience": 10,
         "cuda_device": utils.parse_number(std.extVar("GPU")), // [0, 1, 2, 3],
         "num_epochs": utils.parse_number(std.extVar("EPOCHS")),
-        "shuffle": true,
         "optimizer": {
-            "type": "bert_adam",
+            "type": "huggingface_adamw",
             "lr": 1e-5
         },
-        "summary_interval": 100,
-        "should_log_parameter_statistics": false,
         "validation_metric": "+f1",
-        "gc_freq": utils.parse_number(std.extVar("GC_FREQ")),
+        // "gc_freq": utils.parse_number(std.extVar("GC_FREQ")),
     },
 
     "random_seed": utils.parse_number(std.extVar("SEED")),

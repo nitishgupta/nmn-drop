@@ -173,7 +173,7 @@ def aux_window_loss(ptop_attention, passage_mask, inwindow_mask):
     sum_inwindow_probs = inwindow_probs.sum(1)
     # Shape: (passage_length) -- mask for tokens that have empty windows
     mask_sum = (inwindow_mask.sum(1) > 0).float()
-    masked_sum_inwindow_probs = allenutil.replace_masked_values(sum_inwindow_probs, mask_sum, replace_with=1e-40)
+    masked_sum_inwindow_probs = allenutil.replace_masked_values(sum_inwindow_probs, mask_sum.bool(), replace_with=1e-40)
     log_sum_inwindow_probs = torch.log(masked_sum_inwindow_probs + 1e-40) * mask_sum
     inwindow_likelihood = torch.sum(log_sum_inwindow_probs)
     inwindow_likelihood_avg = inwindow_likelihood / torch.sum(inwindow_mask)
