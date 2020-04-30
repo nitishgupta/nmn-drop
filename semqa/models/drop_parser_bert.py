@@ -3,6 +3,7 @@ from typing import List, Dict, Any, Tuple, Optional, Set, Union
 import numpy as np
 from overrides import overrides
 import torch
+import gc
 
 from allennlp.data.vocabulary import Vocabulary
 from allennlp.models.model import Model
@@ -207,6 +208,8 @@ class DROPParserBERT(DROPParserBase):
 
         self.interpret = interpret
 
+        self.gc_steps = 0
+
         # self.logfile = open("log_sup_epochs_3.txt", "w")
         # self.num_train_steps = 0
         # self.log_freq = 100
@@ -260,6 +263,11 @@ class DROPParserBERT(DROPParserBase):
         aux_answer_as_count=None,
         aux_count_mask=None,
     ) -> Dict[str, torch.Tensor]:
+
+        self.gc_steps += 1
+        if self.gc_steps % 500 == 0:
+            gc.collect()
+
 
         if self.device_id is None:
             self.device_id = allenutil.get_device_of(self.qp_matrix_attention._weight_vector.data)

@@ -41,7 +41,7 @@ export SUPEPOCHS=5
 # -1 will not run HardEM; HardEM will kick after EPOCH num of epochs
 export HARDEM_EPOCH=5
 
-export BS=2
+export BS=4
 export DROPOUT=0.2
 
 export SEED=1
@@ -61,7 +61,7 @@ MODEL_DIR=drop_parser_bert
 PD_1=EXCLOSS_${EXCLOSS}/MMLLOSS_${MMLLOSS}/aux_${AUXLOSS}/SUPEPOCHS_${SUPEPOCHS}
 SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}/BeamSize1
 
-SERIALIZATION_DIR=./resources/semqa/checkpoints/test
+SERIALIZATION_DIR=./resources/semqa/checkpoints/test-1.0
 
 #######################################################################################################################
 

@@ -265,20 +265,12 @@ class DROPReaderNew(DatasetReader):
 
                 if instance is not None:
                     instances_read += 1
-                    if instances_read > 200:
-                        break
-
-                    # print("\n\n")
+                    # if instances_read > 200:
+                    #     break
                     yield instance
-            if instances_read > 200:
-                break
+            # if instances_read > 200:
+            #     break
 
-        #         if instance is not None:
-        #             instances.append(instance)
-        #         else:
-        #             skip_count += 1
-        # logger.info(f"Skipped {skip_count} questions, kept {len(instances)} questions.")
-        # return instances
         logger.info(f"Total QAs: {total_qas}. Instances read: {instances_read}")
         logger.info(f"Instances Skipped: {self.skip_count}")
         logger.info(
@@ -360,7 +352,6 @@ class DROPReaderNew(DatasetReader):
         q_wp_pad_len = max_question_len - q_wp_len
         question_wps.extend(["[PAD]"] * q_wp_pad_len)
         q_wpidx2tokenidx.extend([-1] * q_wp_pad_len)
-        self._tokenizer: PretrainedTransformerTokenizer = self._tokenizer
 
         question_wps_tokens = [Token(text=t, text_id=self._tokenizer.tokenizer.vocab[t], type_id=0)
                                for t in question_wps]
