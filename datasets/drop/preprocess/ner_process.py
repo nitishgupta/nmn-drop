@@ -64,7 +64,7 @@ def parseDateNERS(ner_spans, passage_tokens: List[str]) -> Tuple[List, List, Lis
             if normalized_dates is not None:
                 parsed_dates.extend(normalized_dates)
 
-    year_mentions: List[str, Tuple, Tuple] = extract_years_from_text(passage_tokens=passage_tokens)
+    year_mentions: List[Tuple[str, Tuple, Tuple]] = extract_years_from_text(passage_tokens=passage_tokens)
 
     # Mention format -- (span_string, (start_idx, end_idx), normalized_value_tuple)
     parsed_dates = merge_datener_with_yearmentions(parsed_dates, year_mentions)

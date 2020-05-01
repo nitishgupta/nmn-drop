@@ -3,8 +3,10 @@ import json
 from nltk.corpus import stopwords
 import os
 import datasets.drop.constants as constants
-from semqa.domain_languages.drop_language import Date
+from semqa.domain_languages.drop_language import Date, DropLanguage
+from semqa.utils import qdmr_utils
 import argparse
+
 
 """ This script is used to augment date-comparison-data by flipping events in the questions """
 THRESHOLD = 20
@@ -31,6 +33,15 @@ def readDataset(input_json):
     with open(input_json, "r") as f:
         dataset = json.load(f)
     return dataset
+
+
+def get_program_supervision(operator: str) -> qdmr_utils.Node:
+    assert operator in [FIRST, SECOND], "Operator: {}".format(operator)
+    date_lt = "(find_passageSpanAnswer (compare_date_lesser_than find_PassageAttention find_PassageAttention))"
+    date_gt = "(find_passageSpanAnswer (compare_date_greater_than find_PassageAttention find_PassageAttention))"
+    lisp_program = date_lt if operator == FIRST else date_gt
+    node: qdmr_utils.Node = qdmr_utils.nested_expression_to_tree(qdmr_utils.lisp_to_nested_expression(lisp_program))
+    return node
 
 
 def is_date_comparison(question: str):
@@ -229,8 +240,7 @@ def pruneDateQuestions(dataset):
     numexamaples_w_dates_annotated = 0
 
     for passage_id, passage_info in dataset.items():
-        passage = passage_info[constants.tokenized_passage]
-        passage_tokens: List[str] = passage.split(" ")
+        passage_tokens: List[str] = passage_info[constants.passage_tokens]
         p_date_mens: List[Tuple[str, Tuple[int, int], Tuple[int, int, int]]] = passage_info[constants.passage_date_mens]
         p_date_entidxs = passage_info[constants.passage_date_entidx]
         p_date_values: List[Tuple] = passage_info[constants.passage_date_normalized_values]
@@ -241,24 +251,26 @@ def pruneDateQuestions(dataset):
         for question_answer in passage_info[constants.qa_pairs]:
             total_ques += 1
 
-            question_tokenized_text = question_answer[constants.tokenized_question]
-            question_tokens: List[str] = question_tokenized_text.split(" ")
+            # question_tokenized_text = question_answer[constants.tokenized_question]
+            question_tokens: List[str] = question_answer[constants.question_tokens]
+            question_tokenized_text = " ".join(question_tokens)
             answer_annotation = question_answer[constants.answer]
 
             if not is_date_comparison(question_tokenized_text):
                 continue
             if question_answer[constants.answer_type] != constants.SPAN_TYPE:
                 continue
+
             # Two (start, end) tuples for the two events mentioned in the question (end exclusive)
-            event_spans = quesEvents(question_tokenized_text)
+            ques_event_spans: Tuple[Tuple[int, int], Tuple[int, int]] = quesEvents(question_tokenized_text)
             answer_span: str = answer_annotation["spans"][0]
 
-            # If events are not found, we cannot find dates etc. therefore add this question
-            if event_spans is None:
+            # If events are not found, we cannot find dates etc. therefore don't add this question
+            if ques_event_spans is None:
                 continue
 
             # For questions with identified events, we'll try to ground dates
-            event1_span, event2_span = event_spans
+            event1_span, event2_span = ques_event_spans
 
             event1_tokens = question_tokens[event1_span[0]:event1_span[1]]
             event2_tokens = question_tokens[event2_span[0]:event2_span[1]]
@@ -277,6 +289,7 @@ def pruneDateQuestions(dataset):
             if not date_near_event1 or not date_near_event2:
                 continue
 
+            # Returns FIRST if less-than or SECOND if greater-than
             question_operator = getQuestionComparisonOperator(question_tokens)
             answer_event = find_answer_event(answer_span, event1_tokens, event2_tokens)
 
@@ -312,24 +325,34 @@ def pruneDateQuestions(dataset):
                 keep_dates = False
 
             # Adding a tuple of zero vectors and empty_values to later store the date grounding of the two ques-events
-            event1_date_grounding = [0] * len(p_date_values)
-            event2_date_grounding = [0] * len(p_date_values)
-            event1_date_value = [-1, -1, -1]
-            event2_date_value = [-1, -1, -1]
+            # event1_date_grounding = [0] * len(p_date_values)
+            # event2_date_grounding = [0] * len(p_date_values)
+            # event1_date_value = [-1, -1, -1]
+            # event2_date_value = [-1, -1, -1]
+
+            # Compiling gold - program
+            program_node: qdmr_utils.Node = get_program_supervision(operator=question_operator)
+            date_compare_node = program_node.children[0]
+            find1_node, find2_node = date_compare_node.children[0], date_compare_node.children[1]
+            find1_node.supervision["question_attention"] = event1_span
+            find2_node.supervision["question_attention"] = event2_span
 
             question_answer[constants.exection_supervised] = False
-
             if keep_dates:
-                numexamaples_w_dates_annotated += 1
-                event1_date_grounding[event1_date_idx] = 1
-                event1_date_value = p_date_values[event1_date_idx]
-                event2_date_grounding[event2_date_idx] = 1
-                event2_date_value = p_date_values[event2_date_idx]
+                date_compare_node.supervision["date1_entidx"] = event1_date_idx
+                date_compare_node.supervision["date2_entidx"] = event2_date_idx
                 question_answer[constants.exection_supervised] = True
+                numexamaples_w_dates_annotated += 1
+                # event1_date_grounding[event1_date_idx] = 1
+                # event1_date_value = p_date_values[event1_date_idx]
+                # event2_date_grounding[event2_date_idx] = 1
+                # event2_date_value = p_date_values[event2_date_idx]
 
-            """ We store the groundings in the reverse order since they seem to help """
-            question_answer[constants.qspan_dategrounding_supervision] = [event2_date_grounding, event1_date_grounding]
-            question_answer[constants.qspan_datevalue_supervision] = [event2_date_value, event1_date_value]
+            question_answer[constants.program_supervision] = program_node.to_dict()
+
+            # """ We store the groundings in the reverse order since they seem to help """
+            # question_answer[constants.qspan_dategrounding_supervision] = [event2_date_grounding, event1_date_grounding]
+            # question_answer[constants.qspan_datevalue_supervision] = [event2_date_value, event1_date_value]
 
             new_qa_pairs.append(question_answer)
 

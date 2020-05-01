@@ -6,9 +6,10 @@ qa_pairs = "qa_pairs"
 
 # Question
 question = "question"
-cleaned_question = "cleaned_question"
-tokenized_question = "tokenized_question"
+question_tokens = "question_tokens"
 question_charidxs = "question_charidxs"
+cleaned_question = "cleaned_question"       # DEPRECATED
+tokenized_question = "tokenized_question"   # DEPRECATED
 # Answer dict
 answer = "answer"
 # Number answer as a string
@@ -23,10 +24,12 @@ query_id = "query_id"
 
 # Passage text
 passage = "passage"
-cleaned_passage = "cleaned_passage"
-tokenized_passage = "tokenized_passage"
+passage_tokens = "passage_tokens"
 passage_charidxs = "passage_charidxs"
 passage_sent_idxs = "passage_sent_idxs"
+
+cleaned_passage = "cleaned_passage"         # DEPRECATED
+tokenized_passage = "tokenized_passage"     # DEPRECATED
 
 # Answer string
 # Original and tokenized
@@ -72,6 +75,7 @@ program_supervised = "program_supervised"
 qattn_supervised = "qattn_supervised"
 exection_supervised = "execution_supervised"
 pattn_supervised = "pattn_supervised"  # Boolean
+program_supervision = "program_supervision"
 
 # n-tuple of question attention
 ques_attention_supervision = "ques_attention_supervision"

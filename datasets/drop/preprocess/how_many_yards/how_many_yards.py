@@ -6,9 +6,8 @@ import copy
 from collections import defaultdict
 import datasets.drop.constants as constants
 import argparse
+from semqa.utils import qdmr_utils
 
-""" This script is used to augment date-comparison-data by flipping events in the questions """
-THRESHOLD = 20
 
 STOP_WORDS = set(stopwords.words("english"))
 STOP_WORDS.update(["'s", ","])
@@ -20,32 +19,9 @@ def readDataset(input_json):
     return dataset
 
 
-"""
-def get_question_attention(tokenized_question: str) -> List[float]:
-    ques_tokens = tokenized_question.split(' ')
-    attention = [0] * len(ques_tokens)
-
-    # First 4 tokens are `How many yards was` -- no attention
-    # the - if the 5th token -- no attention
-    # ?, longest, shortest, second,  -- no attention
-    no_attend_tokens = ['second', 'longest', 'shortest', '?']
-    for i, token in enumerate(ques_tokens):
-        if i < 4:
-            continue
-        elif i == 4 and token == 'the':
-            continue
-        elif token in no_attend_tokens:
-            continue
-        else:
-            attention[i] = 1
-
-    return attention
-"""
-
-
 def get_number_distribution_supervision(
-    tokenized_question,
-    tokenized_passage,
+    question_tokens,
+    passage_tokens,
     num_answer,
     attention,
     passage_num_mens,
@@ -53,8 +29,6 @@ def get_number_distribution_supervision(
     passage_num_vals,
 ):
     WINDOW = 10
-    passage_tokens = tokenized_passage.split(" ")
-    question_tokens = tokenized_question.split(" ")
 
     # Only supervised longest / shortest questions -- cannot do the first / last kind of questions
     if "longest" not in question_tokens and "shortest" not in question_tokens:
@@ -128,18 +102,10 @@ def get_number_distribution_supervision(
         number_grounding = None
         number_values = None
 
-    # print(tokenized_question)
-    # print(attended_tokens)
-    # print(f"Answer: {num_answer}")
-    # print(tokenized_passage)
-    # print(passage_num_vals)
-    # print(number_values)
-    # print()
-
     return number_grounding, number_values
 
 
-def get_question_attention(question_tokens: str):
+def get_question_attention(question_tokens: List[str]) -> Tuple[List[int], List[int]]:
     tokens_with_find_attention = [
         "touchdown",
         "run",
@@ -223,9 +189,8 @@ def qtype_from_findfilter_maxminnum(find_or_filter, longest_shortest_or_num):
     return qtype
 
 
-def preprocess_HowManyYardsWasThe_ques(dataset, ques_attn: bool, number_supervision: bool):
+def preprocess_HowManyYardsWasThe_ques(dataset):
     """ This function prunes questions that start with "How many yards was".
-        Mostly, longest, shortest style questions. We can also prune for these; look at longestshortest_ques.py
 
         Along with pruning, we also supervise the longest/shortest/second longest/second shortest questions
         by adding the question_type for those questions.
@@ -257,18 +222,17 @@ def preprocess_HowManyYardsWasThe_ques(dataset, ques_attn: bool, number_supervis
         passage_num_mens = passage_info[constants.passage_num_mens]
         passage_num_entidxs = passage_info[constants.passage_num_entidx]
         passage_num_vals = passage_info[constants.passage_num_normalized_values]
-        tokenized_passage = passage_info[constants.tokenized_passage]
+        passage_tokens = passage_info[constants.passage_tokens]
 
         new_qa_pairs = []
         for question_answer in passage_info[constants.qa_pairs]:
             answer = question_answer[constants.answer]
-
             total_ques += 1
 
-            original_question = question_answer[constants.cleaned_question]
-            tokenized_question = question_answer[constants.tokenized_question]
-            ques_lower_tokens = tokenized_question.lower().split(" ")
-            question_lower = original_question.lower()
+            question = question_answer[constants.question]
+            question_tokens = question_answer[constants.question_tokens]
+            ques_lower_tokens = [t.lower() for t in question_tokens]
+            question_lower = question.lower()
 
             # Keep questions that contain "how many yards was"
             if how_many_yards_was in question_lower:
@@ -282,8 +246,9 @@ def preprocess_HowManyYardsWasThe_ques(dataset, ques_attn: bool, number_supervis
 
                 # We will find the ques-attentions for find vs. filter
                 # Using the existence of longest / shortest word we can figure out between Max/Min/Num
-
-                find_qattn, filter_qattn = get_question_attention(question_tokens=ques_lower_tokens)
+                # Tuple[List[int], List[int]]
+                (find_qattn, filter_qattn) = get_question_attention(
+                    question_tokens=ques_lower_tokens)
 
                 find_or_filter = None
                 if find_qattn is None and filter_qattn is None:
@@ -301,9 +266,9 @@ def preprocess_HowManyYardsWasThe_ques(dataset, ques_attn: bool, number_supervis
 
                 # Now need to figure out whether it's a findNumber / maxNumber / minNumber
                 longest_shortest_or_num = None
-                if "longest" in tokenized_question:
+                if "longest" in question_lower:
                     longest_shortest_or_num = "longest"
-                elif "shortest" in tokenized_question:
+                elif "shortest" in question_lower:
                     longest_shortest_or_num = "shortest"
                 else:
                     longest_shortest_or_num = "num"
@@ -322,28 +287,27 @@ def preprocess_HowManyYardsWasThe_ques(dataset, ques_attn: bool, number_supervis
                     question_answer[constants.ques_attention_supervision] = [find_qattn]
                 questions_w_attn += 1
 
-                if number_supervision is True:
-                    num_answer_str = answer["number"]
-                    num_answer = float(num_answer_str) if num_answer_str else None
+                num_answer_str = answer["number"]
+                num_answer = float(num_answer_str) if num_answer_str else None
 
-                    qattn = copy.deepcopy(find_qattn)
-                    if filter_qattn is not None:
-                        qattn = [x + y for (x, y) in zip(qattn, filter_qattn)]
+                qattn = copy.deepcopy(find_qattn)
+                if filter_qattn is not None:
+                    qattn = [x + y for (x, y) in zip(qattn, filter_qattn)]
 
-                    number_grounding, number_values = get_number_distribution_supervision(
-                        tokenized_question,
-                        tokenized_passage,
-                        num_answer,
-                        qattn,
-                        passage_num_mens,
-                        passage_num_entidxs,
-                        passage_num_vals,
-                    )
-                    if number_grounding is not None:
-                        question_answer[constants.exection_supervised] = True
-                        question_answer[constants.qspan_numgrounding_supervision] = number_grounding
-                        question_answer[constants.qspan_numvalue_supervision] = number_values
-                        questions_w_numground += 1
+                number_grounding, number_values = get_number_distribution_supervision(
+                    question_tokens,
+                    passage_tokens,
+                    num_answer,
+                    qattn,
+                    passage_num_mens,
+                    passage_num_entidxs,
+                    passage_num_vals,
+                )
+                if number_grounding is not None:
+                    question_answer[constants.exection_supervised] = True
+                    question_answer[constants.qspan_numgrounding_supervision] = number_grounding
+                    question_answer[constants.qspan_numvalue_supervision] = number_values
+                    questions_w_numground += 1
 
                 new_qa_pairs.append(question_answer)
 
@@ -367,8 +331,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_dir")
     parser.add_argument("--output_dir")
-    parser.add_argument("--qattn", action="store_true", default=False)
-    parser.add_argument("--numground", action="store_true", default=False)
     args = parser.parse_args()
 
     train_json = "drop_dataset_train.json"
@@ -376,18 +338,11 @@ if __name__ == "__main__":
 
     input_dir = args.input_dir
     output_dir = args.output_dir
-    qattn = args.qattn
-    numbergrounding = args.numground
-
-    if numbergrounding is True:
-        assert qattn is True
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
 
     print(f"\nOutput dir: {output_dir}")
-    print(f"\nQuestion Attention annotation: {qattn}")
-    print(f"\nNumber Grounding annotation: {numbergrounding}")
 
     input_trnfp = os.path.join(input_dir, train_json)
     input_devfp = os.path.join(input_dir, dev_json)
@@ -398,13 +353,9 @@ if __name__ == "__main__":
     dev_dataset = readDataset(input_devfp)
 
     print()
-    new_train_dataset = preprocess_HowManyYardsWasThe_ques(
-        train_dataset, ques_attn=qattn, number_supervision=numbergrounding
-    )
+    new_train_dataset = preprocess_HowManyYardsWasThe_ques(train_dataset)
     print()
-    new_dev_dataset = preprocess_HowManyYardsWasThe_ques(
-        dev_dataset, ques_attn=qattn, number_supervision=numbergrounding
-    )
+    new_dev_dataset = preprocess_HowManyYardsWasThe_ques(dev_dataset)
 
     with open(output_trnfp, "w") as f:
         json.dump(new_train_dataset, f, indent=4)
