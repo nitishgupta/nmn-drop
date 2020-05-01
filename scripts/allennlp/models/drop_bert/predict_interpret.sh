@@ -8,7 +8,7 @@ export DEBUG=true
 export INTERPRET=true
 
 # SAVED MODEL
-MODEL_DIR=/shared/nitishg/semqa/checkpoints/drop/generalization/min_max/drop_parser_bert/EXCLOSS_false/MMLLOSS_true/aux_true/SUPEPOCHS_0/S_1/BeamSize1_HEM0
+MODEL_DIR=/shared/nitishg/semqa/checkpoints/drop/merged_data/date_yd_num_hmyw_cnt_whoarg_0_full/drop_parser_bert/EXCLOSS_false/MMLLOSS_true/aux_true/SUPEPOCHS_0/S_1/BeamSize2_HEM0_wSpanAns
 MODEL_TAR=${MODEL_DIR}/model.tar.gz
 PREDICTION_DIR=${MODEL_DIR}/predictions
 mkdir ${PREDICTION_DIR}

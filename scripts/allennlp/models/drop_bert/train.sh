@@ -3,7 +3,7 @@
 # export TMPDIR=/srv/local/data/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
-DATASET_NAME=generalization/min_max
+DATASET_NAME=merged_data/date_yd_num_hmyw_cnt_whoarg_0_full
 
 DATASET_DIR=./resources/data/drop_post_iclr/${DATASET_NAME}
 TRAINFILE=${DATASET_DIR}/drop_dataset_train.json
@@ -45,9 +45,9 @@ export HARDEM_EPOCH=0
 export BS=4
 export DROPOUT=0.2
 
-export SEED=1
+export SEED=10
 
-export BEAMSIZE=1
+export BEAMSIZE=2
 export MAX_DECODE_STEP=14
 export EPOCHS=40
 
@@ -60,7 +60,7 @@ CHECKPOINT_ROOT=./resources/semqa/checkpoints
 SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop/${DATASET_NAME}
 MODEL_DIR=drop_parser_bert
 PD_1=EXCLOSS_${EXCLOSS}/MMLLOSS_${MMLLOSS}/aux_${AUXLOSS}/SUPEPOCHS_${SUPEPOCHS}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}/BeamSize1_HEM0
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}/BeamSize2_HEM0_woSpanAns
 
 # SERIALIZATION_DIR=./resources/semqa/checkpoints/test
 

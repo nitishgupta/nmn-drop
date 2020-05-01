@@ -13,7 +13,7 @@ PREDICTION_DIR=${MODEL_DIR}/predictions
 mkdir ${PREDICTION_DIR}
 
 DATASET_DIR=./resources/data/drop_post_iclr
-DATASET_NAME=generalization/min_max
+DATASET_NAME=merged_data/date_yd_num_hmyw_cnt_whoarg_1200_full
 
 FULL_VALFILE=${DATASET_DIR}/${DATASET_NAME}/drop_dataset_dev.json
 
