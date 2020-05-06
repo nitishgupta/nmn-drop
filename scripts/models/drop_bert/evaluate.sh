@@ -7,17 +7,15 @@ export BEAMSIZE=1
 export DEBUG=true
 
 # SAVED MODEL
-MODEL_DIR=./resources/semqa/checkpoints/drop/date_num/date_yd_num_hmyw_cnt_whoarg_600/drop_parser_bert/EXCLOSS_true/MMLLOSS_true/aux_true/SUPEPOCHS_5/S_1/BeamSize1
+MODEL_DIR=./resources/semqa/checkpoints/drop/drop_wqdmr_programs/drop_parser_bert/EXCLOSS_true/MMLLOSS_true/aux_true/SUPEPOCHS_0_HEM_0_BM_1/S_2
 MODEL_TAR=${MODEL_DIR}/model.tar.gz
 PREDICTION_DIR=${MODEL_DIR}/predictions
 mkdir ${PREDICTION_DIR}
 
-DATASET_DIR=./resources/data/drop_post_iclr
+DATASET_DIR=/shared/nitishg/data/drop-w-qdmr
+DATASET_NAME=drop_wqdmr_programs
 
-# This should contain:
-DATASET_NAME=date_num/date_yd_num_hmyw_cnt_whoarg_600
-
-VALDATA_FILE=${DATASET_DIR}/${DATASET_NAME}/drop_dataset_mydev.json
+VALDATA_FILE=${DATASET_DIR}/${DATASET_NAME}/drop_dataset_dev.json
 
 VAL_METRICS_FILE=${PREDICTION_DIR}/drop_dev_metrics.json
 

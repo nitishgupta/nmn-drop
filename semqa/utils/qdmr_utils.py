@@ -1,5 +1,6 @@
 import json
 from typing import List, Tuple, Set, Dict, Union, Any
+from allennlp_semparse.domain_languages import DomainLanguage
 
 
 class Node():
@@ -95,7 +96,13 @@ class QDMRExample(object):
 
         self.program_tree: Node = None
         self.typed_masked_nested_expr = []
-        if self.typed_nested_expression:
+        if self.drop_nested_expression:
+            self.program_tree: Node = nested_expression_to_tree(self.drop_nested_expression,
+                                                                predicates_with_strings=True)
+            # This contains string-args masked as GET_QUESTION_SPAN predicate
+            # self.typed_masked_nested_expr = self.program_tree.get_nested_expression()
+
+        elif self.typed_nested_expression:
             self.program_tree: Node = nested_expression_to_tree(self.typed_nested_expression,
                                                                 predicates_with_strings=True)
             # This contains string-args masked as GET_QUESTION_SPAN predicate
@@ -269,6 +276,74 @@ def lisp_to_nested_expression(lisp_string: str) -> List:
             current_expression = stack.pop()
             token = token[:-1]
     return current_expression[0]
+
+
+def get_domainlang_function2returntype_mapping(language: DomainLanguage) -> Dict[str, str]:
+    function2returntype_mapping = {}
+    for name, function_type_list in language._function_types.items():
+        for function_type in function_type_list:
+            # {function_type} -> {name} are actions
+            function_type_split = str(function_type).split(":")
+            if len(function_type_split) == 1:  # e.g. PassageAttention -> select_passage
+                return_type = function_type_split[0]
+            else:  # e.g. <PassageNumber,PassageNumber:ComposedNumber> -> passagenumber_addition
+                return_type = function_type_split[-1][:-1]  # removing '>' from the end
+            function2returntype_mapping[name] = return_type
+    return function2returntype_mapping
+
+
+def get_inorder_function_list(node: Node) -> List[str]:
+    inorder_func_list = [node.predicate]
+    for c in node.children:
+        inorder_func_list.extend(get_inorder_function_list(c))
+    return inorder_func_list
+
+
+def get_inorder_supervision_list(node: Node) -> List[Dict]:
+    inorder_supervision_list = [node.supervision]
+    for c in node.children:
+        inorder_supervision_list.extend(get_inorder_supervision_list(c))
+    return inorder_supervision_list
+
+
+def function_to_action_string_alignment(program_node: Node, action_strings: List[str]) -> List[int]:
+    """ Action strings is an in-order linearization of the program_node. It contains a intermediate non-terminal actions
+    and terminal-function producing actions. The idea is to map functions (in an in-order list) to those actions
+    that produce them. This can be used to map aux-function-supervision to the correct action's side-args in a NMN.
+
+    E.g.
+    nested-program:
+    ['passagenumber_difference', ['select_num', 'select_passage'], ['select_num', 'select_passage']]
+    linearized-function-list:
+    ['passagenumber_difference', 'select_num', 'select_passage', 'select_num', 'select_passage']
+    action-strings:
+    ['@start@ -> ComposedNumber',
+     'ComposedNumber -> [<PassageNumber,PassageNumber:ComposedNumber>, PassageNumber, PassageNumber]',
+     '<PassageNumber,PassageNumber:ComposedNumber> -> passagenumber_difference',
+     ........... ]
+
+    The return value should be a list of size = linearized-function-list that contains [2, ...] since
+    passagenumber_difference gets decoded in the action-idx = 2.
+    """
+    # List of function-names in in-order form
+    function_list: List[str] = get_inorder_function_list(program_node)
+
+    function2action_idx_mapping: List[int] = []
+
+    function_idx = 0
+    for action_idx, action in enumerate(action_strings):
+        rhs = action.split(" -> ")[1]
+        if rhs == function_list[function_idx]:
+            function2action_idx_mapping.append(action_idx)
+            function_idx += 1
+
+    assert function_idx == len(function_list), "All functions from function_list not found in action_strings"
+    assert len(function2action_idx_mapping) == len(function_list)
+
+    return function2action_idx_mapping
+
+
+
 
 
 if __name__ == "__main__":

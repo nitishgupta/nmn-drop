@@ -29,10 +29,9 @@ from semqa.state_machines.constrained_beam_search import FirstStepConstrainedBea
 from semqa.utils.rc_utils import get_best_span, DropEmAndF1
 from semqa.state_machines.prefixed_beam_search import PrefixedConstrainedBeamSearch
 from semqa.models.utils import semparse_utils
-from semqa.utils import qdmr_utils
 from semqa.models.drop_parser_base import DROPParserBase
-from semqa.domain_languages.drop_language_v2 import (
-    DropLanguageV2,
+from semqa.domain_languages.drop_language import (
+    DropLanguage,
     Date,
     QuestionSpanAnswer,
     PassageSpanAnswer,
@@ -49,8 +48,8 @@ from semqa.profiler.profile import Profile, profile_func_decorator
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-@Model.register("drop_parser_bert")
-class DROPParserBERT(DROPParserBase):
+@Model.register("drop_parser_bert_old")
+class DROPParserBERTOLD(DROPParserBase):
     def __init__(
         self,
         vocab: Vocabulary,
@@ -79,7 +78,7 @@ class DROPParserBERT(DROPParserBase):
         regularizer: Optional[RegularizerApplicator] = None,
     ) -> None:
 
-        super(DROPParserBERT, self).__init__(
+        super(DROPParserBERTOLD, self).__init__(
             vocab=vocab,
             action_embedding_dim=action_embedding_dim,
             dropout=dropout,
@@ -156,7 +155,7 @@ class DROPParserBERT(DROPParserBase):
         # self.passage_count_predictor.bias.data.zero_()
         # self.passage_count_predictor.bias.requires_grad = False
 
-        self._num_implicit_nums = len(DropLanguageV2.implicit_numbers)
+        self._num_implicit_nums = len(DropLanguage.implicit_numbers)
 
         self._executor_parameters = ExecutorParameters(
             question_encoding_dim=self.bert_dim,
@@ -221,23 +220,24 @@ class DROPParserBERT(DROPParserBase):
     def forward(
         self,
         question_passage: TextFieldTensors,
-        question: TextFieldTensors,
-        passage: TextFieldTensors,
+        question: Dict[str, torch.LongTensor],
+        passage: Dict[str, torch.LongTensor],
         p_sentboundary_wps: torch.LongTensor,
         passageidx2numberidx: torch.Tensor,
         passage_number_values: List[List[float]],
         composed_numbers: List[List[float]],
-        passage_number_sortedtokenidxs: List[List[int]],
         add_number_combinations_indices: torch.LongTensor,
         sub_number_combinations_indices: torch.LongTensor,
         max_num_add_combs: List[int],
         max_num_sub_combs: List[int],
+        passage_number_sortedtokenidxs: List[List[int]],
         passageidx2dateidx: torch.LongTensor,
         passage_date_values: List[List[Date]],
+        actions: List[List[ProductionRule]],
         year_differences: List[List[int]],
         year_differences_mat: List[np.array],
         count_values: List[List[int]],
-        actions: List[List[ProductionRule]],
+        answer_program_start_types: List[Union[List[str], None]] = None,
         answer_as_passage_spans: torch.LongTensor = None,
         answer_as_question_spans: torch.LongTensor = None,
         answer_as_passage_number: List[List[int]] = None,
@@ -245,20 +245,29 @@ class DROPParserBERT(DROPParserBase):
         answer_as_year_difference: List[List[int]] = None,
         answer_as_count: List[List[int]] = None,
         composed_num_ans_composition_types: List[Set[str]] = None,
-        answer_program_start_types: List[Union[List[str], None]] = None,
-        program_supervised: List[bool] = None,
-        execution_supervised: List[bool] = None,
+        datecomp_ques_event_date_groundings: List[Tuple[List[int], List[int]]] = None,
+        numcomp_qspan_num_groundings: List[Tuple[List[int], List[int]]] = None,
         strongly_supervised: List[bool] = None,
+        program_supervised: List[bool] = None,
+        qattn_supervised: List[bool] = None,
+        pattn_supervised: List[bool] = None,
+        execution_supervised: List[bool] = None,
+        qtypes: List[str] = None,
         gold_action_seqs: List[Tuple[List[List[int]], List[List[int]]]] = None,
-        gold_function2actionidx_maps: List[List[List[int]]] = None,
-        gold_program_dicts: List[List[Union[Dict, None]]] = None,
+        qattn_supervision: torch.FloatTensor = None,
+        passage_attn_supervision: List[List[float]] = None,
+        synthetic_numground_metadata: List[Tuple[int, int]] = None,
         epoch_num: List[int] = None,
         metadata: List[Dict[str, Any]] = None,
+        aux_passage_attention=None,
+        aux_answer_as_count=None,
+        aux_count_mask=None,
     ) -> Dict[str, torch.Tensor]:
 
         self.gc_steps += 1
         if self.gc_steps % 500 == 0:
             gc.collect()
+
 
         if self.device_id is None:
             self.device_id = allenutil.get_device_of(self.qp_matrix_attention._weight_vector.data)
@@ -271,7 +280,8 @@ class DROPParserBERT(DROPParserBase):
         question_passage_tokens = question_passage["tokens"]["token_ids"]
         pad_mask = (question_passage_tokens != self._pad_token_id).long()
         question_passage["tokens"]["mask"] = pad_mask
-        question_passage["tokens"]["type_ids"][:, self.max_ques_len + 1:] = 1  # type-id = 1 starting from [SEP] after Q
+        question_passage["tokens"]["type_ids"][:, self.max_ques_len + 1:] = 1
+        type_ids = question_passage["tokens"]["type_ids"]
 
         with Profile(scope_name="bert-run"):
             # Shape: (batch_size, seqlen, bert_dim); (batch_size, bert_dim)
@@ -280,18 +290,22 @@ class DROPParserBERT(DROPParserBase):
             bert_pooled_out = bert_out[:, 0, :]     # CLS embedding
 
         # Skip [CLS]; then the next max_ques_len tokens are question tokens
-        encoded_question = bert_out[:, 1:self.max_ques_len + 1, :]
-        question_mask = (pad_mask[:, 1:self.max_ques_len + 1]).float()
-        # Skip [CLS] Q_tokens [SEP]; the passage includes the [SEP] at the end
-        ques_w_cls_sep_len = 1 + self.max_ques_len + 1
-        encoded_passage = bert_out[:, ques_w_cls_sep_len:, :]
-        passage_mask = (pad_mask[:, ques_w_cls_sep_len:]).float()
-        passage_token_idxs = question_passage_tokens[:, ques_w_cls_sep_len:]
+        encoded_question = bert_out[:, 1 : self.max_ques_len + 1, :]
+        question_mask = (pad_mask[:, 1 : self.max_ques_len + 1]).float()
+        # Skip [CLS] Q_tokens [SEP]
+        encoded_passage = bert_out[:, 1 + self.max_ques_len + 1 :, :]
+        passage_mask = (pad_mask[:, 1 + self.max_ques_len + 1 :]).float()
+
+
+        passage_token_idxs = question_passage_tokens[:, 1 + self.max_ques_len + 1 :]
 
         batch_size = len(actions)
 
-        # epoch_num in AllenNLP starts from 0
-        epoch = epoch_num[0] + 1 if epoch_num is not None else None
+        if epoch_num is not None:
+            # epoch_num in allennlp starts from 0
+            epoch = epoch_num[0] + 1
+        else:
+            epoch = None
 
         modeled_passage = encoded_passage
         passage_length = modeled_passage.size()[1]
@@ -410,7 +424,7 @@ class DROPParserBERT(DROPParserBase):
 
         with Profile("lang_init"):
             languages = [
-                DropLanguageV2(
+                DropLanguage(
                     rawemb_question=question_rawemb_aslist[i],
                     embedded_question=question_embedded_aslist[i],
                     encoded_question=question_encoded_aslist[i],
@@ -550,7 +564,6 @@ class DROPParserBERT(DROPParserBase):
                         supervised_final_states, unsup_final_states, supervised_instances, unsupervised_instances
                     )
                 else:
-                    # No program-supervision in this batch; run beam-search w/ starting action(s) known
                     (initial_state, _, _) = self.getInitialDecoderState(
                         languages,
                         actions,
@@ -576,8 +589,8 @@ class DROPParserBERT(DROPParserBase):
                         num_steps=self._max_decoding_steps,
                         keep_final_unfinished_states=False,
                     )
+            # Prediction Mode
             elif not self.interpret:
-                # Prediction-mode; Run beam-search
                 (initial_state, _, _) = self.getInitialDecoderState(
                     languages,
                     actions,
@@ -592,11 +605,11 @@ class DROPParserBERT(DROPParserBase):
                 best_final_states = self._decoder_beam_search.search(
                     self._max_decoding_steps, initial_state, self._decoder_step, keep_final_unfinished_states=False
                 )
+            # Running constrained decoding for dev-set assuming that all dev examples have gold-program labels
             else:
-                # Running constrained decoding for dev-set assuming that all dev examples have gold-program labels
                 assert self.training is False and self.interpret is True
                 assert all(program_supervised)
-                # assert all([x is not "UNK" for x in qtypes])
+                assert all([x is not "UNK" for x in qtypes])
                 actionseq_idxs, actionseq_masks = zip(*gold_action_seqs)
                 actionseq_idxs = list(actionseq_idxs)
                 actionseq_masks = list(actionseq_masks)
@@ -639,42 +652,35 @@ class DROPParserBERT(DROPParserBase):
             batch_actionseq_probs = [[torch.exp(logprob) for logprob in instance_programs]
                                      for instance_programs in batch_actionseq_logprobs]
 
-            self.add_aux_supervision_to_program_side_args(languages=languages,
-                                                          batch_action_seqs=batch_actionseqs,
-                                                          batch_actionseq_sideargs=batch_actionseq_sideargs,
-                                                          program_supervised=program_supervised,
-                                                          gold_program_dicts=gold_program_dicts,
-                                                          gold_function2actionidx_maps=gold_function2actionidx_maps)
-
             # Adding Date-Comparison supervised event groundings to relevant actions
-            # max_passage_len = encoded_passage.size()[1]
-            # self.passage_attention_to_sidearg(
-            #     qtypes,
-            #     batch_actionseqs,
-            #     batch_actionseq_sideargs,
-            #     pattn_supervised,
-            #     passage_attn_supervision,
-            #     max_passage_len,
-            #     self.device_id,
-            # )
-            #
-            # self.datecompare_eventdategr_to_sideargs(
-            #     qtypes, batch_actionseqs, batch_actionseq_sideargs, datecomp_ques_event_date_groundings, self.device_id
-            # )
-            #
-            # self.numcompare_eventnumgr_to_sideargs(
-            #     qtypes,
-            #     execution_supervised,
-            #     batch_actionseqs,
-            #     batch_actionseq_sideargs,
-            #     numcomp_qspan_num_groundings,
-            #     self.device_id,
-            # )
+            max_passage_len = encoded_passage.size()[1]
+            self.passage_attention_to_sidearg(
+                qtypes,
+                batch_actionseqs,
+                batch_actionseq_sideargs,
+                pattn_supervised,
+                passage_attn_supervision,
+                max_passage_len,
+                self.device_id,
+            )
 
-        # PRINT PRED PROGRAMS
+            self.datecompare_eventdategr_to_sideargs(
+                qtypes, batch_actionseqs, batch_actionseq_sideargs, datecomp_ques_event_date_groundings, self.device_id
+            )
+
+            self.numcompare_eventnumgr_to_sideargs(
+                qtypes,
+                execution_supervised,
+                batch_actionseqs,
+                batch_actionseq_sideargs,
+                numcomp_qspan_num_groundings,
+                self.device_id,
+            )
+
+        # # PRINT PRED PROGRAMS
         # for idx, instance_progs in enumerate(batch_actionseqs):
         #     print(f"--------  InstanceIdx: {idx}  ----------")
-        #     print(metadata[idx]["question"])
+        #     print(metadata[idx]["original_question"])
         #     probs = batch_actionseq_probs[idx]
         #     logprobs = batch_actionseq_logprobs[idx]
         #     start_types = answer_program_start_types[idx]
@@ -686,11 +692,11 @@ class DROPParserBERT(DROPParserBase):
         # import pdb
         # pdb.set_trace()
 
-        # with Profile("get-deno"):
-        # List[List[Any]], List[List[str]]: Denotations and their types for all instances
-        batch_denotations, batch_denotation_types = self._get_denotations(
-            batch_actionseqs, languages, batch_actionseq_sideargs
-        )
+        with Profile("get-deno"):
+            # List[List[Any]], List[List[str]]: Denotations and their types for all instances
+            batch_denotations, batch_denotation_types = self._get_denotations(
+                batch_actionseqs, languages, batch_actionseq_sideargs
+            )
 
         output_dict = {}
         # Computing losses if gold answers are given
@@ -702,30 +708,30 @@ class DROPParserBERT(DROPParserBase):
             if aux_win_loss != 0:
                 self.auxwinloss_metric(aux_win_loss.item())
 
-            # if self.excloss:
-            #     exec_loss = 0.0
-            #     batch_exec_loss = 0.0
-            #     execloss_normalizer = 0.0
-            #     for ins_dens in batch_denotations:
-            #         for den in ins_dens:
-            #             execloss_normalizer += 1.0
-            #             exec_loss += den.loss
-            #     if execloss_normalizer > 0:
-            #         batch_exec_loss = exec_loss / execloss_normalizer
-            #     # This check is made explicit here since not all batches have this loss, hence a 0.0 value
-            #     # only bloats the denominator in the metric. This is also done for other losses in below
-            #     if batch_exec_loss != 0.0:
-            #         self.excloss_metric(batch_exec_loss.item())
-            #     total_aux_loss += batch_exec_loss
+            if self.excloss:
+                exec_loss = 0.0
+                batch_exec_loss = 0.0
+                execloss_normalizer = 0.0
+                for ins_dens in batch_denotations:
+                    for den in ins_dens:
+                        execloss_normalizer += 1.0
+                        exec_loss += den.loss
+                if execloss_normalizer > 0:
+                    batch_exec_loss = exec_loss / execloss_normalizer
+                # This check is made explicit here since not all batches have this loss, hence a 0.0 value
+                # only bloats the denominator in the metric. This is also done for other losses in below
+                if batch_exec_loss != 0.0:
+                    self.excloss_metric(batch_exec_loss.item())
+                total_aux_loss += batch_exec_loss
 
             if self.qattloss:
                 # Compute Question Attention Supervision auxiliary loss
-                qattn_loss = self._ques_attention_loss(batch_actionseq_sideargs, question_mask)
-                # print(qattn_loss)
+                qattn_loss = self._ques_attention_loss(
+                    batch_actionseqs, batch_actionseq_sideargs, qtypes, qattn_supervised, qattn_supervision
+                )
                 if qattn_loss != 0.0:
                     self.qattloss_metric(qattn_loss.item())
                 total_aux_loss += qattn_loss
-
             if self.mmlloss:
                 # This is computed above during beam search
                 if mml_loss != 0.0:
@@ -878,8 +884,8 @@ class DROPParserBERT(DROPParserBase):
             output_dict["all_predicted_answers"] = []
 
             for i in range(batch_size):
-                original_question = metadata[i]["question"]
-                original_passage = metadata[i]["passage"]
+                original_question = metadata[i]["original_question"]
+                original_passage = metadata[i]["original_passage"]
                 question_token_offsets = metadata[i]["question_token_offsets"]
                 passage_token_offsets = metadata[i]["passage_token_offsets"]
                 instance_year_differences = year_differences[i]
@@ -900,9 +906,6 @@ class DROPParserBERT(DROPParserBase):
                             span_end_logits=denotation._value[1].unsqueeze(0),
                         ).squeeze(0)
                         predicted_span = tuple(best_span.detach().cpu().numpy())
-                        if predicted_span[0] >= len(passage_token_offsets) or predicted_span[1] >= len(passage_token_offsets):
-                            import pdb
-                            pdb.set_trace()
                         start_char_offset = passage_token_offsets[predicted_span[0]][0]
                         end_char_offset = passage_token_offsets[predicted_span[1]][1]
                         predicted_answer = original_passage[start_char_offset:end_char_offset]
@@ -1152,12 +1155,12 @@ class DROPParserBERT(DROPParserBase):
 
         # Map from string passed by reader to LanguageType class
         answer_type_to_start_action_mapping = {
-            "PassageSpanAnswer": "@start@ -> PassageSpanAnswer",
-            "YearDifference": "@start@ -> YearDifference",
-            "PassageNumber": "@start@ -> PassageNumber",
-            "QuestionSpanAnswer": "@start@ -> QuestionSpanAnswer",
-            "CountNumber": "@start@ -> CountNumber",
-            "ComposedNumber": "@start@ -> ComposedNumber",
+            "passage_span": "@start@ -> PassageSpanAnswer",
+            "year_difference": "@start@ -> YearDifference",
+            "passage_number": "@start@ -> PassageNumber",
+            "question_span": "@start@ -> QuestionSpanAnswer",
+            "count_number": "@start@ -> CountNumber",
+            "composed_number": "@start@ -> ComposedNumber",
         }
 
         # This is the next action to go from ComposedNumber to a function that could generate it
@@ -1184,26 +1187,25 @@ class DROPParserBERT(DROPParserBase):
             instance_answer_types: List[str] = answer_types[i]
             instance_prefix_sequences: List[List[int]] = []
             for start_type in instance_answer_types:
-                # if start_type in answer_type_to_start_action_mapping:
-                # start_action = answer_type_to_start_action_mapping[start_type]
-                start_action = "@start@ -> {}".format(start_type)
-                start_action_idx = action2actionidx[start_action]
-                if start_type == "ComposedNumber":
-                    # Containing "passage_num_addition" and/or "passage_num_subtraction"
-                    instance_numcomposition_types: Set[str] = valid_numcomposition_types[i]
-                    assert len(instance_numcomposition_types) > 0, "No composition type info given"
-                    for composition_type in instance_numcomposition_types:
-                        composition_function_action = num_composition_type_action_mapping[composition_type]
-                        composition_function_action_idx = action2actionidx[composition_function_action]
-                        composednumtype_to_funcsign_actionidx = action2actionidx[composed_num_function_action]
-                        prefix_sequence = [start_action_idx, composednumtype_to_funcsign_actionidx,
-                                           composition_function_action_idx]
+                if start_type in answer_type_to_start_action_mapping:
+                    start_action = answer_type_to_start_action_mapping[start_type]
+                    start_action_idx = action2actionidx[start_action]
+                    if start_type == "composed_number":
+                        # Containing "passage_num_addition" and/or "passage_num_subtraction"
+                        instance_numcomposition_types: Set[str] = valid_numcomposition_types[i]
+                        assert len(instance_numcomposition_types) > 0, "No composition type info given"
+                        for composition_type in instance_numcomposition_types:
+                            composition_function_action = num_composition_type_action_mapping[composition_type]
+                            composition_function_action_idx = action2actionidx[composition_function_action]
+                            composednumtype_to_funcsign_actionidx = action2actionidx[composed_num_function_action]
+                            prefix_sequence = [start_action_idx, composednumtype_to_funcsign_actionidx,
+                                               composition_function_action_idx]
+                            instance_prefix_sequences.append(prefix_sequence)
+                    else:
+                        prefix_sequence = [start_action_idx]
                         instance_prefix_sequences.append(prefix_sequence)
                 else:
-                    prefix_sequence = [start_action_idx]
-                    instance_prefix_sequences.append(prefix_sequence)
-                # else:
-                #     logging.error(f"StartType: {start_type} not present in {answer_type_to_start_action_mapping}")
+                    logging.error(f"StartType: {start_type} not present in {answer_type_to_start_action_mapping}")
             # valid_start_action_ids.append(start_action_ids)
             action_prefixes.append(instance_prefix_sequences)
 
@@ -1242,175 +1244,144 @@ class DROPParserBERT(DROPParserBase):
 
         return loss
 
+    def _ques_attention_loss(
+        self,
+        batch_actionseqs: List[List[List[str]]],
+        batch_actionseq_sideargs: List[List[List[Dict]]],
+        qtypes: List[str],
+        qattn_supervised: List[bool],
+        qattn_supervision: torch.FloatTensor,
+    ):
 
-    def _ques_attention_loss(self,
-                             batch_actionseq_sideargs: List[List[List[Dict]]], question_mask: torch.FloatTensor):
-        """Compute question attention loss against the `question_attention_supervision` key in side-args.
+        """ Compute QAttn supervision loss for different kind of questions. Different question-types have diff.
+            gold-programs and can have different number of qattn-supervision for each instance.
+            There, the shape of qattn_supervision is (B, R, QLen) where R is the maximum number of attn-supervisions
+            provided for an instance in this batch. For instances with less number of relevant actions
+            the corresponding instance_slice will be padded with all zeros-tensors.
 
-        Relevant actions should contain the `question_attention_supervision` key; compute loss against that.
+            We hard-code the question-types supported, and for each qtype, the relevant actions for which the
+            qattn supervision will (should) be provided. For example, the gold program for date-comparison questions
+            contains two 'PassageAttention -> find_PassageAttention' actions which use the question_attention sidearg
+            for which the supervision is
+             provided. Hence, qtype2relevant_actions_list - contains the two actions for the
+            date-comparison question.
+
+            The loss computed is the negative-log of sum of relevant probabilities.
+
+            NOTE: This loss is only computed for instances that are marked as strongly-annotated and hence we don't
+            check if the qattns-supervision needs masking.
         """
+        find_passage_attention = "PassageAttention -> find_PassageAttention"
+        filter_passage_attention = "<PassageAttention:PassageAttention> -> filter_PassageAttention"
+        relocate_passage_attention = "<PassageAttention:PassageAttention_answer> -> relocate_PassageAttention"
+
+        single_find_passage_attention_list = [find_passage_attention]
+        double_find_passage_attentions_list = [find_passage_attention, find_passage_attention]
+        filter_find_passage_attention_list = [filter_passage_attention, find_passage_attention]
+        relocate_find_passage_attention_list = [relocate_passage_attention, find_passage_attention]
+        relocate_filterfind_passage_attention_list = [
+            relocate_passage_attention,
+            filter_passage_attention,
+            find_passage_attention,
+        ]
+
+        qtypes_w_findPA = [
+            dropconstants.NUM_find_qtype,
+            dropconstants.MAX_find_qtype,
+            dropconstants.MIN_find_qtype,
+            dropconstants.COUNT_find_qtype,
+            dropconstants.YARDS_findnum_qtype,
+            dropconstants.YARDS_longest_qtype,
+            dropconstants.YARDS_shortest_qtype,
+        ]
+
+        qtypes_w_filterfindPA = [
+            dropconstants.NUM_filter_find_qtype,
+            dropconstants.MAX_filter_find_qtype,
+            dropconstants.MIN_filter_find_qtype,
+            dropconstants.COUNT_filter_find_qtype,
+        ]
+
+        qtypes_w_two_findPA = [dropconstants.DATECOMP_QTYPE, dropconstants.NUMCOMP_QTYPE]
+
+        qtypes_w_relocatefindPA = [
+            dropconstants.RELOC_find_qtype,
+            dropconstants.RELOC_maxfind_qtype,
+            dropconstants.RELOC_minfind_qtype,
+        ]
+        qtypes_w_relocate_filterfindPA = [
+            dropconstants.RELOC_filterfind_qtype,
+            dropconstants.RELOC_maxfilterfind_qtype,
+            dropconstants.RELOC_minfilterfind_qtype,
+        ]
+
+        qtype2relevant_actions_list = {}
+
+        for qtype in qtypes_w_findPA:
+            qtype2relevant_actions_list[qtype] = single_find_passage_attention_list
+        for qtype in qtypes_w_two_findPA:
+            qtype2relevant_actions_list[qtype] = double_find_passage_attentions_list
+        for qtype in qtypes_w_filterfindPA:
+            qtype2relevant_actions_list[qtype] = filter_find_passage_attention_list
+        for qtype in qtypes_w_relocatefindPA:
+            qtype2relevant_actions_list[qtype] = relocate_find_passage_attention_list
+        for qtype in qtypes_w_relocate_filterfindPA:
+            qtype2relevant_actions_list[qtype] = relocate_filterfind_passage_attention_list
+
         loss = 0.0
         normalizer = 0
-        for instance_idx in range(len(batch_actionseq_sideargs)):
-            instance_actionseq_sideargs: List[List[Dict]] = batch_actionseq_sideargs[instance_idx]
-            for program_sideargs in instance_actionseq_sideargs:
-                for action_sideargs in program_sideargs:
-                    if "question_attention_supervision" in action_sideargs:
-                        gold_attn: List[int] = action_sideargs["question_attention_supervision"]
-                        gold_attn_len = len(gold_attn)
-                        gold_attn_tensor: torch.FloatTensor = allenutil.move_to_device(
-                            torch.FloatTensor(gold_attn), cuda_device=self.device_id)
-                        pred_attn = action_sideargs["question_attention"]
-                        pred_attn = pred_attn[0:gold_attn_len]
-                        mask = question_mask[instance_idx, 0:gold_attn_len]
-                        log_question_attention = torch.log(pred_attn + 1e-40) * mask
-                        l = torch.sum(log_question_attention * gold_attn_tensor) # / float(gold_attn_len)
-                        loss += l
-                        normalizer += 1
 
+        for ins_idx in range(len(batch_actionseqs)):
+            qattn_supervised_instance = qattn_supervised[ins_idx]
+            if not qattn_supervised_instance:
+                # no point even bothering
+                continue
+            qtype = qtypes[ins_idx]
+            if qtype not in qtype2relevant_actions_list:
+                continue
+
+            instance_programs = batch_actionseqs[ins_idx]
+            instance_prog_sideargs = batch_actionseq_sideargs[ins_idx]
+            # Shape: (R, question_length)
+            instance_qattn_supervision = qattn_supervision[ins_idx]
+            # These are the actions for which qattn_supervision should be provided.
+            relevant_actions = qtype2relevant_actions_list[qtype]
+            num_relevant_actions = len(relevant_actions)
+            for program, side_args in zip(instance_programs, instance_prog_sideargs):
+                # Counter to keep a track of which relevant action we're looking for next
+                relevant_action_idx = 0
+                relevant_action = relevant_actions[relevant_action_idx]
+                gold_qattn = instance_qattn_supervision[relevant_action_idx]
+                for action, side_arg in zip(program, side_args):
+                    if action == relevant_action:
+                        question_attention = side_arg["question_attention"]
+                        if torch.sum(gold_qattn) != 0.0:
+                            # Sum of probs -- model can distribute gold mass however it likes
+                            # l = torch.sum(question_attention * gold_qattn)
+                            # loss += torch.log(l)
+                            # Prod of probs -- forces model to evenly distribute mass on gold-attn
+                            log_question_attention = torch.log(question_attention + 1e-40)
+                            l = torch.sum(log_question_attention * gold_qattn)
+                            loss += l
+                            normalizer += 1
+                        else:
+                            print(
+                                f"\nGold attention sum == 0.0."
+                                f"\nQattnSupervised: {qattn_supervised_instance}"
+                                f"\nQtype: {qtype}"
+                            )
+                        relevant_action_idx += 1
+
+                        # All relevant actions for this instance in this program are found
+                        if relevant_action_idx >= num_relevant_actions:
+                            break
+                        else:
+                            relevant_action = relevant_actions[relevant_action_idx]
+                            gold_qattn = instance_qattn_supervision[relevant_action_idx]
         if normalizer == 0:
             return loss
         else:
             return -1 * (loss / normalizer)
-
-    # def _ques_attention_loss(
-    #     self,
-    #     batch_actionseqs: List[List[List[str]]],
-    #     batch_actionseq_sideargs: List[List[List[Dict]]],
-    #     qtypes: List[str],
-    #     qattn_supervised: List[bool],
-    #     qattn_supervision: torch.FloatTensor,
-    # ):
-    #
-    #     """ Compute QAttn supervision loss for different kind of questions. Different question-types have diff.
-    #         gold-programs and can have different number of qattn-supervision for each instance.
-    #         There, the shape of qattn_supervision is (B, R, QLen) where R is the maximum number of attn-supervisions
-    #         provided for an instance in this batch. For instances with less number of relevant actions
-    #         the corresponding instance_slice will be padded with all zeros-tensors.
-    #
-    #         We hard-code the question-types supported, and for each qtype, the relevant actions for which the
-    #         qattn supervision will (should) be provided. For example, the gold program for date-comparison questions
-    #         contains two 'PassageAttention -> find_PassageAttention' actions which use the question_attention sidearg
-    #         for which the supervision is
-    #          provided. Hence, qtype2relevant_actions_list - contains the two actions for the
-    #         date-comparison question.
-    #
-    #         The loss computed is the negative-log of sum of relevant probabilities.
-    #
-    #         NOTE: This loss is only computed for instances that are marked as strongly-annotated and hence we don't
-    #         check if the qattns-supervision needs masking.
-    #     """
-    #     find_passage_attention = "PassageAttention -> find_PassageAttention"
-    #     filter_passage_attention = "<PassageAttention:PassageAttention> -> filter_PassageAttention"
-    #     relocate_passage_attention = "<PassageAttention:PassageAttention_answer> -> relocate_PassageAttention"
-    #
-    #     single_find_passage_attention_list = [find_passage_attention]
-    #     double_find_passage_attentions_list = [find_passage_attention, find_passage_attention]
-    #     filter_find_passage_attention_list = [filter_passage_attention, find_passage_attention]
-    #     relocate_find_passage_attention_list = [relocate_passage_attention, find_passage_attention]
-    #     relocate_filterfind_passage_attention_list = [
-    #         relocate_passage_attention,
-    #         filter_passage_attention,
-    #         find_passage_attention,
-    #     ]
-    #
-    #     qtypes_w_findPA = [
-    #         dropconstants.NUM_find_qtype,
-    #         dropconstants.MAX_find_qtype,
-    #         dropconstants.MIN_find_qtype,
-    #         dropconstants.COUNT_find_qtype,
-    #         dropconstants.YARDS_findnum_qtype,
-    #         dropconstants.YARDS_longest_qtype,
-    #         dropconstants.YARDS_shortest_qtype,
-    #     ]
-    #
-    #     qtypes_w_filterfindPA = [
-    #         dropconstants.NUM_filter_find_qtype,
-    #         dropconstants.MAX_filter_find_qtype,
-    #         dropconstants.MIN_filter_find_qtype,
-    #         dropconstants.COUNT_filter_find_qtype,
-    #     ]
-    #
-    #     qtypes_w_two_findPA = [dropconstants.DATECOMP_QTYPE, dropconstants.NUMCOMP_QTYPE]
-    #
-    #     qtypes_w_relocatefindPA = [
-    #         dropconstants.RELOC_find_qtype,
-    #         dropconstants.RELOC_maxfind_qtype,
-    #         dropconstants.RELOC_minfind_qtype,
-    #     ]
-    #     qtypes_w_relocate_filterfindPA = [
-    #         dropconstants.RELOC_filterfind_qtype,
-    #         dropconstants.RELOC_maxfilterfind_qtype,
-    #         dropconstants.RELOC_minfilterfind_qtype,
-    #     ]
-    #
-    #     qtype2relevant_actions_list = {}
-    #
-    #     for qtype in qtypes_w_findPA:
-    #         qtype2relevant_actions_list[qtype] = single_find_passage_attention_list
-    #     for qtype in qtypes_w_two_findPA:
-    #         qtype2relevant_actions_list[qtype] = double_find_passage_attentions_list
-    #     for qtype in qtypes_w_filterfindPA:
-    #         qtype2relevant_actions_list[qtype] = filter_find_passage_attention_list
-    #     for qtype in qtypes_w_relocatefindPA:
-    #         qtype2relevant_actions_list[qtype] = relocate_find_passage_attention_list
-    #     for qtype in qtypes_w_relocate_filterfindPA:
-    #         qtype2relevant_actions_list[qtype] = relocate_filterfind_passage_attention_list
-    #
-    #     loss = 0.0
-    #     normalizer = 0
-    #
-    #     for ins_idx in range(len(batch_actionseqs)):
-    #         qattn_supervised_instance = qattn_supervised[ins_idx]
-    #         if not qattn_supervised_instance:
-    #             # no point even bothering
-    #             continue
-    #         qtype = qtypes[ins_idx]
-    #         if qtype not in qtype2relevant_actions_list:
-    #             continue
-    #
-    #         instance_programs = batch_actionseqs[ins_idx]
-    #         instance_prog_sideargs = batch_actionseq_sideargs[ins_idx]
-    #         # Shape: (R, question_length)
-    #         instance_qattn_supervision = qattn_supervision[ins_idx]
-    #         # These are the actions for which qattn_supervision should be provided.
-    #         relevant_actions = qtype2relevant_actions_list[qtype]
-    #         num_relevant_actions = len(relevant_actions)
-    #         for program, side_args in zip(instance_programs, instance_prog_sideargs):
-    #             # Counter to keep a track of which relevant action we're looking for next
-    #             relevant_action_idx = 0
-    #             relevant_action = relevant_actions[relevant_action_idx]
-    #             gold_qattn = instance_qattn_supervision[relevant_action_idx]
-    #             for action, side_arg in zip(program, side_args):
-    #                 if action == relevant_action:
-    #                     question_attention = side_arg["question_attention"]
-    #                     if torch.sum(gold_qattn) != 0.0:
-    #                         # Sum of probs -- model can distribute gold mass however it likes
-    #                         # l = torch.sum(question_attention * gold_qattn)
-    #                         # loss += torch.log(l)
-    #                         # Prod of probs -- forces model to evenly distribute mass on gold-attn
-    #                         log_question_attention = torch.log(question_attention + 1e-40)
-    #                         l = torch.sum(log_question_attention * gold_qattn)
-    #                         loss += l
-    #                         normalizer += 1
-    #                     else:
-    #                         print(
-    #                             f"\nGold attention sum == 0.0."
-    #                             f"\nQattnSupervised: {qattn_supervised_instance}"
-    #                             f"\nQtype: {qtype}"
-    #                         )
-    #                     relevant_action_idx += 1
-    #
-    #                     # All relevant actions for this instance in this program are found
-    #                     if relevant_action_idx >= num_relevant_actions:
-    #                         break
-    #                     else:
-    #                         relevant_action = relevant_actions[relevant_action_idx]
-    #                         gold_qattn = instance_qattn_supervision[relevant_action_idx]
-    #     if normalizer == 0:
-    #         return loss
-    #     else:
-    #         return -1 * (loss / normalizer)
 
     @staticmethod
     def _get_best_spans(
@@ -1708,7 +1679,7 @@ class DROPParserBERT(DROPParserBase):
 
     def getInitialDecoderState(
         self,
-        languages: List[DropLanguageV2],
+        languages: List[DropLanguage],
         actions: List[List[ProductionRule]],
         encoded_question: torch.FloatTensor,
         question_mask: torch.FloatTensor,
@@ -1765,7 +1736,7 @@ class DROPParserBERT(DROPParserBase):
     def initialState_forInstanceIndices(
         self,
         instances_list: List[int],
-        languages: List[DropLanguageV2],
+        languages: List[DropLanguage],
         actions: List[List[ProductionRule]],
         encoded_question: torch.FloatTensor,
         question_mask: torch.FloatTensor,
@@ -1958,43 +1929,3 @@ class DROPParserBERT(DROPParserBase):
         # Increase inwindow likelihod and decrease outwindow-negative-entropy
         loss = -1 * inwindow_likelihood + outwindow_negentropies
         return loss
-
-
-    def add_aux_supervision_to_program_side_args(self,
-                                                 languages: List[DropLanguageV2],
-                                                 batch_action_seqs: List[List[List[str]]],
-                                                 batch_actionseq_sideargs: List[List[List[Dict]]],
-                                                 program_supervised: List[bool],
-                                                 gold_program_dicts: List[List[Union[Dict, None]]],
-                                                 gold_function2actionidx_maps: List[List[List[int]]]):
-        if not self.training:
-            return
-
-        for instance_idx in range(len(program_supervised)):
-            ins_prog_supervised = program_supervised[instance_idx]
-            if not ins_prog_supervised:
-                continue
-            # Currently we assume there is only one gold-program per instance and this gets decoded as top-program
-            # in constrained-decoding
-            language = languages[instance_idx]
-            gold_program_node = qdmr_utils.node_from_dict(gold_program_dicts[instance_idx][0])
-            gold_program_lisp = qdmr_utils.nested_expression_to_lisp(gold_program_node.get_nested_expression())
-            gold_action_seq: List[str] = language.logical_form_to_action_sequence(gold_program_lisp)
-            # TODO(nitish): Faced issue in next line in evaluate once. list index out of range
-            pred_action_seq: List[str] = batch_action_seqs[instance_idx][0]
-            pred_sideargs: List[Dict] = batch_actionseq_sideargs[instance_idx][0]
-            if gold_action_seq == pred_action_seq:
-                # These are the action-idxs which produce terminal-node functions; gold_function2actionidx_maps is
-                # packed so that as multiple gold-programs are passed. we assume singe gold-program here
-                function2actionidx_map: List[int] = gold_function2actionidx_maps[instance_idx][0]
-                # inorder_functions: List[str] = qdmr_utils.get_inorder_function_list(gold_program_node)
-                inorder_supervision_dicts: List[Dict] = qdmr_utils.get_inorder_supervision_list(gold_program_node)
-                # Append the appropriate pred_sideargs idxs with the supervision-dict
-                for supervision_idx, action_idx in enumerate(function2actionidx_map):
-                    # supervision_idx: range(0, num_of_functions) - index into inorder_supervision_dicts
-                    # action_idx: range(0, len(pred_sideargs)) - index into the actions
-                    pred_sideargs[action_idx].update(inorder_supervision_dicts[supervision_idx])
-
-
-
-

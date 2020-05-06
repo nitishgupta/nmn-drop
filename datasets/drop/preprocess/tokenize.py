@@ -250,7 +250,7 @@ def processPassage(input_args):
         qa[constants.q_date_normalized_values] = normalized_date_values
 
         qa[constants.q_num_mens] = parsed_nums
-        qa[constants.q_date_mens] = normalized_num_idxs
+        qa[constants.q_num_entidx] = normalized_num_idxs
         qa[constants.q_num_normalized_values] = normalized_number_values
 
         answer = qa[constants.answer]

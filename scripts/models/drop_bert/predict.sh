@@ -7,15 +7,15 @@ export BEAMSIZE=1
 export DEBUG=true
 
 # SAVED MODEL
-MODEL_DIR=./resources/semqa/checkpoints/test
+MODEL_DIR=./resources/semqa/checkpoints/test-1.0
 MODEL_TAR=${MODEL_DIR}/model.tar.gz
 PREDICTION_DIR=${MODEL_DIR}/predictions
 mkdir ${PREDICTION_DIR}
 
-DATASET_DIR=./resources/data/drop_post_iclr
-DATASET_NAME=date_num/date_yd_num_hmyw_cnt_whoarg_1200
+DATASET_DIR=/shared/nitishg/data/drop-w-qdmr
+DATASET_NAME=drop_wqdmr_programs
 
-FULL_VALFILE=${DATASET_DIR}/${DATASET_NAME}/drop_dataset_mydev.json
+FULL_VALFILE=${DATASET_DIR}/${DATASET_NAME}/drop_dataset_dev.json
 
 # Prediction output including verbose execution logs
 PREDICTOR=drop_parser_predictor
@@ -32,7 +32,7 @@ allennlp predict --output-file ${PREDICTION_FILE} \
                  --silent \
                  --batch-size 4 \
                  --use-dataset-reader \
-                 --overrides "{"model": { "beam_size": ${BEAMSIZE}, "debug": ${DEBUG}}}" \
+                 --overrides "{"model": { "beam_size": ${BEAMSIZE}, "debug": ${DEBUG} }}" \
                  ${MODEL_TAR} ${FULL_VALFILE}
 
 echo -e "Dev predictions file saved at: ${PREDICTION_FILE}"

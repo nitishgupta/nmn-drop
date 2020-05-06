@@ -14,7 +14,7 @@ from allennlp_semparse.state_machines.states import GrammarStatelet, RnnStatelet
 from allennlp_semparse.fields.production_rule_field import ProductionRule
 
 import semqa.domain_languages.domain_language_utils as dl_utils
-from semqa.domain_languages.drop_language import DropLanguage
+from semqa.domain_languages.drop_language_v2 import DropLanguageV2
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -115,7 +115,7 @@ class DROPParserBase(Model):
         return initial_rnn_state
 
     def _create_grammar_statelet(
-        self, language: DropLanguage, possible_actions: List[ProductionRule]
+        self, language: DropLanguageV2, possible_actions: List[ProductionRule]
     ) -> Tuple[GrammarStatelet, Dict[str, int], List[str]]:
         # linked_rule2idx: Dict = None,
         # action2ques_linkingscore: torch.FloatTensor = None,
@@ -187,7 +187,7 @@ class DROPParserBase(Model):
 
     @staticmethod
     def _get_denotations(
-        action_strings: List[List[List[str]]], languages: List[DropLanguage], sideargs: List[List[List[Dict]]] = None
+        action_strings: List[List[List[str]]], languages: List[DropLanguageV2], sideargs: List[List[List[Dict]]] = None
     ) -> Tuple[List[List[Any]], List[List[str]]]:
         """ Get denotations for all action-sequences for  every instance in a batch.
 
@@ -205,7 +205,7 @@ class DROPParserBase(Model):
         all_denotations: List[List[Any]] = []
         all_denotation_types: List[List[str]] = []
         for insidx in range(len(languages)):
-            instance_language: DropLanguage = languages[insidx]
+            instance_language: DropLanguageV2 = languages[insidx]
             instance_action_sequences = action_strings[insidx]
             instance_sideargs = sideargs[insidx]
             instance_denotations: List[Any] = []
@@ -255,7 +255,7 @@ class DROPParserBase(Model):
             # for instance_action_sequences, instance_action_sideargs, l in zip(best_action_strings,
             #                                                                   batch_actionseq_sideargs,
             #                                                                   languages):
-            l: DropLanguage = languages[insidx]
+            l: DropLanguageV2 = languages[insidx]
             l.debug = self._debug
             l.metadata = metadatas[insidx]
 
