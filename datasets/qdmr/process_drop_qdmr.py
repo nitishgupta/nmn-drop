@@ -139,6 +139,83 @@ def add_question_attention_supervision(node: Node, question_tokens: List[str]) -
     return node
 
 
+def get_cog(attention: List[int]):
+    cog = sum([i * x for (i, x) in enumerate(attention)])
+    # cog = max([i if x == 1 else 0 for (i, x) in enumerate(attention)])
+    return cog
+
+
+def switch_year_diff_two_events_arguments(question: str, program_node: Node, count_dict: Dict):
+    question = question.lower()
+    nested_expr = program_node.get_nested_expression()
+    nested_expr_tuple = convert_nestedexpr_to_tuple(nested_expr)
+    if nested_expr_tuple == ('year_difference_two_events', 'select_passage', 'select_passage'):
+        count_dict["year-two-diff"] = count_dict.get("year-two-diff", 0) + 1
+        select1_node = program_node.children[0]
+        select2_node = program_node.children[1]
+        qattn1 = select1_node.supervision["question_attention_supervision"]
+        qattn2 = select2_node.supervision["question_attention_supervision"]
+        cog1 = get_cog(qattn1)
+        cog2 = get_cog(qattn2)
+        if any([x in question for x in ["how many years passed",
+                                        "how many years were between",
+                                        "how many years was it"]]):
+            count_dict["years-passed-between"] = count_dict.get("years-passed-between", 0) + 1
+            # We want cog1 > cog2, i.e., the first select1 to select the event mentioned later
+            if cog1 < cog2:
+                # Switch select-node order in this case
+                program_node.children = []
+                program_node.add_child(select2_node)
+                program_node.add_child(select1_node)
+                count_dict["switched"] = count_dict.get("switched", 0) + 1
+        elif "after" in question:
+            count_dict["year-two-diff-after"] = count_dict.get("year-two-diff-after", 0) + 1
+            if question[0:3] == "how":
+                # We want cog1 > cog2, i.e., the first select1 to select the event mentioned later
+                if cog1 < cog2:
+                    # Switch select-node order in this case
+                    program_node.children = []
+                    program_node.add_child(select2_node)
+                    program_node.add_child(select1_node)
+                    count_dict["switched"] = count_dict.get("switched", 0) + 1
+            else:
+                # We want cog1 < cog2, i.e., the first select1 to select the event mentioned earlier
+                if cog1 > cog2:
+                    # Switch select-node order in this case
+                    program_node.children = []
+                    program_node.add_child(select2_node)
+                    program_node.add_child(select1_node)
+                    count_dict["switched"] = count_dict.get("switched", 0) + 1
+        elif "how many years before" in question:
+            count_dict["year-two-diff-before"] = count_dict.get("year-two-diff-before", 0) + 1
+            if question[0:3] == "how":
+                # We want cog1 <>> cog2, i.e., the first select1 to select the event mentioned earlier
+                if cog1 > cog2:
+                    # Switch select-node order in this case
+                    program_node.children = []
+                    program_node.add_child(select2_node)
+                    program_node.add_child(select1_node)
+                    count_dict["switched"] = count_dict.get("switched", 0) + 1
+            else:
+                # We want cog1 > cog2, i.e., the first select1 to select the event mentioned later
+                if cog1 < cog2:
+                    # Switch select-node order in this case
+                    program_node.children = []
+                    program_node.add_child(select2_node)
+                    program_node.add_child(select1_node)
+                    count_dict["switched"] = count_dict.get("switched", 0) + 1
+        else:
+            count_dict["remaining"] = count_dict.get("remaining", 0) + 1
+            # We want cog1 > cog2, i.e., the first select1 to select the event mentioned later
+            if cog1 < cog2:
+                # Switch select-node order in this case
+                program_node.children = []
+                program_node.add_child(select2_node)
+                program_node.add_child(select1_node)
+                count_dict["switched"] = count_dict.get("switched", 0) + 1
+    return program_node
+
+
 def remove_get_question_span_node(qdmr_node: Node) -> Node:
     """This function removes the GET_QUESTION_SPAN node from the program and makes the string_arg of this predicate
     as the string_arg of the parent node. This is done since NMN-DROP (question-attention version) does not have an
@@ -212,6 +289,7 @@ def map_qdmr_to_nmn_predicates(qdmr_program: Node) -> Tuple[Union[Node, None], b
 
 
 def convert_qdmr_program_to_nmn(qdmr_program: Node,
+                                question: str,
                                 drop_question_tokens: List[str]) -> Tuple[Union[Node, None], bool, bool]:
     """Convert QDMR-DROP program into NMN-DROP program.
 
@@ -235,8 +313,8 @@ def convert_qdmr_program_to_nmn(qdmr_program: Node,
         executable = False
         return None, mapping_present, executable
 
-    # wrap prgram in NMN's passage-attention to passage-span-ans module
-    nmn_drop_program = wrap_passage_set_root_w_span_ans_predicate(nmn_drop_program)
+    # wrap program in NMN's passage-attention to passage-span-ans module
+    nmn_drop_program: Node = wrap_passage_set_root_w_span_ans_predicate(nmn_drop_program)
 
     nmn_drop_prog_lisp = nested_expression_to_lisp(nmn_drop_program.get_nested_expression())
     try:
@@ -247,6 +325,7 @@ def convert_qdmr_program_to_nmn(qdmr_program: Node,
 
     if executable:
         nmn_drop_program = add_question_attention_supervision(nmn_drop_program, drop_question_tokens)
+        switch_year_diff_two_events_arguments(question=question, program_node=nmn_drop_program, count_dict={})
 
     return nmn_drop_program, mapping_present, executable
 
@@ -262,11 +341,11 @@ def qdmrid_to_dropid(qdmr_query_id) -> Tuple[str, str]:
     return passage_id, query_id
 
 
-def get_drop_question_tokens(drop_data, passage_id, query_id) -> List[str]:
+def get_drop_question_and_tokens(drop_data, passage_id, query_id) -> Tuple[str, List[str]]:
     passage_info = drop_data[passage_id]
     for qa in passage_info[constants.qa_pairs]:
         if qa[constants.query_id] == query_id:
-            return qa[constants.question_tokens]
+            return qa[constants.question], qa[constants.question_tokens]
 
 
 def get_drop_programs(qdmr_examples: List[QDMRExample], drop_data) -> Dict[str, Dict[str, Node]]:
@@ -278,11 +357,13 @@ def get_drop_programs(qdmr_examples: List[QDMRExample], drop_data) -> Dict[str, 
         program_node = qdmr_example.program_tree
         qdmr_query_id = qdmr_example.query_id
         drop_passage_id, drop_query_id = qdmrid_to_dropid(qdmr_query_id)
-        drop_question_tokens = get_drop_question_tokens(drop_data, drop_passage_id, drop_query_id)
+        drop_question, drop_question_tokens = get_drop_question_and_tokens(drop_data, drop_passage_id, drop_query_id)
 
         if program_node:
             num_w_qdmr_drop += 1
-            nmn_drop_prog, mapping_present, executable = convert_qdmr_program_to_nmn(program_node, drop_question_tokens)
+            nmn_drop_prog, mapping_present, executable = convert_qdmr_program_to_nmn(program_node,
+                                                                                     drop_question,
+                                                                                     drop_question_tokens)
             num_w_nmn_drop += 1 if mapping_present else 0
             num_w_nmn_executable += 1 if executable else 0
 
