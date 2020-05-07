@@ -535,6 +535,7 @@ class DROPReaderV2(DatasetReader):
                 "question_token_offsets": question_offsets,
                 "passage_wpidx2tokenidx": p_wpidx2tokenidx,
                 "question_wpidx2tokenidx": q_wpidx2tokenidx,
+                "unpadded_q_wps_len": unpadded_q_wps_len,
                 "question_wps": question_wps,
                 "passage_wps": passage_wps,
                 "question_tokens": question_tokens,

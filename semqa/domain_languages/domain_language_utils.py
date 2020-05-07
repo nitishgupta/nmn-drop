@@ -1,4 +1,4 @@
-from typing import Callable, List, Dict, Tuple, Any, Type, Set
+from typing import Callable, List, Dict, Tuple, Any, Type, Set, Union
 
 import inspect
 import torch
@@ -183,7 +183,7 @@ def aux_window_loss(ptop_attention, passage_mask, inwindow_mask):
     return inwindow_aux_loss
 
 
-def mostAttendedSpans(attention_vec: torch.FloatTensor, tokens: List[str], span_length=5):
+def mostAttendedSpans(attention_vec: Union[torch.FloatTensor, List[float]], tokens: List[str], span_length=5):
     """ Visualize an attention vector for a list of tokens
 
         Parameters:
@@ -197,7 +197,10 @@ def mostAttendedSpans(attention_vec: torch.FloatTensor, tokens: List[str], span_
         --------
     """
 
-    attention_aslist: List[float] = myutils.round_all(myutils.tocpuNPList(attention_vec), 3)
+    if not isinstance(attention_vec, list):
+        attention_aslist: List[float] = myutils.round_all(myutils.tocpuNPList(attention_vec), 3)
+    else:
+        attention_aslist = myutils.round_all(attention_vec, 3)
     tokens_len = len(tokens)
     # To remove padded elements
     attention_aslist: List[float] = attention_aslist[:tokens_len]
@@ -234,7 +237,7 @@ def mostAttendedSpans(attention_vec: torch.FloatTensor, tokens: List[str], span_
     return out_str
 
 
-def listTokensVis(attention_vec: torch.FloatTensor, tokens: List[str]):
+def listTokensVis(attention_vec:  Union[torch.FloatTensor, List[float]], tokens: List[str]):
     """ Visualize an attention vector for a list of tokens
 
         Parameters:
@@ -249,8 +252,10 @@ def listTokensVis(attention_vec: torch.FloatTensor, tokens: List[str]):
         complete_attention_vis: str
         most_attended_vis: String visualization of question attention
     """
-
-    attention_aslist: List[float] = myutils.round_all(myutils.tocpuNPList(attention_vec), 3)
+    if not isinstance(attention_vec, list):
+        attention_aslist: List[float] = myutils.round_all(myutils.tocpuNPList(attention_vec), 3)
+    else:
+        attention_aslist = myutils.round_all(attention_vec, 3)
     tokens_len = len(tokens)
     # To remove padded elements
     attention_aslist: List[float] = attention_aslist[:tokens_len]

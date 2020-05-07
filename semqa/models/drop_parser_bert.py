@@ -975,6 +975,7 @@ class DROPParserBERT(DROPParserBase):
 
             if not self.training: # and self._debug:
                 output_dict["metadata"] = metadata
+                output_dict["question_mask"] = question_mask
                 output_dict["passage_mask"] = passage_mask
                 output_dict["passage_token_idxs"] = passage_token_idxs
                 if answer_as_passage_spans is not None:
@@ -988,11 +989,9 @@ class DROPParserBERT(DROPParserBase):
                         instance_logical_progs.append(logical_form)
                     batch_logical_programs.append(instance_logical_progs)
 
-                output_dict["batch_logical_programs"] = batch_logical_programs
-                output_dict["batch_actionseq_logprobs"] = batch_actionseq_logprobs
-                output_dict["batch_actionseq_probs"] = batch_actionseq_probs
-                output_dict["batch_actionseq_sideargs"] = batch_actionseq_sideargs
-                output_dict["languages"] = languages
+                output_dict["logical_forms"] = batch_logical_programs
+                output_dict["actionseq_logprobs"] = batch_actionseq_logprobs
+                output_dict["actionseq_probs"] = batch_actionseq_probs
                 modules_debug_infos = [l.modules_debug_info for l in languages]
                 output_dict["modules_debug_infos"] = modules_debug_infos
 
@@ -1272,145 +1271,6 @@ class DROPParserBERT(DROPParserBase):
             return loss
         else:
             return -1 * (loss / normalizer)
-
-    # def _ques_attention_loss(
-    #     self,
-    #     batch_actionseqs: List[List[List[str]]],
-    #     batch_actionseq_sideargs: List[List[List[Dict]]],
-    #     qtypes: List[str],
-    #     qattn_supervised: List[bool],
-    #     qattn_supervision: torch.FloatTensor,
-    # ):
-    #
-    #     """ Compute QAttn supervision loss for different kind of questions. Different question-types have diff.
-    #         gold-programs and can have different number of qattn-supervision for each instance.
-    #         There, the shape of qattn_supervision is (B, R, QLen) where R is the maximum number of attn-supervisions
-    #         provided for an instance in this batch. For instances with less number of relevant actions
-    #         the corresponding instance_slice will be padded with all zeros-tensors.
-    #
-    #         We hard-code the question-types supported, and for each qtype, the relevant actions for which the
-    #         qattn supervision will (should) be provided. For example, the gold program for date-comparison questions
-    #         contains two 'PassageAttention -> find_PassageAttention' actions which use the question_attention sidearg
-    #         for which the supervision is
-    #          provided. Hence, qtype2relevant_actions_list - contains the two actions for the
-    #         date-comparison question.
-    #
-    #         The loss computed is the negative-log of sum of relevant probabilities.
-    #
-    #         NOTE: This loss is only computed for instances that are marked as strongly-annotated and hence we don't
-    #         check if the qattns-supervision needs masking.
-    #     """
-    #     find_passage_attention = "PassageAttention -> find_PassageAttention"
-    #     filter_passage_attention = "<PassageAttention:PassageAttention> -> filter_PassageAttention"
-    #     relocate_passage_attention = "<PassageAttention:PassageAttention_answer> -> relocate_PassageAttention"
-    #
-    #     single_find_passage_attention_list = [find_passage_attention]
-    #     double_find_passage_attentions_list = [find_passage_attention, find_passage_attention]
-    #     filter_find_passage_attention_list = [filter_passage_attention, find_passage_attention]
-    #     relocate_find_passage_attention_list = [relocate_passage_attention, find_passage_attention]
-    #     relocate_filterfind_passage_attention_list = [
-    #         relocate_passage_attention,
-    #         filter_passage_attention,
-    #         find_passage_attention,
-    #     ]
-    #
-    #     qtypes_w_findPA = [
-    #         dropconstants.NUM_find_qtype,
-    #         dropconstants.MAX_find_qtype,
-    #         dropconstants.MIN_find_qtype,
-    #         dropconstants.COUNT_find_qtype,
-    #         dropconstants.YARDS_findnum_qtype,
-    #         dropconstants.YARDS_longest_qtype,
-    #         dropconstants.YARDS_shortest_qtype,
-    #     ]
-    #
-    #     qtypes_w_filterfindPA = [
-    #         dropconstants.NUM_filter_find_qtype,
-    #         dropconstants.MAX_filter_find_qtype,
-    #         dropconstants.MIN_filter_find_qtype,
-    #         dropconstants.COUNT_filter_find_qtype,
-    #     ]
-    #
-    #     qtypes_w_two_findPA = [dropconstants.DATECOMP_QTYPE, dropconstants.NUMCOMP_QTYPE]
-    #
-    #     qtypes_w_relocatefindPA = [
-    #         dropconstants.RELOC_find_qtype,
-    #         dropconstants.RELOC_maxfind_qtype,
-    #         dropconstants.RELOC_minfind_qtype,
-    #     ]
-    #     qtypes_w_relocate_filterfindPA = [
-    #         dropconstants.RELOC_filterfind_qtype,
-    #         dropconstants.RELOC_maxfilterfind_qtype,
-    #         dropconstants.RELOC_minfilterfind_qtype,
-    #     ]
-    #
-    #     qtype2relevant_actions_list = {}
-    #
-    #     for qtype in qtypes_w_findPA:
-    #         qtype2relevant_actions_list[qtype] = single_find_passage_attention_list
-    #     for qtype in qtypes_w_two_findPA:
-    #         qtype2relevant_actions_list[qtype] = double_find_passage_attentions_list
-    #     for qtype in qtypes_w_filterfindPA:
-    #         qtype2relevant_actions_list[qtype] = filter_find_passage_attention_list
-    #     for qtype in qtypes_w_relocatefindPA:
-    #         qtype2relevant_actions_list[qtype] = relocate_find_passage_attention_list
-    #     for qtype in qtypes_w_relocate_filterfindPA:
-    #         qtype2relevant_actions_list[qtype] = relocate_filterfind_passage_attention_list
-    #
-    #     loss = 0.0
-    #     normalizer = 0
-    #
-    #     for ins_idx in range(len(batch_actionseqs)):
-    #         qattn_supervised_instance = qattn_supervised[ins_idx]
-    #         if not qattn_supervised_instance:
-    #             # no point even bothering
-    #             continue
-    #         qtype = qtypes[ins_idx]
-    #         if qtype not in qtype2relevant_actions_list:
-    #             continue
-    #
-    #         instance_programs = batch_actionseqs[ins_idx]
-    #         instance_prog_sideargs = batch_actionseq_sideargs[ins_idx]
-    #         # Shape: (R, question_length)
-    #         instance_qattn_supervision = qattn_supervision[ins_idx]
-    #         # These are the actions for which qattn_supervision should be provided.
-    #         relevant_actions = qtype2relevant_actions_list[qtype]
-    #         num_relevant_actions = len(relevant_actions)
-    #         for program, side_args in zip(instance_programs, instance_prog_sideargs):
-    #             # Counter to keep a track of which relevant action we're looking for next
-    #             relevant_action_idx = 0
-    #             relevant_action = relevant_actions[relevant_action_idx]
-    #             gold_qattn = instance_qattn_supervision[relevant_action_idx]
-    #             for action, side_arg in zip(program, side_args):
-    #                 if action == relevant_action:
-    #                     question_attention = side_arg["question_attention"]
-    #                     if torch.sum(gold_qattn) != 0.0:
-    #                         # Sum of probs -- model can distribute gold mass however it likes
-    #                         # l = torch.sum(question_attention * gold_qattn)
-    #                         # loss += torch.log(l)
-    #                         # Prod of probs -- forces model to evenly distribute mass on gold-attn
-    #                         log_question_attention = torch.log(question_attention + 1e-40)
-    #                         l = torch.sum(log_question_attention * gold_qattn)
-    #                         loss += l
-    #                         normalizer += 1
-    #                     else:
-    #                         print(
-    #                             f"\nGold attention sum == 0.0."
-    #                             f"\nQattnSupervised: {qattn_supervised_instance}"
-    #                             f"\nQtype: {qtype}"
-    #                         )
-    #                     relevant_action_idx += 1
-    #
-    #                     # All relevant actions for this instance in this program are found
-    #                     if relevant_action_idx >= num_relevant_actions:
-    #                         break
-    #                     else:
-    #                         relevant_action = relevant_actions[relevant_action_idx]
-    #                         gold_qattn = instance_qattn_supervision[relevant_action_idx]
-    #     if normalizer == 0:
-    #         return loss
-    #     else:
-    #         return -1 * (loss / normalizer)
 
     @staticmethod
     def _get_best_spans(

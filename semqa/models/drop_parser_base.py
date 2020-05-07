@@ -214,7 +214,6 @@ class DROPParserBase(Model):
                 action_sequence = instance_action_sequences[pidx]
                 program_sideargs = instance_sideargs[pidx]
                 instance_language.modules_debug_info.append([])
-                # print(instance_action_strings)
                 if not action_sequence:
                     continue
                 actionseq_denotation = instance_language.execute_action_sequence(action_sequence, program_sideargs)
@@ -228,65 +227,3 @@ class DROPParserBase(Model):
             all_denotations.append(instance_denotations)
             all_denotation_types.append(instance_denotation_types)
         return all_denotations, all_denotation_types
-
-    @overrides
-    def make_output_human_readable(
-        self, output_dict: Dict[str, torch.Tensor]
-    ) -> Dict[str, torch.Tensor]:
-        """
-        This method overrides ``Model.decode``, which gets called after ``Model.forward``, at test
-        time, to finalize predictions. We only transform the action string sequences into logical
-        forms here.
-        """
-        # if 'languages' in output_dict:
-        #     output_dict.pop('languages', None)
-        # return output_dict
-
-        best_action_strings = output_dict["batch_action_seqs"]
-        batch_actionseq_sideargs = output_dict["batch_actionseq_sideargs"]
-        languages = output_dict["languages"]
-        metadatas = output_dict["metadata"]
-
-        # This currectly works because there aren't any instance-specific arguments to the language.
-        logical_forms = []
-        execution_vals = []
-        modules_debug_infos = []
-        for insidx in range(len(languages)):
-            # for instance_action_sequences, instance_action_sideargs, l in zip(best_action_strings,
-            #                                                                   batch_actionseq_sideargs,
-            #                                                                   languages):
-            l: DropLanguageV2 = languages[insidx]
-            l.debug = self._debug
-            l.metadata = metadatas[insidx]
-
-            instance_action_sequences: List[List[str]] = best_action_strings[insidx]
-            instance_action_sideargs = batch_actionseq_sideargs[insidx]
-
-            instance_logical_forms = []
-            instance_execution_vals = []
-            for pidx in range(len(instance_action_sequences)):
-                # for action_strings, side_args in zip(instance_action_sequences, instance_action_sideargs):
-                action_strings = instance_action_sequences[pidx]
-                side_args = instance_action_sideargs[pidx] if instance_action_sideargs else None
-                if action_strings:
-                    instance_logical_forms.append(l.action_sequence_to_logical_form(action_strings))
-                    # Custom function that copies the execution from domain_languages, but is used for debugging
-                    l.modules_debug_info.append([])
-                    denotation, ex_vals = dl_utils.execute_action_sequence(l, action_strings, side_args)
-                    instance_execution_vals.append(ex_vals)
-                else:
-                    instance_logical_forms.append("")
-                    instance_execution_vals.append([])
-
-            logical_forms.append(instance_logical_forms)
-            execution_vals.append(instance_execution_vals)
-            modules_debug_infos.append(l.modules_debug_info)
-
-        output_dict["logical_forms"] = logical_forms
-        output_dict["execution_vals"] = execution_vals
-        output_dict["modules_debug_infos"] = modules_debug_infos
-        output_dict.pop("languages", None)
-        output_dict.pop("batch_actionseq_sideargs", None)
-
-        return output_dict
-        # '''

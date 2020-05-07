@@ -8,9 +8,47 @@ from allennlp.data import DatasetReader, Instance
 from allennlp.models import Model
 from allennlp.predictors.predictor import Predictor
 import utils.util as myutils
+from allennlp_semparse.common.util import lisp_to_nested_expression
+from semqa.domain_languages.domain_language_utils import mostAttendedSpans, listTokensVis
+from semqa.domain_languages.drop_language_v2 import Output, output_from_dict
 
 from semqa.utils.squad_eval import metric_max_over_ground_truths
 from semqa.utils.drop_eval import get_metrics as drop_em_and_f1, answer_json_to_strings
+
+
+def visualize_module_outputs(module_name: str, module_outputs: List[Dict], **kwargs):
+    """For a module and its list of Output(s) return a string-output that can be visualized."""
+    outputs: List[Output] = [output_from_dict(x) for x in module_outputs]
+    output_str = f"{module_name}\n"
+    for output in outputs:
+        output_str += visualize_single_output_from_module(output, **kwargs) + '\n'
+    output_str = output_str.strip() + "\n\n"
+    return output_str
+
+
+def visualize_single_output_from_module(output: Output, question_wps, passage_wps, passage_numbers, passage_dates,
+                                        composed_numbers, year_diffs, count_values):
+    """Visualize string for single Output attention from a module. """
+    output_values = {'passage': passage_wps,
+                     'question': question_wps,
+                     'numbers': passage_numbers,
+                     'dates': passage_dates,
+                     'year_diffs': year_diffs,
+                     'composed_numbers': composed_numbers,
+                     'count': count_values}
+    output_type: str = output.output_type
+    output_support: List[Union[str, int, float]] = output_values[output_type]
+    output_attn: List[float] = output.values
+    output_label: str = output.label
+
+    output_str = f"\t{output_label}\n"
+    complete_attention_vis, _ = listTokensVis(attention_vec=output_attn, tokens=output_support)
+    output_str += "\t" + complete_attention_vis + "\n"
+    if output_type in ["passage"]:
+        most_attended_spans = mostAttendedSpans(attention_vec=output_attn, tokens=output_support)
+        output_str += "\t" + most_attended_spans + "\n"
+
+    return output_str
 
 
 def f1metric(prediction: Union[str, List], ground_truths: List):  # type: ignore
@@ -67,30 +105,43 @@ class DropNMNPredictor(Predictor):
     def dump_line(self, outputs: JsonDict) -> str:  # pylint: disable=no-self-use
         # Use json.dumps(outputs) + "\n" to dump a dictionary
 
-        out_str = ""
         metadata = outputs["metadata"]
         predicted_ans = outputs["predicted_answer"]
-        module_debug_infos = outputs["modules_debug_infos"]
+        modules_debug_infos = outputs["modules_debug_infos"]
+        program_execution: List[Dict] = modules_debug_infos[0]
+        program_execution = program_execution[::-1]
+
+        question_mask = outputs["question_mask"]
+        passage_mask = outputs["passage_mask"]
+        logical_forms = outputs["logical_forms"]
+        top_logical_form = logical_forms[0] if logical_forms else None
+        actionseq_logprobs = outputs["actionseq_logprobs"]
+        actionseq_probs = outputs["actionseq_probs"]
+        top_logical_form_prob = actionseq_probs[0] if actionseq_probs else None
+        prog_denotations = outputs["all_predicted_answers"]
 
         gold_passage_span_ans = metadata["answer_passage_spans"] if "answer_passage_spans" in metadata else []
         gold_question_span_ans = metadata["answer_question_spans"] if "answer_question_spans" in metadata else []
 
-        # instance_spans_for_all_progs = outputs['predicted_spans']
-        # best_span = instance_spans_for_all_progs[0]
         question_id = metadata["question_id"]
         question = metadata["question"]
         passage = metadata["passage"]
+
+        unpadded_q_wps_len = metadata["unpadded_q_wps_len"]
+        question_wps = metadata["question_wps"][0:unpadded_q_wps_len]
         passage_tokens = metadata["passage_tokens"]
         passage_wps = metadata["passage_wps"]
         passage_wpidx2tokenidx = metadata["passage_wpidx2tokenidx"]
+        question_wpidx2tokenidx = metadata["question_wpidx2tokenidx"]
         answer_annotation_dicts = metadata["answer_annotations"]
         passage_date_values = metadata["passage_date_values"]
         passage_num_values = metadata["passage_number_values"]
         composed_numbers = metadata["composed_numbers"]
         passage_year_diffs = metadata["passage_year_diffs"]
-        # passage_num_diffs = metadata['passagenum_diffs']
+        count_values = metadata["count_values"]
         (exact_match, f1_score) = f1metric(predicted_ans, answer_annotation_dicts)
 
+        out_str = ""
         out_str += "qid: {}".format(question_id) + "\n"
         out_str += question + "\n"
         out_str += passage + "\n"
@@ -99,56 +150,29 @@ class DropNMNPredictor(Predictor):
         out_str += f"GoldPassageSpans:{gold_passage_span_ans}  GoldQuesSpans:{gold_question_span_ans}\n"
         # out_str += f"GoldPassageSpans:{answer_as_passage_spans}" + '\n'
 
-        # out_str += f"PredPassageSpan: {best_span}" + '\n'
         out_str += f"PredictedAnswer: {predicted_ans}" + "\n"
         out_str += f"F1:{f1_score} EM:{exact_match}" + "\n"
-        if outputs['logical_forms']:
-            out_str += f"Top-Prog: {outputs['logical_forms'][0]}" + "\n"
-        else:
-            out_str += f"Top-Prog: NO PROGRAM FOUND" + "\n"
-        if outputs['batch_actionseq_probs']:
-            out_str += f"Top-Prog-Prob: {outputs['batch_actionseq_probs'][0]}" + "\n"
-        else:
-            out_str += f"Top-Prog-Prob: NO PROGRAM FOUND" + "\n"
+
+        out_str += f"Top-Prog: {top_logical_form}" + "\n"
+        out_str += f"Top-Prog-Prob: {top_logical_form_prob}" + "\n"
+
         out_str += f"Dates: {passage_date_values}" + "\n"
         out_str += f"PassageNums: {passage_num_values}" + "\n"
         out_str += f"ComposedNumbers: {composed_numbers}" + "\n"
-        # out_str += f'PassageNumDiffs: {passage_num_diffs}' + '\n'
         out_str += f"YearDiffs: {passage_year_diffs}" + "\n"
 
-        logical_forms = outputs["logical_forms"]
-        program_probs = outputs["batch_actionseq_probs"]
-        execution_vals = outputs["execution_vals"]
-        program_logprobs = outputs["batch_actionseq_logprobs"]
-        all_predicted_answers = outputs["all_predicted_answers"]
-        if "logical_forms":
-            for lf, d, ex_vals, prog_logprob, prog_prob in zip(
-                logical_forms, all_predicted_answers, execution_vals, program_logprobs, program_probs
-            ):
-                ex_vals = myutils.round_all(ex_vals, 1)
-                # Stripping the trailing new line
-                ex_vals_str = self._print_ExecutionValTree(ex_vals, 0).strip()
-                out_str += f"LogicalForm: {lf}\n"
-                out_str += f"Prog_LogProb: {prog_logprob}\n"
-                out_str += f"Prog_Prob: {prog_prob}\n"
-                out_str += f"Answer: {d}\n"
-                out_str += f"ExecutionTree:\n{ex_vals_str}"
-                out_str += f"\n"
-                # NUM_PROGS_TO_PRINT -= 1
-                # if NUM_PROGS_TO_PRINT == 0:
-                #     break
-
-        # # This is the top scoring program
-        # # List of dictionary where each dictionary contains a single module_name: pattn-value pair
-        # module_debug_info: List[Dict] = module_debug_infos[0]
-        # for module_dict in module_debug_info:
-        #     module_name, pattn = list(module_dict.items())[0]
-        #     print(module_name)
-        #     print(f"{len(pattn)}  {len(passage_wpidx2tokenidx)}")
-        #     assert len(pattn) == len(passage_wpidx2tokenidx)
-        #
-        # # print(module_debug_infos)
-        # # print(passage_wpidx2tokenidx)
+        out_str += "Program execution" + "\n"
+        for module_output_dict in program_execution:
+            for module_name, module_outputs in module_output_dict.items():
+                module_output_str = visualize_module_outputs(module_name=module_name, module_outputs=module_outputs,
+                                                             question_wps=question_wps,
+                                                             passage_wps=passage_wps,
+                                                             passage_numbers=passage_num_values,
+                                                             passage_dates=passage_date_values,
+                                                             composed_numbers=composed_numbers,
+                                                             year_diffs=passage_year_diffs,
+                                                             count_values=count_values)
+                out_str += module_output_str
 
         out_str += "--------------------------------------------------\n"
 

@@ -7,7 +7,7 @@ export BEAMSIZE=1
 export DEBUG=true
 
 # SAVED MODEL
-MODEL_DIR=./resources/semqa/checkpoints/test-1.0
+MODEL_DIR=/shared/nitishg/semqa/checkpoints/drop/drop_wqdmr_programs/drop_parser_bert/EXCLOSS_true/MMLLOSS_true/aux_true/SUPEPOCHS_0_HEM_5_BM_1/S_1/Qattn_true
 MODEL_TAR=${MODEL_DIR}/model.tar.gz
 PREDICTION_DIR=${MODEL_DIR}/predictions
 mkdir ${PREDICTION_DIR}

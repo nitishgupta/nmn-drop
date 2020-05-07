@@ -4,7 +4,7 @@ export TMPDIR=/shared/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
 DATASET_DIR=/shared/nitishg/data/drop-w-qdmr
-DATASET_NAME=drop_wqdmr_programs
+DATASET_NAME=drop_wqdmr_programs-y2d-wcog
 # drop_wqdmr_programs
 # full_drop_merged_wqdmr
 
