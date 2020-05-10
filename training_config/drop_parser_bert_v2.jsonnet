@@ -3,6 +3,7 @@ local bert_model = "bert-base-uncased";
 local batch_size = utils.parse_number(std.extVar("BS"));
 local max_length = 512;
 local beam_size = utils.parse_number(std.extVar("BEAMSIZE"));
+local supervised_epochs = utils.parse_number(std.extVar("SUPEPOCHS"));
 
 {
     "dataset_reader": {
@@ -118,7 +119,24 @@ local beam_size = utils.parse_number(std.extVar("BEAMSIZE"));
         "interpret": utils.boolparser(std.extVar("INTERPRET"))
     },
 
+//    "data_loader": {
+//      "batch_sampler": {
+//        "type": "basic",
+//        "sampler": {"type": "random"},
+//        "batch_size": batch_size,
+//        "drop_last": false,
+//      },
+//    },
+
     "data_loader": {
+      "sampler": {
+        "type": "curriculum",
+        "supervised_epochs": supervised_epochs,
+      },
+      "batch_size": batch_size,
+    },
+
+    "validation_data_loader": {
       "batch_sampler": {
         "type": "basic",
         "sampler": {"type": "random"},
@@ -126,7 +144,6 @@ local beam_size = utils.parse_number(std.extVar("BEAMSIZE"));
         "drop_last": false,
       },
     },
-
 
     "trainer": {
         "checkpointer": {"num_serialized_models_to_keep": 1},

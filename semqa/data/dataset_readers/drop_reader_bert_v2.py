@@ -554,6 +554,8 @@ class DROPReaderV2(DatasetReader):
         if program_supervision:
             program_node = node_from_dict(program_supervision)
             question_attention_supervision_to_wps(program_node, q_tokenidx2wpidx, unpadded_q_wps_len)
+            revise_date_num_execution_supervision(program_node=program_node, old2new_dateidxs=old2new_p_dateidx,
+                                                  old2new_numidxs=old2new_p_numidx)
             program_supervision = program_node.to_dict()
 
         # Tuple[List[List[int]], List[List[int]]]
@@ -579,6 +581,7 @@ class DROPReaderV2(DatasetReader):
         fields["gold_function2actionidx_maps"] = MetadataField(gold_function2actionidx_map)
         # wrapping in a list to support multiple program-supervisions
         fields["gold_program_dicts"] = MetadataField([program_supervision])
+        metadata.update({"program_supervision": program_supervision})
 
         ########     ANSWER FIELDS      ###################
         if answer_annotations:
@@ -909,3 +912,38 @@ def question_attention_supervision_to_wps(program_node: Node, q_tokenidx2wpidx: 
 
     for c in program_node.children:
         question_attention_supervision_to_wps(c, q_tokenidx2wpidx, unpadded_q_wps_len)
+
+
+def revise_date_num_execution_supervision(program_node: Node, old2new_dateidxs: Dict[int, int],
+                                          old2new_numidxs: Dict[int, int]):
+    def is_date_num_supervision(sup_key: str) -> Tuple[bool, str]:
+        """function to check if the supervision key is a date or number execution supervision.
+            e.g. "num1_entidxs", "date2_entidxs", "num_entidxs", etc.
+        """
+        is_date_num_bool = True
+        if sup_key.split("_")[1] != "entidxs":
+            is_date_num_bool = False
+        if sup_key[0:3] != "num" and sup_key[0:4] != "date":
+            is_date_num_bool = False
+
+        date_or_num_str = None
+        if is_date_num_bool:
+            date_or_num_str = "date" if sup_key[0:4] == "date" else "num"
+        return is_date_num_bool, date_or_num_str
+
+    supervision_dict: Dict = program_node.supervision
+
+    for supervision_key in supervision_dict:
+        is_date_num, date_or_num = is_date_num_supervision(supervision_key)
+        if is_date_num:
+            # This can be list of date or num entidxs
+            symbol_entidxs = supervision_dict[supervision_key]
+            old2new_entidxs = old2new_dateidxs if date_or_num == "date" else old2new_numidxs
+            new_symbol_entidxs = []
+            for entidx in symbol_entidxs:
+                if entidx in old2new_entidxs:
+                    new_symbol_entidxs.append(old2new_entidxs[entidx])
+            supervision_dict[supervision_key] = new_symbol_entidxs
+
+    for c in program_node.children:
+        revise_date_num_execution_supervision(c, old2new_dateidxs, old2new_numidxs)

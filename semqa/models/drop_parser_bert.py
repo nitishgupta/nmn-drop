@@ -702,21 +702,22 @@ class DROPParserBERT(DROPParserBase):
             if aux_win_loss != 0:
                 self.auxwinloss_metric(aux_win_loss.item())
 
-            # if self.excloss:
-            #     exec_loss = 0.0
-            #     batch_exec_loss = 0.0
-            #     execloss_normalizer = 0.0
-            #     for ins_dens in batch_denotations:
-            #         for den in ins_dens:
-            #             execloss_normalizer += 1.0
-            #             exec_loss += den.loss
-            #     if execloss_normalizer > 0:
-            #         batch_exec_loss = exec_loss / execloss_normalizer
-            #     # This check is made explicit here since not all batches have this loss, hence a 0.0 value
-            #     # only bloats the denominator in the metric. This is also done for other losses in below
-            #     if batch_exec_loss != 0.0:
-            #         self.excloss_metric(batch_exec_loss.item())
-            #     total_aux_loss += batch_exec_loss
+            if self.excloss:
+                exec_loss = 0.0
+                batch_exec_loss = 0.0
+                execloss_normalizer = 0.0
+                for ins_dens in batch_denotations:
+                    for den in ins_dens:
+                        exec_loss += den.loss
+                        if den.loss > 0.0:
+                            execloss_normalizer += 1.0
+                if execloss_normalizer > 0:
+                    batch_exec_loss = exec_loss / execloss_normalizer
+                # This check is made explicit here since not all batches have this loss, hence a 0.0 value
+                # only bloats the denominator in the metric. This is also done for other losses in below
+                if batch_exec_loss != 0.0:
+                    self.excloss_metric(batch_exec_loss.item())
+                total_aux_loss += batch_exec_loss
 
             if self.qattloss:
                 # Compute Question Attention Supervision auxiliary loss
@@ -1272,299 +1273,6 @@ class DROPParserBERT(DROPParserBase):
         else:
             return -1 * (loss / normalizer)
 
-    @staticmethod
-    def _get_best_spans(
-        batch_denotations,
-        batch_denotation_types,
-        question_char_offsets,
-        question_strs,
-        passage_char_offsets,
-        passage_strs,
-        *args,
-    ):
-        """ For all SpanType denotations, get the best span
-
-        Parameters:
-        ----------
-        batch_denotations: List[List[Any]]
-        batch_denotation_types: List[List[str]]
-        """
-
-        (question_mask_aslist, passage_mask_aslist) = args
-
-        batch_best_spans = []
-        batch_predicted_answers = []
-
-        for instance_idx in range(len(batch_denotations)):
-            instance_prog_denotations = batch_denotations[instance_idx]
-            instance_prog_types = batch_denotation_types[instance_idx]
-
-            instance_best_spans = []
-            instance_predicted_ans = []
-
-            for denotation, progtype in zip(instance_prog_denotations, instance_prog_types):
-                # if progtype == "QuestionSpanAnswwer":
-                # Distinction between QuestionSpanAnswer and PassageSpanAnswer is not needed currently,
-                # since both classes store the start/end logits as a tuple
-                # Shape: (2, )
-                best_span = get_best_span(
-                    span_start_logits=denotation._value[0].unsqueeze(0),
-                    span_end_logits=denotation._value[1].unsqueeze(0),
-                ).squeeze(0)
-                instance_best_spans.append(best_span)
-
-                predicted_span = tuple(best_span.detach().cpu().numpy())
-                if progtype == "QuestionSpanAnswer":
-                    try:
-                        start_offset = question_char_offsets[instance_idx][predicted_span[0]][0]
-                        end_offset = question_char_offsets[instance_idx][predicted_span[1]][1]
-                        predicted_answer = question_strs[instance_idx][start_offset:end_offset]
-                    except:
-                        print()
-                        print(f"PredictedSpan: {predicted_span}")
-                        print(f"QuesMaskLen: {question_mask_aslist[instance_idx].size()}")
-                        print(f"StartLogProbs:{denotation._value[0]}")
-                        print(f"EndLogProbs:{denotation._value[1]}")
-                        print(f"LenofOffsets: {len(question_char_offsets[instance_idx])}")
-                        print(f"QuesStrLen: {len(question_strs[instance_idx])}")
-
-                elif progtype == "PassageSpanAnswer":
-                    try:
-                        start_offset = passage_char_offsets[instance_idx][predicted_span[0]][0]
-                        end_offset = passage_char_offsets[instance_idx][predicted_span[1]][1]
-                        predicted_answer = passage_strs[instance_idx][start_offset:end_offset]
-                    except:
-                        print()
-                        print(f"PredictedSpan: {predicted_span}")
-                        print(f"PassageMaskLen: {passage_mask_aslist[instance_idx].size()}")
-                        print(f"LenofOffsets: {len(passage_char_offsets[instance_idx])}")
-                        print(f"PassageStrLen: {len(passage_strs[instance_idx])}")
-                else:
-                    raise NotImplementedError
-
-                instance_predicted_ans.append(predicted_answer)
-
-            batch_best_spans.append(instance_best_spans)
-            batch_predicted_answers.append(instance_predicted_ans)
-
-        return batch_best_spans, batch_predicted_answers
-
-    def passage_attention_to_sidearg(
-        self,
-        qtypes: List[str],
-        batch_actionseqs: List[List[List[str]]],
-        batch_actionseq_sideargs: List[List[List[Dict]]],
-        pattn_supervised: List[bool],
-        passage_attn_supervision: torch.FloatTensor,
-        max_passage_len: int,
-        device_id,
-    ):
-        """ If instance has passage attention supervision, add it to 'PassageAttention -> find_PassageAttention' """
-
-        relevant_action = "PassageAttention -> find_PassageAttention"
-        for ins_idx in range(len(batch_actionseqs)):
-            instance_programs = batch_actionseqs[ins_idx]
-            instance_prog_sideargs = batch_actionseq_sideargs[ins_idx]
-            instance_pattn_supervised = pattn_supervised[ins_idx]
-            pattn_supervision = passage_attn_supervision[ins_idx]
-            if not instance_pattn_supervised:
-                pattn_supervision = None
-            for program, side_args in zip(instance_programs, instance_prog_sideargs):
-                for action, sidearg_dict in zip(program, side_args):
-                    if action == relevant_action:
-                        sidearg_dict["passage_attention"] = pattn_supervision
-
-    def datecompare_eventdategr_to_sideargs(
-        self,
-        qtypes: List[str],
-        batch_actionseqs: List[List[List[str]]],
-        batch_actionseq_sideargs: List[List[List[Dict]]],
-        datecomp_ques_event_date_groundings: List[Tuple[List[float], List[float]]],
-        device_id,
-    ):
-        """ batch_event_date_groundings: For each question, a two-tuple containing the correct date-grounding for the
-            two events mentioned in the question.
-            These are in order of the annotation (order of events in question) but later the question attention
-            might be predicted in reverse order and these will then be the wrong (reverse) annotations. Take care later.
-        """
-        # List[Tuple[torch.Tensor, torch.Tensor]]
-        q_event_date_groundings = self.get_gold_question_event_date_grounding(
-            datecomp_ques_event_date_groundings, device_id
-        )
-
-        relevant_action1 = "<PassageAttention,PassageAttention:PassageAttention_answer> -> compare_date_greater_than"
-        relevant_action2 = "<PassageAttention,PassageAttention:PassageAttention_answer> -> compare_date_lesser_than"
-        relevant_actions = [relevant_action1, relevant_action2]
-
-        for ins_idx in range(len(batch_actionseqs)):
-            instance_programs = batch_actionseqs[ins_idx]
-            instance_prog_sideargs = batch_actionseq_sideargs[ins_idx]
-            event_date_groundings = q_event_date_groundings[ins_idx]
-            for program, side_args in zip(instance_programs, instance_prog_sideargs):
-                for action, sidearg_dict in zip(program, side_args):
-                    if action in relevant_actions:
-                        sidearg_dict["event_date_groundings"] = event_date_groundings
-
-    def numcompare_eventnumgr_to_sideargs(
-        self,
-        qtypes,
-        execution_supervised,
-        batch_actionseqs: List[List[List[str]]],
-        batch_actionseq_sideargs: List[List[List[Dict]]],
-        numcomp_qspan_num_groundings: List[Tuple[List[float], List[float]]],
-        device_id,
-    ):
-        """ UPDATE: function name suggest only numpcomp, but works for other questions also
-            numcomp_qspan_num_groundings - is a List of 1- or 2- or maybe n- tuple of number-grounding
-        """
-        """ batch_event_num_groundings: For each question, a 1- or 2--tuple containing the correct num-grounding for the
-            two events mentioned in the question.
-            
-            Currently, for each qtype, we only have supervision for one of the actions, hence this function works
-            (The tuple contains both groundings for the same action)
-            If we need somthing like qattn, where multiple supervisions are provided, things will have to change
-        """
-        # Reusing the function written for dates -- should work fine
-        #
-        q_event_num_groundings = self.get_gold_question_event_date_grounding(numcomp_qspan_num_groundings, device_id)
-        numcomp_action_gt = "<PassageAttention,PassageAttention:PassageAttention_answer> -> compare_num_greater_than"
-        numcomp_action_lt = "<PassageAttention,PassageAttention:PassageAttention_answer> -> compare_num_greater_than"
-        findnum_action = "<PassageAttention:PassageNumber> -> find_PassageNumber"
-        maxNumPattn_action = "<PassageAttention:PassageAttention> -> maxNumPattn"
-        minNumPattn_action = "<PassageAttention:PassageAttention> -> minNumPattn"
-
-        qtype2relevant_actions_list = {
-            dropconstants.NUMCOMP_QTYPE: [numcomp_action_gt, numcomp_action_lt],
-            dropconstants.NUM_find_qtype: [findnum_action],
-            dropconstants.NUM_filter_find_qtype: [findnum_action],
-            dropconstants.MAX_find_qtype: [maxNumPattn_action],
-            dropconstants.MAX_filter_find_qtype: [maxNumPattn_action],
-            dropconstants.MIN_find_qtype: [minNumPattn_action],
-            dropconstants.MIN_filter_find_qtype: [minNumPattn_action],
-        }
-
-        for ins_idx in range(len(batch_actionseqs)):
-            instance_programs = batch_actionseqs[ins_idx]
-            instance_prog_sideargs = batch_actionseq_sideargs[ins_idx]
-            event_num_groundings = q_event_num_groundings[ins_idx]
-            qtype = qtypes[ins_idx]  # Could be UNK
-            if qtype not in qtype2relevant_actions_list:
-                continue
-            relevant_actions = qtype2relevant_actions_list[qtype]
-            for program, side_args in zip(instance_programs, instance_prog_sideargs):
-                for action, sidearg_dict in zip(program, side_args):
-                    if action in relevant_actions:
-                        sidearg_dict["event_num_groundings"] = event_num_groundings
-
-    def get_gold_question_event_date_grounding(
-        self, question_event_date_groundings: List[Tuple[List[int], List[int]]], device_id: int
-    ) -> List[Tuple[torch.Tensor, torch.Tensor]]:
-        """ Converts input event date groundings (date-comparison) to FloatTensors """
-        question_date_groundings = []
-        # for grounding_1, grounding_2 in question_event_date_groundings:
-        #     g1 = allenutil.move_to_device(torch.FloatTensor(grounding_1), device_id)
-        #     g2 = allenutil.move_to_device(torch.FloatTensor(grounding_2), device_id)
-        #     question_date_groundings.append((g1, g2))
-
-        # Reader passes two groundings if not provided, hence all elements have tensors and no need to check for None
-        for groundings in question_event_date_groundings:
-            groundings_tensors = []
-            for grounding in groundings:
-                g = allenutil.move_to_device(torch.FloatTensor(grounding), device_id)
-                groundings_tensors.append(g)
-            question_date_groundings.append(groundings_tensors)
-        return question_date_groundings
-
-    def passageAnsSpan_to_PassageAttention(self, answer_as_passage_spans, passage_mask):
-        """ Convert answers as passage span into passage attention for model introspection
-
-        Parameters:
-        ----------
-        answer_as_passage_spans: `torch.Tensor`
-            Tensor of shape (batch_size, number_of_ans_spans, 2) containing start / end positions
-        passage_mask: `torch.FloatTensor`
-            Tensor of shape (batch_size, passage_length)
-
-        Returns:
-        --------
-        attention: `torch.FloatTensor`
-            List of (passage_length, ) shaped tensor containing normalized attention for gold spans
-        """
-        # Shape: (batch_size, number_of_ans_spans, 2)
-        answer_as_spans = answer_as_passage_spans.long()
-
-        # TODO(nitish): ONLY USING FIRST CORRECT SPAN OUT OF MULTIPLE POSSIBLE
-        # answer_as_spans = answer_as_spans[:, 0, :].unsqueeze(1)
-
-        # Shape: (batch_size, number_of_ans_spans)
-        span_starts = answer_as_spans[:, :, 0]
-        span_ends = answer_as_spans[:, :, 1]
-        answers_mask = (span_starts >= 0).float()
-
-        # Shape: (batch_size, 1, number_of_ans_spans)
-        span_starts_ex = span_starts.unsqueeze(1)
-        span_ends_ex = span_ends.unsqueeze(1)
-
-        # Idea: Make a range vector from 0 <-> seq_len - 1 and convert into boolean with (val > start) and (val < end)
-        # Such items in the sequence are within the span range
-        # Shape: (passage_length, )
-        range_vector = allenutil.get_range_vector(passage_mask.size(1), allenutil.get_device_of(passage_mask))
-
-        # Shape: (1, passage_length, 1)
-        range_vector = range_vector.unsqueeze(0).unsqueeze(2)
-
-        # Shape: (batch_size, passage_length, number_of_ans_spans) - 1 as tokens in the span, 0 otherwise
-        span_range_mask = (range_vector >= span_starts_ex).float() * (range_vector <= span_ends_ex).float()
-        span_range_mask = span_range_mask * answers_mask.unsqueeze(1)
-
-        # Shape: (batch_size, passage_length)
-        unnormalized_attention = span_range_mask.sum(2)
-        normalized_attention = unnormalized_attention / unnormalized_attention.sum(1, keepdim=True)
-
-        attention_aslist = [normalized_attention[i, :] for i in range(normalized_attention.size(0))]
-
-        return attention_aslist
-
-    def passageattn_to_startendlogits(self, passage_attention, passage_mask):
-        span_start_logits = passage_attention.new_zeros(passage_attention.size())
-        span_end_logits = passage_attention.new_zeros(passage_attention.size())
-
-        nonzeroindcs = (passage_attention > 0).nonzero()
-
-        startidx = nonzeroindcs[0]
-        endidx = nonzeroindcs[-1]
-
-        print(f"{startidx} {endidx}")
-
-        span_start_logits[startidx] = 2.0
-        span_end_logits[endidx] = 2.0
-
-        span_start_logits = allenutil.replace_masked_values(span_start_logits, passage_mask.bool(), -1e32)
-        span_end_logits = allenutil.replace_masked_values(span_end_logits, passage_mask.bool(), -1e32)
-
-        span_start_logits += 1e-7
-        span_end_logits += 1e-7
-
-        return (span_start_logits, span_end_logits)
-
-    def passage_ans_attn_to_sideargs(
-        self,
-        batch_actionseqs: List[List[List[str]]],
-        batch_actionseq_sideargs: List[List[List[Dict]]],
-        batch_gold_attentions: List[torch.Tensor],
-    ):
-
-        for ins_idx in range(len(batch_actionseqs)):
-            instance_programs = batch_actionseqs[ins_idx]
-            instance_prog_sideargs = batch_actionseq_sideargs[ins_idx]
-            instance_gold_attention = batch_gold_attentions[ins_idx]
-            for program, side_args in zip(instance_programs, instance_prog_sideargs):
-                first_qattn = True  # This tells model which qent attention to use
-                # print(side_args)
-                # print()
-                for action, sidearg_dict in zip(program, side_args):
-                    if action == "PassageSpanAnswer -> find_passageSpanAnswer":
-                        sidearg_dict["passage_attention"] = instance_gold_attention
 
     def getInitialDecoderState(
         self,
@@ -1696,42 +1404,42 @@ class DROPParserBERT(DROPParserBase):
 
         return final_states
 
-    def aux_count_loss(self, passage_attention, passage_mask, answer_as_count, count_mask):
-        if torch.sum(count_mask) == 0:
-            loss, accuracy = 0.0, 0.0
-            return loss, accuracy
-
-        batch_size = passage_attention.size()[0]
-        # List of (B, P) shaped tensors
-        scaled_attentions = [passage_attention * sf for sf in self._executor_parameters.passage_attention_scalingvals]
-        # Shape: (B, passage_length, num_scaling_factors)
-        scaled_passage_attentions = torch.stack(scaled_attentions, dim=2)
-        # Shape: (B, hidden_dim)
-        count_hidden_repr = self._executor_parameters.passage_attention_to_count(
-            scaled_passage_attentions, passage_mask
-        )
-        # Shape: (B, num_counts)
-        passage_span_logits = self._executor_parameters.passage_count_predictor(count_hidden_repr)
-        count_distribution = torch.softmax(passage_span_logits, dim=1)
-
-        loss = 0
-        accuracy = 0
-        if answer_as_count is not None:
-            # (B, num_counts)
-            answer_as_count = answer_as_count.float()
-            count_log_probs = torch.log(count_distribution + 1e-40)
-            log_likelihood = torch.sum(count_log_probs * answer_as_count * count_mask.unsqueeze(1).float())
-
-            loss = -1 * log_likelihood
-            loss = loss / torch.sum(count_mask).float()
-
-            # List of predicted count idxs
-            count_idx = torch.argmax(count_distribution, 1)
-            gold_count_idxs = torch.argmax(answer_as_count, 1)
-            correct_vec = (count_idx == gold_count_idxs).float() * count_mask.float()
-            accuracy = (torch.sum(correct_vec) / torch.sum(count_mask)).detach().cpu().numpy()
-
-        return loss, accuracy
+    # def aux_count_loss(self, passage_attention, passage_mask, answer_as_count, count_mask):
+    #     if torch.sum(count_mask) == 0:
+    #         loss, accuracy = 0.0, 0.0
+    #         return loss, accuracy
+    #
+    #     batch_size = passage_attention.size()[0]
+    #     # List of (B, P) shaped tensors
+    #     scaled_attentions = [passage_attention * sf for sf in self._executor_parameters.passage_attention_scalingvals]
+    #     # Shape: (B, passage_length, num_scaling_factors)
+    #     scaled_passage_attentions = torch.stack(scaled_attentions, dim=2)
+    #     # Shape: (B, hidden_dim)
+    #     count_hidden_repr = self._executor_parameters.passage_attention_to_count(
+    #         scaled_passage_attentions, passage_mask
+    #     )
+    #     # Shape: (B, num_counts)
+    #     passage_span_logits = self._executor_parameters.passage_count_predictor(count_hidden_repr)
+    #     count_distribution = torch.softmax(passage_span_logits, dim=1)
+    #
+    #     loss = 0
+    #     accuracy = 0
+    #     if answer_as_count is not None:
+    #         # (B, num_counts)
+    #         answer_as_count = answer_as_count.float()
+    #         count_log_probs = torch.log(count_distribution + 1e-40)
+    #         log_likelihood = torch.sum(count_log_probs * answer_as_count * count_mask.unsqueeze(1).float())
+    #
+    #         loss = -1 * log_likelihood
+    #         loss = loss / torch.sum(count_mask).float()
+    #
+    #         # List of predicted count idxs
+    #         count_idx = torch.argmax(count_distribution, 1)
+    #         gold_count_idxs = torch.argmax(answer_as_count, 1)
+    #         correct_vec = (count_idx == gold_count_idxs).float() * count_mask.float()
+    #         accuracy = (torch.sum(correct_vec) / torch.sum(count_mask)).detach().cpu().numpy()
+    #
+    #     return loss, accuracy
 
     def masking_blockdiagonal(self, passage_length, window, device_id):
         """ Make a (passage_length, passage_length) tensor M of 1 and -1 in which for each row x,

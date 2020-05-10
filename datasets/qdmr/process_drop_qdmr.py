@@ -140,8 +140,8 @@ def add_question_attention_supervision(node: Node, question_tokens: List[str]) -
 
 
 def get_cog(attention: List[int]):
-    cog = sum([i * x for (i, x) in enumerate(attention)])
-    # cog = max([i if x == 1 else 0 for (i, x) in enumerate(attention)])
+    cog = sum([i * x for (i, x) in enumerate(attention)])   # Weighted-COG  -- this seems to work better
+    # cog = max([i if x == 1 else 0 for (i, x) in enumerate(attention)])   # Last token attended COG
     return cog
 
 

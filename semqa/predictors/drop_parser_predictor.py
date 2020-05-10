@@ -1,5 +1,6 @@
-from typing import List, Union, Dict
+from typing import List, Union, Dict, Tuple
 
+from dataclasses import dataclass
 import json
 from overrides import overrides
 
@@ -7,35 +8,80 @@ from allennlp.common.util import JsonDict, sanitize
 from allennlp.data import DatasetReader, Instance
 from allennlp.models import Model
 from allennlp.predictors.predictor import Predictor
-import utils.util as myutils
 from allennlp_semparse.common.util import lisp_to_nested_expression
 from semqa.domain_languages.domain_language_utils import mostAttendedSpans, listTokensVis
 from semqa.domain_languages.drop_language_v2 import Output, output_from_dict
 
 from semqa.utils.squad_eval import metric_max_over_ground_truths
 from semqa.utils.drop_eval import get_metrics as drop_em_and_f1, answer_json_to_strings
+from semqa.utils.qdmr_utils import node_from_dict, nested_expression_to_lisp
 
 
-def visualize_module_outputs(module_name: str, module_outputs: List[Dict], **kwargs):
+class PredictionData:
+    def __init__(self, outputs: JsonDict):
+        self.metadata: Dict = outputs["metadata"]
+        self.predicted_ans: str = outputs["predicted_answer"]
+        modules_debug_infos = outputs["modules_debug_infos"]
+        program_execution: List[Dict] = modules_debug_infos[0] if modules_debug_infos else []
+        # Each dict is a singleton {module_name: List[Output-dict]} where the Output is a serialized as a Dict
+        self.program_execution: List[Dict] = program_execution[::-1]
+
+        self.question_mask: List[float] = outputs["question_mask"]
+        self.passage_mask: List[float] = outputs["passage_mask"]
+        self.logical_forms: List[str] = outputs["logical_forms"]
+        self.top_logical_form: str = self.logical_forms[0] if self.logical_forms else ""
+        self.top_nested_expr = []
+        if self.top_logical_form:
+            self.top_nested_expr: List = lisp_to_nested_expression(self.top_logical_form)
+        self.actionseq_logprobs: List[float] = outputs["actionseq_logprobs"]
+        self.actionseq_probs: List[float] = outputs["actionseq_probs"]
+        self.top_logical_form_prob: float = self.actionseq_probs[0] if self.actionseq_probs else -1
+        self.prog_denotations: List[str] = outputs["all_predicted_answers"]
+
+        self.gold_passage_span_ans: List[Tuple[int, int]] = self.metadata["answer_passage_spans"] if \
+            "answer_passage_spans" in self.metadata else []
+        self.gold_question_span_ans: List[Tuple[int, int]] = self.metadata["answer_question_spans"] if \
+            "answer_question_spans" in self.metadata else []
+
+        self.question_id: str = self.metadata["question_id"]
+        self.question: str = self.metadata["question"]
+        self.passage: str = self.metadata["passage"]
+        self.unpadded_q_wps_len: int = self.metadata["unpadded_q_wps_len"]
+        self.question_wps: List[str] = self.metadata["question_wps"][0:self.unpadded_q_wps_len]
+        self.passage_tokens: List[str] = self.metadata["passage_tokens"]
+        self.passage_wps: List[str] = self.metadata["passage_wps"]
+        self.passage_wpidx2tokenidx: List[int] = self.metadata["passage_wpidx2tokenidx"]
+        self.question_wpidx2tokenidx: List[int] = self.metadata["question_wpidx2tokenidx"]
+        self.answer_annotation_dicts: List[Dict] = self.metadata["answer_annotations"]
+        self.passage_date_values: List[str] = self.metadata["passage_date_values"]
+        self.passage_num_values: List[float] = self.metadata["passage_number_values"]
+        self.composed_numbers: List[float] = self.metadata["composed_numbers"]
+        self.passage_year_diffs: List[int] = self.metadata["passage_year_diffs"]
+        self.count_values: List[int] = self.metadata["count_values"]
+        self.program_supervision: Union[None, Dict] = self.metadata.get("program_supervision", None)
+
+        (self.exact_match, self.f1_score) = f1metric(self.predicted_ans, self.answer_annotation_dicts)
+
+
+def visualize_module_outputs(module_name: str, module_outputs: List[Dict], prediction_data: PredictionData):
     """For a module and its list of Output(s) return a string-output that can be visualized."""
     outputs: List[Output] = [output_from_dict(x) for x in module_outputs]
     output_str = f"{module_name}\n"
     for output in outputs:
-        output_str += visualize_single_output_from_module(output, **kwargs) + '\n'
+        output_str += visualize_single_output_from_module(output, prediction_data) + '\n'
     output_str = output_str.strip() + "\n\n"
     return output_str
 
 
-def visualize_single_output_from_module(output: Output, question_wps, passage_wps, passage_numbers, passage_dates,
-                                        composed_numbers, year_diffs, count_values):
+def visualize_single_output_from_module(output: Output, prediction_data: PredictionData):
     """Visualize string for single Output attention from a module. """
-    output_values = {'passage': passage_wps,
-                     'question': question_wps,
-                     'numbers': passage_numbers,
-                     'dates': passage_dates,
-                     'year_diffs': year_diffs,
-                     'composed_numbers': composed_numbers,
-                     'count': count_values}
+    output_values = {'passage': prediction_data.passage_wps,
+                     'question': prediction_data.question_wps,
+                     'numbers': prediction_data.passage_num_values,
+                     'dates': prediction_data.passage_date_values,
+                     'year_diffs': prediction_data.passage_year_diffs,
+                     'composed_numbers': prediction_data.composed_numbers,
+                     'count': prediction_data.count_values}
     output_type: str = output.output_type
     output_support: List[Union[str, int, float]] = output_values[output_type]
     output_attn: List[float] = output.values
@@ -105,78 +151,75 @@ class DropNMNPredictor(Predictor):
     def dump_line(self, outputs: JsonDict) -> str:  # pylint: disable=no-self-use
         # Use json.dumps(outputs) + "\n" to dump a dictionary
 
-        metadata = outputs["metadata"]
-        predicted_ans = outputs["predicted_answer"]
-        modules_debug_infos = outputs["modules_debug_infos"]
-        program_execution: List[Dict] = modules_debug_infos[0]
-        program_execution = program_execution[::-1]
-
-        question_mask = outputs["question_mask"]
-        passage_mask = outputs["passage_mask"]
-        logical_forms = outputs["logical_forms"]
-        top_logical_form = logical_forms[0] if logical_forms else None
-        actionseq_logprobs = outputs["actionseq_logprobs"]
-        actionseq_probs = outputs["actionseq_probs"]
-        top_logical_form_prob = actionseq_probs[0] if actionseq_probs else None
-        prog_denotations = outputs["all_predicted_answers"]
-
-        gold_passage_span_ans = metadata["answer_passage_spans"] if "answer_passage_spans" in metadata else []
-        gold_question_span_ans = metadata["answer_question_spans"] if "answer_question_spans" in metadata else []
-
-        question_id = metadata["question_id"]
-        question = metadata["question"]
-        passage = metadata["passage"]
-
-        unpadded_q_wps_len = metadata["unpadded_q_wps_len"]
-        question_wps = metadata["question_wps"][0:unpadded_q_wps_len]
-        passage_tokens = metadata["passage_tokens"]
-        passage_wps = metadata["passage_wps"]
-        passage_wpidx2tokenidx = metadata["passage_wpidx2tokenidx"]
-        question_wpidx2tokenidx = metadata["question_wpidx2tokenidx"]
-        answer_annotation_dicts = metadata["answer_annotations"]
-        passage_date_values = metadata["passage_date_values"]
-        passage_num_values = metadata["passage_number_values"]
-        composed_numbers = metadata["composed_numbers"]
-        passage_year_diffs = metadata["passage_year_diffs"]
-        count_values = metadata["count_values"]
-        (exact_match, f1_score) = f1metric(predicted_ans, answer_annotation_dicts)
+        prediction_data = PredictionData(outputs=outputs)
 
         out_str = ""
-        out_str += "qid: {}".format(question_id) + "\n"
-        out_str += question + "\n"
-        out_str += passage + "\n"
+        out_str += "qid: {}".format(prediction_data.question_id) + "\n"
+        out_str += prediction_data.question + "\n"
+        out_str += prediction_data.passage + "\n"
 
-        out_str += f"GoldAnswer: {answer_annotation_dicts}" + "\n"
-        out_str += f"GoldPassageSpans:{gold_passage_span_ans}  GoldQuesSpans:{gold_question_span_ans}\n"
-        # out_str += f"GoldPassageSpans:{answer_as_passage_spans}" + '\n'
+        out_str += f"GoldAnswer: {prediction_data.answer_annotation_dicts}" + "\n"
+        out_str += f"GoldPassageSpans:{prediction_data.gold_passage_span_ans}  " \
+                   f"GoldQuesSpans:{prediction_data.gold_question_span_ans}\n"
 
-        out_str += f"PredictedAnswer: {predicted_ans}" + "\n"
-        out_str += f"F1:{f1_score} EM:{exact_match}" + "\n"
+        out_str += f"PredictedAnswer: {prediction_data.predicted_ans}" + "\n"
+        out_str += f"F1:{prediction_data.f1_score} EM:{prediction_data.exact_match}" + "\n"
 
-        out_str += f"Top-Prog: {top_logical_form}" + "\n"
-        out_str += f"Top-Prog-Prob: {top_logical_form_prob}" + "\n"
+        out_str += f"Top-logical-form: {prediction_data.top_logical_form}" + "\n"
+        out_str += f"Top-prog-Prob: {prediction_data.top_logical_form_prob}" + "\n"
 
-        out_str += f"Dates: {passage_date_values}" + "\n"
-        out_str += f"PassageNums: {passage_num_values}" + "\n"
-        out_str += f"ComposedNumbers: {composed_numbers}" + "\n"
-        out_str += f"YearDiffs: {passage_year_diffs}" + "\n"
+        out_str += f"Dates: {prediction_data.passage_date_values}" + "\n"
+        out_str += f"PassageNums: {prediction_data.passage_num_values}" + "\n"
+        out_str += f"ComposedNumbers: {prediction_data.composed_numbers}" + "\n"
+        out_str += f"YearDiffs: {prediction_data.passage_year_diffs}" + "\n"
 
         out_str += "Program execution" + "\n"
-        for module_output_dict in program_execution:
+        for module_output_dict in prediction_data.program_execution:
             for module_name, module_outputs in module_output_dict.items():
                 module_output_str = visualize_module_outputs(module_name=module_name, module_outputs=module_outputs,
-                                                             question_wps=question_wps,
-                                                             passage_wps=passage_wps,
-                                                             passage_numbers=passage_num_values,
-                                                             passage_dates=passage_date_values,
-                                                             composed_numbers=composed_numbers,
-                                                             year_diffs=passage_year_diffs,
-                                                             count_values=count_values)
+                                                             prediction_data=prediction_data)
                 out_str += module_output_str
 
         out_str += "--------------------------------------------------\n"
 
         return out_str
+
+
+@Predictor.register("drop_parser_jsonl_predictor")
+class DROPNMNJSONLPredictor(DropNMNPredictor):
+    """
+    Predictor for the :class:`~allennlp.models.bidaf.SemanticRoleLabeler` model.
+    """
+    def __init__(self, model: Model, dataset_reader: DatasetReader) -> None:
+        super().__init__(model, dataset_reader)
+
+    @overrides
+    def dump_line(self, outputs: JsonDict) -> str:  # pylint: disable=no-self-use
+        # Use json.dumps(outputs) + "\n" to dump a dictionary
+
+        prediction_data = PredictionData(outputs=outputs)
+
+        # Node in a dict format
+        program_supervision: Dict = prediction_data.program_supervision
+        gold_program_lisp = ""
+        if program_supervision:
+            nested_expr = node_from_dict(program_supervision).get_nested_expression()
+            gold_program_lisp = nested_expression_to_lisp(nested_expr)
+
+        output_dict = {
+            "question": prediction_data.question,
+            "gold_logical_form": gold_program_lisp,
+            # "passage": prediction_data.passage,
+            "query_id": prediction_data.question_id,
+            "predicted_ans": prediction_data.predicted_ans,
+            "logical_form": prediction_data.top_logical_form,
+            "nested_expression": prediction_data.top_nested_expr,
+            "logical_form_prob": prediction_data.top_logical_form_prob,
+            "f1": prediction_data.f1_score,
+            "em": prediction_data.exact_match
+        }
+
+        return json.dumps(output_dict) + "\n"
 
 
 @Predictor.register("drop_analysis_predictor")
