@@ -91,6 +91,13 @@ def model_comparison(pred_instances_1: List[PredictionInstance], pred_instances_
     print(f"Correct intersection between model-1 and model-2")
     print(len(common_correct))
 
+    print(f"Correct in model-1 but not in model-2")
+    diff_qids_set = correct_qids1.difference(correct_qids2)
+    diff_qids = [instance.question_id for instance in pred_instances_1 if instance.question_id in diff_qids_set]
+    print(diff_qids)
+
+
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -115,7 +122,7 @@ if __name__ == "__main__":
     print_about_model(pred_instances_1, modules_of_interest)
     print()
 
-    print("Model 2 {}".format(args.pred_jsonl_1))
+    print("Model 2 {}".format(args.pred_jsonl_2))
     print_about_model(pred_instances_2, modules_of_interest)
 
     print()

@@ -26,14 +26,14 @@ def count_num_exec_sup(dataset, choosen_pids):
     for passage_idx in choosen_pids:
         passage_info = dataset[passage_idx]
         for qa in passage_info[constants.qa_pairs]:
-            if constants.exection_supervised in qa:
-                if qa[constants.exection_supervised]:
+            if constants.execution_supervised in qa:
+                if qa[constants.execution_supervised]:
                     num_exec_sup += 1
     return num_exec_sup
 
 
 def make_supervision_dict(dataset):
-    basic_keys = [constants.program_supervised, constants.qattn_supervised, constants.exection_supervised]
+    basic_keys = [constants.program_supervised, constants.qattn_supervised, constants.execution_supervised]
     qtype_dict = defaultdict(int)
     total_num_qa = 0
     supervision_dict = defaultdict(int)
@@ -84,7 +84,7 @@ def remove_all_annotations(dataset, annotation_for_numpassages):
     supervision_keys = [
         constants.program_supervised,
         constants.qattn_supervised,
-        constants.exection_supervised,
+        constants.execution_supervised,
         constants.strongly_supervised,
     ]
 

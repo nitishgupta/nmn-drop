@@ -343,6 +343,12 @@ def function_to_action_string_alignment(program_node: Node, action_strings: List
     return function2action_idx_mapping
 
 
+def write_jsonl(output_jsonl, output_json_dicts):
+    with open(output_jsonl, 'w') as outf:
+        for json_dict in output_json_dicts:
+            outf.write(json.dumps(json_dict))
+            outf.write("\n")
+
 
 
 

@@ -129,7 +129,7 @@ def generateNumGroundingQues(dataset):
 
         # The final output of the program is enough to train, so no aux loss / execution supervision is needed
         # Still label as execution_supervised as it requires passing the pattn as side-arg
-        question_answer[constants.exection_supervised] = True
+        question_answer[constants.execution_supervised] = True
 
         new_qa_pairs.append(question_answer)
 

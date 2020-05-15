@@ -10,7 +10,7 @@ local supervised_epochs = utils.parse_number(std.extVar("SUPEPOCHS"));
         "type": "drop_reader_bert_v2",
         "lazy": false,
         "skip_instances": true,
-        "skip_due_to_gold_programs": true,
+        "skip_if_progtype_mismatch_anstype": false,
         "convert_spananswer_to_num": true,
         "max_question_wps": 50,
         "max_transformer_length": max_length,
@@ -31,7 +31,6 @@ local supervised_epochs = utils.parse_number(std.extVar("SUPEPOCHS"));
         "type": "drop_reader_bert_v2",
         "lazy": false,
         "skip_instances": false,
-        "skip_due_to_gold_programs": false,
         "max_question_wps": 50,
         "tokenizer": {
           "model_name": bert_model,

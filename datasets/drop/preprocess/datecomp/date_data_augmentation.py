@@ -4,13 +4,17 @@ import os
 import json
 import copy
 import string
+from enum import Enum
 from collections import defaultdict
-import datasets.drop.constants as constants
 import random
 import argparse
 
-random.seed(100)
+from allennlp.data.tokenizers import SpacyTokenizer
+import datasets.drop.constants as constants
+from semqa.utils.qdmr_utils import node_from_dict, Node
 
+random.seed(100)
+spacy_tokenizer = SpacyTokenizer()
 IGNORED_TOKENS = {"a", "an", "the"}
 STRIPPED_CHARACTERS = string.punctuation + "".join(["‘", "’", "´", "`", "_"])
 
@@ -21,6 +25,11 @@ SECOND = "second"
 
 FIRST_operator_tokens = ["first", "earlier"]
 SECOND_operator_tokens = ["later", "last", "second"]
+
+
+def tokenize(text: str) -> List[str]:
+    tokens = spacy_tokenizer.tokenize(text)
+    return [t.text for t in tokens]
 
 
 def readDataset(input_json):
@@ -72,25 +81,39 @@ def find_valid_spans(passage_tokens: List[str], answer_texts: List[str]) -> List
     return spans
 
 
-def get_answer_event_order(ans_tokens: List[str], event1_tokens: List[str], event2_tokens: List[str]) -> str:
+
+class AnswerEventOrder(Enum):
+    FIRST = 1
+    SECOND = 1
+
+
+def get_answer_event_order(ans_tokens: List[str],
+                           event1_tokens: List[str],
+                           event2_tokens: List[str]) -> AnswerEventOrder:
     event1, event2 = set(event1_tokens), set(event2_tokens)
-    ans_event = FIRST if len(event1.intersection(ans_tokens)) > len(event2.intersection(ans_tokens)) else SECOND
+    ans_event = AnswerEventOrder.FIRST if len(event1.intersection(ans_tokens)) > len(event2.intersection(ans_tokens)) \
+        else AnswerEventOrder.SECOND
     return ans_event
 
 
-def getQuestionComparisonOperator(question: str) -> str:
+class OperatorType(Enum):
+    FIRST = 1
+    SECOND = 2
+
+
+def getQuestionComparisonOperator(question: str) -> OperatorType:
     question_tokens = question.split(" ")
     # Correct if Attn1 is first event
 
     for t in ["first", "earlier", "forst", "firts"]:
         if t in question_tokens:
-            return FIRST
+            return OperatorType.FIRST
 
     for t in ["later", "last", "second"]:
         if t in question_tokens:
-            return SECOND
+            return OperatorType.SECOND
 
-    return SECOND
+    return OperatorType.SECOND
 
 
 def quesEvents(qstr):
@@ -157,7 +180,9 @@ def getEventOrderSwitchQuestion(question_answer):
         For validation data we can keep all the validated_answers as the answer string doesn't change
     """
 
-    question_tokenized_text = question_answer[constants.tokenized_question]
+    question_tokens = question_answer[constants.question_tokens]
+    question_tokens = [t for t in question_tokens if t not in ['', ' ']]
+    question_tokenized_text = " ".join(question_tokens)
     answer_as_passage_spans = question_answer[constants.answer_passage_spans]
 
     if not answer_as_passage_spans:
@@ -172,31 +197,35 @@ def getEventOrderSwitchQuestion(question_answer):
 
     new_question_answer = copy.deepcopy(question_answer)
 
-    tokens = question_tokenized_text.split(" ")
-    pretext = tokens[0 : event1_span[0]]
-    event2_text = tokens[event2_span[0] : event2_span[1]]
-    mid_text = tokens[event1_span[1] : event2_span[0]]
-    event1_text = tokens[event1_span[0] : event1_span[1]]
-    end_text = tokens[event2_span[1] :]
+    pretext = question_tokens[0 : event1_span[0]]
+    event2_text = question_tokens[event2_span[0] : event2_span[1]]
+    mid_text = question_tokens[event1_span[1] : event2_span[0]]
+    event1_text = question_tokens[event1_span[0] : event1_span[1]]
+    end_text = question_tokens[event2_span[1] :]
 
     new_question_tokens = pretext + event2_text + mid_text + event1_text + end_text
     new_question_text = " ".join(new_question_tokens)
 
-    new_question_answer[constants.tokenized_question] = new_question_text
-    # Since we don't know the following, we will keep them blank
-    new_question_answer[constants.cleaned_question] = new_question_text
     new_question_answer[constants.question] = new_question_text
+    new_question_answer[constants.question_tokens] = new_question_tokens
 
+    # Since we don't know the following, we will keep them blank
     new_question_answer[constants.answer_question_spans] = []
-    # TODO(nitish): Reverse order of groundings
-    # Reversing the order of the date groundings
-    if constants.qspan_dategrounding_supervision in question_answer:
-        qevent_date_groundings = question_answer[constants.qspan_dategrounding_supervision]
-        qevent_date_values = question_answer[constants.qspan_datevalue_supervision]
-        new_qevent_date_groundings = (qevent_date_groundings[1], qevent_date_groundings[0])
-        new_qevent_date_values = (qevent_date_values[1], qevent_date_values[0])
-        new_question_answer[constants.qspan_dategrounding_supervision] = new_qevent_date_groundings
-        new_question_answer[constants.qspan_datevalue_supervision] = new_qevent_date_values
+
+    # Reversing the order of supervision
+    if constants.program_supervision in question_answer:
+        program_node: Node = node_from_dict(new_question_answer[constants.program_supervision])
+        date_compare_node = program_node.children[0]
+        find1_node, find2_node = date_compare_node.children[0], date_compare_node.children[1]
+        if "date1_entidxs" in date_compare_node.supervision and "date2_entidxs" in date_compare_node.supervision:
+            date1 = date_compare_node.supervision["date1_entidxs"]
+            date2 = date_compare_node.supervision["date2_entidxs"]
+            date_compare_node.supervision["date1_entidxs"] = date2
+            date_compare_node.supervision["date2_entidxs"] = date1
+        find1_sup = find1_node.supervision
+        find2_sup = find2_node.supervision
+        find1_node.supervision = find2_sup
+        find2_node.supervision = find1_sup
 
     new_question_answer["augmented_data"] = True
     new_question_answer[constants.query_id] = question_answer[constants.query_id] + "-dc-event-switch"
@@ -206,45 +235,42 @@ def getEventOrderSwitchQuestion(question_answer):
 
 def getQuestionOperatorSwitchQA_wo_QSA(
     question_answer,
-    passage_tokenized_text,
+    question_tokens,
+    passage_tokens,
     passage_token_charidxs,
-    question_token_charidxs,
-    original_passage_text,
-    original_question_text,
+    passage_text,
 ):
-    """ event1_span and event2_span are end-exclusive 
-        
-        Doesn't consider new answers to be question span answers!
+    """ For a question; "What happened first, A or B" -- generate a question "What happened second, A or B"
+
+        The supervision (question-attention and date-grounding) should work as it is.
     """
 
     new_question_answer = copy.deepcopy(question_answer)
 
-    question_tokenized_text = question_answer[constants.tokenized_question]
+    question_tokens = [t for t in question_tokens if t not in ['', ' ']]
+    question_tokenized_text = " ".join(question_tokens)
 
-    event_spans = quesEvents(question_answer[constants.tokenized_question])
+    event_spans = quesEvents(question_tokenized_text)
     if event_spans is None:
         return None
     event1_span, event2_span = event_spans
-
-    question_tokens = question_tokenized_text.split(" ")
-    passage_tokens = passage_tokenized_text.split(" ")
 
     # Get correct answer to find which event in question is correct
     answer_as_passage_spans = question_answer[constants.answer_passage_spans]
     if answer_as_passage_spans:
         passage_ans_span = answer_as_passage_spans[0]
-        answer_tokens = passage_tokens[passage_ans_span[0] : passage_ans_span[1] + 1]
+        answer_tokens = passage_tokens[passage_ans_span[0]: passage_ans_span[1] + 1]
     else:
         answer_text = new_question_answer[constants.answer]["spans"][0]
-        answer_tokens = answer_text.split(" ")
+        answer_tokens = tokenize(answer_text)
 
     event1_tokens = question_tokens[event1_span[0] : event1_span[1]]
     event2_tokens = question_tokens[event2_span[0] : event2_span[1]]
     # First or Second
-    answer_event = get_answer_event_order(answer_tokens, event1_tokens, event2_tokens)
+    answer_event: AnswerEventOrder = get_answer_event_order(answer_tokens, event1_tokens, event2_tokens)
 
     # If event1 of question is original_answer, then the other is the answer for our new question
-    if answer_event == FIRST:
+    if answer_event == AnswerEventOrder.FIRST:
         new_ans_tokens = event2_tokens
     else:
         new_ans_tokens = event1_tokens
@@ -255,11 +281,6 @@ def getQuestionOperatorSwitchQA_wo_QSA(
     # Find this question answer span in the passage
     new_ans_as_passage_spans = find_valid_spans(passage_tokens, [" ".join(new_ans_tokens)])
     if not new_ans_as_passage_spans:
-        # print(question_tokenized_text)
-        # print(new_question_answer[constants.answer]["spans"])
-        # print(' '.join(new_ans_tokens))
-        # print(' '.join(passage_tokens))
-        # print()
         return None
 
     # Only consider the first grounding
@@ -270,7 +291,7 @@ def getQuestionOperatorSwitchQA_wo_QSA(
         passage_token_charidxs[new_ans_as_passage_span[1] + 1],
     )
 
-    answer_passage_text = original_passage_text[new_ans_start_char_offset:new_ans_end_charoffset]
+    answer_passage_text = passage_text[new_ans_start_char_offset:new_ans_end_charoffset]
 
     new_question_answer[constants.answer]["spans"] = [answer_passage_text]
     new_question_answer[constants.answer_question_spans] = []
@@ -279,9 +300,9 @@ def getQuestionOperatorSwitchQA_wo_QSA(
         new_question_answer.pop("validated_answers")
 
     # Make the new question -
-    original_ques_operator = getQuestionComparisonOperator(question_tokenized_text)
+    original_ques_operator: OperatorType = getQuestionComparisonOperator(question_tokenized_text)
     # not using the FIRST_operator_tokens list since there is noise in original question
-    if original_ques_operator == FIRST:
+    if original_ques_operator == OperatorType.FIRST:
         tokens_to_replace = ["first", "earlier", "forst", "firts"]
         new_operator_token = random.choice(SECOND_operator_tokens)
     else:
@@ -297,72 +318,43 @@ def getQuestionOperatorSwitchQA_wo_QSA(
     if question_tokenized_text == new_question_text:
         return None
 
-    new_question_answer[constants.tokenized_question] = new_question_text
-    new_question_answer[constants.cleaned_question] = new_question_text
     new_question_answer[constants.question] = new_question_text
+    new_question_answer[constants.question_tokens] = new_question_text.split(" ")
 
     new_question_answer["augmented_data"] = True
     new_question_answer[constants.query_id] = question_answer[constants.query_id] + "-dc-qop-switch"
     return new_question_answer
 
 
-def addQuestionAttentionVectors(question_answer):
-    question_tokenized_text = question_answer[constants.tokenized_question]
-    question_tokens = question_tokenized_text.split(" ")
-    qlen = len(question_tokens)
-    event_spans = quesEvents(question_answer[constants.tokenized_question])
-    if event_spans:
-        # These span ends are exclusive
-        event1_span, event2_span = event_spans
-        event1_attention = [0.0] * qlen
-        event2_attention = [0.0] * qlen
-        for i in range(event1_span[0], event1_span[1]):
-            event1_attention[i] = 1.0
-        for i in range(event2_span[0], event2_span[1]):
-            event2_attention[i] = 1.0
-        question_answer[constants.qattn_supervised] = True
-
-    else:
-        # Couldn't find the two events; add empty annotation
-        event1_attention = [0.0] * qlen
-        event2_attention = [0.0] * qlen
-        question_answer[constants.qattn_supervised] = False
-
-    """ Add attentions in reverse order -- seem to help """
-    question_answer[constants.ques_attention_supervision] = (event2_attention, event1_attention)
-
-    return question_answer
-
-
-def strongSupervisionFlagAndQType(question_answer_pairs: List[Dict]):
-    num_strongly_supervised_qas = 0
-    supervision_distribution = defaultdict(int)
-
-    for question_answer in question_answer_pairs:
-        question_answer[constants.qtype] = constants.DATECOMP_QTYPE
-        question_answer[constants.program_supervised] = True
-
-        if (
-            question_answer[constants.program_supervised]
-            and question_answer[constants.qattn_supervised]
-            and question_answer[constants.exection_supervised]
-        ):
-            question_answer[constants.strongly_supervised] = True
-        else:
-            question_answer[constants.strongly_supervised] = False
-
-        supervision_distribution[constants.program_supervised] += (
-            1 if question_answer[constants.program_supervised] else 0
-        )
-        supervision_distribution[constants.qattn_supervised] += 1 if question_answer[constants.qattn_supervised] else 0
-        supervision_distribution[constants.exection_supervised] += (
-            1 if question_answer[constants.exection_supervised] else 0
-        )
-        supervision_distribution[constants.strongly_supervised] += (
-            1 if question_answer[constants.strongly_supervised] else 0
-        )
-
-    return question_answer_pairs, supervision_distribution
+# def strongSupervisionFlagAndQType(question_answer_pairs: List[Dict]):
+#     num_strongly_supervised_qas = 0
+#     supervision_distribution = defaultdict(int)
+#
+#     for question_answer in question_answer_pairs:
+#         question_answer[constants.qtype] = constants.DATECOMP_QTYPE
+#         question_answer[constants.program_supervised] = True
+#
+#         if (
+#             question_answer[constants.program_supervised]
+#             and question_answer[constants.qattn_supervised]
+#             and question_answer[constants.execution_supervised]
+#         ):
+#             question_answer[constants.strongly_supervised] = True
+#         else:
+#             question_answer[constants.strongly_supervised] = False
+#
+#         supervision_distribution[constants.program_supervised] += (
+#             1 if question_answer[constants.program_supervised] else 0
+#         )
+#         supervision_distribution[constants.qattn_supervised] += 1 if question_answer[constants.qattn_supervised] else 0
+#         supervision_distribution[constants.execution_supervised] += (
+#             1 if question_answer[constants.execution_supervised] else 0
+#         )
+#         supervision_distribution[constants.strongly_supervised] += (
+#             1 if question_answer[constants.strongly_supervised] else 0
+#         )
+#
+#     return question_answer_pairs, supervision_distribution
 
 
 def augmentDateComparisonData(dataset):
@@ -399,46 +391,40 @@ def augmentDateComparisonData(dataset):
 
     for passage_id, passage_info in dataset.items():
         new_qa_pairs = []
-        passage_tokenized_text = passage_info[constants.tokenized_passage]
+        passage = passage_info[constants.passage]
+        passage_tokens = passage_info[constants.passage_tokens]
+        passage_tokenized_text = " ".join(passage_tokens)
         passage_token_charidxs = passage_info[constants.passage_charidxs]
-        original_passage_text = passage_info[constants.cleaned_passage]
+
         num_qa_original += len(passage_info[constants.qa_pairs])
         for question_answer in passage_info[constants.qa_pairs]:
-            question_tokenized_text = question_answer[constants.tokenized_question]
-            question_token_charidxs = question_answer[constants.question_charidxs]
-            original_question_text = question_answer[constants.cleaned_question]
+            question = question_answer[constants.question]
+            question_tokens = question_answer[constants.question_tokens]
+            question_tokenized_text = " ".join(question_tokens)
 
-            ques_operator = getQuestionComparisonOperator(question_tokenized_text)
+            ques_operator: OperatorType = getQuestionComparisonOperator(question_tokenized_text)
             original_operator_dist[ques_operator] += 1
 
-            question_answer = addQuestionAttentionVectors(question_answer)
             new_qa_pairs.append(question_answer)
-            augment_operator_dist[ques_operator] += 1
 
-            # "first A or B" --> "first B or A"
+            # Given: "first A or B"; generate QA which is "first B or A"
             event_switch_question_answer = getEventOrderSwitchQuestion(question_answer)
+
             if event_switch_question_answer is not None:
-                event_switch_question_answer = addQuestionAttentionVectors(event_switch_question_answer)
-                ques_operator = getQuestionComparisonOperator(
-                    event_switch_question_answer[constants.tokenized_question]
-                )
                 augment_operator_dist[ques_operator] += 1
                 new_qa_pairs.append(event_switch_question_answer)
 
             # "first A or B" --> "second A or B"
             qoperator_switch_question_answer = getQuestionOperatorSwitchQA_wo_QSA(
                 question_answer,
-                passage_tokenized_text,
+                question_tokens,
+                passage_tokens,
                 passage_token_charidxs,
-                question_token_charidxs,
-                original_passage_text,
-                original_question_text,
-            )
+                passage)
 
             if qoperator_switch_question_answer is not None:
-                qoperator_switch_question_answer = addQuestionAttentionVectors(qoperator_switch_question_answer)
                 ques_operator = getQuestionComparisonOperator(
-                    qoperator_switch_question_answer[constants.tokenized_question]
+                    " ".join(qoperator_switch_question_answer[constants.question_tokens])
                 )
                 augment_operator_dist[ques_operator] += 1
                 new_qa_pairs.append(qoperator_switch_question_answer)
@@ -447,25 +433,16 @@ def augmentDateComparisonData(dataset):
                 # "first B or A" --> "second B or A"
                 event_sw_qoperator_sw_question_answer = getQuestionOperatorSwitchQA_wo_QSA(
                     event_switch_question_answer,
-                    passage_tokenized_text,
+                    event_switch_question_answer[constants.question_tokens],
+                    passage_tokens,
                     passage_token_charidxs,
-                    question_token_charidxs,
-                    original_passage_text,
-                    original_question_text,
-                )
+                    passage)
                 if event_sw_qoperator_sw_question_answer is not None:
-                    event_sw_qoperator_sw_question_answer = addQuestionAttentionVectors(
-                        event_sw_qoperator_sw_question_answer
-                    )
                     ques_operator = getQuestionComparisonOperator(
-                        event_sw_qoperator_sw_question_answer[constants.tokenized_question]
+                        " ".join(event_sw_qoperator_sw_question_answer[constants.question_tokens])
                     )
                     augment_operator_dist[ques_operator] += 1
                     new_qa_pairs.append(event_sw_qoperator_sw_question_answer)
-
-        new_qa_pairs, para_supervision_dist = strongSupervisionFlagAndQType(new_qa_pairs)
-        for key, value in para_supervision_dist.items():
-            supervision_distribution[key] += value
 
         q_ids = set([qa[constants.query_id] for qa in new_qa_pairs])
         assert len(q_ids) == len(new_qa_pairs)

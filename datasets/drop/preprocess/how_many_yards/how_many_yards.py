@@ -304,7 +304,7 @@ def preprocess_HowManyYardsWasThe_ques(dataset):
                     passage_num_vals,
                 )
                 if number_grounding is not None:
-                    question_answer[constants.exection_supervised] = True
+                    question_answer[constants.execution_supervised] = True
                     question_answer[constants.qspan_numgrounding_supervision] = number_grounding
                     question_answer[constants.qspan_numvalue_supervision] = number_values
                     questions_w_numground += 1
@@ -357,10 +357,10 @@ if __name__ == "__main__":
     print()
     new_dev_dataset = preprocess_HowManyYardsWasThe_ques(dev_dataset)
 
-    with open(output_trnfp, "w") as f:
-        json.dump(new_train_dataset, f, indent=4)
-
-    with open(output_devfp, "w") as f:
-        json.dump(new_dev_dataset, f, indent=4)
+    # with open(output_trnfp, "w") as f:
+    #     json.dump(new_train_dataset, f, indent=4)
+    #
+    # with open(output_devfp, "w") as f:
+    #     json.dump(new_dev_dataset, f, indent=4)
 
     print("Written HowManyYards datasets")

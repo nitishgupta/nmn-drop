@@ -289,7 +289,7 @@ def hmyw_aux_supervision(dataset: Dict, THRESHOLD: int = 10):
                             select_num_node_2.supervision["num_entidxs"] = relevant_number_entidxs2
                         else:
                             select_num_node_2.children[0].supervision["num_entidxs"] = relevant_number_entidxs2
-                        question_answer[constants.exection_supervised] = True
+                        question_answer[constants.execution_supervised] = True
                         numexamaples_w_nums_annotated += 1
 
                     # else:

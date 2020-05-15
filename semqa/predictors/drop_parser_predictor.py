@@ -14,17 +14,29 @@ from semqa.domain_languages.drop_language_v2 import Output, output_from_dict
 
 from semqa.utils.squad_eval import metric_max_over_ground_truths
 from semqa.utils.drop_eval import get_metrics as drop_em_and_f1, answer_json_to_strings
-from semqa.utils.qdmr_utils import node_from_dict, nested_expression_to_lisp
+from semqa.utils.qdmr_utils import node_from_dict, nested_expression_to_lisp, Node, nested_expression_to_tree
+
+
+def compute_postorder_position(node: Node, position: int = 0):
+    for c in node.children:
+        position = compute_postorder_position(c, position)
+    node.post_order = position
+    position += 1
+    return position
+
+
+def compute_postorder_position_in_inorder_traversal(node: Node):
+    postorder_positions = [node.post_order]
+    for c in node.children:
+        c_postorder_positions = compute_postorder_position_in_inorder_traversal(c)
+        postorder_positions.extend(c_postorder_positions)
+    return postorder_positions
 
 
 class PredictionData:
     def __init__(self, outputs: JsonDict):
         self.metadata: Dict = outputs["metadata"]
         self.predicted_ans: str = outputs["predicted_answer"]
-        modules_debug_infos = outputs["modules_debug_infos"]
-        program_execution: List[Dict] = modules_debug_infos[0] if modules_debug_infos else []
-        # Each dict is a singleton {module_name: List[Output-dict]} where the Output is a serialized as a Dict
-        self.program_execution: List[Dict] = program_execution[::-1]
 
         self.question_mask: List[float] = outputs["question_mask"]
         self.passage_mask: List[float] = outputs["passage_mask"]
@@ -37,6 +49,22 @@ class PredictionData:
         self.actionseq_probs: List[float] = outputs["actionseq_probs"]
         self.top_logical_form_prob: float = self.actionseq_probs[0] if self.actionseq_probs else -1
         self.prog_denotations: List[str] = outputs["all_predicted_answers"]
+
+        modules_debug_infos = outputs["modules_debug_infos"]
+        program_execution: List[Dict] = modules_debug_infos[0] if modules_debug_infos else []
+        if self.top_nested_expr:
+            program_node: Node = nested_expression_to_tree(self.top_nested_expr)
+            compute_postorder_position(program_node)   # adding positions to nodes if traversed in post-order
+            # These are the post-order positions of nodes when tree is traversed in-order manner
+            postorder_position_in_inorder_traversal = compute_postorder_position_in_inorder_traversal(program_node)
+            assert len(postorder_position_in_inorder_traversal) == len(program_execution)
+            program_execution_vis = [program_execution[x] for x in postorder_position_in_inorder_traversal]
+        else:
+            # Some thing is wrong before; resort to assuming that the tree is fully left-branching
+            program_execution_vis = program_execution[::-1]
+
+        # Each dict is a singleton {module_name: List[Output-dict]} where the Output is a serialized as a Dict
+        self.program_execution: List[Dict] = program_execution_vis
 
         self.gold_passage_span_ans: List[Tuple[int, int]] = self.metadata["answer_passage_spans"] if \
             "answer_passage_spans" in self.metadata else []
@@ -54,11 +82,13 @@ class PredictionData:
         self.question_wpidx2tokenidx: List[int] = self.metadata["question_wpidx2tokenidx"]
         self.answer_annotation_dicts: List[Dict] = self.metadata["answer_annotations"]
         self.passage_date_values: List[str] = self.metadata["passage_date_values"]
-        self.passage_num_values: List[float] = self.metadata["passage_number_values"]
+        self.passage_number_values: List[float] = self.metadata["passage_number_values"]
         self.composed_numbers: List[float] = self.metadata["composed_numbers"]
         self.passage_year_diffs: List[int] = self.metadata["passage_year_diffs"]
         self.count_values: List[int] = self.metadata["count_values"]
         self.program_supervision: Union[None, Dict] = self.metadata.get("program_supervision", None)
+        if self.program_supervision == "None":      # sanitize converts NoneType to "None"
+            self.program_supervision = None
 
         (self.exact_match, self.f1_score) = f1metric(self.predicted_ans, self.answer_annotation_dicts)
 
@@ -77,7 +107,7 @@ def visualize_single_output_from_module(output: Output, prediction_data: Predict
     """Visualize string for single Output attention from a module. """
     output_values = {'passage': prediction_data.passage_wps,
                      'question': prediction_data.question_wps,
-                     'numbers': prediction_data.passage_num_values,
+                     'numbers': prediction_data.passage_number_values,
                      'dates': prediction_data.passage_date_values,
                      'year_diffs': prediction_data.passage_year_diffs,
                      'composed_numbers': prediction_data.composed_numbers,
@@ -169,7 +199,7 @@ class DropNMNPredictor(Predictor):
         out_str += f"Top-prog-Prob: {prediction_data.top_logical_form_prob}" + "\n"
 
         out_str += f"Dates: {prediction_data.passage_date_values}" + "\n"
-        out_str += f"PassageNums: {prediction_data.passage_num_values}" + "\n"
+        out_str += f"PassageNums: {prediction_data.passage_number_values}" + "\n"
         out_str += f"ComposedNumbers: {prediction_data.composed_numbers}" + "\n"
         out_str += f"YearDiffs: {prediction_data.passage_year_diffs}" + "\n"
 
@@ -200,15 +230,19 @@ class DROPNMNJSONLPredictor(DropNMNPredictor):
         prediction_data = PredictionData(outputs=outputs)
 
         # Node in a dict format
-        program_supervision: Dict = prediction_data.program_supervision
+        program_supervision: Union[Dict, None] = prediction_data.program_supervision
         gold_program_lisp = ""
+        gold_nested_expr = []
         if program_supervision:
-            nested_expr = node_from_dict(program_supervision).get_nested_expression()
+            program_node = node_from_dict(program_supervision)
+            nested_expr = program_node.get_nested_expression()
             gold_program_lisp = nested_expression_to_lisp(nested_expr)
+            gold_nested_expr = program_node.get_nested_expression_with_strings()
 
         output_dict = {
             "question": prediction_data.question,
             "gold_logical_form": gold_program_lisp,
+            "gold_nested_expr": gold_nested_expr,
             # "passage": prediction_data.passage,
             "query_id": prediction_data.question_id,
             "predicted_ans": prediction_data.predicted_ans,

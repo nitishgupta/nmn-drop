@@ -361,7 +361,7 @@ def date_comparison_aux_supervision(dataset):
             if keep_dates:
                 date_compare_node.supervision["date1_entidxs"] = [event1_date_idx]
                 date_compare_node.supervision["date2_entidxs"] = [event2_date_idx]
-                question_answer[constants.exection_supervised] = True
+                question_answer[constants.execution_supervised] = True
                 numexamaples_w_dates_annotated += 1
 
             question_answer[constants.program_supervision] = program_node.to_dict()

@@ -1128,37 +1128,31 @@ class DROPParserBERT(DROPParserBase):
     @staticmethod
     def get_valid_start_actionids(answer_types: List[List[str]], action2actionidx: Dict[str, int],
                                   valid_numcomposition_types: List[Set[str]] = None) -> List[List[List[int]]]:
-        """ For each instances, given answer_types as man-made strings, return the set of valid start action ids
-            that return an object of that type.
-            For example, given start_type as 'passage_span', '@start@ -> PassageSpanAnswer' is a valid start action
+        """ For each instance, given answer_types return the set of valid start action ids that return an object of
+            that type.
+            For example, given start_type as 'PassageSpanAnswer', '@start@ -> PassageSpanAnswer' is a valid start action
             See the reader for all possible values of start_types
 
-            TODO(nitish): Instead of the reader passing in arbitrary strings and maintaining a mapping here,
-            TODO(nitish): we can pass in the names of the LanguageObjects directly and make the start-action-str
-                          in a programmatic manner.
-
             This is used while *training* to run constrained-beam-search to only search through programs for which
-            the gold answer is known. These *** shouldn't *** beused during validation
+            the gold answer is known. These *** shouldn't *** be used during validation
         Parameters:
         -----------
-            composed_num_ans_types: ``List[Set[str]]``
-                For each instance, if the answer is of ComposedNumber type, then this tells valid compositions.
-                Can be used to limit search space
+        answer_types: ``List[List[str]]``
+            List of answer-types for each instance. These should be (a) possible start-types of the DomainLanguage (DL)
+            and (b) "@start@ -> TYPE" action should exist for any TYPE, i.e. they should be types of the DL.
+        action2actionidx:
+            Mapping action-strings to action-idxs.
+        valid_numcomposition_types:
+            If answer-type is ComposedNumber, then the function (e.g. add or subtract) that would lead to the answer.
+            This helps us constrain the program-search even further
+        composed_num_ans_types: ``List[Set[str]]``
+            For each instance, if the answer is of ComposedNumber type, then this tells valid compositions.
+            Can be used to limit search space
         Returns:
         --------
         start_types: `List[Set[int]]`
             For each instance, a set of possible start_types
         """
-
-        # Map from string passed by reader to LanguageType class
-        answer_type_to_start_action_mapping = {
-            "PassageSpanAnswer": "@start@ -> PassageSpanAnswer",
-            "YearDifference": "@start@ -> YearDifference",
-            "PassageNumber": "@start@ -> PassageNumber",
-            "QuestionSpanAnswer": "@start@ -> QuestionSpanAnswer",
-            "CountNumber": "@start@ -> CountNumber",
-            "ComposedNumber": "@start@ -> ComposedNumber",
-        }
 
         # This is the next action to go from ComposedNumber to a function that could generate it
         composed_num_function_action = "ComposedNumber -> [<PassageNumber,PassageNumber:ComposedNumber>, PassageNumber, PassageNumber]"
@@ -1175,17 +1169,12 @@ class DROPParserBERT(DROPParserBase):
         # We are aiming to make a List[List[List[int]]] -- for each instance, a list of prefix sequences.
         #  Each prefix sequence is a list of action indices. The prefixes don't need to be of the same length.
         #  If an instance does not have any prefixes, its prefix_sequences_list can remain empty
-        valid_action_prefixes = []
-
-        # valid_start_action_ids: List[Set[int]] = []
         action_prefixes: List[List[List[int]]] = []
 
         for i in range(len(answer_types)):
             instance_answer_types: List[str] = answer_types[i]
             instance_prefix_sequences: List[List[int]] = []
             for start_type in instance_answer_types:
-                # if start_type in answer_type_to_start_action_mapping:
-                # start_action = answer_type_to_start_action_mapping[start_type]
                 start_action = "@start@ -> {}".format(start_type)
                 start_action_idx = action2actionidx[start_action]
                 if start_type == "ComposedNumber":
@@ -1264,7 +1253,7 @@ class DROPParserBERT(DROPParserBase):
                         pred_attn = pred_attn[0:gold_attn_len]
                         mask = question_mask[instance_idx, 0:gold_attn_len]
                         log_question_attention = torch.log(pred_attn + 1e-40) * mask
-                        l = torch.sum(log_question_attention * gold_attn_tensor) # / float(gold_attn_len)
+                        l = torch.sum(log_question_attention * gold_attn_tensor)
                         loss += l
                         normalizer += 1
 
@@ -1535,6 +1524,9 @@ class DROPParserBERT(DROPParserBase):
                                                  program_supervised: List[bool],
                                                  gold_program_dicts: List[List[Union[Dict, None]]],
                                                  gold_function2actionidx_maps: List[List[List[int]]]):
+        """ If instance has a gold-program, update the side-args of the predicted program (same as gold) with
+            supervision dictionaries from the gold-program.
+        """
         if not self.training:
             return
 
@@ -1555,13 +1547,14 @@ class DROPParserBERT(DROPParserBase):
                 # These are the action-idxs which produce terminal-node functions; gold_function2actionidx_maps is
                 # packed so that as multiple gold-programs are passed. we assume singe gold-program here
                 function2actionidx_map: List[int] = gold_function2actionidx_maps[instance_idx][0]
-                # inorder_functions: List[str] = qdmr_utils.get_inorder_function_list(gold_program_node)
                 inorder_supervision_dicts: List[Dict] = qdmr_utils.get_inorder_supervision_list(gold_program_node)
+                assert len(function2actionidx_map) == len(inorder_supervision_dicts), "each func. should have a supdict"
                 # Append the appropriate pred_sideargs idxs with the supervision-dict
                 for supervision_idx, action_idx in enumerate(function2actionidx_map):
                     # supervision_idx: range(0, num_of_functions) - index into inorder_supervision_dicts
                     # action_idx: range(0, len(pred_sideargs)) - index into the actions
                     pred_sideargs[action_idx].update(inorder_supervision_dicts[supervision_idx])
+
 
 
 

@@ -184,8 +184,8 @@ class DROPReaderV2(DatasetReader):
             max_question_wps: int = 50,
             max_transformer_length: int = 512,
             only_strongly_supervised: bool = False,
-            skip_instances=False,
-            skip_due_to_gold_programs=False,
+            skip_instances: bool = False,
+            skip_if_progtype_mismatch_anstype: bool = False,
             convert_spananswer_to_num=False,
     ) -> None:
         super().__init__(lazy)
@@ -196,13 +196,24 @@ class DROPReaderV2(DatasetReader):
         self.max_question_wps = max_question_wps
         self.max_transformer_length = max_transformer_length
         self.only_strongly_supervised = only_strongly_supervised
-        self.skip_instances = skip_instances
-        self.skip_due_to_gold_programs = skip_due_to_gold_programs
         self.convert_spananswer_to_num = convert_spananswer_to_num
+
+        self.skip_instances: bool = skip_instances
+        self.num_program_supervised = 0
+        # If instance has program-supervision but none of the program-return-types match the answer-supervision-type,
+        # we have two option (a) skip the instance (b) remove program supervision and train with only answer supervision
+        # True here applies (a). If skip_instances is False, this option doesn't matter
+        self.skip_if_progtype_mismatch_anstype: bool = skip_if_progtype_mismatch_anstype and skip_instances
+
         self.skip_count = 0
-        self.skip_due_to_gold_not_in_answer = 0
+        self.num_goldans_not_in_anssupport = 0
+        self.num_supprogtype_mismatch_anstype = 0
+        self.num_supervised_programs = 0
         # mapping from DROPLanguage functions to their return_types - used for getting return_type of prog-supervision
         self.function2returntype_mapping = get_domainlang_function2returntype_mapping(get_empty_language_object())
+
+        # self.answer_notin_support = open("answer-not-in-support.jsonl", "w")
+        # self.progtype_mismatch_anstype = open("progtype-mismatch-anstype.jsonl", "w")
 
         self.max_passage_nums = 0
         self.max_composed_nums = 0
@@ -260,7 +271,7 @@ class DROPReaderV2(DatasetReader):
 
                 program_supervision = qa.get(constants.program_supervision, None)
                 program_supervised = True if program_supervision is not None else False
-                execution_supervised = qa.get(constants.exection_supervised, False)
+                execution_supervised = qa.get(constants.execution_supervised, False)
 
                 strongly_supervised = program_supervised and execution_supervised
 
@@ -304,11 +315,10 @@ class DROPReaderV2(DatasetReader):
             if self.max_num_instances != -1 and instances_read > self.max_num_instances:
                 break
 
-        logger.info(f"Total QAs: {total_qas}. Instances read: {instances_read}")
-        logger.info(f"Instances Skipped: {self.skip_count}")
-        logger.info(
-            f"Instances skipped due to gold-answer not in gold_program_types: {self.skip_due_to_gold_not_in_answer}"
-        )
+        logger.info(f"Total QAs: {total_qas}. Instances made: {instances_read}  (skipped: {self.skip_count})")
+        logger.info(f"num program supervised: {self.num_supervised_programs}")
+        logger.info(f"gold-ans not in ans support: {self.num_goldans_not_in_anssupport}")
+        logger.info(f"supervised-program-type mismatches answer-type(s): {self.num_supprogtype_mismatch_anstype}")
         logger.info("Max passage nums: {} Max composed nums : {} ".format(self.max_passage_nums,
                                                                           self.max_composed_nums))
 
@@ -548,55 +558,17 @@ class DROPReaderV2(DatasetReader):
             }
         )
 
-        # Get gold action_seqs for strongly_supervised questions
-        action2idx_map = {rule: i for i, rule in enumerate(language.all_possible_productions())}
-
-        if program_supervision:
-            program_node = node_from_dict(program_supervision)
-            question_attention_supervision_to_wps(program_node, q_tokenidx2wpidx, unpadded_q_wps_len)
-            revise_date_num_execution_supervision(program_node=program_node, old2new_dateidxs=old2new_p_dateidx,
-                                                  old2new_numidxs=old2new_p_numidx)
-            program_supervision = program_node.to_dict()
-
-        # Tuple[List[List[int]], List[List[int]]]
-        (
-            gold_action_seqs,
-            gold_actionseq_masks,
-            gold_function2actionidx_map,
-            gold_program_start_types,
-            program_supervised,
-        ) = self.get_gold_action_seqs(
-            program_supervision=program_supervision,
-            language=language,
-            action2idx_map=action2idx_map)
-
-        # FIELDS FOR STRONG-SUPERVISION
-        fields["program_supervised"] = MetadataField(program_supervised)
-        execution_supervised = execution_supervised and program_supervised
-        strongly_supervised = execution_supervised
-        fields["execution_supervised"] = MetadataField(execution_supervised)
-        fields["strongly_supervised"] = MetadataField(strongly_supervised)
-
-        fields["gold_action_seqs"] = MetadataField((gold_action_seqs, gold_actionseq_masks))
-        fields["gold_function2actionidx_maps"] = MetadataField(gold_function2actionidx_map)
-        # wrapping in a list to support multiple program-supervisions
-        fields["gold_program_dicts"] = MetadataField([program_supervision])
-        metadata.update({"program_supervision": program_supervision})
-
         ########     ANSWER FIELDS      ###################
+        # This list contains the possible-start-types for programs that can yield the correct answer
+        # For example, if the answer is a number but also in passage, this will contain two keys
+        # If the answer is a number, we'll find which kind and that program-start-type will be added here
+        answer_program_start_types: List[str] = []
         if answer_annotations:
             metadata.update({"answer_annotations": answer_annotations})
             # Using the first one supervision (training actually only has one)
             answer_annotation = answer_annotations[0]
 
-            # These are start-types from the domain_language; answer is one of these types
-            possible_start_types: Set[str] = {"PassageSpanAnswer", "YearDifference", "PassageNumber", "ComposedNumber",
-                                              "CountNumber"}
-
-            # This list contains the possible-start-types for programs that can yield the correct answer
-            # For example, if the answer is a number but also in passage, this will contain two keys
-            # If the answer is a number, we'll find which kind and that program-start-type will be added here
-            answer_program_start_types: List[str] = []
+            # Possible_Start_Types -- PassageSpanAnswer, YearDifference, PassageNumber, ComposedNumber, CountNumber
 
             # Passage-span answer
             metadata.update({"answer_passage_spans": answer_passage_spans})
@@ -680,26 +652,81 @@ class DROPReaderV2(DatasetReader):
             fields["answer_as_count"] = MetadataField(answer_as_count)
             fields["composed_num_ans_composition_types"] = MetadataField(composed_num_ans_composition_types)
 
-            if self.skip_due_to_gold_programs:
-                if program_supervised:
-                    new_answer_program_start_types = []
-                    for answer_program_type in answer_program_start_types:
-                        if answer_program_type in gold_program_start_types:
-                            new_answer_program_start_types.append(answer_program_type)
-                else:
-                    new_answer_program_start_types = answer_program_start_types
-                # Answer exists as other programs but not for gold-program
-                if len(answer_program_start_types) != 0 and len(new_answer_program_start_types) == 0:
-                    self.skip_due_to_gold_not_in_answer += 1
-                answer_program_start_types = new_answer_program_start_types
+        # End if answer-annotation
+        if not answer_program_start_types:
+            self.num_goldans_not_in_anssupport += 1
+            if self.skip_instances:     # Answer not found in support. Skipping this instance
+                self.skip_count += 1
+                return None
 
-            fields["answer_program_start_types"] = MetadataField(answer_program_start_types)
+        # Program supervision
+        # Get gold action_seqs for strongly_supervised questions
+        action2idx_map = {rule: i for i, rule in enumerate(language.all_possible_productions())}
 
-            if self.skip_instances:
-                if len(answer_program_start_types) == 0:
+        if program_supervision:
+            program_node = node_from_dict(program_supervision)
+            program_return_type = self.function2returntype_mapping[program_node.predicate]
+            if program_return_type not in answer_program_start_types:
+                self.num_supprogtype_mismatch_anstype += 1
+                if self.skip_if_progtype_mismatch_anstype:
                     self.skip_count += 1
                     return None
-        # End if answer-annotation
+                else:
+                    program_supervision = None
+            else:
+                # If sup-program return type is in answer-types, reduce answer-types to sup-program-types
+                # This is debatable though; if we want the model to explore programs that yield the answer of a
+                # different type than the program supervisied, we shouldn't prune answer-prog-start-types.
+                answer_program_start_types = [program_return_type]
+
+        if program_supervision:
+            program_node = node_from_dict(program_supervision)
+            question_attention_supervision_to_wps(program_node, q_tokenidx2wpidx, unpadded_q_wps_len,
+                                                  self.max_question_wps)
+            revise_date_num_execution_supervision(program_node=program_node, old2new_dateidxs=old2new_p_dateidx,
+                                                  old2new_numidxs=old2new_p_numidx)
+            program_supervision = program_node.to_dict()
+
+
+        # Tuple[List[List[int]], List[List[int]]]
+        (
+            gold_action_seqs,
+            gold_actionseq_masks,
+            gold_function2actionidx_map,
+            gold_program_start_types,
+            program_supervised,
+        ) = self.get_gold_action_seqs(
+            program_supervision=program_supervision,
+            language=language,
+            action2idx_map=action2idx_map)
+
+        # FIELDS FOR STRONG-SUPERVISION
+        fields["program_supervised"] = MetadataField(program_supervised)
+        self.num_supervised_programs += 1 if program_supervised else 0
+        execution_supervised = execution_supervised and program_supervised
+        strongly_supervised = execution_supervised
+        fields["execution_supervised"] = MetadataField(execution_supervised)
+        fields["strongly_supervised"] = MetadataField(strongly_supervised)
+
+        fields["gold_action_seqs"] = MetadataField((gold_action_seqs, gold_actionseq_masks))
+        fields["gold_function2actionidx_maps"] = MetadataField(gold_function2actionidx_map)
+        # wrapping in a list to support multiple program-supervisions
+        fields["gold_program_dicts"] = MetadataField([program_supervision])
+        metadata.update({"program_supervision": program_supervision})
+        # This list is made here since it can get modfied due to program-supervision
+        fields["answer_program_start_types"] = MetadataField(answer_program_start_types)
+
+        # outdict = {
+        #     "question": question,
+        #     "passage": passage,
+        #     "program_supervision": node_from_dict(program_supervision).get_nested_expression_with_strings(),
+        #     "answer_annotation": answer_annotation,
+        #     "answer_passage_spans": answer_passage_spans,
+        #     "passage_number_values": passage_number_values,
+        #     "passage_date_values": passage_date_values,
+        #     "year_differences": year_differences,
+        #     "composed_numbers": composed_numbers,
+        # }
 
         fields["metadata"] = MetadataField(metadata)
         return Instance(fields)
@@ -898,7 +925,8 @@ class DROPReaderV2(DatasetReader):
             return return_no_program_supervision()
 
 
-def question_attention_supervision_to_wps(program_node: Node, q_tokenidx2wpidx: List[List[int]], unpadded_q_wps_len):
+def question_attention_supervision_to_wps(program_node: Node, q_tokenidx2wpidx: List[List[int]], unpadded_q_wps_len,
+                                          max_question_wps):
     supervision_dict: Dict = program_node.supervision
     if "question_attention_supervision" in supervision_dict:
         wps_attention = []
@@ -907,11 +935,12 @@ def question_attention_supervision_to_wps(program_node: Node, q_tokenidx2wpidx: 
             if token_idx < len(q_tokenidx2wpidx):
                 wps_idxs = q_tokenidx2wpidx[token_idx]
                 wps_attention.extend([token_attn] * len(wps_idxs))  # add as many attentions as wps for this token
+        wps_attention = wps_attention[:max_question_wps]
         assert len(wps_attention) == unpadded_q_wps_len, f"Attn-len: {len(wps_attention)}  Q-len: {unpadded_q_wps_len}"
         supervision_dict["question_attention_supervision"] = wps_attention
 
     for c in program_node.children:
-        question_attention_supervision_to_wps(c, q_tokenidx2wpidx, unpadded_q_wps_len)
+        question_attention_supervision_to_wps(c, q_tokenidx2wpidx, unpadded_q_wps_len, max_question_wps)
 
 
 def revise_date_num_execution_supervision(program_node: Node, old2new_dateidxs: Dict[int, int],

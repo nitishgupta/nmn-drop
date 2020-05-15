@@ -21,8 +21,8 @@ def count_num_exec_sup(dataset, choosen_pids):
     for passage_idx in choosen_pids:
         passage_info = dataset[passage_idx]
         for qa in passage_info[constants.qa_pairs]:
-            if constants.exection_supervised in qa:
-                if qa[constants.exection_supervised]:
+            if constants.execution_supervised in qa:
+                if qa[constants.execution_supervised]:
                     num_exec_sup += 1
     return num_exec_sup
 
@@ -37,8 +37,8 @@ def compute_pid2supervisioncount(dataset):
                 if qa[constants.program_supervised]:
                     num_sup_examples += 1
 
-            if constants.exection_supervised in qa:
-                if qa[constants.exection_supervised]:
+            if constants.execution_supervised in qa:
+                if qa[constants.execution_supervised]:
                     num_sup_examples += 1
         pid2supexamples[passage_idx] = num_sup_examples
 
@@ -54,7 +54,7 @@ def compute_choosen_pids(pid2supexamples, perc: float):
 
 
 def make_supervision_dict(dataset):
-    basic_keys = [constants.program_supervised, constants.qattn_supervised, constants.exection_supervised]
+    basic_keys = [constants.program_supervised, constants.qattn_supervised, constants.execution_supervised]
     qtype_dict = defaultdict(int)
     total_num_qa = 0
     supervision_dict = defaultdict(int)

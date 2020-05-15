@@ -197,9 +197,9 @@ class DROPReaderNew(DatasetReader):
                 date_grounding_supervision = None
                 num_grounding_supervision = None
                 execution_supervised = False
-                if constants.exection_supervised in qa:
-                    execution_supervised = qa[constants.exection_supervised]
-                    if qa[constants.exection_supervised] is True:
+                if constants.execution_supervised in qa:
+                    execution_supervised = qa[constants.execution_supervised]
+                    if qa[constants.execution_supervised] is True:
                         # There can be multiple types of execution_supervision
                         if constants.qspan_dategrounding_supervision in qa:
                             date_grounding_supervision = qa[constants.qspan_dategrounding_supervision]

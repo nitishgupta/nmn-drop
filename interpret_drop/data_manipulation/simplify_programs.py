@@ -11,7 +11,7 @@ import datasets.drop.constants as constants
 supervision_keys = [
     constants.program_supervised,
     constants.qattn_supervised,
-    constants.exection_supervised,
+    constants.execution_supervised,
     constants.strongly_supervised,
 ]
 

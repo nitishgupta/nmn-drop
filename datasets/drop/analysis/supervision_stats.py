@@ -5,7 +5,7 @@ import datasets.drop.constants as constants
 from collections import defaultdict
 
 
-SUPERVISION_KEYS = [constants.program_supervised, constants.qattn_supervised, constants.exection_supervised]
+SUPERVISION_KEYS = [constants.program_supervised, constants.qattn_supervised, constants.execution_supervised]
 
 
 def readDataset(input_json):

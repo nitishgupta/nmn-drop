@@ -828,49 +828,50 @@ class DropLanguageV2(DomainLanguage):
         num_dist_1: (num_passage_numbers) Passage number distribution
         num_dist_2: (num_passage_numbers) Passage number distribution
         """
-        with Profile("num-add-sub"):
-            assert operation in ["add", "sub"]
-            if operation == "add":
-                num_combination_indices = self.add_num_combination_indices
-                num_combination_mask = self.add_num_combination_mask
-            elif operation == "sub":
-                num_combination_indices = self.sub_num_combination_indices
-                num_combination_mask = self.sub_num_combination_mask
-            else:
-                raise NotImplementedError
+        # with Profile("num-add-sub"):
+        assert operation in ["add", "sub"]
+        if operation == "add":
+            num_combination_indices = self.add_num_combination_indices
+            num_combination_mask = self.add_num_combination_mask
+        elif operation == "sub":
+            num_combination_indices = self.sub_num_combination_indices
+            num_combination_mask = self.sub_num_combination_mask
+        else:
+            raise NotImplementedError
 
-            # num_combination_indices: (size_composed_numbers, max_num_combinations, 2) for each number in composed numbers,
-            # these are combinations (indices of passasge numbers) that combine (in order) using the operation and result
-            # into this number. For example, num_combination_indices[i, :, :] is a combs=[NC, 2] array where
-            # composed_number[i] = PassageNumber(combs[j, 0]) OP PassageNumber(combs[j, 1]) for all j.
-            # These combinations are padded with -1
-            masked_num_combination_indices = num_combination_indices * num_combination_mask
+        # num_combination_indices: (size_composed_numbers, max_num_combinations, 2) for each number in composed numbers,
+        # these are combinations (indices of passasge numbers) that combine (in order) using the operation and result
+        # into this number. For example, num_combination_indices[i, :, :] is a combs=[NC, 2] array where
+        # composed_number[i] = PassageNumber(combs[j, 0]) OP PassageNumber(combs[j, 1]) for all j.
+        # These combinations are padded with -1
+        masked_num_combination_indices = num_combination_indices * num_combination_mask
 
-            # Making (B=1, seq_len=passage_numbers, dim=1) for batch index selection
-            num_dist_1_uns = num_dist_1.unsqueeze(0).unsqueeze(2)
-            num_dist_2_uns = num_dist_2.unsqueeze(0).unsqueeze(2)
-            # B=1 unsqueezing
-            masked_num_combination_indices_uns = masked_num_combination_indices.unsqueeze(0)
+        # Making (B=1, seq_len=passage_numbers, dim=1) for batch index selection
+        num_dist_1_uns = num_dist_1.unsqueeze(0).unsqueeze(2)
+        num_dist_2_uns = num_dist_2.unsqueeze(0).unsqueeze(2)
+        # B=1 unsqueezing
+        masked_num_combination_indices_uns = masked_num_combination_indices.unsqueeze(0)
 
-            # Indexing into num_dist_1 where indices are num_combination_indices[:, :, 0]
-            selected_d_1 = allenutil.batched_index_select(
-                target=num_dist_1_uns, indices=masked_num_combination_indices_uns[:, :, :, 0]
-            )
-            # Shape: (size_composed_numbers, max_num_combinations)
-            selected_d_1 = selected_d_1.squeeze(0).squeeze(-1)
-            selected_d_1 = selected_d_1 * num_combination_mask[:, :, 0].float()
+        # Indexing into num_dist_1 where indices are num_combination_indices[:, :, 0]
+        selected_d_1 = allenutil.batched_index_select(
+            target=num_dist_1_uns, indices=masked_num_combination_indices_uns[:, :, :, 0]
+        )
+        # Shape: (size_composed_numbers, max_num_combinations)
+        selected_d_1 = selected_d_1.squeeze(0).squeeze(-1)
+        selected_d_1 = selected_d_1 * num_combination_mask[:, :, 0].float()
 
-            # Indexing into num_dist_2 where indices are num_combination_indices[:, :, 1]
-            selected_d_2 = allenutil.batched_index_select(
-                target=num_dist_2_uns, indices=masked_num_combination_indices_uns[:, :, :, 1]
-            )
-            # Shape: (size_composed_numbers, max_num_combinations)
-            selected_d_2 = selected_d_2.squeeze(0).squeeze(-1)
-            selected_d_2 = selected_d_2 * num_combination_mask[:, :, 1].float()
+        # Indexing into num_dist_2 where indices are num_combination_indices[:, :, 1]
+        selected_d_2 = allenutil.batched_index_select(
+            target=num_dist_2_uns, indices=masked_num_combination_indices_uns[:, :, :, 1]
+        )
+        # Shape: (size_composed_numbers, max_num_combinations)
+        selected_d_2 = selected_d_2.squeeze(0).squeeze(-1)
+        selected_d_2 = selected_d_2 * num_combination_mask[:, :, 1].float()
 
-            # Shape: (number_support)
-            expected_distribution = (selected_d_1 * selected_d_2).sum(dim=1)
-            expected_distribution = clamp_distribution(expected_distribution)
+        # Shape: (number_support)
+        expected_distribution = (selected_d_1 * selected_d_2).sum(dim=1)
+        expected_distribution = clamp_distribution(expected_distribution)
+
         return expected_distribution
 
     def expected_date_year_difference(
@@ -961,7 +962,7 @@ class DropLanguageV2(DomainLanguage):
         average_passage_distribution = bool1 * passage_attention_1 + bool2 * passage_attention_2
 
         loss1 = aux_symbol_loss(date1_entidxs, date_distribution_1)
-        loss2 = aux_symbol_loss(date1_entidxs, date_distribution_1)
+        loss2 = aux_symbol_loss(date2_entidxs, date_distribution_2)
         date_grounding_loss = loss1 + loss2
 
         # if date1_entidxs:  # This can be None or empty; this should take care of both
@@ -1278,7 +1279,7 @@ class DropLanguageV2(DomainLanguage):
                     + f"\nPattn2: {pattn_vis_most_2}\n Date2: {date2}"
             )
             date1_output = Output(output_type="dates", values=date_distribution_1, label="date_1")
-            date2_output = Output(output_type="dates", values=date_distribution_1, label="date_2")
+            date2_output = Output(output_type="dates", values=date_distribution_2, label="date_2")
             year_diff_output = Output(output_type="year_diffs", values=year_difference_dist, label="year_diff")
             debug_info_dict = {"year_difference_two_events": [date1_output, date2_output, year_diff_output]}
             # debug_info_dict = {"year-diff": {"date_1": date_distribution_1,
@@ -1328,7 +1329,7 @@ class DropLanguageV2(DomainLanguage):
                     + f"\n Date1: {date1}\n Date2: {date2}"
             )
             date1_output = Output(output_type="dates", values=date_distribution_1, label="date_1")
-            date2_output = Output(output_type="dates", values=date_distribution_1, label="date_2")
+            date2_output = Output(output_type="dates", values=date_distribution_2, label="date_2")
             year_diff_output = Output(output_type="year_diffs", values=year_difference_dist, label="year_diff")
             debug_info_dict = {"year_difference_single_event": [date1_output, date2_output, year_diff_output]}
             # debug_info_dict = {"year-diff": {"date_1": date_distribution_1,

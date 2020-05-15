@@ -325,7 +325,7 @@ def num_comparison_aux_supervision(dataset: Dict, THRESHOLD: int = 10):
                 assert num_compare_node.predicate in ["compare_num_lt", "compare_num_gt"]
                 num_compare_node.supervision["num1_entidxs"] = [event1_num_idx]
                 num_compare_node.supervision["num2_entidxs"] = [event2_num_idx]
-                question_answer[constants.exection_supervised] = True
+                question_answer[constants.execution_supervised] = True
                 numexamaples_w_nums_annotated += 1
 
             question_answer[constants.program_supervision] = program_node.to_dict()

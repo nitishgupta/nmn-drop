@@ -73,12 +73,17 @@ qtype = "qtype"
 strongly_supervised = "strongly_supervised"
 program_supervised = "program_supervised"
 qattn_supervised = "qattn_supervised"
-exection_supervised = "execution_supervised"
+execution_supervised = "execution_supervised"
 pattn_supervised = "pattn_supervised"  # Boolean
 program_supervision = "program_supervision"
 
 # n-tuple of question attention
 ques_attention_supervision = "ques_attention_supervision"
+
+# Supervision keys
+question_attention_supervision = "question_attention_supervision"
+date_entidxs = "date_entidxs"
+num_entidxs = "num_entidxs"
 
 # Date comparision question-type
 DATECOMP_QTYPE = "date_comparison"

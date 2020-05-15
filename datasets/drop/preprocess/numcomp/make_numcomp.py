@@ -2,6 +2,7 @@ from typing import List, Tuple, Dict, Union
 import os
 import json
 import argparse
+from enum import Enum
 from collections import defaultdict
 from nltk.corpus import stopwords
 from datasets.drop import constants
@@ -43,37 +44,48 @@ def number_comparison_filter(question: str) -> bool:
     return relevant
 
 
-def getQuestionComparisonOperator(question_tokens: List[str]) -> str:
+class OperatorType(Enum):
+    LT_OPERATOR = 1
+    GT_OPERATOR = 2
+
+
+class AnswerEvent(Enum):
+    FIRST = 1
+    SECOND = 2
+
+
+def getQuestionComparisonOperator(question_tokens: List[str]) -> Union[OperatorType, None]:
     """ Figure out which kind of comparison is needed; return GT_OPERATOR or LT_OPERATOR"""
     for t in lesser_than_tokens:
         if t in question_tokens:
-            return LT_OPERATOR
+            return OperatorType.LT_OPERATOR
     for t in greater_than_tokens:
         if t in question_tokens:
-            return GT_OPERATOR
+            return OperatorType.GT_OPERATOR
     return None
 
 
-def get_program_supervision(operator: str) -> qdmr_utils.Node:
-    assert operator in [LT_OPERATOR, GT_OPERATOR], "Operator: {}".format(operator)
-    num_lt = "(find_passageSpanAnswer (compare_num_lesser_than find_PassageAttention find_PassageAttention))"
-    num_gt = "(find_passageSpanAnswer (compare_num_greater_than find_PassageAttention find_PassageAttention))"
-    lisp_program = num_lt if operator == FIRST else num_gt
+def get_program_supervision(operator: OperatorType) -> qdmr_utils.Node:
+    assert operator is not None
+    num_lt = "(select_passagespan_answer (compare_num_lt select_passage select_passage))"
+    num_gt = "(select_passagespan_answer (compare_num_gt select_passage select_passage))"
+    lisp_program = num_lt if operator == OperatorType.LT_OPERATOR else num_gt
     node: qdmr_utils.Node = qdmr_utils.nested_expression_to_tree(qdmr_utils.lisp_to_nested_expression(lisp_program))
     return node
 
 
-def find_answer_event(answer_span: str, event1_tokens: List[str], event2_tokens: List[str]) -> str:
+def find_answer_event(answer_span: str, event1_tokens: List[str], event2_tokens: List[str]) -> AnswerEvent:
     """ Figure which of the event is the answer, FIRST or SECOND.
     This is doneby fuzzy matching answer string with the two events' tokens
     """
     ans_tokens = set(answer_span.split(" "))
     event1, event2 = set(event1_tokens), set(event2_tokens)
-    ans_event = FIRST if len(event1.intersection(ans_tokens)) > len(event2.intersection(ans_tokens)) else SECOND
+    ans_event = AnswerEvent.FIRST if len(event1.intersection(ans_tokens)) > len(event2.intersection(ans_tokens)) else \
+        AnswerEvent.SECOND
     return ans_event
 
 
-def getNumTokenIdxs(p_num_mens: List[Tuple[str, int, int]],
+def getNumTokenIdxs(p_num_mens: List[Tuple[str, int, float]],
                     passage_num_entidx: List[int]) -> Tuple[List[int], List[int]]:
     """ Lists telling which tokens are numbers, and num_ent_idx they ground to. """
     passage_num_tokens = []
@@ -212,85 +224,66 @@ def numInNeighborhood(relevant_passage_tokenidxs: List[int], passage_num_tokenid
 
 
 
-def pruneDataset(input_json: str, output_json: str, THRESHOLD: int = 10) -> None:
+def pruneNumCompQuestions(dataset, THRESHOLD: int = 10) -> Dict:
     """ Prune dataset to only contain questions that qualify after certain NUM comparison question tests.
         Currently only keeping questions with a single passage SpanType answer.
     """
 
-    # Input file contains single json obj with list of questions as jsonobjs inside it
-    with open(input_json, "r") as f:
-        dataset = json.load(f)
+    new_dataset = {}
+    total_ques = 0
+    after_pruning_ques = 0
+    num_passages = len(dataset)
 
-    num_input_qas = 0
+    numexamaples_w_num_annotated = 0
 
-    # List of tuples with (passage_id, passage_info)
-    passage_id_infos = list(dataset.items())
-    for (_, pinfo) in passage_id_infos:
-        num_input_qas += len(pinfo[constants.qa_pairs])
-
-    output_passage_dict = {}
     qoperator_dict = defaultdict(int)
-    num_output_qas = 0
-    num_prog_supervised = 0
-    num_qattn_supervised = 0
-    num_exec_supervised = 0
 
     for passage_id, passage_info in dataset.items():
+        passage_tokens: List[str] = passage_info[constants.passage_tokens]
+        passage_num_mens: List[Tuple[str, int, float]] = passage_info[constants.passage_num_mens]
+        passage_num_idxs = passage_info[constants.passage_num_entidx]
+        passage_num_values: List[float] = passage_info[constants.passage_num_normalized_values]
+        (passage_num_tokenidxs, passage_numtoken_entidxs) = getNumTokenIdxs(passage_num_mens, passage_num_idxs)
+
         qa_pairs = passage_info[constants.qa_pairs]
         relevant_qa_pairs = []
 
-        for qa_pair in qa_pairs:
-            question = qa_pair[constants.question]
-            question_tokens = qa_pair[constants.question_tokens]
+        new_qa_pairs = []
+        for question_answer in qa_pairs:
+            total_ques += 1
+
+            # question_tokenized_text = question_answer[constants.tokenized_question]
+            question_tokens: List[str] = question_answer[constants.question_tokens]
+            question_tokenized_text = " ".join(question_tokens)
+            answer_annotation = question_answer[constants.answer]
 
             # Number Comparison questions we care about
-            if not number_comparison_filter(question):
+            if not number_comparison_filter(question_tokenized_text):
                 continue
-
             # Only SPAN type questions
-            if constants.answer_type in qa_pair and qa_pair[constants.answer_type] != constants.SPAN_TYPE:
+            if question_answer[constants.answer_type] != constants.SPAN_TYPE:
                 continue
-
-            relevant_qa_pairs.append(qa_pair)
-
-            # QA has been added to relevant set since it is a number comparison. Now we try to add supervision for this
-            answer_span: str = qa_pair[constants.answer]["spans"][0]
-            passage_tokens = passage_info[constants.passage_tokens]
-            qoperator = getQuestionComparisonOperator(question_tokens)  # GT_OPERATOR or LT_OPERATOR
+            qoperator: Union[OperatorType, None] = getQuestionComparisonOperator(question_tokens)
             if qoperator is None:
                 continue
             else:
                 qoperator_dict[qoperator] += 1
 
-            # Program supervision
-            program_node: qdmr_utils.Node = get_program_supervision(operator=qoperator)
-            qa_pair[constants.program_supervision] = program_node.to_dict()    # Add program and then continue
-            num_prog_supervised += 1
             ques_event_spans: Tuple[Tuple[int, int], Tuple[int, int]] = questionAttns(" ".join(question_tokens))
+            answer_span: str = answer_annotation["spans"][0]
+
             if ques_event_spans is None:
                 continue
-            event1_span, event2_span = ques_event_spans
 
-            # Queston attention supervision
-            num_compare_node = program_node.children[0]
-            find1_node, find2_node = num_compare_node.children[0], num_compare_node.children[1]
-            find1_node.supervision["question_attention"] = event1_span
-            find2_node.supervision["question_attention"] = event2_span
-            qa_pair[constants.program_supervision] = program_node.to_dict()   # Add program and then continue
-            num_qattn_supervised += 1
+            # For questions with identified events, we'll try to ground dates
+            event1_span, event2_span = ques_event_spans
+            event1_tokens = question_tokens[event1_span[0]:event1_span[1]]
+            event2_tokens = question_tokens[event2_span[0]:event2_span[1]]
 
             # NUMBER GROUNDING SUPERVISION
-            passage_num_mens = passage_info[constants.passage_num_mens]
-            passage_num_idxs = passage_info[constants.passage_num_entidx]
-            passage_num_values = passage_info[constants.passage_num_normalized_values]
-            (passage_num_tokenidxs, passage_numtoken_entidxs) = getNumTokenIdxs(passage_num_mens, passage_num_idxs)
-
-            span1_tokens = question_tokens[event1_span[0]: event1_span[1]]
-            span2_tokens = question_tokens[event2_span[0]: event2_span[1]]
-
             # List of tokenidxs in passage that is a rough grounding for event 1/2
-            event1_passage_tokenidxs: List[int] = matchEventToPassage(span1_tokens, passage_tokens)
-            event2_passage_tokenidxs: List[int] = matchEventToPassage(span2_tokens, passage_tokens)
+            event1_passage_tokenidxs: List[int] = matchEventToPassage(event1_tokens, passage_tokens)
+            event2_passage_tokenidxs: List[int] = matchEventToPassage(event2_tokens, passage_tokens)
 
             num_near_event1, event1_num_idx = numInNeighborhood(
                 event1_passage_tokenidxs, passage_num_tokenidxs, passage_numtoken_entidxs, threshold=THRESHOLD
@@ -313,41 +306,53 @@ def pruneDataset(input_json: str, output_json: str, THRESHOLD: int = 10) -> None
                 execution_supervision = False
             else:
                 # First or Second
-                answer_event = find_answer_event(answer_span, span1_tokens, span2_tokens)
+                answer_event: AnswerEvent = find_answer_event(answer_span, event1_tokens, event2_tokens)
                 # Need to check if the values are coherent with the operator and the answer
-                grounded_answer_num_value = value1 if answer_event == FIRST else value2
-                grounded_other_num_value = value2 if answer_event == FIRST else value1
+                grounded_answer_num_value = value1 if answer_event == AnswerEvent.FIRST else value2
+                grounded_other_num_value = value2 if answer_event == AnswerEvent.FIRST else value1
 
-                if qoperator == LT_OPERATOR:
+                if qoperator == OperatorType.LT_OPERATOR:
                     if grounded_answer_num_value >= grounded_other_num_value:
                         execution_supervision = False
-                if qoperator == GT_OPERATOR:
+                if qoperator == OperatorType.GT_OPERATOR:
                     if grounded_answer_num_value <= grounded_other_num_value:
                         execution_supervision = False
 
+            # Compiling gold - program
+            program_node: qdmr_utils.Node = get_program_supervision(operator=qoperator)
+            num_compare_node = program_node.children[0]
+            find1_node, find2_node = num_compare_node.children[0], num_compare_node.children[1]
+            find1_node.string_arg = " ".join(event1_tokens)
+            find2_node.string_arg = " ".join(event2_tokens)
+            event1_token_idxs = list(range(event1_span[0], event1_span[1]))
+            event1_attn = [1 if i in event1_token_idxs else 0 for i in range(len(question_tokens))]
+            event2_token_idxs = list(range(event2_span[0], event2_span[1]))
+            event2_attn = [1 if i in event2_token_idxs else 0 for i in range(len(question_tokens))]
+            find1_node.supervision["question_attention_supervision"] = event1_attn
+            find2_node.supervision["question_attention_supervision"] = event2_attn
+
+            question_answer[constants.execution_supervised] = False
             if execution_supervision is True:
-                num_compare_node.supervision["num1_entidx"] = event1_num_idx
-                num_compare_node.supervision["num2_entidx"] = event2_num_idx
-                qa_pair[constants.exection_supervised] = True
-                num_exec_supervised += 1
+                num_compare_node.supervision["num1_entidxs"] = [event1_num_idx]
+                num_compare_node.supervision["num2_entidxs"] = [event2_num_idx]
+                question_answer[constants.execution_supervised] = True
+                numexamaples_w_num_annotated += 1
 
-        if len(relevant_qa_pairs) == 0:
-            continue
+            question_answer[constants.program_supervision] = program_node.to_dict()
 
-        passage_info[constants.qa_pairs] = relevant_qa_pairs
-        num_output_qas += len(relevant_qa_pairs)
+            new_qa_pairs.append(question_answer)
 
-        output_passage_dict[passage_id] = passage_info
+        if len(new_qa_pairs) > 0:
+            passage_info[constants.qa_pairs] = new_qa_pairs
+            new_dataset[passage_id] = passage_info
+            after_pruning_ques += len(new_qa_pairs)
 
-    with open(output_json, "w") as outf:
-        json.dump(output_passage_dict, outf, indent=4)
+    num_passages_after_prune = len(new_dataset)
+    print(f"Passages original:{num_passages}  After Pruning:{num_passages_after_prune}")
+    print(f"Questions original:{total_ques}  After pruning:{after_pruning_ques}")
+    print(f"Num of QA with annotated dates: {numexamaples_w_num_annotated}")
 
-    print(f"Number of input passages: {len(passage_id_infos)}\nNumber of input QA pairs: {num_input_qas}")
-    print(f"Number of output passages: {len(output_passage_dict)}\nNumber of output QA pairs: {num_output_qas}")
-    print(qoperator_dict)
-    print(f"Program supervised: {num_prog_supervised}  QAttn supervised: {num_qattn_supervised}  "
-          f"Exec supervised: {num_exec_supervised}")
-    print()
+    return new_dataset
 
 
 if __name__ == "__main__":
@@ -371,8 +376,17 @@ if __name__ == "__main__":
     output_trnfp = os.path.join(output_dir, train_json)
     output_devfp = os.path.join(output_dir, dev_json)
 
-    # args.input_json --- is the raw json from the DROP dataset
-    pruneDataset(input_json=input_trnfp, output_json=output_trnfp)
+    train_dataset = qdmr_utils.read_drop_dataset(input_trnfp)
+    dev_dataset = qdmr_utils.read_drop_dataset(input_devfp)
 
-    # args.input_json --- is the raw json from the DROP dataset
-    pruneDataset(input_json=input_devfp, output_json=output_devfp)
+    new_train_dataset = pruneNumCompQuestions(train_dataset)
+
+    new_dev_dataset = pruneNumCompQuestions(dev_dataset)
+
+    with open(output_trnfp, "w") as f:
+        json.dump(new_train_dataset, f, indent=4)
+
+    with open(output_devfp, "w") as f:
+        json.dump(new_dev_dataset, f, indent=4)
+
+    print("Written augmented datasets")

@@ -26,11 +26,11 @@ def removeExecutionSupervision(dataset):
     total_num_passages = len(dataset)
 
     supervision_dict = defaultdict(int)
-    exec_supervision_keys = [constants.exection_supervised, constants.strongly_supervised]
+    exec_supervision_keys = [constants.execution_supervised, constants.strongly_supervised]
     supervision_keys = [
         constants.program_supervised,
         constants.qattn_supervised,
-        constants.exection_supervised,
+        constants.execution_supervised,
         constants.strongly_supervised,
     ]
 

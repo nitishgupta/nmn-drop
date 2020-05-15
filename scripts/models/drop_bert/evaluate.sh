@@ -7,13 +7,13 @@ export BEAMSIZE=1
 export DEBUG=true
 
 # SAVED MODEL
-MODEL_DIR=./resources/semqa/checkpoints/drop/drop_wqdmr_programs/drop_parser_bert/EXCLOSS_true/MMLLOSS_true/aux_true/SUPEPOCHS_0_HEM_0_BM_1/S_2
+MODEL_DIR=./resources/semqa/checkpoints/drop/drop_wqdmr_programs-ns/drop_parser_bert/Qattn_false/EXCLOSS_true/MMLLOSS_true/aux_true/SUPEPOCHS_0_HEM_5_BM_1/S_1
 MODEL_TAR=${MODEL_DIR}/model.tar.gz
 PREDICTION_DIR=${MODEL_DIR}/predictions
 mkdir ${PREDICTION_DIR}
 
 DATASET_DIR=/shared/nitishg/data/drop-w-qdmr
-DATASET_NAME=drop_wqdmr_programs
+DATASET_NAME=drop_wqdmr_programs-ns
 
 VALDATA_FILE=${DATASET_DIR}/${DATASET_NAME}/drop_dataset_dev.json
 

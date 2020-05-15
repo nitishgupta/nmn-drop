@@ -37,8 +37,8 @@ def readDataset(input_json):
 
 def get_program_supervision(operator: str) -> qdmr_utils.Node:
     assert operator in [FIRST, SECOND], "Operator: {}".format(operator)
-    date_lt = "(find_passageSpanAnswer (compare_date_lesser_than find_PassageAttention find_PassageAttention))"
-    date_gt = "(find_passageSpanAnswer (compare_date_greater_than find_PassageAttention find_PassageAttention))"
+    date_lt = "(select_passagespan_answer (compare_date_lt select_passage select_passage))"
+    date_gt = "(select_passagespan_answer (compare_date_gt select_passage select_passage))"
     lisp_program = date_lt if operator == FIRST else date_gt
     node: qdmr_utils.Node = qdmr_utils.nested_expression_to_tree(qdmr_utils.lisp_to_nested_expression(lisp_program))
     return node
@@ -213,7 +213,7 @@ def dateInNeighborhood(
         return True, closest_date_entidx
 
 
-def pruneDateQuestions(dataset):
+def pruneDateCompQuestions(dataset):
     """ Prunes questions where a date is not present near both events in the question.
         1. Find events in the question
         2. Find whether a nearby date exists or not; if yes, which date.
@@ -286,7 +286,7 @@ def pruneDateQuestions(dataset):
                 event2_passage_tokenidxs, passage_date_tokenidxs, passage_datetoken_entidxs, threshold=THRESHOLD
             )
 
-            if not date_near_event1 or not date_near_event2:
+            if not date_near_event1 or not date_near_event2:    # these are not really date-comparison
                 continue
 
             # Returns FIRST if less-than or SECOND if greater-than
@@ -324,35 +324,27 @@ def pruneDateQuestions(dataset):
             else:
                 keep_dates = False
 
-            # Adding a tuple of zero vectors and empty_values to later store the date grounding of the two ques-events
-            # event1_date_grounding = [0] * len(p_date_values)
-            # event2_date_grounding = [0] * len(p_date_values)
-            # event1_date_value = [-1, -1, -1]
-            # event2_date_value = [-1, -1, -1]
-
             # Compiling gold - program
             program_node: qdmr_utils.Node = get_program_supervision(operator=question_operator)
             date_compare_node = program_node.children[0]
             find1_node, find2_node = date_compare_node.children[0], date_compare_node.children[1]
-            find1_node.supervision["question_attention"] = event1_span
-            find2_node.supervision["question_attention"] = event2_span
+            find1_node.string_arg = " ".join(event1_tokens)
+            find2_node.string_arg = " ".join(event2_tokens)
+            event1_token_idxs = list(range(event1_span[0], event1_span[1]))
+            event1_attn = [1 if i in event1_token_idxs else 0 for i in range(len(question_tokens))]
+            event2_token_idxs = list(range(event2_span[0], event2_span[1]))
+            event2_attn = [1 if i in event2_token_idxs else 0 for i in range(len(question_tokens))]
+            find1_node.supervision["question_attention_supervision"] = event1_attn
+            find2_node.supervision["question_attention_supervision"] = event2_attn
 
-            question_answer[constants.exection_supervised] = False
+            question_answer[constants.execution_supervised] = False
             if keep_dates:
-                date_compare_node.supervision["date1_entidx"] = event1_date_idx
-                date_compare_node.supervision["date2_entidx"] = event2_date_idx
-                question_answer[constants.exection_supervised] = True
+                date_compare_node.supervision["date1_entidxs"] = [event1_date_idx]
+                date_compare_node.supervision["date2_entidxs"] = [event2_date_idx]
+                question_answer[constants.execution_supervised] = True
                 numexamaples_w_dates_annotated += 1
-                # event1_date_grounding[event1_date_idx] = 1
-                # event1_date_value = p_date_values[event1_date_idx]
-                # event2_date_grounding[event2_date_idx] = 1
-                # event2_date_value = p_date_values[event2_date_idx]
 
             question_answer[constants.program_supervision] = program_node.to_dict()
-
-            # """ We store the groundings in the reverse order since they seem to help """
-            # question_answer[constants.qspan_dategrounding_supervision] = [event2_date_grounding, event1_date_grounding]
-            # question_answer[constants.qspan_datevalue_supervision] = [event2_date_value, event1_date_value]
 
             new_qa_pairs.append(question_answer)
 
@@ -392,9 +384,9 @@ if __name__ == "__main__":
     train_dataset = readDataset(input_trnfp)
     dev_dataset = readDataset(input_devfp)
 
-    new_train_dataset = pruneDateQuestions(train_dataset)
+    new_train_dataset = pruneDateCompQuestions(train_dataset)
 
-    new_dev_dataset = pruneDateQuestions(dev_dataset)
+    new_dev_dataset = pruneDateCompQuestions(dev_dataset)
 
     with open(output_trnfp, "w") as f:
         json.dump(new_train_dataset, f, indent=4)

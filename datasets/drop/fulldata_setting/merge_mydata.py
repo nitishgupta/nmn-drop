@@ -18,7 +18,7 @@ def count_supervision_types(passage_dict):
     supervision_keys = [
         constants.program_supervised,
         constants.qattn_supervised,
-        constants.exection_supervised,
+        constants.execution_supervised,
         constants.strongly_supervised,
     ]
     questypes_dict = defaultdict(int)
