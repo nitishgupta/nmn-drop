@@ -9,19 +9,14 @@ from datasets.drop import constants
 
 
 def count_supervision_types(passage_dict):
-    supervision_keys = [
-        constants.program_supervised,
-        constants.qattn_supervised,
-        constants.execution_supervised,
-        constants.strongly_supervised,
-    ]
     supervision_dict = defaultdict(int)
     for _, pinfo in passage_dict.items():
         qa_pairs = pinfo[constants.qa_pairs]
         for qa in qa_pairs:
-            for key in supervision_keys:
-                if key in qa and qa[key] is True:
-                    supervision_dict[key] += 1
+            if constants.program_supervision in qa and qa[constants.program_supervision]:
+                supervision_dict["program_supervision"] += 1
+            if constants.execution_supervised in qa and qa[constants.execution_supervised]:
+                supervision_dict[constants.execution_supervised] += 1
 
     return supervision_dict
 
@@ -56,16 +51,31 @@ def mergeDatasets(input_json1: str, input_json2: str, output_json: str) -> None:
 
     for passage_id in union_passage_ids:
         if passage_id in passage_ids_1 and passage_id in passage_ids_2:
-            # These assumes that all passage-level parsing is same in both datasets, only qa_pairs differ
-            qa_pairs_1 = dataset1[passage_id][constants.qa_pairs]
-            num_qas_1 += len(qa_pairs_1)
-            qa_pairs_2 = dataset2[passage_id][constants.qa_pairs]
-            num_qas_2 += len(qa_pairs_2)
+            pinfo_1 = dataset1[passage_id]
+            pinfo_2 = dataset2[passage_id]
 
-            merged_qa_pairs = list({qa[constants.query_id]: qa for qa in qa_pairs_1 + qa_pairs_2}.values())
+            # Assumes that all passage-level parsing is same in both datasets, only qa_pairs differ
+            passage_info = copy.copy(pinfo_1)
 
-            passage_info = copy.deepcopy(dataset1[passage_id])
-            passage_info[constants.qa_pairs] = merged_qa_pairs
+            # Dataset1 gets preference for QA if query_id is present in both
+            qa_pairs_1 = pinfo_1[constants.qa_pairs]
+            qid2qapair_1 = {qapair[constants.query_id]: qapair for qapair in qa_pairs_1}
+            qids_1 = set(qid2qapair_1.keys())
+            num_qas_1 += len(qids_1)
+
+            qa_pairs_2 = pinfo_2[constants.qa_pairs]
+            qid2qapair_2 = {qapair[constants.query_id]: qapair for qapair in qa_pairs_2}
+            qids_2 = set(qid2qapair_2.keys())
+            num_qas_2 += len(qids_2)
+
+            new_qapairs = []
+            union_qa_ids = qids_1.union(qids_2)
+            for qid in union_qa_ids:
+                if qid in qids_1:
+                    new_qapairs.append(qid2qapair_1[qid])
+                else:
+                    new_qapairs.append(qid2qapair_2[qid])
+            passage_info[constants.qa_pairs] = new_qapairs
 
         elif passage_id in passage_ids_1:
             passage_info = copy.deepcopy(dataset1[passage_id])

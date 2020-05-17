@@ -55,16 +55,36 @@ class CurriculumSampler(data.Sampler):
 
     def __iter__(self):
         logger.info("iterator called; epoch-num: {}".format(self.epoch_num))
+        supervision_dict = None
         if self.epoch_num < self._supervised_epochs:
             supervised_idxs = []
+            supervision_dict = {}
             for idx, instance in enumerate(self.data_source):
                 instance: Instance = instance
                 if self._supervised_field in instance.fields and instance.fields[self._supervised_field].metadata is True:
                     supervised_idxs.append(idx)
+                execution_supervised = instance.fields["execution_supervised"].metadata
+                program_supervised = instance.fields["program_supervised"].metadata
+                supervision_dict["execution_supervised"] = (supervision_dict.get("execution_supervised", 0) +
+                                                            int(execution_supervised))
+                supervision_dict["program_supervised"] = (supervision_dict.get("program_supervised", 0) +
+                                                          int(program_supervised))
             random.shuffle(supervised_idxs)
+            logger.info(f"Supervision count: {supervision_dict}")
+            supervision_dict = None
         else:
             n = len(self.data_source)
             supervised_idxs = torch.randperm(n).tolist()
+            if supervision_dict is None:
+                supervision_dict = {}
+                for instance in self.data_source:
+                    execution_supervised = instance.fields["execution_supervised"].metadata
+                    program_supervised = instance.fields["program_supervised"].metadata
+                    supervision_dict["execution_supervised"] = (supervision_dict.get("execution_supervised", 0) +
+                                                                int(execution_supervised))
+                    supervision_dict["program_supervised"] = (supervision_dict.get("program_supervised", 0) +
+                                                              int(program_supervised))
+            logger.info(f"Supervision count: {supervision_dict}")
 
         logger.info("num instances: {}".format(len(supervised_idxs)))
         self.epoch_num += 1

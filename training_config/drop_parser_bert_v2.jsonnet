@@ -152,7 +152,7 @@ local supervised_epochs = utils.parse_number(std.extVar("SUPEPOCHS"));
         "num_epochs": utils.parse_number(std.extVar("EPOCHS")),
         "optimizer": {
             "type": "huggingface_adamw",
-            "lr": 1e-5
+            "lr": 2e-5
         },
         "validation_metric": "+f1",
         // "gc_freq": utils.parse_number(std.extVar("GC_FREQ")),

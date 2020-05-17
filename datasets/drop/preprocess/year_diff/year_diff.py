@@ -1,7 +1,7 @@
 import argparse
 from collections import defaultdict
 import json
-from nltk.corpus import stopwords
+from semqa.utils.qdmr_utils import lisp_to_nested_expression, nested_expression_to_tree, Node
 import os
 
 import datasets.drop.constants as constants
@@ -44,6 +44,15 @@ def is_single_event_yeardiff_question(question_lower: str):
     return single_event_ques
 
 
+def program_supervision_node(is_single_event_ques: bool) -> Node:
+    year_two_diff_lisp = "(year_difference_two_events select_passage select_passage)"
+    year_one_diff_lisp = "(year_difference_single_event select_passage)"
+    year_two_diff: Node = nested_expression_to_tree(lisp_to_nested_expression(year_two_diff_lisp))
+    year_one_diff: Node = nested_expression_to_tree(lisp_to_nested_expression(year_one_diff_lisp))
+
+    return year_one_diff if is_single_event_ques else year_two_diff
+
+
 def readDataset(input_json):
     with open(input_json, "r") as f:
         dataset = json.load(f)
@@ -65,21 +74,13 @@ def prune_YearDiffQues(dataset):
         for question_answer in passage_info[constants.qa_pairs]:
             total_ques += 1
 
-            original_question = question_answer[constants.cleaned_question]
-            question_lower = original_question.lower()
+            question = question_answer[constants.question]
+            question_lower = question.lower()
 
             if any(span in question_lower for span in YEAR_DIFF_NGRAMS):
                 single_event_ques: bool = is_single_event_yeardiff_question(question_lower)
-                # Return value of None means un-identifiable type
-                if single_event_ques is not None:
-                    if single_event_ques:
-                        question_answer[constants.qtype] = constants.YEARDIFF_SE_qtype
-                        question_answer[constants.program_supervised] = True
-                        qtype_dist[constants.YEARDIFF_SE_qtype] += 1
-                    else:
-                        question_answer[constants.qtype] = constants.YEARDIFF_TE_qtype
-                        question_answer[constants.program_supervised] = True
-                        qtype_dist[constants.YEARDIFF_TE_qtype] += 1
+                program_node = program_supervision_node(single_event_ques)
+                question_answer[constants.program_supervision] = program_node.to_dict()
 
                 new_qa_pairs.append(question_answer)
 

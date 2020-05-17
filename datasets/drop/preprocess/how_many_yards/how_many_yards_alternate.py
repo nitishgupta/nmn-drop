@@ -7,48 +7,72 @@ from collections import defaultdict
 import datasets.drop.constants as constants
 import argparse
 import re
+from enum import Enum
 
 from semqa.utils.qdmr_utils import Node, nested_expression_to_lisp, nested_expression_to_tree, lisp_to_nested_expression
 from semqa.domain_languages.drop_language_v2 import DropLanguageV2, get_empty_language_object
 
 drop_language: DropLanguageV2 = get_empty_language_object()
 
-def qtype_to_node(qtype) -> Node:
-    num_find = ['select_num', 'select_passage']
 
-    num_max_find = ['select_num', ['select_max_num', 'select_passage']]
-    num_min_find = ['select_num', ['select_min_num', 'select_passage']]
-
-    num_max_filter_find = ['select_num', ['select_max_num', ['filter_passage', 'select_passage']]]
-    num_min_filter_find = ['select_num', ['select_min_num', ['filter_passage', 'select_passage']]]
-
-    qtype_to_nested = {
-        constants.NUM_find_qtype: num_find,
-        constants.MAX_find_qtype: num_max_find,
-        constants.MAX_filter_find_qtype: num_max_filter_find,
-        constants.MIN_find_qtype: num_min_find,
-        constants.MIN_filter_find_qtype: num_min_filter_find,
-    }
-
-    nested_expr = qtype_to_nested.get(qtype, None)
-    node = None
-    if nested_expr:
-        node: Node = nested_expression_to_tree(nested_expr)
-
-    return node
+class MinMaxNum(Enum):
+    min = 1
+    max = 2
+    num = 3
 
 
-def add_supervision(qtype, node, find_qattn, number_entidxs, question_tokens):
-    assert qtype in [constants.MAX_find_qtype, constants.MIN_find_qtype]
-    assert len(find_qattn) == len(question_tokens)
-    # ['select_num', ['select_max_num', 'select_passage']]
-    string_arg = " ".join([t for i, t in enumerate(question_tokens) if find_qattn[i] == 1])
-    select_node: Node = node.children[0].children[0]
-    select_node.string_arg = string_arg
-    select_node.supervision["question_attention_supervision"] = find_qattn
+def get_find_node(find_qattn):
+    find_node = Node(predicate="select_passage")
+    find_node.supervision["question_attention_supervision"] = find_qattn
+    return find_node
 
-    minmax_node = node.children[0]
-    minmax_node.supervision["num_entidxs"] = number_entidxs
+
+def get_filter_find_node(find_qattn, filter_qattn):
+    find_node = Node(predicate="select_passage")
+    find_node.supervision["question_attention_supervision"] = find_qattn
+    filter_node = Node(predicate="filter_passage")
+    filter_node.supervision["question_attention_supervision"] = filter_qattn
+    filter_node.add_child(find_node)
+    return filter_node
+
+
+def get_num_minmax_filterfind_node(min_or_max: MinMaxNum, filter: bool, find_qattn, filter_qattn):
+    min_max_str = "min" if min_or_max == MinMaxNum.min else "max"
+    min_max_node = Node(predicate="select_{}_num".format(min_max_str))
+    if filter:
+        node = get_filter_find_node(find_qattn, filter_qattn)
+    else:
+        node = get_find_node(find_qattn)
+    min_max_node.add_child(node)
+
+    select_num_node = Node(predicate="select_num")
+    select_num_node.add_child(min_max_node)
+    return select_num_node
+
+
+def get_num_filterfind_node(filter: bool, find_qattn, filter_qattn):
+    if filter:
+        node = get_filter_find_node(find_qattn, filter_qattn)
+    else:
+        node = get_find_node(find_qattn)
+    select_num_node = Node(predicate="select_num")
+    select_num_node.add_child(node)
+    return select_num_node
+
+
+
+def node_from_findfilter_maxminnum(find_or_filter: str, min_max_or_num: MinMaxNum,
+                                   find_qattn, filter_qattn) -> Node:
+    is_filter = True if find_or_filter == "filter" else False
+    is_min_max = True if min_max_or_num in [MinMaxNum.min, MinMaxNum.max] else False
+    min_or_max: MinMaxNum = None if not is_min_max else min_max_or_num
+
+    if min_or_max is not None:
+        select_num_node = get_num_minmax_filterfind_node(min_or_max, is_filter, find_qattn, filter_qattn)
+    else:
+        select_num_node = get_num_filterfind_node(is_filter, find_qattn, filter_qattn)
+
+    return select_num_node
 
 
 THRESHOLD = 20
@@ -66,6 +90,15 @@ NUM_FIND_QUESTION_REGEX_PATTERNS = [
     "how many yards was \S* \S* touchdown \S* \?",
     "how many yards was \S* touchdown \?",
     "how many yards was \S* \S* touchdown \?",
+
+    "how many yards was \S* field goal of the game \?",
+    "how many yards was \S* \S* field goal of the game \?",
+    "how many yards was \S* td \S* of the game \?",
+    "how many yards was \S* \S* td \S* of the game \?",
+    "how many yards was \S* touchdown \S* of the game \?",
+    "how many yards was \S* \S* touchdown \S* of the game \?",
+    "how many yards was \S* touchdown of the game \?",
+    "how many yards was \S* \S* touchdown of the game \?",
 ]
 
 NUM_FIND_REGEX = re.compile("|".join(NUM_FIND_QUESTION_REGEX_PATTERNS))
@@ -95,6 +128,31 @@ NUM_MAXMIN_FIND_QUESTION_REGEX_PATTERNS = [
     "how many yards was \S* shortest touchdown \?",
     "how many yards was \S* \S* shortest touchdown \?",
     "how many yards was \S* \S* \S* shortest touchdown \?",
+
+    "how many yards was \S* longest field goal of the game \?",
+    "how many yards was \S* \S* longest field goal of the game \?",
+    "how many yards was \S* \S* \S* longest field goal of the game \?",
+    "how many yards was \S* shortest field goal of the game \?",
+    "how many yards was \S* \S* shortest field goal of the game \?",
+    "how many yards was \S* \S* \S* shortest field goal of the game \?",
+    "how many yards was \S* longest td \S* of the game \?",
+    "how many yards was \S* \S* longest td \S* of the game \?",
+    "how many yards was \S* \S* \S* longest td \S* of the game \?",
+    "how many yards was \S* shortest td \S* of the game \?",
+    "how many yards was \S* \S* shortest td \S* of the game \?",
+    "how many yards was \S* \S* \S* shortest td \S* of the game \?",
+    "how many yards was \S* longest touchdown \S* of the game \?",
+    "how many yards was \S* \S* longest touchdown \S* of the game \?",
+    "how many yards was \S* \S* \S* longest touchdown \S* of the game \?",
+    "how many yards was \S* shortest touchdown \S* of the game \?",
+    "how many yards was \S* \S* shortest touchdown \S* of the game \?",
+    "how many yards was \S* \S* \S* shortest touchdown \S* of the game \?",
+    "how many yards was \S* longest touchdown of the game \?",
+    "how many yards was \S* \S* longest touchdown of the game \?",
+    "how many yards was \S* \S* \S* longest touchdown of the game \?",
+    "how many yards was \S* shortest touchdown of the game \?",
+    "how many yards was \S* \S* shortest touchdown of the game \?",
+    "how many yards was \S* \S* \S* shortest touchdown of the game \?",
 ]
 
 NUM_MINMAX_FIND_REGEX = re.compile("|".join(NUM_MAXMIN_FIND_QUESTION_REGEX_PATTERNS))
@@ -191,22 +249,21 @@ def convert_start_end_to_attention_vector(length, start, end):
     return attention_vector
 
 
-
-def get_question_attention(question_tokens: List[str], qtype: str):
+def get_question_attention(question_tokens: List[str], find_or_filter: str, min_max_or_num: MinMaxNum):
     qlen = len(question_tokens)
 
-    if qtype in [constants.NUM_find_qtype]:
+    if find_or_filter == "find" and min_max_or_num == MinMaxNum.num:
         find_start = 4  # exclude "how many yards was"
         find_end = qlen - 1  # exclusive, don't attend to ?
         find_attention_vector = convert_start_end_to_attention_vector(qlen, find_start,
                                                                       find_end)
         filter_attention_vector = None
 
-    elif qtype in [constants.MAX_find_qtype, constants.MIN_find_qtype]:
+    elif find_or_filter == "find" and min_max_or_num in [MinMaxNum.min, MinMaxNum.max]:
         # Two spans of find -- after "how many yards was" until longest/shortest and after until the end
-        if qtype == constants.MAX_find_qtype:
+        if min_max_or_num == MinMaxNum.max:
             longest_shortest_idx = question_tokens.index("longest")
-        elif qtype == constants.MIN_find_qtype:
+        elif min_max_or_num == MinMaxNum.min:
             longest_shortest_idx = question_tokens.index("shortest")
         else:
             raise NotImplementedError
@@ -222,11 +279,11 @@ def get_question_attention(question_tokens: List[str], qtype: str):
         find_attention_vector = [x+y for x, y in zip(find_attention_vector1, find_attention_vector2)]
         filter_attention_vector = None
 
-    elif qtype in [constants.MAX_filter_find_qtype, constants.MIN_filter_find_qtype]:
+    elif find_or_filter == "filter" and min_max_or_num in [MinMaxNum.min, MinMaxNum.max]:
         # Two spans of find -- after "how many yards was" until longest/shortest & after that until \S* \S* \S* half ?
-        if qtype == constants.MAX_filter_find_qtype:
+        if min_max_or_num == MinMaxNum.max:
             longest_shortest_idx = question_tokens.index("longest")
-        elif qtype == constants.MIN_filter_find_qtype:
+        elif min_max_or_num == MinMaxNum.min:
             longest_shortest_idx = question_tokens.index("shortest")
         else:
             raise NotImplementedError
@@ -365,9 +422,6 @@ def preprocess_HowManyYardsWasThe_ques(dataset):
     questions_w_numground = 0
     qtype_dist = defaultdict(int)
     num_passages = len(dataset)
-    counter = 1
-
-    num_programsupervised_ques = 0
 
     for passage_id, passage_info in dataset.items():
 
@@ -393,53 +447,74 @@ def preprocess_HowManyYardsWasThe_ques(dataset):
                 if "second longest" in question_lower or "second shortest" in question_lower:
                     continue
 
-                qtype = None
+                find_or_filter = None
+                min_max_or_num = None
+
+                if "longest" in question_lower:
+                    min_max_or_num = MinMaxNum.max
+                elif "shortest" in question_lower:
+                    min_max_or_num = MinMaxNum.min
+                else:
+                    min_max_or_num = MinMaxNum.num
+
                 if is_num_find_question(tokenized_question.lower()):
-                    qtype = constants.NUM_find_qtype
+                    find_or_filter = "find"
+                    min_max_or_num = MinMaxNum.num
                 if is_num_minmax_find_question(tokenized_question.lower()):
+                    find_or_filter = "find"
                     if "longest" in tokenized_question:
-                        qtype = constants.MAX_find_qtype
+                        min_max_or_num = MinMaxNum.max
                     elif "shortest" in tokenized_question:
-                        qtype = constants.MIN_find_qtype
+                        min_max_or_num = MinMaxNum.min
                 if is_num_minmax_filter_find_question(tokenized_question.lower()):
+                    find_or_filter = "filter"
                     if "longest" in tokenized_question:
-                        qtype = constants.MAX_filter_find_qtype
+                        min_max_or_num = MinMaxNum.max
                     elif "shortest" in tokenized_question:
-                        qtype = constants.MIN_filter_find_qtype
+                        min_max_or_num = MinMaxNum.min
 
-                if qtype is not None and qtype in [constants.MAX_find_qtype, constants.MIN_find_qtype]:
-                    find_qattn, filter_qattn = get_question_attention(question_tokens=ques_lower_tokens, qtype=qtype)
+                if find_or_filter is None or min_max_or_num is None:
+                    continue
 
-                    # NUM SUPERVISION
-                    node: Node = qtype_to_node(qtype)
-                    if node is None:
-                        print(qtype)
-                        continue
+                find_qattn, filter_qattn = get_question_attention(question_tokens=ques_lower_tokens,
+                                                                  find_or_filter=find_or_filter,
+                                                                  min_max_or_num=min_max_or_num)
 
-                    num_answer_str = answer["number"]
-                    num_answer = float(num_answer_str) if num_answer_str else None
+                if find_qattn is None:
+                    continue
 
-                    relevant_number_entidxs, number_values = get_number_distribution_supervision(
-                        question_tokens,
-                        passage_tokens,
-                        num_answer,
-                        find_qattn,
-                        passage_num_mens,
-                        passage_num_entidxs,
-                        passage_num_vals,
-                    )
-                    if relevant_number_entidxs is not None:
-                        add_supervision(qtype, node, find_qattn, relevant_number_entidxs, question_tokens)
+                program_node: Node = node_from_findfilter_maxminnum(find_or_filter, min_max_or_num,
+                                                                    find_qattn, filter_qattn)
+                qtype = longest_shortest_or_num + "_" + find_or_filter
+                qtype_dist[qtype] += 1
 
-                        program_supervision = node.to_dict()
-                        question_answer[constants.program_supervision] = program_supervision
-                        question_answer[constants.execution_supervised] = True
+                # NUM SUPERVISION
+                num_answer_str = answer["number"]
+                num_answer = float(num_answer_str) if num_answer_str else None
 
-                        questions_w_numground += 1
-                        num_programsupervised_ques += 1
-                        qtype_dist[qtype] += 1
+                qattn = copy.deepcopy(find_qattn)
+                if filter_qattn is not None:
+                    qattn = [min(1, x + y) for (x, y) in zip(qattn, filter_qattn)]
 
-                        new_qa_pairs.append(question_answer)
+                relevant_number_entidxs, number_values = get_number_distribution_supervision(
+                    question_tokens,
+                    passage_tokens,
+                    num_answer,
+                    qattn,
+                    passage_num_mens,
+                    passage_num_entidxs,
+                    passage_num_vals,
+                )
+
+                if longest_shortest_or_num is not "num" and relevant_number_entidxs:
+                    minmax_node = program_node.children[0]
+                    minmax_node.supervision["num_entidxs"] = relevant_number_entidxs
+                    question_answer[constants.execution_supervised] = True
+                    questions_w_numground += 1
+
+                question_answer[constants.program_supervision] = program_node.to_dict()
+                new_qa_pairs.append(question_answer)
+
 
         if len(new_qa_pairs) > 0:
             passage_info[constants.qa_pairs] = new_qa_pairs
@@ -450,7 +525,6 @@ def preprocess_HowManyYardsWasThe_ques(dataset):
     print(f"Passages original:{num_passages}  After Pruning:{num_passages_after_prune}")
     print(f"Questions original:{total_ques}  After pruning:{after_pruning_ques}")
     print(f"Num of QA with num-grounding supervised: {questions_w_numground}")
-    print(f"Number of program supervised questions: {num_programsupervised_ques}")
     print(f"Qtype dist: {qtype_dist}")
 
     return new_dataset

@@ -110,116 +110,58 @@ def get_number_distribution_supervision(
     return relevant_number_entidxs, number_values
 
 
-FILTER_MODIFIERS = [
-    "the first quarter",
-    "the second quarter",
-    "the third quarter",
-    "the fourth quarter",
-    "the first half",
-    "the second half",
-    "the first two quarters",
-    "the last two quarters",
-]
-
-
-def hmyw_program_qattn(tokenized_queslower: str):
-    """ Here we'll annotate questions with one/two attentions depending on if the program type is
-        1. find(QuestionAttention)
-        2. filter(QuestionAttention, find(QuestionAttention))
-    """
-    question_lower = tokenized_queslower
-    question_tokens: List[str] = question_lower.split(" ")
+def get_question_attention(question_tokens: List[str]) -> Tuple[List[int], List[int]]:
+    tokens_with_find_attention = [
+        "touchdown",
+        "run",
+        "pass",
+        "field",
+        "goal",
+        "passing",
+        "TD",
+        "td",
+        "rushing",
+        "kick",
+        "scoring",
+        "drive",
+        "touchdowns",
+        "reception",
+        "interception",
+        "return",
+        "goals",
+    ]
+    tokens_with_no_attention = [
+        "how",
+        "How",
+        "many",
+        "yards",
+        "was",
+        "the",
+        "longest",
+        "shortest",
+        "?",
+        "of",
+        "in",
+        "game",
+    ]
     qlen = len(question_tokens)
+    find_qattn = [0.0] * qlen
+    filter_qattn = [0.0] * qlen
 
-    find_qattn = [0] * qlen
-    filter_qattn = None
-    find_or_filter = None
-
-    if any([span in tokenized_queslower for span in FILTER_MODIFIERS]):
-        filter_qattn = [0] * qlen
-        for i in range(0, 4):
-            filter_qattn[qlen - 1 - 1 - i] = 1  # extra -1 to avoid '?' at the end
-        find_or_filter = "filter"
-    else:
-        find_or_filter = "find"
-
-    for i in range(4, qlen - 1):   # avoid "how many yards was" and '?' with -1
-        if i == 4 and question_tokens[i] == "the":
+    for i, token in enumerate(question_tokens):
+        if token in tokens_with_no_attention:
             continue
-        if question_tokens[i] not in ["longest", "shortest"]:
-            if filter_qattn:
-                if filter_qattn[i] != 1:
-                    find_qattn[i] = 1
-            else:
-                find_qattn[i] = 1
+        if token in tokens_with_find_attention:
+            find_qattn[i] = 1.0
+        else:
+            filter_qattn[i] = 1.0
 
-    # Using above, find would attend to "of the game", "in the game" -- removing that
-    if question_tokens[-4:-1] == ["of", "the", "game"] or question_tokens[-4:-1] == ["in", "the", "game"]:
-        find_qattn[-4:-1] = [0, 0, 0]
+    if sum(find_qattn) == 0:
+        find_qattn = None
+    if sum(filter_qattn) == 0:
+        filter_qattn = None
 
-    if "longest" in question_tokens:
-        min_max_or_num = MinMaxNum.max
-    elif "shortest" in question_tokens:
-        min_max_or_num = MinMaxNum.min
-    else:
-        min_max_or_num = MinMaxNum.num
-
-    return find_or_filter, min_max_or_num, filter_qattn, find_qattn
-
-
-#
-# def get_question_attention(question_tokens: List[str]) -> Tuple[List[int], List[int]]:
-#     tokens_with_find_attention = [
-#         "touchdown",
-#         "run",
-#         "pass",
-#         "field",
-#         "goal",
-#         "passing",
-#         "TD",
-#         "td",
-#         "rushing",
-#         "kick",
-#         "scoring",
-#         "drive",
-#         "touchdowns",
-#         "reception",
-#         "interception",
-#         "return",
-#         "goals",
-#     ]
-#     tokens_with_no_attention = [
-#         "how",
-#         "How",
-#         "many",
-#         "yards",
-#         "was",
-#         "the",
-#         "longest",
-#         "shortest",
-#         "?",
-#         "of",
-#         "in",
-#         "game",
-#     ]
-#     qlen = len(question_tokens)
-#     find_qattn = [0.0] * qlen
-#     filter_qattn = [0.0] * qlen
-#
-#     for i, token in enumerate(question_tokens):
-#         if token in tokens_with_no_attention:
-#             continue
-#         if token in tokens_with_find_attention:
-#             find_qattn[i] = 1.0
-#         else:
-#             filter_qattn[i] = 1.0
-#
-#     if sum(find_qattn) == 0:
-#         find_qattn = None
-#     if sum(filter_qattn) == 0:
-#         filter_qattn = None
-#
-#     return find_qattn, filter_qattn
+    return find_qattn, filter_qattn
 
 
 def get_find_node(find_qattn):
@@ -260,6 +202,7 @@ def get_num_filterfind_node(filter: bool, find_qattn, filter_qattn):
     select_num_node = Node(predicate="select_num")
     select_num_node.add_child(node)
     return select_num_node
+
 
 
 def node_from_findfilter_maxminnum(find_or_filter: str, min_max_or_num: MinMaxNum,
@@ -319,7 +262,6 @@ def preprocess_HowManyYardsWasThe_ques(dataset):
             question = question_answer[constants.question]
             question_tokens = question_answer[constants.question_tokens]
             ques_lower_tokens = [t.lower() for t in question_tokens]
-            tokenizedques_lower = " ".join(ques_lower_tokens)
             question_lower = question.lower()
 
             # Keep questions that contain "how many yards was"
@@ -335,17 +277,38 @@ def preprocess_HowManyYardsWasThe_ques(dataset):
                 # We will find the ques-attentions for find vs. filter
                 # Using the existence of longest / shortest word we can figure out between Max/Min/Num
                 # Tuple[List[int], List[int]]
-                (find_or_filter, min_max_or_num, filter_qattn, find_qattn) = hmyw_program_qattn(tokenizedques_lower)
+                (find_qattn, filter_qattn) = get_question_attention(
+                    question_tokens=ques_lower_tokens)
+
+                find_or_filter = None
+                if find_qattn is None and filter_qattn is None:
+                    pass
+                elif find_qattn is None:
+                    find_qattn = filter_qattn
+                    filter_qattn = None
+                    find_or_filter = "find"
+                elif filter_qattn is None:
+                    find_or_filter = "find"
+                else:
+                    # Both are not None
+                    find_or_filter = "filter"
+
+                if find_or_filter is None:
+                    continue
+
+                # Now need to figure out whether it's a findNumber / maxNumber / minNumber
+                min_max_or_num = None
+                if "longest" in question_lower:
+                    min_max_or_num = MinMaxNum.max
+                elif "shortest" in question_lower:
+                    min_max_or_num = MinMaxNum.min
+                else:
+                    min_max_or_num = MinMaxNum.num
 
                 program_node: Node = node_from_findfilter_maxminnum(find_or_filter, min_max_or_num,
                                                                     find_qattn, filter_qattn)
-                qtype = str(min_max_or_num) + "_" + find_or_filter
+                qtype = min_max_or_num + "_" + find_or_filter
                 qtype_dist[qtype] += 1
-
-                # print(question)
-                # print(qtype)
-                # print(f"{find_qattn}  {filter_qattn}")
-                # print()
 
                 num_answer_str = answer["number"]
                 num_answer = float(num_answer_str) if num_answer_str else None
@@ -364,7 +327,7 @@ def preprocess_HowManyYardsWasThe_ques(dataset):
                     passage_num_vals,
                 )
 
-                if min_max_or_num is not MinMaxNum.num and relevant_number_entidxs:
+                if min_max_or_num is not "num" and relevant_number_entidxs:
                     minmax_node = program_node.children[0]
                     minmax_node.supervision["num_entidxs"] = relevant_number_entidxs
                     question_answer[constants.execution_supervised] = True

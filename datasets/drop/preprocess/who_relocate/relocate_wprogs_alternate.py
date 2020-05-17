@@ -202,10 +202,10 @@ def preprocess_Relocate_ques_wattn(dataset):
         for question_answer in passage_info[constants.qa_pairs]:
             total_ques += 1
 
-            original_question = question_answer[constants.cleaned_question]
+            original_question = question_answer[constants.question]
             question_lower = original_question.lower()
-            tokenized_ques = question_answer[constants.tokenized_question]
-            question_tokens = tokenized_ques.lower().split(" ")
+            question_tokens = question_answer[constants.question_tokens]
+            tokenized_ques = " ".join(question_tokens)
             if any(span in question_lower for span in WHO_RELOCATE_NGRAMS):
 
                 if tokenized_ques.lower() in relocate_find_questions:

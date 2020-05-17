@@ -26,34 +26,46 @@ def count_num_exec_sup(dataset, choosen_pids):
     for passage_idx in choosen_pids:
         passage_info = dataset[passage_idx]
         for qa in passage_info[constants.qa_pairs]:
-            if constants.execution_supervised in qa:
-                if qa[constants.execution_supervised]:
-                    num_exec_sup += 1
+            if constants.execution_supervised in qa and qa[constants.execution_supervised]:
+                num_exec_sup += 1
     return num_exec_sup
 
 
-def make_supervision_dict(dataset):
-    basic_keys = [constants.program_supervised, constants.qattn_supervised, constants.execution_supervised]
-    qtype_dict = defaultdict(int)
-    total_num_qa = 0
+def count_supervision_types(passage_dict):
     supervision_dict = defaultdict(int)
-    for passage_idx, passage_info in dataset.items():
-        total_num_qa += len(passage_info[constants.qa_pairs])
-        for qa in passage_info[constants.qa_pairs]:
-            if constants.qtype in qa:
-                qtype_dict[qa[constants.qtype]] += 1
+    for _, pinfo in passage_dict.items():
+        qa_pairs = pinfo[constants.qa_pairs]
+        for qa in qa_pairs:
+            if constants.program_supervision in qa and qa[constants.program_supervision]:
+                supervision_dict["program_supervision"] += 1
+            if constants.execution_supervised in qa and qa[constants.execution_supervised]:
+                supervision_dict[constants.execution_supervised] += 1
 
-            all_basic_true = False
-            for key in basic_keys:
-                if key in qa:
-                    supervision_dict[key] += 1 if qa[key] else 0
-                    all_basic_true = True if qa[key] else False
-                else:
-                    all_basic_true = False
-            if all_basic_true:
-                supervision_dict[constants.strongly_supervised] += 1
+    return supervision_dict
 
-    return supervision_dict, qtype_dict
+
+# def make_supervision_dict(dataset):
+#     basic_keys = [constants.program_supervised, constants.qattn_supervised, constants.execution_supervised]
+#     qtype_dict = defaultdict(int)
+#     total_num_qa = 0
+#     supervision_dict = defaultdict(int)
+#     for passage_idx, passage_info in dataset.items():
+#         total_num_qa += len(passage_info[constants.qa_pairs])
+#         for qa in passage_info[constants.qa_pairs]:
+#             if constants.qtype in qa:
+#                 qtype_dict[qa[constants.qtype]] += 1
+#
+#             all_basic_true = False
+#             for key in basic_keys:
+#                 if key in qa:
+#                     supervision_dict[key] += 1 if qa[key] else 0
+#                     all_basic_true = True if qa[key] else False
+#                 else:
+#                     all_basic_true = False
+#             if all_basic_true:
+#                 supervision_dict[constants.strongly_supervised] += 1
+#
+#     return supervision_dict, qtype_dict
 
 
 def remove_all_annotations(dataset, annotation_for_numpassages):
@@ -82,13 +94,12 @@ def remove_all_annotations(dataset, annotation_for_numpassages):
     total_num_qa = 0
 
     supervision_keys = [
-        constants.program_supervised,
-        constants.qattn_supervised,
+        constants.program_supervision,
         constants.execution_supervised,
-        constants.strongly_supervised,
     ]
 
-    orig_supervision_dict, orig_qtype_dict = make_supervision_dict(dataset)
+    # orig_supervision_dict, orig_qtype_dict = count_supervision_types(dataset)
+    orig_supervision_dict = count_supervision_types(dataset)
 
     for passage_idx, passage_info in dataset.items():
         total_num_qa += len(passage_info[constants.qa_pairs])
@@ -97,18 +108,16 @@ def remove_all_annotations(dataset, annotation_for_numpassages):
             for qa in passage_info[constants.qa_pairs]:
                 # Setting all keys for supervised = False
                 for key in supervision_keys:
-                    qa[key] = False
-                if constants.qtype in qa:
-                    qa.pop(constants.qtype)
+                    qa.pop(key, None)
 
-    pruned_supervision_dict, pruned_qtype_dict = make_supervision_dict(dataset)
+    # pruned_supervision_dict, pruned_qtype_dict = make_supervision_dict(dataset)
+    pruned_supervision_dict = count_supervision_types(dataset)
 
     print()
     print(f"TotalNumPassages: {total_num_passages}  Passages remaining annotated: {annotation_for_numpassages}")
     print(f"Num of original question: {total_num_qa}")
     print(f"Original Supervision Dict: {orig_supervision_dict}")
-    print(f"Supervision Dict: {pruned_supervision_dict}")
-    print(f"Ques Type Dict: {pruned_qtype_dict}")
+    print(f"Output Supervision Dict: {pruned_supervision_dict}")
 
     return dataset
 
