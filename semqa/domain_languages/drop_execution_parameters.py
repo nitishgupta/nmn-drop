@@ -4,7 +4,7 @@ import torch
 from allennlp.common import Registrable
 from allennlp.modules import Seq2SeqEncoder
 from allennlp.modules.span_extractors.endpoint_span_extractor import EndpointSpanExtractor
-
+from allennlp.modules.attention import BilinearAttention
 from allennlp.modules.matrix_attention import (
     MatrixAttention,
     BilinearMatrixAttention,
@@ -36,6 +36,10 @@ class ExecutorParameters(torch.nn.Module, Registrable):
         self.num_counts = 10
 
         self.passage_attention_scalingvals = [1, 2, 5, 10]
+
+        self.qvec_to_passage_attention = BilinearAttention(vector_dim=question_encoding_dim,
+                                                           matrix_dim=passage_encoding_dim,
+                                                           normalize=False)
 
         # Parameters for answer start/end prediction from PassageAttention
         self.passage_attention_to_span = passage_attention_to_span
