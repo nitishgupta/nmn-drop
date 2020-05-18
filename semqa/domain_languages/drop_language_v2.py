@@ -500,15 +500,22 @@ class DropLanguageV2(DomainLanguage):
     @predicate_with_side_args(["question_attention"])
     def select_passage(self, question_attention: Tensor) -> PassageAttention:
         with Profile("find-pattn"):
-            # The passage attention is only used as supervision for certain synthetic questions
-            # if passage_attention is not None:
-            #     return PassageAttention(passage_attention, debug_value="Supervised-Pattn-Used")
             question_attention = question_attention * self.question_mask
+            # SMA
+            # passage_similarity_ex = question_attention.unsqueeze(0).mm(self.question_passage_similarity)
+            # passage_similarity = passage_similarity_ex.squeeze(0)
 
-            # Shape: (question_length, passage_length)
-            question_passage_attention = self.question_passage_attention * question_attention.unsqueeze(1)
+            # BLA
+            # Shape: (ques_encoding_dim)
+            weighted_question_vector = torch.sum(self.encoded_question * question_attention.unsqueeze(1), 0)
+            weighted_question_vector_ex = weighted_question_vector.unsqueeze(0)
+            passage_matrix = self.encoded_passage.unsqueeze(0)
+            # (passage_length, )
+            passage_similarity = self.parameters.qvec_to_passage_attention(weighted_question_vector_ex,
+                                                                           passage_matrix).squeeze(0)
 
-            passage_attention = question_passage_attention.sum(0)
+            passage_attention = allenutil.masked_softmax(passage_similarity, mask=self.passage_mask.bool(),
+                                                         memory_efficient=True)
             passage_attention = clamp_distribution(passage_attention)
 
             debug_value = ""
