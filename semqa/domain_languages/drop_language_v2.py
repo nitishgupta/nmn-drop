@@ -291,8 +291,6 @@ class DropLanguageV2(DomainLanguage):
             year_differences: List[int],
             year_differences_mat: np.array,
             count_num_values: List[int],
-            question_passage_similarity: Tensor,
-            passage_question_similarity: Tensor,
             question_passage_attention: Tensor,
             passage_question_attention: Tensor,
             passage_token2date_alignment: Tensor,
@@ -381,9 +379,6 @@ class DropLanguageV2(DomainLanguage):
         self._debug = debug
 
         self.device_id = device_id
-
-        self.question_passage_similarity = question_passage_similarity
-        self.passage_question_similarity = passage_question_similarity
 
         # Shape: (question_length, passage_length)
         self.question_passage_attention = (
@@ -507,17 +502,17 @@ class DropLanguageV2(DomainLanguage):
         with Profile("find-pattn"):
             question_attention = question_attention * self.question_mask
             # SMA
-            passage_similarity_ex = question_attention.unsqueeze(0).mm(self.question_passage_similarity)
-            passage_similarity = passage_similarity_ex.squeeze(0)
+            # passage_similarity_ex = question_attention.unsqueeze(0).mm(self.question_passage_similarity)
+            # passage_similarity = passage_similarity_ex.squeeze(0)
 
             # BLA
-            # # Shape: (ques_encoding_dim)
-            # weighted_question_vector = torch.sum(self.encoded_question * question_attention.unsqueeze(1), 0)
-            # weighted_question_vector_ex = weighted_question_vector.unsqueeze(0)
-            # passage_matrix = self.encoded_passage.unsqueeze(0)
-            # # (passage_length, )
-            # passage_similarity = self.parameters.qvec_to_passage_attention(weighted_question_vector_ex,
-            #                                                                passage_matrix).squeeze(0)
+            # Shape: (ques_encoding_dim)
+            weighted_question_vector = torch.sum(self.encoded_question * question_attention.unsqueeze(1), 0)
+            weighted_question_vector_ex = weighted_question_vector.unsqueeze(0)
+            passage_matrix = self.encoded_passage.unsqueeze(0)
+            # (passage_length, )
+            passage_similarity = self.parameters.qvec_to_passage_attention(weighted_question_vector_ex,
+                                                                           passage_matrix).squeeze(0)
 
             passage_attention = allenutil.masked_softmax(passage_similarity, mask=self.passage_mask.bool(),
                                                          memory_efficient=True)
@@ -1873,8 +1868,6 @@ def get_empty_language_object() -> DropLanguageV2:
         year_differences=None,
         year_differences_mat=None,
         count_num_values=None,
-        question_passage_similarity=None,
-        passage_question_similarity=None,
         question_passage_attention=None,
         passage_question_attention=None,
         passage_token2date_alignment=None,

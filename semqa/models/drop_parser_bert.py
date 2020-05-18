@@ -388,8 +388,6 @@ class DROPParserBERT(DROPParserBase):
         passage_encoded_aslist = [encoded_passage[i] for i in range(batch_size)]
         passage_modeled_aslist = [modeled_passage[i] for i in range(batch_size)]
         passage_mask_aslist = [passage_mask[i] for i in range(batch_size)]
-        q2p_similarity_aslist = [question_passage_similarity[i] for i in range(batch_size)]
-        p2q_similarity_aslist = [passage_question_similarity[i] for i in range(batch_size)]
         q2p_attention_aslist = [question_passage_attention[i] for i in range(batch_size)]
         p2q_attention_aslist = [passage_question_attention[i] for i in range(batch_size)]
         # p2pdate_similarity_aslist = [passage_passage_token2date_similarity[i] for i in range(batch_size)]
@@ -434,8 +432,6 @@ class DROPParserBERT(DROPParserBase):
                     year_differences=year_differences[i],
                     year_differences_mat=year_differences_mat[i],
                     count_num_values=count_values[i],
-                    question_passage_similarity=q2p_similarity_aslist[i],
-                    passage_question_similarity=p2q_similarity_aslist[i],
                     question_passage_attention=q2p_attention_aslist[i],
                     passage_question_attention=p2q_attention_aslist[i],
                     passage_token2date_alignment=p2pdate_alignment_aslist[i],
