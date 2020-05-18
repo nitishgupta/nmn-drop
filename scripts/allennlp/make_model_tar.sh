@@ -1,6 +1,6 @@
 #!/usr/bin/env
 
-SERIALIZATION_DIR=./resources/semqa/checkpoints/drop/merged_data/date_yd_num_hmyw_cnt_whoarg_1200_full/drop_parser_bert/EXCLOSS_true/MMLLOSS_true/aux_true/SUPEPOCHS_3/S_1/BeamSize2
+SERIALIZATION_DIR=./resources/semqa/checkpoints/drop/drop_iclrfull_wqdmr/drop_parser_bert/Qattn_true/EXCLOSS_true/MMLLOSS_true/aux_true/SUPEPOCHS_0_HEM_3_BM_1/S_42
 WEIGHTS_TH=best.th
 
 MODEL_ARCHIVE=${SERIALIZATION_DIR}/model.tar.gz
