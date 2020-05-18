@@ -3,9 +3,10 @@ from typing import List, Dict, Tuple
 import os
 import json
 import argparse
+from collections import defaultdict
 
 
-class PredictionInstance:
+class NMNPredictionInstance:
     """ Class to hold a single NMN prediction written in json format.
         Typically these outputs are written by the "drop_parser_jsonl_predictor"
     """
@@ -22,19 +23,19 @@ class PredictionInstance:
         self.correct = True if self.f1_score > 0.6 else False
 
 
-def read_nmn_prediction(jsonl_file) -> List[PredictionInstance]:
+def read_nmn_prediction(jsonl_file) -> List[NMNPredictionInstance]:
     """ Input json-lines written typically by the "drop_parser_jsonl_predictor". """
     with open(jsonl_file, "r") as f:
-        return [PredictionInstance(json.loads(line)) for line in f.readlines()]
+        return [NMNPredictionInstance(json.loads(line)) for line in f.readlines()]
 
 
-def avg_f1(instances: List[PredictionInstance]):
+def avg_f1(instances: List[NMNPredictionInstance]):
     """ Avg F1 score for the predictions. """
     total = sum([instance.f1_score for instance in instances])
     return float(total)/float(len(instances))
 
 
-def read_mtmsn_predictions(json_file) -> List[PredictionInstance]:
+def read_mtmsn_predictions(json_file) -> List[NMNPredictionInstance]:
     with open(json_file, 'r') as f:
         mtmsn_preds = json.load(f)
 
@@ -48,11 +49,37 @@ def read_mtmsn_predictions(json_file) -> List[PredictionInstance]:
             "f1": pred["f1"],
             "em": pred["em"],
         }
-        pred_instances.append(PredictionInstance(pred_dict))
+        pred_instances.append(NMNPredictionInstance(pred_dict))
     return pred_instances
 
 
-def compute_mtmsn_type_distribution(qids: List[str], predictions: List[PredictionInstance]):
+def logicalform_distribution(nmn_instances: List[NMNPredictionInstance], mtmsn_instances: List[NMNPredictionInstance]):
+    lf2qids = defaultdict(list)
+    lf2nmn_correct = defaultdict(list)
+    for instance in nmn_instances:
+        lf = instance.top_logical_form
+        qid = instance.question_id
+        nmn_correct = instance.correct
+        lf2qids[lf].append(qid)
+        lf2nmn_correct[lf].append(nmn_correct)
+
+    lf2mtmsn_correct = defaultdict(list)
+    for mtmsn_ins in mtmsn_instances:
+        qid = mtmsn_ins.question_id
+        for lf, qids in lf2qids.items():
+            if qid in qids:
+                lf2mtmsn_correct[lf].append(mtmsn_ins.correct)
+
+    sorted_lf = sorted(lf2qids.keys(), key=lambda x: len(lf2qids[x]), reverse=True)
+    for lf in sorted_lf:
+        print(f"{lf}")
+        total_nmn_correct = sum(lf2nmn_correct[lf])
+        total_mtmsn_correct = sum(lf2mtmsn_correct[lf])
+        print(f"Total: {len(lf2qids[lf])}  NMN:{total_nmn_correct}  MTMSN:{total_mtmsn_correct}")
+        print()
+
+
+def compute_mtmsn_type_distribution(qids: List[str], predictions: List[NMNPredictionInstance]):
     qids = set(qids)
     type_dist = {}
     type2qids = {}
@@ -66,13 +93,13 @@ def compute_mtmsn_type_distribution(qids: List[str], predictions: List[Predictio
 
 
 
-def get_correct_qids(instances: List[PredictionInstance]) -> List[str]:
+def get_correct_qids(instances: List[NMNPredictionInstance]) -> List[str]:
     """ Get list of QIDs with correc predictions """
     qids = [instance.question_id for instance in instances if instance.correct]
     return qids
 
 
-def model_stats(pred_instances: List[PredictionInstance]):
+def model_stats(pred_instances: List[NMNPredictionInstance]):
     print()
     print(f"Total instances: {len(pred_instances)}")
     print(f"F1: {avg_f1(pred_instances)}")
@@ -83,7 +110,7 @@ def model_stats(pred_instances: List[PredictionInstance]):
 
 
 
-def model_comparison(nmn_predictions: List[PredictionInstance], mtmsn_predictions: List[PredictionInstance]):
+def model_comparison(nmn_predictions: List[NMNPredictionInstance], mtmsn_predictions: List[NMNPredictionInstance]):
     correct_nmn_qids = set(get_correct_qids(nmn_predictions))
     correct_mtmsn_qids = set(get_correct_qids(mtmsn_predictions))
 
@@ -94,17 +121,24 @@ def model_comparison(nmn_predictions: List[PredictionInstance], mtmsn_prediction
     print(f"Correct intersection between model-1 and model-2")
     print(len(common_correct))
 
-    print(f"Correct in model-1 but not in model-2")
+    print(f"Correct in MTMSN but not in NMN")
     correct_in_mtmsn_qids = correct_mtmsn_qids.difference(correct_nmn_qids)
     diff_qids = [instance.question_id for instance in nmn_predictions if instance.question_id in correct_in_mtmsn_qids]
     print(diff_qids)
 
+    print(f"Correct in NMN but not in MTMSN")
+    correct_in_nmn_qids = correct_nmn_qids.difference(correct_mtmsn_qids)
+    diff_qids = [instance.question_id for instance in nmn_predictions if instance.question_id in correct_in_nmn_qids]
+    print(diff_qids)
+
     correct_in_mtmsn_typedist, correct_in_mtmsn_type2qids = compute_mtmsn_type_distribution(correct_in_mtmsn_qids,
                                                                                             mtmsn_predictions)
-    print(correct_in_mtmsn_typedist)
-    for k, v in correct_in_mtmsn_type2qids.items():
-        print(k)
-        print(v)
+    # print(correct_in_mtmsn_typedist)
+    # for k, v in correct_in_mtmsn_type2qids.items():
+    #     print(k)
+    #     print(v)
+
+    logicalform_distribution(nmn_predictions, mtmsn_predictions)
 
 
 
@@ -116,10 +150,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # This is usuallya JSON-L file
-    nmn_preds: List[PredictionInstance] = read_nmn_prediction(args.our_preds_jsonl)
+    nmn_preds: List[NMNPredictionInstance] = read_nmn_prediction(args.our_preds_jsonl)
 
     # This is a JSON file
-    mtmsn_preds: List[PredictionInstance] = read_mtmsn_predictions(args.mtmsn_preds_json)
+    mtmsn_preds: List[NMNPredictionInstance] = read_mtmsn_predictions(args.mtmsn_preds_json)
 
     model_stats(nmn_preds)
     model_stats(mtmsn_preds)

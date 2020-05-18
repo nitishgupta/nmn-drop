@@ -7,7 +7,7 @@ export BEAMSIZE=1
 export DEBUG=true
 
 # SAVED MODEL
-MODEL_DIR=./resources/semqa/checkpoints/drop/drop_iclrfull_wqdmr/drop_parser_bert/Qattn_true/EXCLOSS_true/MMLLOSS_true/aux_true/SUPEPOCHS_0_HEM_3_BM_1/S_42
+MODEL_DIR=./resources/semqa/checkpoints/drop/drop_iclr600_wqdmr/drop_parser_bert/Qattn_true/EXCLOSS_true/MMLLOSS_true/aux_true/SUPEPOCHS_5_HEM_3_BM_1/S_42
 MODEL_TAR=${MODEL_DIR}/model.tar.gz
 PREDICTION_DIR=${MODEL_DIR}/predictions
 mkdir ${PREDICTION_DIR}
@@ -17,7 +17,7 @@ DATASET_NAME=drop_wqdmr_programs-ns
 
 VALDATA_FILE=${DATASET_DIR}/${DATASET_NAME}/drop_dataset_dev.json
 
-VAL_METRICS_FILE=${PREDICTION_DIR}/drop_dev_metrics.json
+VAL_METRICS_FILE=${PREDICTION_DIR}/drop_qdmr_metrics.json
 
 # Validation over complete dataset
 allennlp evaluate --output-file ${VAL_METRICS_FILE} \
