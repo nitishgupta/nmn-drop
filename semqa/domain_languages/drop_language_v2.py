@@ -1887,7 +1887,8 @@ if __name__ == "__main__":
     print("\nAllGet nonterminal productions")
     print("\n".join(list(dl.get_nonterminal_productions())))
 
-    print(dl._functions.keys())
+    print("Functions in DROP Language")
+    print(list(dl._functions.keys()))
 
 
 

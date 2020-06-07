@@ -4,7 +4,8 @@ import random
 import argparse
 
 from datasets.drop import constants
-from semqa.utils.qdmr_utils import Node, convert_nestedexpr_to_tuple, node_from_dict, read_drop_dataset
+from semqa.utils.qdmr_utils import Node, convert_nestedexpr_to_tuple, node_from_dict, read_drop_dataset, \
+    nested_expression_to_lisp
 
 
 # def get_operators(nested_expression):
@@ -38,6 +39,7 @@ def read_qdmr(drop_dataset):
     qid2optemplate = {}
     function2qids = defaultdict(list)
     operatortemplate2count = defaultdict(int)
+    lisp2count = defaultdict(int)
     operatortemplate2qids = defaultdict(list)
     qid2nestedexp = {}
 
@@ -53,19 +55,21 @@ def read_qdmr(drop_dataset):
             program_node: Node = node_from_dict(program_supervision)
             nested_expr = program_node.get_nested_expression()
             operator_template = convert_nestedexpr_to_tuple(nested_expr)
+            lisp = nested_expression_to_lisp(nested_expr)
 
             qid2ques[query_id] = question
             qid2optemplate[query_id] = operator_template
             qid2nestedexp[query_id] = program_node.get_nested_expression_with_strings()
             operatortemplate2count[operator_template] += 1
             operatortemplate2qids[operator_template].append(query_id)
+            lisp2count[lisp] += 1
 
     print("Total questions: {}  Total program abstractions: {}".format(total_ques, len(operatortemplate2count)))
-    return qid2ques, operatortemplate2count, operatortemplate2qids, qid2nestedexp
+    return qid2ques, operatortemplate2count, operatortemplate2qids, qid2nestedexp, lisp2count
 
 
-def train_dev_stats(train_qid2ques, train_optemplate2count, train_optemplate2qids,
-                    dev_qid2ques, dev_optemplate2count=None, dev_optemplate2qids=None):
+def train_dev_stats(train_qid2ques, train_optemplate2count, train_optemplate2qids, train_lisp2count,
+                    dev_qid2ques, dev_optemplate2count=None, dev_optemplate2qids=None, dev_lisp2count=None):
     train_templates = set(train_optemplate2count.keys())
     print("Train number of program templates: {}\n".format(len(train_templates)))
 
@@ -89,10 +93,16 @@ def train_dev_stats(train_qid2ques, train_optemplate2count, train_optemplate2qid
             [dev_optemplate2count[x] for x in dev_extra_templates]))
     print()
 
-    template2count_sorted = sorted(train_optemplate2count.items(), key=lambda x: x[1], reverse=True)
-    for i in range(0, 10):
-        template, count = template2count_sorted[i]
-        print("{} {}".format(template, count))
+    # template2count_sorted = sorted(train_optemplate2count.items(), key=lambda x: x[1], reverse=True)
+    # for i in range(0, 10):
+    #     template, count = template2count_sorted[i]
+    #     print("{} {}".format(template, count))
+
+    lisp2count_sorted = sorted(train_lisp2count.items(), key=lambda x: x[1], reverse=True)
+    for i in range(0, 15):
+        lisp, count = lisp2count_sorted[i]
+        print("{} {}".format(lisp.upper(), count))
+
         # for j in range(0, 1):
         #     qid = train_optemplate2qids[template][j]
         #     ques = train_qid2ques[qid]
@@ -124,20 +134,22 @@ def write_example_programs_tsv(output_tsv_path, qid2ques, qid2nestedexp, func2qi
 
 
 def main(args):
-    train_drop_json = "/shared/nitishg/data/drop-w-qdmr/drop_wqdmr_programs/drop_dataset_train.json"
-    dev_drop_json = "/shared/nitishg/data/drop-w-qdmr/drop_wqdmr_programs/drop_dataset_dev.json"
+    # train_drop_json = "/shared/nitishg/data/drop-w-qdmr/drop_wqdmr_programs/drop_dataset_train.json"
+    # dev_drop_json = "/shared/nitishg/data/drop-w-qdmr/drop_wqdmr_programs/drop_dataset_dev.json"
+    train_drop_json = args.train_drop_json
+    dev_drop_json = args.dev_drop_json
 
     train_drop = read_drop_dataset(train_drop_json)
     dev_drop = read_drop_dataset(dev_drop_json)
 
-    train_qid2ques, train_optemplate2count, train_optemplate2qids, train_qid2nestedexp = read_qdmr(
-        drop_dataset=train_drop)
+    train_qid2ques, train_optemplate2count, train_optemplate2qids, train_qid2nestedexp, \
+        train_lisp2count = read_qdmr(drop_dataset=train_drop)
 
-    dev_qid2ques, dev_optemplate2count, dev_optemplate2qids, dev_qid2nestedexp = read_qdmr(
-        drop_dataset=dev_drop)
+    dev_qid2ques, dev_optemplate2count, dev_optemplate2qids, dev_qid2nestedexp, \
+        dev_lisp2count = read_qdmr(drop_dataset=dev_drop)
 
-    train_dev_stats(train_qid2ques, train_optemplate2count, train_optemplate2qids,
-                    dev_qid2ques, dev_optemplate2count, dev_optemplate2qids)
+    train_dev_stats(train_qid2ques, train_optemplate2count, train_optemplate2qids, train_lisp2count,
+                    dev_qid2ques, dev_optemplate2count, dev_optemplate2qids, dev_lisp2count)
 
 
 if __name__ == "__main__":

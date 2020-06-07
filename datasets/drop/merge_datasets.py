@@ -27,6 +27,7 @@ def mergeDatasets(input_json1: str, input_json2: str, output_json: str) -> None:
             If a passage only appears in one - add as it is
             If occurs in both, merge questions inside
                 Since question_answer is a dict; check for duplicacy by making a set of question_dicts first.
+                If question occurs in both, input_json1 gets preference.
     """
 
     # Input file contains single json obj with list of questions as jsonobjs inside it

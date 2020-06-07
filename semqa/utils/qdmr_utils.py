@@ -50,6 +50,25 @@ class Node():
                 nested_expression.append(child.get_nested_expression_with_strings())
             return nested_expression
 
+
+    def get_prodigy_lisp(self):
+        def get_string(node: Node):
+            if node.string_arg is None:
+                return node.predicate.upper()
+            else:
+                return node.predicate.upper() + "[[" + node.string_arg + "]]"
+
+        if self.is_leaf():
+            return get_string(self)
+        else:
+            lisps = []
+            for child in self.children:
+                lisps.append(child.get_prodigy_lisp())
+
+            self_lisp = get_string(self)
+
+            return "(" + " ".join([self_lisp] + lisps) + ")"
+
     def to_dict(self):
         json_dict = {
             "predicate": self.predicate,
@@ -69,7 +88,6 @@ def node_from_dict(dict: Dict) -> Node:
         node.add_child(child_node)
     node.supervision = dict["supervision"]
     return node
-
 
 
 class QDMRExample(object):
@@ -350,8 +368,6 @@ def write_jsonl(output_jsonl, output_json_dicts):
             outf.write("\n")
 
 
-
-
 if __name__ == "__main__":
     p = ['FILTER_NUM_GT', ['FILTER', ['SELECT', 'GET_QUESTION_SPAN(yards of TD passes)'],
                            'GET_QUESTION_SPAN(in the first half)'], 'GET_QUESTION_NUMBER(70)']
@@ -359,17 +375,19 @@ if __name__ == "__main__":
     node: Node = nested_expression_to_tree(p, predicates_with_strings=True)
     print(node.get_nested_expression_with_strings())
     print(node.get_nested_expression())
+    print(node.get_prodigy_lisp())
 
-    with open("test/node.json", 'w') as fp:
-        json.dump(node.to_dict(), fp)
-
-
-    with open("test/node.json", 'r') as fp:
-        node_dict = json.load(fp)
-
-    print()
-    print(node_dict)
-    print()
-    n1: Node = node_from_dict(node_dict)
-    print(n1.get_nested_expression_with_strings())
-    print(n1.get_nested_expression())
+    #
+    # with open("test/node.json", 'w') as fp:
+    #     json.dump(node.to_dict(), fp)
+    #
+    #
+    # with open("test/node.json", 'r') as fp:
+    #     node_dict = json.load(fp)
+    #
+    # print()
+    # print(node_dict)
+    # print()
+    # n1: Node = node_from_dict(node_dict)
+    # print(n1.get_nested_expression_with_strings())
+    # print(n1.get_nested_expression())

@@ -1,6 +1,8 @@
 import argparse
 import itertools
-from semqa.utils.qdmr_utils import read_drop_dataset, node_from_dict, nested_expression_to_lisp, write_jsonl
+from semqa.utils.qdmr_utils import read_drop_dataset, node_from_dict, nested_expression_to_lisp, write_jsonl, \
+    convert_nestedexpr_to_tuple
+
 from datasets.drop import constants
 from semqa.domain_languages.drop_language_v2 import Date
 
@@ -34,14 +36,20 @@ def get_json_dicts(drop_dataset):
             answer_passage_spans = qa[constants.answer_passage_spans]
             if program_supervision:
                 nested_expr = node_from_dict(program_supervision).get_nested_expression_with_strings()
+                nested_tuple = convert_nestedexpr_to_tuple(nested_expr)
+                lisp = nested_expression_to_lisp(nested_expr)
             else:
                 nested_expr = []
+                nested_tuple = ()
+                lisp = ""
 
             output_dict = {
                 "question": question,
                 "passage": passage,
                 "query_id": query_id,
                 "nested_expr": nested_expr,
+                "nested_tuple": nested_tuple,
+                "lisp": lisp,
                 "answer_annotation": answer_annotation,
                 "answer_passage_spans": answer_passage_spans,
                 "passage_number_values": passage_number_values,
@@ -62,7 +70,10 @@ if __name__=="__main__":
     drop_dataset = read_drop_dataset(args.drop_json)
     json_dicts = get_json_dicts(drop_dataset)
 
+    print("Converting DROP json to JsonL : {}".format(args.drop_json))
+    print("Total QA examples: {}".format(len(json_dicts)))
     write_jsonl(output_jsonl=args.output_jsonl, output_json_dicts=json_dicts)
+    print("jsonl written to: {}".format(args.output_jsonl))
 
 
 

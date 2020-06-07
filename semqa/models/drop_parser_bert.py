@@ -721,7 +721,7 @@ class DROPParserBERT(DROPParserBase):
 
             if self.qattloss:
                 # Compute Question Attention Supervision auxiliary loss
-                qattn_loss = self._ques_attention_loss(batch_actionseq_sideargs, question_mask)
+                qattn_loss = self._ques_attention_loss(batch_actionseq_sideargs, question_mask, metadata)
                 # print(qattn_loss)
                 if qattn_loss != 0.0:
                     self.qattloss_metric(qattn_loss.item())
@@ -1233,7 +1233,8 @@ class DROPParserBERT(DROPParserBase):
 
 
     def _ques_attention_loss(self,
-                             batch_actionseq_sideargs: List[List[List[Dict]]], question_mask: torch.FloatTensor):
+                             batch_actionseq_sideargs: List[List[List[Dict]]], question_mask: torch.FloatTensor,
+                             metadata):
         """Compute question attention loss against the `question_attention_supervision` key in side-args.
 
         Relevant actions should contain the `question_attention_supervision` key; compute loss against that.
@@ -1252,10 +1253,15 @@ class DROPParserBERT(DROPParserBase):
                         pred_attn = action_sideargs["question_attention"]
                         pred_attn = pred_attn[0:gold_attn_len]
                         mask = question_mask[instance_idx, 0:gold_attn_len]
-                        log_question_attention = torch.log(pred_attn + 1e-40) * mask
-                        l = torch.sum(log_question_attention * gold_attn_tensor)
-                        loss += l
-                        normalizer += 1
+                        gold_attn_tensor = gold_attn_tensor * mask
+                        pred_attn = pred_attn * mask
+                        if torch.sum(gold_attn_tensor) > 0:     # without this we get NaN loss when gold-attn is 0
+                            attn_sum = torch.sum(pred_attn * gold_attn_tensor)
+                            loss += torch.log(attn_sum + 1e-40)
+                            # log_question_attention = torch.log(pred_attn + 1e-40) * mask
+                            # l = torch.sum(log_question_attention * gold_attn_tensor)
+                            # loss += l
+                            normalizer += 1
 
         if normalizer == 0:
             return loss
