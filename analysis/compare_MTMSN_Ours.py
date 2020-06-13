@@ -4,35 +4,8 @@ import os
 import json
 import argparse
 from collections import defaultdict
-
-
-class NMNPredictionInstance:
-    """ Class to hold a single NMN prediction written in json format.
-        Typically these outputs are written by the "drop_parser_jsonl_predictor"
-    """
-    def __init__(self, pred_dict):
-        self.question = pred_dict.get("question", "")
-        self.question_id = pred_dict.get("query_id", "")
-        self.gold_logical_form = pred_dict.get("gold_logical_form", "")
-        self.predicted_ans = pred_dict.get("predicted_ans", "")
-        self.top_logical_form = pred_dict.get("logical_form", "")
-        self.top_nested_expr = pred_dict.get("nested_expression", [])
-        self.top_logical_form_prob = pred_dict.get("logical_form_prob", 0.0)
-        self.f1_score = pred_dict.get("f1", 0.0)
-        self.exact_match = pred_dict.get("em", 0.0)
-        self.correct = True if self.f1_score > 0.6 else False
-
-
-def read_nmn_prediction(jsonl_file) -> List[NMNPredictionInstance]:
-    """ Input json-lines written typically by the "drop_parser_jsonl_predictor". """
-    with open(jsonl_file, "r") as f:
-        return [NMNPredictionInstance(json.loads(line)) for line in f.readlines()]
-
-
-def avg_f1(instances: List[NMNPredictionInstance]):
-    """ Avg F1 score for the predictions. """
-    total = sum([instance.f1_score for instance in instances])
-    return float(total)/float(len(instances))
+from semqa.utils.prediction_analysis import NMNPredictionInstance, read_nmn_prediction_file, avg_f1, get_correct_qids, \
+    filter_qids_w_logicalforms
 
 
 def read_mtmsn_predictions(json_file) -> List[NMNPredictionInstance]:
@@ -45,7 +18,7 @@ def read_mtmsn_predictions(json_file) -> List[NMNPredictionInstance]:
         pred_dict = {
             "query_id": qid,
             "predicted_ans": pred["text"],
-            "logical_form": pred["type"],
+            "top_logical_form": pred["type"],
             "f1": pred["f1"],
             "em": pred["em"],
         }
@@ -55,27 +28,36 @@ def read_mtmsn_predictions(json_file) -> List[NMNPredictionInstance]:
 
 def logicalform_distribution(nmn_instances: List[NMNPredictionInstance], mtmsn_instances: List[NMNPredictionInstance]):
     lf2qids = defaultdict(list)
+    qid2lf = defaultdict(str)
     lf2nmn_correct = defaultdict(list)
+    lf2nmn_correctqids = defaultdict(set)
     for instance in nmn_instances:
+        qid = instance.query_id
         lf = instance.top_logical_form
-        qid = instance.question_id
-        nmn_correct = instance.correct
         lf2qids[lf].append(qid)
+        qid2lf[qid] = lf
+        nmn_correct: bool = instance.correct
+        if nmn_correct:
+            lf2nmn_correctqids[lf].add(qid)
         lf2nmn_correct[lf].append(nmn_correct)
 
     lf2mtmsn_correct = defaultdict(list)
+    lf2mtmsn_correctqids = defaultdict(set)
     for mtmsn_ins in mtmsn_instances:
-        qid = mtmsn_ins.question_id
-        for lf, qids in lf2qids.items():
-            if qid in qids:
-                lf2mtmsn_correct[lf].append(mtmsn_ins.correct)
+        qid = mtmsn_ins.query_id
+        lf = qid2lf[qid]
+        mtmsn_correct = mtmsn_ins.correct
+        lf2mtmsn_correct[lf].append(mtmsn_correct)
+        if mtmsn_correct:
+            lf2mtmsn_correctqids[lf].add(qid)
 
     sorted_lf = sorted(lf2qids.keys(), key=lambda x: len(lf2qids[x]), reverse=True)
     for lf in sorted_lf:
         print(f"{lf}")
         total_nmn_correct = sum(lf2nmn_correct[lf])
         total_mtmsn_correct = sum(lf2mtmsn_correct[lf])
-        print(f"Total: {len(lf2qids[lf])}  NMN:{total_nmn_correct}  MTMSN:{total_mtmsn_correct}")
+        print(f"Total: {len(lf2qids[lf])}  NMN:{total_nmn_correct}  MTMSN:{total_mtmsn_correct} "
+              f"Common correct: {len(lf2nmn_correctqids[lf].intersection(lf2mtmsn_correctqids[lf]))}")
         print()
 
 
@@ -84,19 +66,12 @@ def compute_mtmsn_type_distribution(qids: List[str], predictions: List[NMNPredic
     type_dist = {}
     type2qids = {}
     for pred in predictions:
-        if pred.question_id in qids:
+        if pred.query_id in qids:
             type_dist[pred.top_logical_form] = type_dist.get(pred.top_logical_form, 0) + 1
             if pred.top_logical_form not in type2qids:
                 type2qids[pred.top_logical_form] = []
-            type2qids[pred.top_logical_form].append(pred.question_id)
+            type2qids[pred.top_logical_form].append(pred.query_id)
     return type_dist, type2qids
-
-
-
-def get_correct_qids(instances: List[NMNPredictionInstance]) -> List[str]:
-    """ Get list of QIDs with correc predictions """
-    qids = [instance.question_id for instance in instances if instance.correct]
-    return qids
 
 
 def model_stats(pred_instances: List[NMNPredictionInstance]):
@@ -123,15 +98,15 @@ def model_comparison(nmn_predictions: List[NMNPredictionInstance], mtmsn_predict
 
     print(f"Correct in MTMSN but not in NMN")
     correct_in_mtmsn_qids = correct_mtmsn_qids.difference(correct_nmn_qids)
-    diff_qids = [instance.question_id for instance in nmn_predictions if instance.question_id in correct_in_mtmsn_qids]
+    diff_qids = [instance.query_id for instance in nmn_predictions if instance.query_id in correct_in_mtmsn_qids]
     print(diff_qids)
 
     print(f"Correct in NMN but not in MTMSN")
     correct_in_nmn_qids = correct_nmn_qids.difference(correct_mtmsn_qids)
-    diff_qids = [instance.question_id for instance in nmn_predictions if instance.question_id in correct_in_nmn_qids]
+    diff_qids = [instance.query_id for instance in nmn_predictions if instance.query_id in correct_in_nmn_qids]
     print(diff_qids)
 
-    correct_in_mtmsn_typedist, correct_in_mtmsn_type2qids = compute_mtmsn_type_distribution(correct_in_mtmsn_qids,
+    correct_in_mtmsn_typedist, correct_in_mtmsn_type2qids = compute_mtmsn_type_distribution(list(correct_in_mtmsn_qids),
                                                                                             mtmsn_predictions)
     # print(correct_in_mtmsn_typedist)
     # for k, v in correct_in_mtmsn_type2qids.items():
@@ -150,7 +125,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # This is usuallya JSON-L file
-    nmn_preds: List[NMNPredictionInstance] = read_nmn_prediction(args.our_preds_jsonl)
+    nmn_preds: List[NMNPredictionInstance] = read_nmn_prediction_file(args.our_preds_jsonl)
 
     # This is a JSON file
     mtmsn_preds: List[NMNPredictionInstance] = read_mtmsn_predictions(args.mtmsn_preds_json)

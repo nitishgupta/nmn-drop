@@ -1,0 +1,10 @@
+{
+    "theme": "basic",
+    "custom_theme": {
+        "fontPrimary": "Trebuchet MS",
+        "cardMaxWidth": "1675px",
+        "cardMinWidth": "1675px",
+        "cardMinHeight": "100px",
+    },
+    "batch_size": 100
+}

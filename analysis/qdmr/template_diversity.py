@@ -91,22 +91,18 @@ def train_dev_stats(train_qid2ques, train_optemplate2count, train_optemplate2qid
         print("Dev extra abstract program templates: {}".format(len(dev_extra_templates)))
         print("Number of questions for each of the new dev-templates: {}".format(
             [dev_optemplate2count[x] for x in dev_extra_templates]))
-    print()
 
-    # template2count_sorted = sorted(train_optemplate2count.items(), key=lambda x: x[1], reverse=True)
-    # for i in range(0, 10):
-    #     template, count = template2count_sorted[i]
-    #     print("{} {}".format(template, count))
-
+    print("\nTrain templates")
     lisp2count_sorted = sorted(train_lisp2count.items(), key=lambda x: x[1], reverse=True)
     for i in range(0, 15):
         lisp, count = lisp2count_sorted[i]
         print("{} {}".format(lisp.upper(), count))
 
-        # for j in range(0, 1):
-        #     qid = train_optemplate2qids[template][j]
-        #     ques = train_qid2ques[qid]
-        #     print(ques)
+    print("\nDev templates")
+    lisp2count_sorted = sorted(dev_lisp2count.items(), key=lambda x: x[1], reverse=True)
+    for i in range(0, 15):
+        lisp, count = lisp2count_sorted[i]
+        print("{} {}".format(lisp.upper(), count))
 
 
 def write_example_programs_tsv(output_tsv_path, qid2ques, qid2nestedexp, func2qids):

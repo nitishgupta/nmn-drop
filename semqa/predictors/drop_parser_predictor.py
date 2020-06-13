@@ -15,7 +15,7 @@ from semqa.domain_languages.drop_language_v2 import Output, output_from_dict
 from semqa.utils.squad_eval import metric_max_over_ground_truths
 from semqa.utils.drop_eval import get_metrics as drop_em_and_f1, answer_json_to_strings
 from semqa.utils.qdmr_utils import node_from_dict, nested_expression_to_lisp, Node, nested_expression_to_tree
-
+from semqa.utils.prediction_analysis import NMNPredictionInstance
 
 def compute_postorder_position(node: Node, position: int = 0):
     for c in node.children:
@@ -182,6 +182,12 @@ class DropNMNPredictor(Predictor):
         # Use json.dumps(outputs) + "\n" to dump a dictionary
 
         prediction_data = PredictionData(outputs=outputs)
+        program_node = prediction_data.program_supervision
+        if program_node is None:
+            gold_program = "N/A"
+        else:
+            program_node = node_from_dict(program_node)
+            gold_program = program_node.get_nested_expression_with_strings()
 
         out_str = ""
         out_str += "qid: {}".format(prediction_data.question_id) + "\n"
@@ -191,6 +197,7 @@ class DropNMNPredictor(Predictor):
         out_str += f"GoldAnswer: {prediction_data.answer_annotation_dicts}" + "\n"
         out_str += f"GoldPassageSpans:{prediction_data.gold_passage_span_ans}  " \
                    f"GoldQuesSpans:{prediction_data.gold_question_span_ans}\n"
+        out_str += f"GoldProgram: {gold_program}\n\n"
 
         out_str += f"PredictedAnswer: {prediction_data.predicted_ans}" + "\n"
         out_str += f"F1:{prediction_data.f1_score} EM:{prediction_data.exact_match}" + "\n"
@@ -241,14 +248,13 @@ class DROPNMNJSONLPredictor(DropNMNPredictor):
 
         output_dict = {
             "question": prediction_data.question,
+            "query_id": prediction_data.question_id,
             "gold_logical_form": gold_program_lisp,
             "gold_nested_expr": gold_nested_expr,
-            # "passage": prediction_data.passage,
-            "query_id": prediction_data.question_id,
             "predicted_ans": prediction_data.predicted_ans,
-            "logical_form": prediction_data.top_logical_form,
-            "nested_expression": prediction_data.top_nested_expr,
-            "logical_form_prob": prediction_data.top_logical_form_prob,
+            "top_logical_form": prediction_data.top_logical_form,
+            "top_nested_expr": prediction_data.top_nested_expr,
+            "top_logical_form_prob": prediction_data.top_logical_form_prob,
             "f1": prediction_data.f1_score,
             "em": prediction_data.exact_match
         }

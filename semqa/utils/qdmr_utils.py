@@ -1,5 +1,7 @@
+import re
 import json
 from typing import List, Tuple, Set, Dict, Union, Any
+from allennlp_semparse.common.util import lisp_to_nested_expression
 from allennlp_semparse.domain_languages import DomainLanguage
 
 
@@ -239,6 +241,35 @@ def nested_expression_to_tree(nested_expression, predicates_with_strings: bool =
     return current_node
 
 
+def prodigy_lisp_to_nested_expression(prodigy_lisp: str) -> List:
+    """
+    Prodigy lisp example -- "(count[[how many]] (division[[2]] first[[field goal]]))", i.e.
+    string arguments of predicates are written as [[string with spaces]]
+    """
+    def clean_nested(nested_expression):
+        if isinstance(nested_expression, str):
+            nested_expression = nested_expression.replace("[[", "(")
+            nested_expression = nested_expression.replace("]]", ")")
+            nested_expression = nested_expression.replace("@@@", " ")
+            return nested_expression
+        elif isinstance(nested_expression, List):
+            # Flattened list of tokens for each element in the list
+            program_tokens = []
+            for x in nested_expression:
+                program_tokens.append(clean_nested(x))
+            return program_tokens
+        else:
+            raise NotImplementedError
+
+    # replace space within [[string-arg]] with @@@
+    prodigy_lisp = re.sub("\[\[[^]]*\]\]", lambda x: x.group(0).replace(' ', '@@@'), prodigy_lisp)
+    # Convert this lisp into nested expression.
+    prodigy_nested_expr = lisp_to_nested_expression(prodigy_lisp)
+    # above would contain nodes like 'predicate[[yards@@@of@@@TD@@@passes]]'; need to replace [[, ]], @@@ with (, ), ' '
+    nested_expr = clean_nested(prodigy_nested_expr)
+    return nested_expr
+
+
 def read_drop_dataset(input_json: str):
     with open(input_json, "r") as f:
         dataset = json.load(f)
@@ -272,28 +303,6 @@ def convert_answer(answer_annotation: Dict[str, Union[str, Dict, List]]) -> Tupl
         # answer_content is a string of number
         answer_texts = [answer_content]
     return answer_type, answer_texts
-
-
-def lisp_to_nested_expression(lisp_string: str) -> List:
-    """
-    Takes a logical form as a lisp string and returns a nested list representation of the lisp.
-    For example, "(count (division first))" would get mapped to ['count', ['division', 'first']].
-    """
-    stack: List = []
-    current_expression: List = []
-    tokens = lisp_string.split()
-    for token in tokens:
-        while token[0] == "(":
-            nested_expression: List = []
-            current_expression.append(nested_expression)
-            stack.append(current_expression)
-            current_expression = nested_expression
-            token = token[1:]
-        current_expression.append(token.replace(")", ""))
-        while token[-1] == ")":
-            current_expression = stack.pop()
-            token = token[:-1]
-    return current_expression[0]
 
 
 def get_domainlang_function2returntype_mapping(language: DomainLanguage) -> Dict[str, str]:
@@ -368,6 +377,14 @@ def write_jsonl(output_jsonl, output_json_dicts):
             outf.write("\n")
 
 
+def read_jsonl(input_jsonl) -> List[Dict]:
+    json_dicts = []
+    with open(input_jsonl) as f:
+        for line in f:
+            json_dicts.append(json.loads(line))
+    return json_dicts
+
+
 if __name__ == "__main__":
     p = ['FILTER_NUM_GT', ['FILTER', ['SELECT', 'GET_QUESTION_SPAN(yards of TD passes)'],
                            'GET_QUESTION_SPAN(in the first half)'], 'GET_QUESTION_NUMBER(70)']
@@ -375,7 +392,16 @@ if __name__ == "__main__":
     node: Node = nested_expression_to_tree(p, predicates_with_strings=True)
     print(node.get_nested_expression_with_strings())
     print(node.get_nested_expression())
-    print(node.get_prodigy_lisp())
+
+    prodigy_lisp = node.get_prodigy_lisp()
+    print(prodigy_lisp)
+
+    nested_expr = prodigy_lisp_to_nested_expression(prodigy_lisp)
+    print(nested_expr)
+
+
+
+
 
     #
     # with open("test/node.json", 'w') as fp:

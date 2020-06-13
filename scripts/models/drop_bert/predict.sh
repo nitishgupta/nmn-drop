@@ -7,22 +7,22 @@ export BEAMSIZE=1
 export DEBUG=true
 
 # SAVED MODEL
-MODEL_DIR=./resources/semqa/checkpoints/drop/drop_wqdmr_programs-ns/drop_parser_bert/Qattn_true/EXCLOSS_true/MMLLOSS_true/aux_true/SUPEPOCHS_0_HEM_3_BM_1/S_42_QaTT
+MODEL_DIR=./resources/checkpoints/drop-w-qdmr/qdmr-filter_iclr600/drop_parser_bert/Qattn_true/EXCLOSS_true/MMLLOSS_true/aux_true/SUPEPOCHS_5_HEM_5_BM_1/S_42
 PREDICTION_DIR=${MODEL_DIR}/predictions
 MODEL_TAR=${MODEL_DIR}/model.tar.gz
 mkdir ${PREDICTION_DIR}
 
-DATASET_DIR=/shared/nitishg/data/drop-w-qdmr
-DATASET_NAME=drop_wqdmr_programs-ns
+DATASET_DIR=/shared/nitishg/data
+DATASET_NAME=drop-w-qdmr/drop_iclr_600
 
 FULL_VALFILE=${DATASET_DIR}/${DATASET_NAME}/drop_dataset_dev.json
 
 # Prediction output including verbose execution logs
 VIS_PREDICTOR=drop_parser_predictor
-VIS_PREDICTION_FILE=${PREDICTION_DIR}/drop_qdmr_verbosepred.txt
+VIS_PREDICTION_FILE=${PREDICTION_DIR}/iclr600_visualize.txt
 
 JSONL_PREDICTOR=drop_parser_jsonl_predictor
-JSONL_PREDICTION_FILE=${PREDICTION_DIR}/drop_qdmr_predictions.jsonl
+JSONL_PREDICTION_FILE=${PREDICTION_DIR}/iclr600_predictions.jsonl
 
 # Prediction output in a JSON-L file similar to MTMSN
 #PREDICTOR=drop_mtmsnstyle_predictor
@@ -48,5 +48,6 @@ allennlp predict --output-file ${JSONL_PREDICTION_FILE} \
                  --overrides "{"model": { "beam_size": ${BEAMSIZE}, "debug": ${DEBUG}}}" \
                  ${MODEL_TAR} ${FULL_VALFILE}
 
+printf "\n"
 echo -e "Vis predictions file saved at: ${VIS_PREDICTION_FILE}"
 echo -e "Jsonl predictions file saved at: ${JSONL_PREDICTION_FILE}"

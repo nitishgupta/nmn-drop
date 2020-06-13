@@ -155,7 +155,6 @@ local supervised_epochs = utils.parse_number(std.extVar("SUPEPOCHS"));
             "lr": 2e-5
         },
         "validation_metric": "+f1",
-        // "gc_freq": utils.parse_number(std.extVar("GC_FREQ")),
     },
 
     "random_seed": utils.parse_number(std.extVar("SEED")),

@@ -4,7 +4,7 @@ export TMPDIR=/shared/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
 DATASET_DIR=/shared/nitishg/data/drop-w-qdmr
-DATASET_NAME=drop_iclr600_wqdmr
+DATASET_NAME=qdmr-filter_iclr600
 # drop_iclr600_wqdmr
 # drop_iclr_600
 # drop_iclrfull_wqdmr
@@ -43,8 +43,7 @@ export SUPFIRST=true
 export SUPEPOCHS=5
 
 # -1 will not run HardEM; HardEM will kick after EPOCH num of epochs
-export HARDEM_EPOCH=3
-
+export HARDEM_EPOCH=5
 
 export BS=4
 export DROPOUT=0.2
@@ -60,11 +59,11 @@ export PROFILE_FREQ=0
 export DEBUG=false
 
 ####    SERIALIZATION DIR --- Check for checkpoint_root/task/dataset/model/parameters/
-CHECKPOINT_ROOT=./resources/semqa/checkpoints
+CHECKPOINT_ROOT=./resources/checkpoints
 SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop-w-qdmr/${DATASET_NAME}
 MODEL_DIR=drop_parser_bert
 PD_1=Qattn_${QATTLOSS}/EXCLOSS_${EXCLOSS}/MMLLOSS_${MMLLOSS}/aux_${AUXLOSS}/SUPEPOCHS_${SUPEPOCHS}_HEM_${HARDEM_EPOCH}_BM_${BEAMSIZE}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}_QaTT
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}
 
 # SERIALIZATION_DIR=./resources/semqa/checkpoints/test
 

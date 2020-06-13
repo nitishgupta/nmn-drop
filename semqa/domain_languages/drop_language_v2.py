@@ -506,14 +506,14 @@ class DropLanguageV2(DomainLanguage):
             # passage_similarity = passage_similarity_ex.squeeze(0)
 
             # BLA
-            # Shape: (ques_encoding_dim)
+            # Shape: (ques_encoding_dim) q = \sum p_i * h_i
             weighted_question_vector = torch.sum(self.encoded_question * question_attention.unsqueeze(1), 0)
             weighted_question_vector_ex = weighted_question_vector.unsqueeze(0)
             passage_matrix = self.encoded_passage.unsqueeze(0)
-            # (passage_length, )
+            # (passage_length, )  s_i = sim(q, p_i)
             passage_similarity = self.parameters.qvec_to_passage_attention(weighted_question_vector_ex,
                                                                            passage_matrix).squeeze(0)
-
+            # p_attn = softmax(s_i)
             passage_attention = allenutil.masked_softmax(passage_similarity, mask=self.passage_mask.bool(),
                                                          memory_efficient=True)
             passage_attention = clamp_distribution(passage_attention)
