@@ -43,7 +43,7 @@ Sheets.
 ```
 python -m prodigy_annotate.prodigy_to_jsonl \
     --prodigy_annotation_jsonl ~/drop/data/qdmr-filter/diagnostics/filternum_potential/annotations.jsonl
-``` 
+```
 
 
 ---
