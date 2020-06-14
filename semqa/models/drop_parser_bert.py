@@ -1492,7 +1492,7 @@ class DROPParserBERT(DROPParserBase):
         # Shape: (batch_size, passage_length)
         sum_inwindow_probs = inwindow_probs.sum(2)
         mask_sum = (inwindow_mask.sum(2) > 0).float()
-        # Image a row where mask = 0, there sum of probs will be zero and we need to compute masked_log
+        # Imagine a row where mask = 0, there the sum of probs will be zero and we need to compute masked_log
         masked_sum_inwindow_probs = allenutil.replace_masked_values(sum_inwindow_probs, mask_sum.bool(),
                                                                     replace_with=1e-40)
         log_sum_inwindow_probs = torch.log(masked_sum_inwindow_probs + 1e-40) * mask_sum
@@ -1519,7 +1519,7 @@ class DROPParserBERT(DROPParserBase):
             outwindow_negentropies = 0.0
 
         # Increase inwindow likelihod and decrease outwindow-negative-entropy
-        loss = -1 * inwindow_likelihood + outwindow_negentropies
+        loss = (-1 * inwindow_likelihood) + outwindow_negentropies
         return loss
 
 

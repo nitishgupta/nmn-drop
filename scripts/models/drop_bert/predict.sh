@@ -7,22 +7,22 @@ export BEAMSIZE=1
 export DEBUG=true
 
 # SAVED MODEL
-MODEL_DIR=./resources/checkpoints/drop-w-qdmr/qdmr-filter_iclr600/drop_parser_bert/Qattn_true/EXCLOSS_true/MMLLOSS_true/aux_true/SUPEPOCHS_5_HEM_5_BM_1/S_42
+MODEL_DIR=./resources/checkpoints/drop-w-qdmr/qdmr-filter/drop_parser_bert/Qattn_true/EXCLOSS_true/MMLLOSS_true/aux_false/SUPEPOCHS_0_HEM_0_BM_1/S_42_Qnumdate_v3
 PREDICTION_DIR=${MODEL_DIR}/predictions
 MODEL_TAR=${MODEL_DIR}/model.tar.gz
 mkdir ${PREDICTION_DIR}
 
-DATASET_DIR=/shared/nitishg/data
-DATASET_NAME=drop-w-qdmr/drop_iclr_600
+DATASET_DIR=/shared/nitishg/data/drop-w-qdmr
+DATASET_NAME=qdmr-filter
 
 FULL_VALFILE=${DATASET_DIR}/${DATASET_NAME}/drop_dataset_dev.json
 
 # Prediction output including verbose execution logs
 VIS_PREDICTOR=drop_parser_predictor
-VIS_PREDICTION_FILE=${PREDICTION_DIR}/iclr600_visualize.txt
+VIS_PREDICTION_FILE=${PREDICTION_DIR}/${DATASET_NAME}_visualize.txt
 
 JSONL_PREDICTOR=drop_parser_jsonl_predictor
-JSONL_PREDICTION_FILE=${PREDICTION_DIR}/iclr600_predictions.jsonl
+JSONL_PREDICTION_FILE=${PREDICTION_DIR}/${DATASET_NAME}_predictions.jsonl
 
 # Prediction output in a JSON-L file similar to MTMSN
 #PREDICTOR=drop_mtmsnstyle_predictor

@@ -154,7 +154,7 @@ def masking_blockdiagonal(passage_length, window, device_id):
     return inwindow_mask, outwindow_mask
 
 
-def aux_window_loss(ptop_attention, passage_mask, inwindow_mask):
+def aux_window_loss(ptop_attention, passage_mask, inwindow_mask, p_tokensymbol_mask_float=None):
     """Auxiliary loss to encourage p-to-p attention to be within a certain window.
 
     Args:
@@ -167,6 +167,8 @@ def aux_window_loss(ptop_attention, passage_mask, inwindow_mask):
     """
     inwindow_mask = inwindow_mask * passage_mask.unsqueeze(0)
     inwindow_mask = inwindow_mask * passage_mask.unsqueeze(1)
+    if p_tokensymbol_mask_float is not None:
+        inwindow_mask = inwindow_mask * p_tokensymbol_mask_float.unsqueeze(0)
     inwindow_probs = ptop_attention * inwindow_mask
     # Sum inwindow_probs for each token, signifying the token can distribute its alignment prob in any way
     # Shape: (passage_length)
@@ -176,7 +178,11 @@ def aux_window_loss(ptop_attention, passage_mask, inwindow_mask):
     masked_sum_inwindow_probs = allenutil.replace_masked_values(sum_inwindow_probs, mask_sum.bool(), replace_with=1e-40)
     log_sum_inwindow_probs = torch.log(masked_sum_inwindow_probs + 1e-40) * mask_sum
     inwindow_likelihood = torch.sum(log_sum_inwindow_probs)
-    inwindow_likelihood_avg = inwindow_likelihood / torch.sum(inwindow_mask)
+
+    if torch.sum(inwindow_mask) > 0:
+        inwindow_likelihood_avg = inwindow_likelihood / torch.sum(inwindow_mask)
+    else:
+        inwindow_likelihood_avg = 0.0
 
     inwindow_aux_loss = -1.0 * inwindow_likelihood_avg
 

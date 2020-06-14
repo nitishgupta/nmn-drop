@@ -4,7 +4,7 @@ export TMPDIR=/shared/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
 DATASET_DIR=/shared/nitishg/data/drop-w-qdmr
-DATASET_NAME=qdmr-filter_iclr600
+DATASET_NAME=qdmr-filter
 # drop_iclr600_wqdmr
 # drop_iclr_600
 # drop_iclrfull_wqdmr
@@ -30,7 +30,7 @@ export TRAINING_DATA_FILE=${TRAINFILE}
 export VAL_DATA_FILE=${VALFILE}
 
 export COUNT_FIXED=false
-export AUXLOSS=true
+export AUXLOSS=false
 
 export EXCLOSS=true
 export QATTLOSS=true
@@ -40,10 +40,10 @@ export INTERPRET=false
 
 # Whether strong supervison instances should be trained on first, if yes for how many epochs
 export SUPFIRST=true
-export SUPEPOCHS=5
+export SUPEPOCHS=0
 
 # -1 will not run HardEM; HardEM will kick after EPOCH num of epochs
-export HARDEM_EPOCH=5
+export HARDEM_EPOCH=0
 
 export BS=4
 export DROPOUT=0.2
@@ -63,7 +63,7 @@ CHECKPOINT_ROOT=./resources/checkpoints
 SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop-w-qdmr/${DATASET_NAME}
 MODEL_DIR=drop_parser_bert
 PD_1=Qattn_${QATTLOSS}/EXCLOSS_${EXCLOSS}/MMLLOSS_${MMLLOSS}/aux_${AUXLOSS}/SUPEPOCHS_${SUPEPOCHS}_HEM_${HARDEM_EPOCH}_BM_${BEAMSIZE}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}_Qnumdate_v3_old
 
 # SERIALIZATION_DIR=./resources/semqa/checkpoints/test
 

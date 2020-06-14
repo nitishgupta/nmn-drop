@@ -41,6 +41,24 @@ class ExecutorParameters(torch.nn.Module, Registrable):
                                                            matrix_dim=passage_encoding_dim,
                                                            normalize=False)
 
+        self.qp_to_passagenum_attention = BilinearMatrixAttention(matrix_1_dim=question_encoding_dim + passage_encoding_dim,
+                                                                  matrix_2_dim=passage_encoding_dim,
+                                                                  activation=None)
+
+        self.qp_to_passagedate_attention = BilinearMatrixAttention(matrix_1_dim=question_encoding_dim + passage_encoding_dim,
+                                                                   matrix_2_dim=passage_encoding_dim,
+                                                                   activation=None)
+
+        self.qp_to_passage_startdate_attention = BilinearMatrixAttention(
+            matrix_1_dim=question_encoding_dim + passage_encoding_dim,
+            matrix_2_dim=passage_encoding_dim,
+            activation=None)
+
+        self.qp_to_passage_enddate_attention = BilinearMatrixAttention(
+            matrix_1_dim=question_encoding_dim + passage_encoding_dim,
+            matrix_2_dim=passage_encoding_dim,
+            activation=None)
+
         # Parameters for answer start/end prediction from PassageAttention
         self.passage_attention_to_span = passage_attention_to_span
         self.passage_startend_predictor = passage_startend_predictor # torch.nn.Linear(self.passage_attention_to_span.get_output_dim(), 2)
