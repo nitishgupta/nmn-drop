@@ -41,21 +41,21 @@ class ExecutorParameters(torch.nn.Module, Registrable):
                                                            matrix_dim=passage_encoding_dim,
                                                            normalize=False)
 
-        self.qp_to_passagenum_attention = BilinearMatrixAttention(matrix_1_dim=question_encoding_dim + passage_encoding_dim,
+        self.qp_to_passagenum_attention = BilinearMatrixAttention(matrix_1_dim=passage_encoding_dim,
                                                                   matrix_2_dim=passage_encoding_dim,
                                                                   activation=None)
 
-        self.qp_to_passagedate_attention = BilinearMatrixAttention(matrix_1_dim=question_encoding_dim + passage_encoding_dim,
+        self.qp_to_passagedate_attention = BilinearMatrixAttention(matrix_1_dim=passage_encoding_dim,
                                                                    matrix_2_dim=passage_encoding_dim,
                                                                    activation=None)
 
         self.qp_to_passage_startdate_attention = BilinearMatrixAttention(
-            matrix_1_dim=question_encoding_dim + passage_encoding_dim,
+            matrix_1_dim=passage_encoding_dim,
             matrix_2_dim=passage_encoding_dim,
             activation=None)
 
         self.qp_to_passage_enddate_attention = BilinearMatrixAttention(
-            matrix_1_dim=question_encoding_dim + passage_encoding_dim,
+            matrix_1_dim=passage_encoding_dim,
             matrix_2_dim=passage_encoding_dim,
             activation=None)
 

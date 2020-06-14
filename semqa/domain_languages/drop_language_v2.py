@@ -725,7 +725,11 @@ class DropLanguageV2(DomainLanguage):
         # Shape: (passage_length, question_dim)
         weighted_question_vector_ex = weighted_question_vector.unsqueeze(0).expand(*self.encoded_passage.size())
         # Shape: (passage_length, passage_dim + question_dim)
-        passage_q_concat = torch.cat([self.encoded_passage, weighted_question_vector_ex], dim=1)
+        # old-V2 -- passage_q_concat = torch.cat([self.encoded_passage, weighted_question_vector_ex], dim=1)
+
+        # V4
+        passage_q_concat = self.encoded_passage + weighted_question_vector.unsqueeze(0)
+        passage_q_concat = passage_q_concat * self.passage_mask.unsqueeze(1)
 
         # (passage_length, passage_length)  s_i = sim([q,p_i], p_i) -- similarity from a passage-token to other tokens
         passage_similarity = qp_to_passagedate_attention(passage_q_concat.unsqueeze(0),
@@ -752,7 +756,7 @@ class DropLanguageV2(DomainLanguage):
                                                 inwindow_mask=self.inwindow_mask,
                                                 outwindow_mask=self.outwindow_mask,
                                                 p_tokensymbol_mask_float=self.passage_datetokens_mask_float)
-        date_win_loss = date_win_loss * 2.0
+        # date_win_loss = date_win_loss * 2.0
 
         """ /v1
         # (passage_length, ) -- weigh each row by passage-attention, and sum rows to get get score for each token
@@ -819,7 +823,10 @@ class DropLanguageV2(DomainLanguage):
         # Shape: (passage_length, question_dim)
         weighted_question_vector_ex = weighted_question_vector.unsqueeze(0).expand(*self.encoded_passage.size())
         # Shape: (passage_length, passage_dim + question_dim)
-        passage_q_concat = torch.cat([self.encoded_passage, weighted_question_vector_ex], dim=1)
+        # V2-old passage_q_concat = torch.cat([self.encoded_passage, weighted_question_vector_ex], dim=1)
+
+        # V4
+        passage_q_concat = self.encoded_passage + weighted_question_vector.unsqueeze(0)
         passage_q_concat = passage_q_concat * self.passage_mask.unsqueeze(1)
 
         # (passage_length, passage_length)  s_i = sim([q,p_i], p_i) -- similarity from a passage-token to other tokens
@@ -848,7 +855,7 @@ class DropLanguageV2(DomainLanguage):
                                                outwindow_mask=self.outwindow_mask,
                                                p_tokensymbol_mask_float=self.passage_numtokens_mask_float)
 
-        num_win_loss = num_win_loss * 2.0
+        # num_win_loss = num_win_loss * 2.0
 
 
         """ /v1 -- will not work -- see `def minmaxNumPattn_module`
