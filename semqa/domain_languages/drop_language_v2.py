@@ -411,7 +411,7 @@ class DropLanguageV2(DomainLanguage):
         self.count_num_values = count_num_values
         self.countvals = allenutil.move_to_device(torch.FloatTensor(range(0, 10)), cuda_device=self.device_id)
 
-        self.inwindow_mask, _ = dlutils.masking_blockdiagonal(
+        self.inwindow_mask, self.outwindow_mask = dlutils.masking_blockdiagonal(
                 passage_length=self.passage_length, window=15, device_id=self.device_id
             )
 
@@ -732,7 +732,7 @@ class DropLanguageV2(DomainLanguage):
                                                          self.encoded_passage.unsqueeze(0)).squeeze(0)
         """ v2/ """
 
-        """ /v3 
+        """ /v3
         passage_similarity = qp_to_passagedate_attention(self.encoded_passage.unsqueeze(0),
                                                          self.encoded_passage.unsqueeze(0)).squeeze(0)
         v3/ """
@@ -750,8 +750,9 @@ class DropLanguageV2(DomainLanguage):
         date_win_loss = dlutils.aux_window_loss(ptop_attention=p2p_date_alignment,
                                                 passage_mask=self.passage_mask,
                                                 inwindow_mask=self.inwindow_mask,
+                                                outwindow_mask=self.outwindow_mask,
                                                 p_tokensymbol_mask_float=self.passage_datetokens_mask_float)
-        # date_win_loss = date_win_loss * 3.0
+        date_win_loss = date_win_loss * 2.0
 
         """ /v1
         # (passage_length, ) -- weigh each row by passage-attention, and sum rows to get get score for each token
@@ -844,9 +845,10 @@ class DropLanguageV2(DomainLanguage):
         num_win_loss = dlutils.aux_window_loss(ptop_attention=p2p_num_alignment,
                                                passage_mask=self.passage_mask,
                                                inwindow_mask=self.inwindow_mask,
+                                               outwindow_mask=self.outwindow_mask,
                                                p_tokensymbol_mask_float=self.passage_numtokens_mask_float)
 
-        # num_win_loss = num_win_loss * 3.0
+        num_win_loss = num_win_loss * 2.0
 
 
         """ /v1 -- will not work -- see `def minmaxNumPattn_module`

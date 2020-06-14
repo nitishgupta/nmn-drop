@@ -154,7 +154,7 @@ def masking_blockdiagonal(passage_length, window, device_id):
     return inwindow_mask, outwindow_mask
 
 
-def aux_window_loss(ptop_attention, passage_mask, inwindow_mask, p_tokensymbol_mask_float=None):
+def aux_window_loss(ptop_attention, passage_mask, inwindow_mask, outwindow_mask=None, p_tokensymbol_mask_float=None):
     """Auxiliary loss to encourage p-to-p attention to be within a certain window.
 
     Args:
@@ -185,8 +185,28 @@ def aux_window_loss(ptop_attention, passage_mask, inwindow_mask, p_tokensymbol_m
         inwindow_likelihood_avg = 0.0
 
     inwindow_aux_loss = -1.0 * inwindow_likelihood_avg
+    total_aux_loss = inwindow_aux_loss
 
-    return inwindow_aux_loss
+    if outwindow_mask is not None:
+        outwindow_mask = outwindow_mask * p_tokensymbol_mask_float.unsqueeze(0)
+        # For tokens outside the window, increase entropy of the distribution. i.e. -\sum p*log(p)
+        # Since we'd like to distribute the weight equally to things outside the window
+        # Shape: (passage_length, passage_length)
+        outwindow_probs = ptop_attention * outwindow_mask
+        masked_outwindow_probs = allenutil.replace_masked_values(outwindow_probs, outwindow_mask.bool(),
+                                                                 replace_with=1e-40)
+        outwindow_probs_log = torch.log(masked_outwindow_probs + 1e-40) * outwindow_mask
+        outwindow_negentropies = torch.sum(outwindow_probs * outwindow_probs_log)
+
+        if torch.sum(outwindow_mask) > 0:
+            outwindow_negentropies = outwindow_negentropies / torch.sum(outwindow_mask)
+        else:
+            outwindow_negentropies = 0.0
+
+        outwindow_aux_loss = outwindow_negentropies
+        total_aux_loss += outwindow_aux_loss
+
+    return total_aux_loss
 
 
 def mostAttendedSpans(attention_vec: Union[torch.FloatTensor, List[float]], tokens: List[str], span_length=5):
