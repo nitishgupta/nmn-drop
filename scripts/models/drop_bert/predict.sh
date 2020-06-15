@@ -13,16 +13,16 @@ MODEL_TAR=${MODEL_DIR}/model.tar.gz
 mkdir ${PREDICTION_DIR}
 
 DATASET_DIR=/shared/nitishg/data
-DATASET_NAME=drop-w-qdmr/drop_iclr_600
+DATASET_NAME=drop-w-qdmr/qdmr-filter
 
-FULL_VALFILE=${DATASET_DIR}/${DATASET_NAME}/drop_dataset_dev.json
+FULL_VALFILE=${DATASET_DIR}/${DATASET_NAME}/drop_dataset_train.json
 
 # Prediction output including verbose execution logs
 VIS_PREDICTOR=drop_parser_predictor
-VIS_PREDICTION_FILE=${PREDICTION_DIR}/iclr600_visualize.txt
+VIS_PREDICTION_FILE=${PREDICTION_DIR}/qdmr-filter_train_visualize.txt
 
 JSONL_PREDICTOR=drop_parser_jsonl_predictor
-JSONL_PREDICTION_FILE=${PREDICTION_DIR}/iclr600_predictions.jsonl
+JSONL_PREDICTION_FILE=${PREDICTION_DIR}/qdmr-filter_train_predictions.jsonl
 
 # Prediction output in a JSON-L file similar to MTMSN
 #PREDICTOR=drop_mtmsnstyle_predictor

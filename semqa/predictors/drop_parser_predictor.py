@@ -57,8 +57,14 @@ class PredictionData:
             compute_postorder_position(program_node)   # adding positions to nodes if traversed in post-order
             # These are the post-order positions of nodes when tree is traversed in-order manner
             postorder_position_in_inorder_traversal = compute_postorder_position_in_inorder_traversal(program_node)
-            assert len(postorder_position_in_inorder_traversal) == len(program_execution)
-            program_execution_vis = [program_execution[x] for x in postorder_position_in_inorder_traversal]
+            if len(postorder_position_in_inorder_traversal) == len(program_execution):
+                program_execution_vis = [program_execution[x] for x in postorder_position_in_inorder_traversal]
+            else:
+                program_execution_vis = program_execution[::-1]
+                print("\nLen of program : {}".format(len(postorder_position_in_inorder_traversal)))
+                print(f"Program: {self.top_nested_expr}")
+                print(f"Program execution: {[key for key in program_execution]}")
+                print()
         else:
             # Some thing is wrong before; resort to assuming that the tree is fully left-branching
             program_execution_vis = program_execution[::-1]

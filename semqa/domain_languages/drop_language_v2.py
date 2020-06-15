@@ -1374,6 +1374,8 @@ class DropLanguageV2(DomainLanguage):
 
             debug_value = ""
             if self._debug:
+                debug_info_dict = {"extract_passagespan_answer": []}
+                self.modules_debug_info[-1].append(debug_info_dict)
                 debug_value += f"OneShotPassageSpanAnswer extraction: nothing to visualize"
 
         return PassageSpanAnswer(
