@@ -8,7 +8,7 @@ export MKL_NUM_THREADS=4
 
 ### DATASET PATHS -- should be same across models for same dataset
 DATASET_DIR=/shared/nitishg/data/drop-w-qdmr
-DATASET_NAME=qdmr-filter-post-v4
+DATASET_NAME=qdmr-filter-post-v5
 # drop_iclr600_wqdmr
 # drop_iclr_600
 # drop_iclrfull_wqdmr
@@ -52,7 +52,7 @@ export HARDEM_EPOCH=0
 export BS=4
 export DROPOUT=0.2
 
-export SEED=2
+export SEED=21
 
 export BEAMSIZE=1
 export MAX_DECODE_STEP=14

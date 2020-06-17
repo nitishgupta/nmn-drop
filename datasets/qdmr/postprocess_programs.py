@@ -20,6 +20,7 @@ from datasets.drop import constants
 """
 
 spacy_tokenizer = SpacyTokenizer()
+print(spacy_tokenizer.spacy.tokenizer)
 
 nmndrop_language: DropLanguageV2 = get_empty_language_object()
 
@@ -721,6 +722,57 @@ def remove_uncompilable_programs(dataset):
     return filtered_data
 
 
+def add_question_attention_supervision(node: Node, question_lemmas: List[str]) -> Node:
+    if node.string_arg is not None:
+        arg_tokens = spacy_tokenizer.tokenize(node.string_arg)
+        arg_lemmas = []
+        for t in arg_tokens:
+            try:
+                arg_lemmas.append(t.lemma_)
+            except:
+                arg_lemmas.append('')
+
+        if "REF" in arg_lemmas:
+            arg_lemmas.remove("REF")
+        if "#" in arg_lemmas:
+            arg_lemmas.remove("#")
+        question_attention: List[int] = [1 if t in arg_lemmas else 0 for t in question_lemmas]
+        node.supervision["question_attention_supervision"] = question_attention
+
+    processed_children = []
+    for child in node.children:
+        processed_children.append(add_question_attention_supervision(child, question_lemmas))
+
+    node.children = []
+    for child in processed_children:
+        node.add_child(child)
+
+    return node
+
+
+def update_question_attention(dataset: Dict):
+    for passage_id, passage_info in dataset.items():
+        for qa in passage_info[constants.qa_pairs]:
+            question = qa[constants.question]
+            question_tokens = qa[constants.question_tokens]
+            question_lemmas = []
+            for t in question_tokens:
+                tts = spacy_tokenizer.tokenize(t)
+                if tts:
+                    question_lemmas.append(tts[0].lemma_)
+                else:
+                    question_lemmas.append('')
+
+            if constants.program_supervision not in qa:
+                continue
+            else:
+                program_node = node_from_dict(qa[constants.program_supervision])
+                program_node = add_question_attention_supervision(program_node, question_lemmas)
+                qa[constants.program_supervision] = program_node.to_dict()
+
+    return dataset
+
+
 def main(args):
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir, exist_ok=True)
@@ -735,6 +787,8 @@ def main(args):
         postprocessed_dataset = get_postprocessed_dataset(dataset=read_drop_dataset(input_json))
 
         postprocessed_dataset = remove_uncompilable_programs(postprocessed_dataset)
+
+        postprocessed_dataset = update_question_attention(postprocessed_dataset)
 
         output_json = os.path.join(args.output_dir, filename)
         print(f"OutFile: {output_json}")
