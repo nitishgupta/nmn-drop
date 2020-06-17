@@ -4,7 +4,7 @@ export TMPDIR=/shared/nitishg/tmp
 
 ### DATASET PATHS -- should be same across models for same dataset
 DATASET_DIR=/shared/nitishg/data/drop-w-qdmr
-DATASET_NAME=qdmr-filter_iclr600
+DATASET_NAME=qdmr-filter-post-v1
 # drop_iclr600_wqdmr
 # drop_iclr_600
 # drop_iclrfull_wqdmr
@@ -40,10 +40,10 @@ export INTERPRET=false
 
 # Whether strong supervison instances should be trained on first, if yes for how many epochs
 export SUPFIRST=true
-export SUPEPOCHS=5
+export SUPEPOCHS=0
 
 # -1 will not run HardEM; HardEM will kick after EPOCH num of epochs
-export HARDEM_EPOCH=5
+export HARDEM_EPOCH=0
 
 export BS=4
 export DROPOUT=0.2

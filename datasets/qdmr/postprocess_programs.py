@@ -432,6 +432,31 @@ def fix_numdiff_arg_order(qdmr_node: Node, question: str):
     return qdmr_node, change
 
 
+def remove_filter_module(qdmr_node: Node, question: str):
+    change = 0
+    if qdmr_node.predicate == "filter_passage":
+        if qdmr_node.children[0].predicate == "select_passage":
+            select_node = qdmr_node.children[0]
+            select_node.string_arg += " " + qdmr_node.string_arg
+            qdmr_node = select_node
+            change = 1
+        else:
+            # No select after this, completely remove this node.
+            qdmr_node = qdmr_node.children[0]
+            change = 1
+
+    new_children = []
+    for child in qdmr_node.children:
+        new_child, x = remove_filter_module(child, question)
+        new_children.append(new_child)
+        change = min(1, change + x)
+
+    qdmr_node.children = []
+    for c in new_children:
+        qdmr_node.add_child(c)
+    return qdmr_node, change
+
+
 def get_postprocessed_dataset(dataset: Dict) -> Dict:
     """ Filter dataset to remove "select_passagespan_answer(select_passage)" questions.
     """
@@ -444,7 +469,8 @@ def get_postprocessed_dataset(dataset: Dict) -> Dict:
         "select_to_filternum": select_to_filternum,
         "add_required_minmax": add_required_minmax,
         "remove_vacuous_minmax": remove_vacuous_minmax,
-        "fix_numdiff_arg_order": fix_numdiff_arg_order
+        "fix_numdiff_arg_order": fix_numdiff_arg_order,
+        "remove_filter_module": remove_filter_module,
     }
 
     qtype2conversion = defaultdict(int)
@@ -463,12 +489,11 @@ def get_postprocessed_dataset(dataset: Dict) -> Dict:
                     post_processed_node, change = processing_function(post_processed_node, question)
                     if change:
                         qtype2conversion[qtype] += 1
-                        # if processing_function == select_to_filternum:
-                        #     if "over" in question or "under" in question:
-                        #         print()
-                        #         print(question)
-                        #         print(program_node.get_nested_expression_with_strings())
-                        #         print(post_processed_node.get_nested_expression_with_strings())
+                        # if processing_function == remove_filter_module:
+                        #     print()
+                        #     print(question)
+                        #     print(program_node.get_nested_expression_with_strings())
+                        #     print(post_processed_node.get_nested_expression_with_strings())
 
                 qa["preprocess_program_supervision"] = program_node.to_dict()
                 qa[constants.program_supervision] = post_processed_node.to_dict()
