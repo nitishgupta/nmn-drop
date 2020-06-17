@@ -8,6 +8,7 @@ from typing import List, Tuple, Dict, Union, Callable
 
 from analysis.qdmr.program_diagnostics import is_potential_filter_num
 from semqa.utils.qdmr_utils import read_drop_dataset, node_from_dict, Node, nested_expression_to_lisp
+from semqa.domain_languages.drop_language_v2 import DropLanguageV2, get_empty_language_object
 from allennlp.data.tokenizers import SpacyTokenizer
 
 from datasets.drop import constants
@@ -19,6 +20,8 @@ from datasets.drop import constants
 """
 
 spacy_tokenizer = SpacyTokenizer()
+
+nmndrop_language: DropLanguageV2 = get_empty_language_object()
 
 
 def tokenize(text):
@@ -246,6 +249,141 @@ def filter_num_classifier(string_arg: str, module: str):
 
 
 
+def between_filternum_classifier(string_arg: str, module: str):
+    def extract_number(string_arg):
+        number_regex_prog = re.compile("[0-9]+")
+        numbers = []
+        for match in list(number_regex_prog.finditer(string_arg)):
+            start, end = match.start(), match.end()
+            numbers.append(string_arg[start:end])  # match end is inclusive
+        if len(numbers) != 2:
+            return None
+
+        num1, num2 = float(numbers[0]), float(numbers[1])
+        if num1 < num2:
+            small_large_number = [numbers[0], numbers[1]]
+        else:
+            small_large_number = [numbers[1], numbers[0]]
+
+        return small_large_number
+
+    regex_patterns = [
+        "between [0-9]+ and [0-9]+",                             # "between #NUM and #NUM"
+        "that are between [0-9]+ and [0-9]+",                    # "between #NUM and #NUM"
+        "between [0-9]+( |\-)\w+ and [0-9]+( |\-)yards",           # "between #NUM and #NUM"
+        "that are between [0-9]+( |\-)yards and [0-9]+( |\-)yards",  # "between #NUM and #NUM"
+        "between [0-9]+ and [0-9]+( |\-)yards",                    # "between #NUM and #NUM"
+        "that are between [0-9]+ and [0-9]+( |\-)yards",           # "between #NUM and #NUM"
+        "between [0-9]+( |\-)yards and [0-9]+( |\-)yards\slong",  # "between #NUM and #NUM"
+        "that are between [0-9]+( |\-)yards and [0-9]+( |\-)yards\slong",  # "between #NUM and #NUM"
+        "between [0-9]+ and [0-9]+( |\-)yards\slong",  # "between #NUM and #NUM"
+        "that are between [0-9]+ and [0-9]+( |\-)yards\slong",  # "between #NUM and #NUM"
+    ]
+
+    regex_progs = [re.compile(p) for p in regex_patterns]
+
+    if module == "filter":
+        # If string-arg comes from filter - perform full-match and return the filter-num-type and the number
+        match_bool = False
+        for regex in regex_progs:
+            if regex.match(string_arg) is not None:
+                match_bool = True
+
+        # Matches #NUM or #NUM+
+        numbers: List[str] = extract_number(string_arg)
+
+        if numbers is None:
+            return False, None
+        else:
+            return match_bool, numbers
+
+
+    elif module == "select":
+        match_bool = False
+        matches = []
+        for regex in regex_progs:
+            regex_matches = list(regex.finditer(string_arg))
+            if regex_matches:   # If len(list) > 0
+                match_bool = True
+                matches.extend(regex_matches)
+
+        if match_bool:
+            matches_lens = [m.end() - m.start() for m in matches]
+            longest_match_idx = argmax(matches_lens)
+            longest_match = matches[longest_match_idx]
+            match_start, match_end = longest_match.start(), longest_match.end()
+            select_string_arg = string_arg[0: match_start].strip() + " " + string_arg[match_end:].strip()
+            select_string_arg = select_string_arg.strip()
+            small_large_number = extract_number(string_arg[match_start:match_end])
+            if small_large_number is None:
+                return False, None, None
+            else:
+                return match_bool, select_string_arg, small_large_number
+        else:
+            return False, None, None
+
+    else:
+        raise NotImplementedError
+
+
+def filter_to_between_filternum(qdmr_node: Node, question: str):
+    """ Recursively, convert FILTER(SET, QSPAN) node into
+        FILTER_NUM_CONDITION(SET, GET_Q_NUM) if the QSPAN matches any of the pre-defined regexes
+        CONDITION is one of LT, GT, LT_EQ, GT_EQ
+    """
+    change = 0
+    if qdmr_node.predicate == "filter_passage":
+        qspan_string_arg = qdmr_node.string_arg
+        matches, numbers = between_filternum_classifier(qspan_string_arg, module="filter")
+        if matches:
+            change = 1
+            print(numbers)
+
+    new_children = []
+    for child in qdmr_node.children:
+        new_child, x = filter_to_between_filternum(child, question)
+        new_children.append(new_child)
+        change = min(1, change + x)
+
+    qdmr_node.children = []
+    for c in new_children:
+        qdmr_node.add_child(c)
+
+    return qdmr_node, change
+
+
+def select_to_between_filternum(qdmr_node: Node, question: str):
+    """ Recursively, convert FILTER(SET, QSPAN) node into
+        FILTER_NUM_CONDITION(SET, GET_Q_NUM) if the QSPAN matches any of the pre-defined regexes
+        CONDITION is one of LT, GT, LT_EQ, GT_EQ
+    """
+    change = 0
+    if qdmr_node.predicate == "select_passage":
+        qspan_string_arg = qdmr_node.string_arg
+        matches, select_string_arg, small_large_number = between_filternum_classifier(qspan_string_arg, module="select")
+        if matches:
+            change = 1
+            select_node = qdmr_node
+            select_node.string_arg = select_string_arg
+            filter_gt_node = Node(predicate="filter_num_gt", string_arg=small_large_number[0])
+            filter_lt_node = Node(predicate="filter_num_lt", string_arg=small_large_number[1])
+            filter_lt_node.add_child(select_node)
+            filter_gt_node.add_child(filter_lt_node)
+            qdmr_node = filter_gt_node
+
+    new_children = []
+    for child in qdmr_node.children:
+        new_child, x = select_to_between_filternum(child, question)
+        new_children.append(new_child)
+        change = min(1, change + x)
+
+    qdmr_node.children = []
+    for c in new_children:
+        qdmr_node.add_child(c)
+
+    return qdmr_node, change
+
+
 def select_to_filternum(qdmr_node: Node, question: str):
     """ Recursively, convert FILTER(SET, QSPAN) node into
         FILTER_NUM_CONDITION(SET, GET_Q_NUM) if the QSPAN matches any of the pre-defined regexes
@@ -438,6 +576,7 @@ def remove_filter_module(qdmr_node: Node, question: str):
         if qdmr_node.children[0].predicate == "select_passage":
             select_node = qdmr_node.children[0]
             select_node.string_arg += " " + qdmr_node.string_arg
+            select_node.parent = qdmr_node.parent
             qdmr_node = select_node
             change = 1
         else:
@@ -448,6 +587,47 @@ def remove_filter_module(qdmr_node: Node, question: str):
     new_children = []
     for child in qdmr_node.children:
         new_child, x = remove_filter_module(child, question)
+        new_children.append(new_child)
+        change = min(1, change + x)
+
+    qdmr_node.children = []
+    for c in new_children:
+        qdmr_node.add_child(c)
+    return qdmr_node, change
+
+
+def process_project(qdmr_node: Node, question: str):
+    change = 0
+    if qdmr_node.predicate == "project_passage":
+        project_string_arg = qdmr_node.string_arg
+        if "second of" in project_string_arg and qdmr_node.children[0].predicate == "select_passage":
+            select_node = qdmr_node.children[0]
+            select_string_arg = select_node.string_arg
+            if "field goals" in select_string_arg:
+                select_string_arg = select_string_arg.replace("field goals", "second field goal")
+            if "touchdown" in select_string_arg:
+                if "touchdowns" in select_string_arg:
+                    select_string_arg = select_string_arg.replace("touchdowns", "second touchdown")
+                elif "touchdown passes" in select_string_arg:
+                    select_string_arg = select_string_arg.replace("touchdown passes", "second touchdown pass")
+                elif "touchdown runs" in select_string_arg:
+                    select_string_arg = select_string_arg.replace("touchdown runs", "second touchdown run")
+                else:
+                    select_string_arg = select_string_arg.replace("touchdown", "second touchdown")
+            if "possessions" in select_string_arg:
+                select_string_arg = select_string_arg.replace("possessions", "second possession")
+            if "scored points" in select_string_arg:
+                select_string_arg = select_string_arg.replace("scored points", "second scored points")
+
+            select_node.string_arg = select_string_arg
+            qdmr_node = select_node
+            change = 1
+        # elif "number of different" in project_string_arg:
+        #     # change = 1
+
+    new_children = []
+    for child in qdmr_node.children:
+        new_child, x = process_project(child, question)
         new_children.append(new_child)
         change = min(1, change + x)
 
@@ -469,8 +649,11 @@ def get_postprocessed_dataset(dataset: Dict) -> Dict:
         "select_to_filternum": select_to_filternum,
         "add_required_minmax": add_required_minmax,
         "remove_vacuous_minmax": remove_vacuous_minmax,
-        "fix_numdiff_arg_order": fix_numdiff_arg_order,
         "remove_filter_module": remove_filter_module,
+        "process_project": process_project,
+        "filter_to_between_filternum": filter_to_between_filternum,
+        "select_to_between_filternum": select_to_between_filternum,
+        "fix_numdiff_arg_order": fix_numdiff_arg_order,
     }
 
     qtype2conversion = defaultdict(int)
@@ -484,12 +667,17 @@ def get_postprocessed_dataset(dataset: Dict) -> Dict:
 
             else:
                 program_node = node_from_dict(qa[constants.program_supervision])
+
+                # if "between" in question:
+                #     print(question)
+                #     print(program_node.get_nested_expression_with_strings())
+
                 post_processed_node = copy.deepcopy(program_node)
                 for qtype, processing_function in qtype_to_function.items():
                     post_processed_node, change = processing_function(post_processed_node, question)
                     if change:
                         qtype2conversion[qtype] += 1
-                        # if processing_function == remove_filter_module:
+                        # if processing_function == select_to_between_filternum:
                         #     print()
                         #     print(question)
                         #     print(program_node.get_nested_expression_with_strings())
@@ -505,6 +693,34 @@ def get_postprocessed_dataset(dataset: Dict) -> Dict:
     return dataset
 
 
+def remove_uncompilable_programs(dataset):
+    filtered_data = {}
+    total_qa, num_filtered_qa = 0, 0
+    for passage_id, passage_info in dataset.items():
+        filtered_qas = []
+        for qa in passage_info[constants.qa_pairs]:
+            total_qa += 1
+            if constants.program_supervision not in qa:
+                continue
+            else:
+                program_node = node_from_dict(qa[constants.program_supervision])
+                program_lisp = nested_expression_to_lisp(program_node.get_nested_expression())
+                try:
+                    nmndrop_language.logical_form_to_action_sequence(program_lisp)
+                    filtered_qas.append(qa)
+                    num_filtered_qa += 1
+                except:
+                    continue
+        if filtered_qas:
+            passage_info[constants.qa_pairs] = filtered_qas
+            filtered_data[passage_id] = passage_info
+
+    print()
+    print(f"Number of input passages: {len(dataset)}\nNumber of input questions: {total_qa}")
+    print(f"Number of filtered passages: {len(filtered_data)}\nNumber of input questions: {num_filtered_qa}")
+    return filtered_data
+
+
 def main(args):
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir, exist_ok=True)
@@ -517,6 +733,8 @@ def main(args):
         print(f"Input json: {input_json}")
 
         postprocessed_dataset = get_postprocessed_dataset(dataset=read_drop_dataset(input_json))
+
+        postprocessed_dataset = remove_uncompilable_programs(postprocessed_dataset)
 
         output_json = os.path.join(args.output_dir, filename)
         print(f"OutFile: {output_json}")

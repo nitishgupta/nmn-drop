@@ -17,7 +17,7 @@ class Node():
 
     def add_child(self, obj):
         assert isinstance(obj, Node)
-        # obj.parent = self
+        obj.parent = self
         self.children.append(obj)
 
     def is_leaf(self):
