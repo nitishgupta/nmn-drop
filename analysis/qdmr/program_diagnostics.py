@@ -72,10 +72,10 @@ patterns_for_filternum = [
         "less than [0-9]+",  # "over #NUM"
         "more than [0-9]+",  # "over #NUM"
         "[0-9]+\s\w+\sor longer",   # 10 yards or longer
-        "[0-9]+\s\w+\sor shorter",  # 10 yards or shorter
         "[0-9]+\s\w+\sor more",   # 10 yards or more
+        "[0-9]+\s\w+\sor shorter",  # 10 yards or shorter
         "[0-9]+\s\w+\sor less",   # 10 yards or less
-        "[0-9]+\s\w+\sor fewer",   # 10 yards or less
+        "[0-9]+\s\w+\sor fewer",   # 10 yards or fewer
     ]
 re_filternum_patterns = [re.compile(p) for p in patterns_for_filternum]
 
