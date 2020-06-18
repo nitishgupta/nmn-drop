@@ -97,6 +97,8 @@ class DROPParserBERT(DROPParserBase):
         self._allennlp_tokenizer = PretrainedTransformerTokenizer(model_name=transformer_model_name)
         self._tokenizer = self._allennlp_tokenizer.tokenizer
         self._pad_token_id = self._tokenizer.pad_token_id
+        self._cls_token_id = self._tokenizer.cls_token_id
+        self._sep_token_id = self._tokenizer.sep_token_id
 
         self.max_ques_len = max_ques_len
 
@@ -211,8 +213,6 @@ class DROPParserBERT(DROPParserBase):
 
         self.gc_steps = 0
 
-        print("\n\n HERE \n\n")
-
         # self.logfile = open("log_sup_epochs_3.txt", "w")
         # self.num_train_steps = 0
         # self.log_freq = 100
@@ -258,8 +258,6 @@ class DROPParserBERT(DROPParserBase):
         metadata: List[Dict[str, Any]] = None,
     ) -> Dict[str, torch.Tensor]:
 
-        print("\n\n here \n\n")
-
         self.gc_steps += 1
         if self.gc_steps % 500 == 0:
             gc.collect()
@@ -273,7 +271,7 @@ class DROPParserBERT(DROPParserBase):
                 logger.info(Profile.to_string())
 
         question_passage_tokens = question_passage["tokens"]["token_ids"]
-        pad_mask = (question_passage_tokens != self._pad_token_id).long()
+        pad_mask = (question_passage_tokens != self._pad_token_id).long()   # Mask tokens that are [PAD]
         question_passage["tokens"]["mask"] = pad_mask
         question_passage["tokens"]["type_ids"][:, self.max_ques_len + 1:] = 1  # type-id = 1 starting from [SEP] after Q
 
@@ -288,9 +286,10 @@ class DROPParserBERT(DROPParserBase):
         question_mask = (pad_mask[:, 1:self.max_ques_len + 1]).float()
         # Skip [CLS] Q_tokens [SEP] and the [SEP] at the end
         ques_w_cls_sep_len = 1 + self.max_ques_len + 1
-        encoded_passage = bert_out[:, ques_w_cls_sep_len:-1, :]
-        passage_mask = (pad_mask[:, ques_w_cls_sep_len:-1]).float()
         passage_token_idxs = question_passage_tokens[:, ques_w_cls_sep_len:-1]
+        passage_mask = (passage_token_idxs != self._pad_token_id).float() * \
+                        (passage_token_idxs != self._sep_token_id).float()      # mask [SEP] token in passage
+        encoded_passage = bert_out[:, ques_w_cls_sep_len:-1, :]
 
         batch_size = len(actions)
 
