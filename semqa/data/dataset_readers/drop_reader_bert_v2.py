@@ -385,15 +385,17 @@ class DROPReaderV2(DatasetReader):
 
         hf_tokenizer = self._tokenizer.tokenizer  # HuggingFace tokenizer / BertTokenizerFast
         pad_token_str, pad_token_id = hf_tokenizer.pad_token, hf_tokenizer.pad_token_id
-        cls_token_str, cls_token_id = hf_tokenizer.cls_token, hf_tokenizer.cls_token_id
-        sep_token_str, sep_token_id = hf_tokenizer.sep_token, hf_tokenizer.sep_token_id
+        # cls_token_str, cls_token_id = hf_tokenizer.cls_token, hf_tokenizer.cls_token_id
+        # sep_token_str, sep_token_id = hf_tokenizer.sep_token, hf_tokenizer.sep_token_id
 
         # Padding question to max length since it makes possible to separate question and passage in the model
         ques_padding_len = self.max_question_wps - len(question_wps)
         question_wps.extend([pad_token_str] * ques_padding_len)
         q_wpidx2tokenidx.extend([-1] * ques_padding_len)
 
-        question_wps_tokens = [Token(text=t, text_id=hf_tokenizer.convert_tokens_to_ids(t)) for t in question_wps]
+        question_wps_tokens = [Token(text=wp_text, text_id=wp_id)
+                               for wp_text, wp_id in zip(question_wps,
+                                                         self._tokenizer.tokenizer.convert_tokens_to_ids(question_wps))]
 
         # Passage_len = Max seq len - CLS - SEP - SEP - Max_Qlen -- Questions will be padded to max length
         max_passage_wps = self.max_transformer_length - 3 - self.max_question_wps
@@ -403,16 +405,25 @@ class DROPReaderV2(DatasetReader):
         p_token_len = last_p_tokenidx + 1
         p_tokenidx2wpidx = p_tokenidx2wpidx[0:p_token_len]
 
-        passage_wps.append(sep_token_str)
-        p_wpidx2tokenidx.append(-1)
-        passage_wps_tokens = [Token(text=t, text_id=hf_tokenizer.convert_tokens_to_ids(t)) for t in passage_wps]
+        # removing in 1.0
+        # passage_wps.append(sep_token_str)
+        # p_wpidx2tokenidx.append(-1)
+
+        passage_wps_tokens = [Token(text=wp_text, text_id=wp_id)
+                              for wp_text, wp_id in zip(passage_wps,
+                                                        self._tokenizer.tokenizer.convert_tokens_to_ids(passage_wps))]
         passage_wps_len = len(passage_wps)
 
-        cls_token = Token(cls_token_str, text_id=cls_token_id)
-        sep_token = Token(sep_token_str, text_id=sep_token_id)
+        question_passage_tokens = self._tokenizer.add_special_tokens(question_wps_tokens, passage_wps_tokens)
+
+        # passage_wps_tokens = [Token(text=t, text_id=hf_tokenizer.convert_tokens_to_ids(t)) for t in passage_wps]
+        # passage_wps_len = len(passage_wps)
+
+        # cls_token = Token(cls_token_str, text_id=cls_token_id)
+        # sep_token = Token(sep_token_str, text_id=sep_token_id)
 
         # This would be in the input to BERT
-        question_passage_tokens: List[Token] = [cls_token] + question_wps_tokens + [sep_token] + passage_wps_tokens
+        # question_passage_tokens: List[Token] = [cls_token] + question_wps_tokens + [sep_token] + passage_wps_tokens
 
         # Now need to take care of metadata due to passage length truncation
         # 1. Date and Number mentions - remove mentions that exceed passage length, recompute mention2entidx and values

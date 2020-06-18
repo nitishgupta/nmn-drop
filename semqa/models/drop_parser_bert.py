@@ -256,6 +256,7 @@ class DROPParserBERT(DROPParserBase):
         metadata: List[Dict[str, Any]] = None,
     ) -> Dict[str, torch.Tensor]:
 
+
         self.gc_steps += 1
         if self.gc_steps % 500 == 0:
             gc.collect()
@@ -282,11 +283,11 @@ class DROPParserBERT(DROPParserBase):
         # Skip [CLS]; then the next max_ques_len tokens are question tokens
         encoded_question = bert_out[:, 1:self.max_ques_len + 1, :]
         question_mask = (pad_mask[:, 1:self.max_ques_len + 1]).float()
-        # Skip [CLS] Q_tokens [SEP]; the passage includes the [SEP] at the end
+        # Skip [CLS] Q_tokens [SEP] and the [SEP] at the end
         ques_w_cls_sep_len = 1 + self.max_ques_len + 1
-        encoded_passage = bert_out[:, ques_w_cls_sep_len:, :]
-        passage_mask = (pad_mask[:, ques_w_cls_sep_len:]).float()
-        passage_token_idxs = question_passage_tokens[:, ques_w_cls_sep_len:]
+        encoded_passage = bert_out[:, ques_w_cls_sep_len:-1, :]
+        passage_mask = (pad_mask[:, ques_w_cls_sep_len:-1]).float()
+        passage_token_idxs = question_passage_tokens[:, ques_w_cls_sep_len:-1]
 
         batch_size = len(actions)
 
