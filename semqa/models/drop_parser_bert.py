@@ -211,6 +211,8 @@ class DROPParserBERT(DROPParserBase):
 
         self.gc_steps = 0
 
+        print("\n\n HERE \n\n")
+
         # self.logfile = open("log_sup_epochs_3.txt", "w")
         # self.num_train_steps = 0
         # self.log_freq = 100
@@ -256,6 +258,7 @@ class DROPParserBERT(DROPParserBase):
         metadata: List[Dict[str, Any]] = None,
     ) -> Dict[str, torch.Tensor]:
 
+        print("\n\n here \n\n")
 
         self.gc_steps += 1
         if self.gc_steps % 500 == 0:

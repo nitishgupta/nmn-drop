@@ -218,7 +218,7 @@ class DROPReaderV2(DatasetReader):
         self.max_passage_nums = 0
         self.max_composed_nums = 0
 
-        self.max_num_instances = -1     # -1 to deactivate
+        self.max_num_instances = 50     # -1 to deactivate
 
     @overrides
     def _read(self, file_path: str):
