@@ -29,7 +29,7 @@ class SingleSpanAnswer(SpanAnswer):
         log_marginal_likelihood_for_passage_span
         """
 
-        answer_as_spans: torch.LongTensor = kwargs["answer_as_spans"]
+        answer_as_spans: torch.LongTensor = kwargs["passage_span_answer"]
         span_start_log_probs: torch.FloatTensor = kwargs["span_start_log_probs"]
         span_end_log_probs: torch.FloatTensor = kwargs["span_end_log_probs"]
 

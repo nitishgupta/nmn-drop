@@ -24,7 +24,7 @@ from semqa.utils.qdmr_utils import Node, node_from_dict, nested_expression_to_li
 from datasets.drop import constants
 
 from semqa.data.dataset_readers.utils import find_valid_spans, index_text_to_tokens, \
-    extract_answer_info_from_annotation, split_tokens_by_hyphen, BIOAnswerGenerator, get_passage_span_answers
+    extract_answer_info_from_annotation, split_tokens_by_hyphen, BIOAnswerGenerator, get_single_answer_span_fields
 
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -590,14 +590,23 @@ class DROPReaderV2(DatasetReader):
                 # "answer_as_text_to_disjoint_bios": `List[List[LabelsField]]` A list of dijoint BIO tags for each ans-text
                 # "span_bio_labels": `LabelsField` BIO tags with all spans
                 # "is_bio_mask": `LabelField` one of {0, 1} to indicate if span answers
-                span_answer_fields, has_passage_span_ans = self.bio_answer_generator.get_bio_labels(
+                # span_answer_fields, has_passage_span_ans \
+                (answer_spans_as_bios_field, answer_spans_for_possible_taggings_field,
+                 all_spans, has_passage_span_ans) = self.bio_answer_generator.get_bio_labels(
                     answer_annotation=answer_annotation,
                     passage_tokens=spacy_passage_tokens,
                     max_passage_len=p_token_len,
                     p_tokenidx2wpidx=p_tokenidx2wpidx,
-                    passage_wps_len=passage_wps_len)
+                    passage_wps_len=passage_wps_len,
+                    passage_field=fields["passage"])
+
+                metadata.update({"answer_passage_spans": all_spans})
+                span_answer_fields = {"passage_span_answer": answer_spans_as_bios_field,
+                                      "answer_spans_for_possible_taggings": answer_spans_for_possible_taggings_field}
+
             else:
-                passage_span_answer_field, answer_passage_spans, has_passage_span_ans = get_passage_span_answers(
+                (passage_span_answer_field, answer_spans_for_possible_taggings_field,
+                 answer_passage_spans, has_passage_span_ans) = get_single_answer_span_fields(
                     passage_tokens=spacy_passage_tokens,
                     max_passage_token_len=p_token_len,
                     answer_annotation=answer_annotation,
@@ -606,7 +615,9 @@ class DROPReaderV2(DatasetReader):
                     p_tokenidx2wpidx=p_tokenidx2wpidx)
 
                 metadata.update({"answer_passage_spans": answer_passage_spans})
-                span_answer_fields = {"answer_as_passage_spans": passage_span_answer_field}
+                span_answer_fields = {"passage_span_answer": passage_span_answer_field,
+                                      "answer_spans_for_possible_taggings": answer_spans_for_possible_taggings_field}
+
 
             fields.update(span_answer_fields)
             if has_passage_span_ans:

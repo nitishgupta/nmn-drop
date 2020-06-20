@@ -259,11 +259,13 @@ class DROPParserBERT(DROPParserBase):
         year_differences_mat: List[np.array],
         count_values: List[List[int]],
         actions: List[List[ProductionRule]],
-        answer_as_list_of_bios: torch.LongTensor = None,       # (batch_size, num_tag_seqs, passage_length)
-        answer_as_text_to_disjoint_bios: torch.LongTensor = None,  # (bs, answer_texts, spans_per_text, passage_length)
-        span_bio_labels: torch.LongTensor = None,            # (batch_size, passage_length)  single tag-seq per example
-        is_bio_mask: torch.LongTensor = None,                # (batch_size, )
-        answer_as_passage_spans: torch.LongTensor = None,
+        # answer_as_list_of_bios: torch.LongTensor = None,       # (batch_size, num_tag_seqs, passage_length)
+        # answer_as_text_to_disjoint_bios: torch.LongTensor = None,  # (bs, answer_texts, spans_per_text, passage_length)
+        # span_bio_labels: torch.LongTensor = None,            # (batch_size, passage_length)  single tag-seq per example
+        # is_bio_mask: torch.LongTensor = None,                # (batch_size, )
+        passage_span_answer: torch.LongTensor = None,  # BIO: (bs, num_tagging, passage_len), S/E: (bs, num_spans, 2)
+        answer_spans_for_possible_taggings: torch.LongTensor = None,    # (batch_size, num_tagging, num_spans, 2)
+        # answer_as_passage_spans: torch.LongTensor = None,
         answer_as_question_spans: torch.LongTensor = None,
         answer_as_passage_number: List[List[int]] = None,
         answer_as_composed_number: List[List[int]] = None,
@@ -786,17 +788,16 @@ class DROPParserBERT(DROPParserBase):
 
                     if progtype == "PassageSpanAnswer":
                         # Tuple of start, end log_probs
-                        span_answer_loss_inputs = {}
+                        span_answer_loss_inputs = {"passage_span_answer": passage_span_answer[i]}
                         if not self.bio_tagging:
                             span_answer_loss_inputs.update({
-                                "answer_as_spans": answer_as_passage_spans[i],
                                 "span_start_log_probs": denotation.passage_span_start_log_probs,
                                 "span_end_log_probs": denotation.passage_span_end_log_probs,
                             })
                         else:
                             span_answer_loss_inputs.update({
-                                "answer_as_list_of_bios": answer_as_list_of_bios[i, :, :],
-                                "span_bio_labels": span_bio_labels[i, :],
+                                # "answer_as_list_of_bios": answer_as_list_of_bios[i, :, :],
+                                # "span_bio_labels": span_bio_labels[i, :],
                                 "log_probs": denotation.bio_logprobs,
                                 "passage_mask": passage_mask[i, :],
                             })
@@ -1014,8 +1015,8 @@ class DROPParserBERT(DROPParserBase):
                 output_dict["question_mask"] = question_mask
                 output_dict["passage_mask"] = passage_mask
                 output_dict["passage_token_idxs"] = passage_token_idxs
-                if answer_as_passage_spans is not None:
-                    output_dict["answer_as_passage_spans"] = answer_as_passage_spans
+                # if answer_as_passage_spans is not None:
+                #     output_dict["answer_as_passage_spans"] = answer_as_passage_spans
                 output_dict["batch_action_seqs"] = batch_actionseqs
                 batch_logical_programs = []
                 for instance_idx, instance_actionseqs in enumerate(batch_actionseqs):

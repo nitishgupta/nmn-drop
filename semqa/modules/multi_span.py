@@ -57,33 +57,41 @@ class MultiSpanAnswer(SpanAnswer):
                 self._constraint_mask[i, j] = 1.0
 
     def gold_log_marginal_likelihood(self,
-                                     answer_as_list_of_bios: torch.LongTensor,
-                                     span_bio_labels: torch.LongTensor,
+                                     passage_span_answer: torch.LongTensor,
+                                     # answer_as_list_of_bios: torch.LongTensor,
+                                     # span_bio_labels: torch.LongTensor,
                                      log_probs: torch.FloatTensor,
                                      passage_mask: torch.FloatTensor):
         """ Compute log-marginal likelihood for the gold-seqs
 
         Parameters:
         ----------
-        answer_as_list_of_bios: `(num_gold_seqs, passage_length)`
-            Various gold tag-seqs per instance.
-            This can be completely masked (all 0s), in that case use span_bio_labels.
-        span_bio_labels: `(passage_length, )`
-            Since BIO gold-tagging for the instance.
-            If answer_as_list_of_bios is masked, use this. Otherwise, this would be masked (all 0s)
+        passage_span_answer: `torch.LongTensor` (batch_size, num_taggings, passage_len)
+        # answer_as_list_of_bios: `(num_gold_seqs, passage_length)`
+        #     Various gold tag-seqs per instance.
+        #     This can be completely masked (all 0s), in that case use span_bio_labels.
+        # span_bio_labels: `(passage_length, )`
+        #     Since BIO gold-tagging for the instance.
+        #     If answer_as_list_of_bios is masked, use this. Otherwise, this would be masked (all 0s)
         log_probs: `(passage_length, num_tags)`
             Log-probabilities for the tags (maybe unmasked)
         passage_mask: `(passage_length, )`
             Float mask for the passage
         """
-        if answer_as_list_of_bios.sum() > 0:
-            gold_bio_seqs = answer_as_list_of_bios
-        elif span_bio_labels.sum() > 0:
-            gold_bio_seqs = span_bio_labels.unsqueeze(0)
-        else:
+        # if answer_as_list_of_bios.sum() > 0:
+        #     gold_bio_seqs = answer_as_list_of_bios
+        # elif span_bio_labels.sum() > 0:
+        #     gold_bio_seqs = span_bio_labels.unsqueeze(0)
+        # else:
+        #     #  If log-loss is being computed during validation for an instance with no gold-spans
+        #     gold_bio_seqs = span_bio_labels.unsqueeze(0)
+        #     warnings.warn('One of answer_as_list_of_bios or span_bio_labels need to be un-masked')
+
+        gold_bio_seqs = passage_span_answer
+        if gold_bio_seqs.sum() == 0:
             #  If log-loss is being computed during validation for an instance with no gold-spans
-            gold_bio_seqs = span_bio_labels.unsqueeze(0)
             warnings.warn('One of answer_as_list_of_bios or span_bio_labels need to be un-masked')
+
 
         log_marginal_likelihood = self._marginal_likelihood(gold_bio_seqs=gold_bio_seqs,
                                                             log_probs=log_probs,
