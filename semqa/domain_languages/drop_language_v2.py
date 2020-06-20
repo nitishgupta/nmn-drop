@@ -163,6 +163,7 @@ class PassageSpanAnswer:
             passage_span_end_log_probs: Tensor,
             start_logits,
             end_logits,
+            passage_attn,
             bio_logprobs=None,
             loss=0.0,
             debug_value="",
@@ -173,6 +174,7 @@ class PassageSpanAnswer:
         self.passage_span_start_log_probs = passage_span_start_log_probs
         self.passage_span_end_log_probs = passage_span_end_log_probs
         self._value = (passage_span_start_log_probs, passage_span_end_log_probs)
+        self.passage_attn = passage_attn
         self.bio_logprobs = bio_logprobs
         self.loss = loss
         self.debug_value = debug_value
@@ -1453,6 +1455,7 @@ class DropLanguageV2(DomainLanguage):
             passage_span_end_log_probs=span_end_log_probs,
             start_logits=span_start_logits,
             end_logits=span_end_logits,
+            passage_attn=passage_attn,
             bio_logprobs=passage_bio_logprobs,
             loss=loss,
             debug_value=debug_value,
