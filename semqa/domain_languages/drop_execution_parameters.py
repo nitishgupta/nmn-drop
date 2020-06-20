@@ -23,9 +23,10 @@ class ExecutorParameters(torch.nn.Module, Registrable):
         question_encoding_dim: int,
         passage_encoding_dim: int,
         passage_attention_to_span: Seq2SeqEncoder,
-        passage_startend_predictor,
         question_attention_to_span: Seq2SeqEncoder,
         passage_attention_to_count: Seq2SeqEncoder,
+        passage_startend_predictor = None,
+        passage_bio_predictor = None,
         num_implicit_nums: int = None,
         passage_count_predictor=None,
         passage_count_hidden2logits=None,
@@ -43,7 +44,9 @@ class ExecutorParameters(torch.nn.Module, Registrable):
 
         # Parameters for answer start/end prediction from PassageAttention
         self.passage_attention_to_span = passage_attention_to_span
-        self.passage_startend_predictor = passage_startend_predictor # torch.nn.Linear(self.passage_attention_to_span.get_output_dim(), 2)
+        # Only one of the below two are active
+        self.passage_startend_predictor = passage_startend_predictor
+        self.passage_bio_predictor = passage_bio_predictor
 
         # Parameters for answer start/end pred directly from passage encoding (direct PassageSpanAnswer from 1step prog)
         self.oneshot_psa_startend_predictor = torch.nn.Linear(passage_encoding_dim, 2)

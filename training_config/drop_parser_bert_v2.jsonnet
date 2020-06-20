@@ -4,6 +4,8 @@ local batch_size = utils.parse_number(std.extVar("BS"));
 local max_length = 512;
 local beam_size = utils.parse_number(std.extVar("BEAMSIZE"));
 local supervised_epochs = utils.parse_number(std.extVar("SUPEPOCHS"));
+local bio_tagging = utils.boolparser(std.extVar("BIO_TAG"));
+local bio_label_scheme = std.extVar("BIO_LABEL");
 
 {
     "dataset_reader": {
@@ -25,6 +27,8 @@ local supervised_epochs = utils.parse_number(std.extVar("SUPEPOCHS"));
             "max_length": max_length
           }
         },
+        "bio_tagging": bio_tagging,
+        "bio_label_scheme": bio_label_scheme,
     },
 
     "validation_dataset_reader": {
@@ -42,7 +46,9 @@ local supervised_epochs = utils.parse_number(std.extVar("SUPEPOCHS"));
             "model_name": bert_model,
             "max_length": max_length
           }
-        }
+        },
+        "bio_tagging": bio_tagging,
+        "bio_label_scheme": bio_label_scheme,
     },
 
     "train_data_path": std.extVar("TRAINING_DATA_FILE"),
@@ -50,6 +56,9 @@ local supervised_epochs = utils.parse_number(std.extVar("SUPEPOCHS"));
 
     "model": {
         "type": "drop_parser_bert",
+
+        "bio_tagging": bio_tagging,
+        "bio_label_scheme": bio_label_scheme,
 
         "transformer_model_name": bert_model,
         "scaling_bert": utils.boolparser(std.extVar("SCALING_BERT")),

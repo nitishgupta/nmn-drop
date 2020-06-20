@@ -23,6 +23,10 @@ from semqa.utils.qdmr_utils import Node, node_from_dict, nested_expression_to_li
     get_domainlang_function2returntype_mapping, get_inorder_function_list, function_to_action_string_alignment
 from datasets.drop import constants
 
+from semqa.data.dataset_readers.utils import find_valid_spans, index_text_to_tokens, \
+    extract_answer_info_from_annotation, split_tokens_by_hyphen, BIOAnswerGenerator, get_passage_span_answers
+
+
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 WORD_NUMBER_MAP = {
@@ -63,19 +67,11 @@ def tokenize_bert(bert_tokenizer: PretrainedTransformerTokenizer, tokens: List[s
     wordpiece_tokens = []
     for tokenidx, token in enumerate(tokens):
         wp_idx = len(wordpiece_tokens)
-        wps = bert_tokenizer.tokenize(token)
+        wps = bert_tokenizer.tokenize(token)    # this can be empty, if token = " "
         wordpiece_tokens.extend([t.text for t in wps])
         wpidx2tokenidx.extend([tokenidx] * len(wps))
-        # Word-piece idxs for this token, wp_idx is the idx for the first token, and +i for the number of wps
-        wp_idxs = [wp_idx + i for i, _ in enumerate(wps)]
-
-        # if not wps:   # Happens if token == " " that gets tokenized to nothing i.e. len(wps) == 0
-        #     if not tokenidx2wpidxs:   # In case first token is " "
-        #         wp_idxs = [0]
-        #     else:
-        #         wp_idxs = [tokenidx2wpidxs[-1][-1]]     # make this whitespace token point to previous wordpiece
-
-        tokenidx2wpidxs.append(wp_idxs)
+        wp_idxs = [wp_idx + i for i, _ in enumerate(wps)]   # This can be empty,
+        tokenidx2wpidxs.append(wp_idxs)     # and hence, entries in this can be empty
     assert len(wordpiece_tokens) == len(wpidx2tokenidx)
     assert len(tokens) == len(tokenidx2wpidxs)
 
@@ -180,9 +176,10 @@ class DROPReaderV2(DatasetReader):
             tokenizer: PretrainedTransformerTokenizer = None,
             token_indexers: Dict[str, TokenIndexer] = None,
             relaxed_span_match: bool = True,
-            do_augmentation: bool = True,
             max_question_wps: int = 50,
             max_transformer_length: int = 512,
+            bio_tagging: bool = False,
+            bio_label_scheme: str = "BIO",
             only_strongly_supervised: bool = False,
             skip_instances: bool = False,
             skip_if_progtype_mismatch_anstype: bool = False,
@@ -192,7 +189,6 @@ class DROPReaderV2(DatasetReader):
         self._tokenizer: PretrainedTransformerTokenizer = tokenizer
         self._token_indexers: Dict[str, TokenIndexer] = token_indexers
         self._relaxed_span_match = relaxed_span_match
-        self._do_augmentation = do_augmentation
         self.max_question_wps = max_question_wps
         self.max_transformer_length = max_transformer_length
         self.only_strongly_supervised = only_strongly_supervised
@@ -212,8 +208,19 @@ class DROPReaderV2(DatasetReader):
         # mapping from DROPLanguage functions to their return_types - used for getting return_type of prog-supervision
         self.function2returntype_mapping = get_domainlang_function2returntype_mapping(get_empty_language_object())
 
-        # self.answer_notin_support = open("answer-not-in-support.jsonl", "w")
-        # self.progtype_mismatch_anstype = open("progtype-mismatch-anstype.jsonl", "w")
+        self.spacy_tokenizer = SpacyTokenizer()  # Used to tokenize answer-texts
+        self.bio_tagging: bool = bio_tagging
+        self.bio_label_scheme: str = bio_label_scheme
+        if self.bio_tagging:
+            if self.bio_label_scheme == "BIO":
+                labels = {'O': 0, 'B': 1, 'I': 2}
+            elif self.bio_label_scheme == "IO":
+                labels = {'O': 0, 'I': 1}
+            else:
+                raise Exception("bio_label_scheme not supported: {}".format(self.bio_label_scheme))
+            self.bio_answer_generator = BIOAnswerGenerator(ignore_question=True,
+                                                           flexibility_threshold=1000,
+                                                           labels=labels)
 
         self.max_passage_nums = 0
         self.max_composed_nums = 0
@@ -429,10 +436,10 @@ class DROPReaderV2(DatasetReader):
          old2new_q_numidx, new2old_q_numidx) = process_num_mentions(q_token_len, q_num_mens, q_num_entidxs,
                                                                     q_num_normvals)
         # List of (start, end) char offsets for each passage and question word-piece
-        passage_offsets: List[Tuple[int, int]] = self.update_charoffsets(
+        passage_wp_offsets: List[Tuple[int, int]] = self.update_charoffsets(
             wpidx2tokenidx=p_wpidx2tokenidx, tokens=passage_tokens, token_charidxs=passage_charidxs
         )
-        question_offsets: List[Tuple[int, int]] = self.update_charoffsets(
+        question_wp_offsets: List[Tuple[int, int]] = self.update_charoffsets(
             wpidx2tokenidx=q_wpidx2tokenidx, tokens=question_tokens, token_charidxs=question_charidxs
         )
 
@@ -544,8 +551,12 @@ class DROPReaderV2(DatasetReader):
 
         metadata.update(
             {
-                "passage_token_offsets": passage_offsets,
-                "question_token_offsets": question_offsets,
+                "passage_token_charidxs": passage_charidxs,
+                "question_token_charidxs": question_charidxs,
+                "passage_wp_offsets": passage_wp_offsets,
+                "question_wp_offsets": question_wp_offsets,
+                "passage_tokenidx2wpidx": p_tokenidx2wpidx,
+                "question_tokenidx2wpidx": q_tokenidx2wpidx,
                 "passage_wpidx2tokenidx": p_wpidx2tokenidx,
                 "question_wpidx2tokenidx": q_wpidx2tokenidx,
                 "unpadded_q_wps_len": unpadded_q_wps_len,
@@ -571,16 +582,44 @@ class DROPReaderV2(DatasetReader):
             # Using the first one supervision (training actually only has one)
             answer_annotation = answer_annotations[0]
 
+            spacy_passage_tokens: List[Token] = [Token(text=t, idx=idx)
+                                                 for t, idx in zip(passage_tokens, passage_charidxs)]
+
+            if self.bio_tagging:
+                # "answer_as_list_of_bios": `List[LabelsField]` List of different BIO label seqs
+                # "answer_as_text_to_disjoint_bios": `List[List[LabelsField]]` A list of dijoint BIO tags for each ans-text
+                # "span_bio_labels": `LabelsField` BIO tags with all spans
+                # "is_bio_mask": `LabelField` one of {0, 1} to indicate if span answers
+                span_answer_fields, has_passage_span_ans = self.bio_answer_generator.get_bio_labels(
+                    answer_annotation=answer_annotation,
+                    passage_tokens=spacy_passage_tokens,
+                    max_passage_len=p_token_len,
+                    p_tokenidx2wpidx=p_tokenidx2wpidx,
+                    passage_wps_len=passage_wps_len)
+            else:
+                passage_span_answer_field, answer_passage_spans, has_passage_span_ans = get_passage_span_answers(
+                    passage_tokens=spacy_passage_tokens,
+                    max_passage_token_len=p_token_len,
+                    answer_annotation=answer_annotation,
+                    spacy_tokenizer=self.spacy_tokenizer,
+                    passage_field=fields["passage"],
+                    p_tokenidx2wpidx=p_tokenidx2wpidx)
+
+                metadata.update({"answer_passage_spans": answer_passage_spans})
+                span_answer_fields = {"answer_as_passage_spans": passage_span_answer_field}
+
+            fields.update(span_answer_fields)
+            if has_passage_span_ans:
+                answer_program_start_types.append("PassageSpanAnswer")
+
             # Possible_Start_Types -- PassageSpanAnswer, YearDifference, PassageNumber, ComposedNumber, CountNumber
 
-            # Passage-span answer
-            metadata.update({"answer_passage_spans": answer_passage_spans})
-            (passage_span_fields,
-             spans_found) = spans_into_listofspanfields(spans=answer_passage_spans, tokenidx2wpidx=p_tokenidx2wpidx,
-                                                        seq_wps_len=passage_wps_len, field=fields["passage"])
-            if spans_found:
-                answer_program_start_types.append("PassageSpanAnswer")
-            fields["answer_as_passage_spans"] = passage_span_fields
+            # (passage_span_fields,
+            #  spans_found) = spans_into_listofspanfields(spans=answer_passage_spans, tokenidx2wpidx=p_tokenidx2wpidx,
+            #                                             seq_wps_len=passage_wps_len, field=fields["passage"])
+            # if spans_found:
+            #     answer_program_start_types.append("PassageSpanAnswer")
+            # fields["answer_as_passage_spans"] = passage_span_fields
 
             # Question-span answer
             question_span_fields = [SpanField(-1, -1, fields["question"])]

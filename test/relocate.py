@@ -1,30 +1,49 @@
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 import json
 
-class Output:
-    def __init__(self, input_name: str, values: List[float], label: Optional[str] = None):
-        self.input_name = input_name
-        self.values = values
-        self.label = label
 
-    def toJSON(self):
-        json_dict = {
-            "input_name": self.input_name,
-            "values": self.values,
-            "label": self.label
-        }
-        return json_dict
+_labels = {0: 'O', 1: 'I'}
 
+def convert_tags_to_spans(token_tags: List[str], labels_scheme: str = "BIO") -> List[Tuple[int, int]]:
+    spans = []
+    prev = 'O'
+    current = []
+    for tokenidx, tag in enumerate(token_tags):
+        if tag == labels['I']:
+            if labels_scheme == "BIO":
+                if prev == "B" or prev == "I":
+                    current.append(tokenidx)
+                    prev = "I"
+                else:
+                    # Illegal I, treat it as O
+                    prev = "O"
+            elif labels_scheme == "IO":
+                if prev == "I":
+                    current.append(tokenidx)  # continue span
+                else:
+                    if current:
+                        spans.append((current[0], current[-1]))
+                    current = [tokenidx]
+                    prev = "I"
+            else:
+                raise NotImplementedError
 
-o1 = Output(input_name="passage", values=[1, 2])
-o2 = Output(input_name="numbers", values=[1, 2], label="n1")
-outputs = [o1, o2]
+        if tag == "O":
+            if prev == "O":
+                continue
+            elif prev == "B" or prev == "I":
+                if current:
+                    spans.append((current[0], current[-1]))
+                current = []
+                prev = "O"
+        if tag == "B":
+            if current:
+                spans.append((current[0], current[-1]))
+            current = [tokenidx]
+            prev = "B"
 
-outputs_json = [o1.toJSON(), o2.toJSON()]
+    if current:
+        # residual span
+        spans.append((current[0], current[-1]))
 
-s = json.dumps({"outputs": outputs_json})
-
-print(s)
-
-
-
+    return spans

@@ -30,7 +30,6 @@ class DROPParserBase(Model):
         self,
         vocab: Vocabulary,
         action_embedding_dim: int,
-        text_field_embedder: TextFieldEmbedder = None,
         dropout: float = 0.0,
         rule_namespace: str = "rule_labels",
         debug: bool = False,

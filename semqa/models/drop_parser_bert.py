@@ -26,7 +26,8 @@ from allennlp_semparse.state_machines import ConstrainedBeamSearch
 from allennlp_semparse.fields.production_rule_field import ProductionRule
 
 from semqa.state_machines.constrained_beam_search import FirstStepConstrainedBeamSearch
-from semqa.utils.rc_utils import get_best_span, DropEmAndF1
+from semqa.data.fields.labels_field import LabelsField
+from semqa.utils.rc_utils import DropEmAndF1
 from semqa.state_machines.prefixed_beam_search import PrefixedConstrainedBeamSearch
 from semqa.models.utils import semparse_utils
 from semqa.utils import qdmr_utils
@@ -42,6 +43,8 @@ from semqa.domain_languages.drop_language_v2 import (
     CountNumber,
 )
 from semqa.domain_languages.drop_execution_parameters import ExecutorParameters
+from semqa.modules.multi_span import MultiSpanAnswer
+from semqa.modules.single_span import SingleSpanAnswer
 import datasets.drop.constants as dropconstants
 from semqa.profiler.profile import Profile, profile_func_decorator
 
@@ -63,6 +66,8 @@ class DROPParserBERT(DROPParserBase):
         beam_size: int,
         max_decoding_steps: int,
         transformer_model_name: str,
+        bio_tagging: bool,
+        bio_label_scheme: str = "BIO",
         scaling_bert: bool = False,
         countfixed: bool = False,
         auxwinloss: bool = False,
@@ -142,7 +147,30 @@ class DROPParserBERT(DROPParserBase):
             self._dropout = lambda x: x
 
         self.passage_attention_to_span = passage_attention_to_span
-        self.passage_startend_predictor = torch.nn.Linear(self.passage_attention_to_span.get_output_dim(), 2)
+        self.passage_startend_predictor = None
+        self.passage_bio_predictor = None
+
+        self.bio_tagging = bio_tagging
+        self.bio_label_scheme = bio_label_scheme
+        self.bio_labels = None
+        if self.bio_tagging:
+            if self.bio_label_scheme == "BIO":
+                self.bio_labels = {'O': 0, 'B': 1, 'I': 2}
+            elif self.bio_label_scheme == "IO":
+                self.bio_labels = {'O': 0, 'I': 1}
+            else:
+                raise Exception("bio_label_scheme not supported: {}".format(self.bio_label_scheme))
+
+            self.span_answer = MultiSpanAnswer(ignore_question=True,
+                                               prediction_method="viterbi",
+                                               decoding_style="at_least_one",
+                                               training_style="",
+                                               labels=self.bio_labels)
+            self.passage_bio_predictor = torch.nn.Linear(self.passage_attention_to_span.get_output_dim(),
+                                                         len(self.bio_labels))
+        else:
+            self.span_answer = SingleSpanAnswer()
+            self.passage_startend_predictor = torch.nn.Linear(self.passage_attention_to_span.get_output_dim(), 2)
 
         self.num_counts = 10
         self.passage_attention_to_count = passage_attention_to_count
@@ -163,6 +191,7 @@ class DROPParserBERT(DROPParserBase):
             passage_encoding_dim=self.bert_dim,
             passage_attention_to_span=self.passage_attention_to_span,
             passage_startend_predictor=self.passage_startend_predictor,
+            passage_bio_predictor=self.passage_bio_predictor,
             question_attention_to_span=question_attention_to_span,
             passage_attention_to_count=self.passage_attention_to_count,
             passage_count_predictor=self.passage_count_predictor,
@@ -204,17 +233,9 @@ class DROPParserBERT(DROPParserBase):
 
         self.profile_steps = 0
         self.profile_freq = None if profile_freq == 0 else profile_freq
-
         self.device_id = None
-
         self.interpret = interpret
-
         self.gc_steps = 0
-
-        # self.logfile = open("log_sup_epochs_3.txt", "w")
-        # self.num_train_steps = 0
-        # self.log_freq = 100
-        # self.num_log_steps = 60000
 
     @profile_func_decorator
     @overrides
@@ -238,6 +259,10 @@ class DROPParserBERT(DROPParserBase):
         year_differences_mat: List[np.array],
         count_values: List[List[int]],
         actions: List[List[ProductionRule]],
+        answer_as_list_of_bios: torch.LongTensor = None,       # (batch_size, num_tag_seqs, passage_length)
+        answer_as_text_to_disjoint_bios: torch.LongTensor = None,  # (bs, answer_texts, spans_per_text, passage_length)
+        span_bio_labels: torch.LongTensor = None,            # (batch_size, passage_length)  single tag-seq per example
+        is_bio_mask: torch.LongTensor = None,                # (batch_size, )
         answer_as_passage_spans: torch.LongTensor = None,
         answer_as_question_spans: torch.LongTensor = None,
         answer_as_passage_number: List[List[int]] = None,
@@ -761,14 +786,23 @@ class DROPParserBERT(DROPParserBase):
 
                     if progtype == "PassageSpanAnswer":
                         # Tuple of start, end log_probs
-                        log_likelihood = self._get_span_answer_log_prob(
-                            answer_as_spans=answer_as_passage_spans[i], span_log_probs=denotation._value
-                        )
+                        span_answer_loss_inputs = {}
+                        if not self.bio_tagging:
+                            span_answer_loss_inputs.update({
+                                "answer_as_spans": answer_as_passage_spans[i],
+                                "span_start_log_probs": denotation.passage_span_start_log_probs,
+                                "span_end_log_probs": denotation.passage_span_end_log_probs,
+                            })
+                        else:
+                            span_answer_loss_inputs.update({
+                                "answer_as_list_of_bios": answer_as_list_of_bios[i, :, :],
+                                "span_bio_labels": span_bio_labels[i, :],
+                                "log_probs": denotation.bio_logprobs,
+                                "passage_mask": passage_mask[i, :],
+                            })
+                        log_likelihood = self.span_answer.gold_log_marginal_likelihood(**span_answer_loss_inputs)
                     elif progtype == "QuestionSpanAnswer":
-                        # Tuple of start, end log_probs
-                        log_likelihood = self._get_span_answer_log_prob(
-                            answer_as_spans=answer_as_question_spans[i], span_log_probs=denotation._value
-                        )
+                        raise NotImplementedError
                     elif progtype == "YearDifference":
                         # Distribution over year_differences
                         pred_year_difference_dist = denotation._value
@@ -881,8 +915,10 @@ class DROPParserBERT(DROPParserBase):
             for i in range(batch_size):
                 original_question = metadata[i]["question"]
                 original_passage = metadata[i]["passage"]
-                question_token_offsets = metadata[i]["question_token_offsets"]
-                passage_token_offsets = metadata[i]["passage_token_offsets"]
+                passage_wp_offsets = metadata[i]["passage_wp_offsets"]
+                passage_token_charidxs = metadata[i]["passage_token_charidxs"]
+                passage_tokens = metadata[i]["passage_tokens"]
+                p_tokenidx2wpidx = metadata[i]['passage_tokenidx2wpidx']
                 instance_year_differences = year_differences[i]
                 instance_passage_numbers = passage_number_values[i]
                 instance_composed_numbers= composed_numbers[i]
@@ -894,31 +930,30 @@ class DROPParserBERT(DROPParserBase):
                     denotation = instance_prog_denotations[progidx]
                     progtype = instance_prog_types[progidx]
                     if progtype == "PassageSpanAnswer":
-                        # Tuple of start, end log_probs
-                        # Shape: (2, ) -- start / end token ids
-                        best_span = get_best_span(
-                            span_start_logits=denotation._value[0].unsqueeze(0),
-                            span_end_logits=denotation._value[1].unsqueeze(0),
-                        ).squeeze(0)
-                        predicted_span = tuple(best_span.detach().cpu().numpy())
-                        if predicted_span[0] >= len(passage_token_offsets) or predicted_span[1] >= len(passage_token_offsets):
-                            import pdb
-                            pdb.set_trace()
-                        start_char_offset = passage_token_offsets[predicted_span[0]][0]
-                        end_char_offset = passage_token_offsets[predicted_span[1]][1]
-                        predicted_answer = original_passage[start_char_offset:end_char_offset]
-                    elif progtype == "QuestionSpanAnswer":
-                        # Tuple of start, end log_probs
-                        # Shape: (2, ) -- start / end token ids
-                        best_span = get_best_span(
-                            span_start_logits=denotation._value[0].unsqueeze(0),
-                            span_end_logits=denotation._value[1].unsqueeze(0),
-                        ).squeeze(0)
+                        span_answer_decode_inputs = {}
+                        if not self.bio_tagging:
+                            # Single-span predictions are made based on word-pieces
+                            span_answer_decode_inputs.update({
+                                "span_start_logits": denotation.start_logits,
+                                "span_end_logits": denotation.end_logits,
+                                "passage_token_offsets": passage_wp_offsets,
+                                "passage_text": original_passage,
+                            })
+                        else:
+                            span_answer_decode_inputs.update({
+                                'log_probs': denotation.bio_logprobs,
+                                'passage_mask': passage_mask[i, :],
+                                'p_text': original_passage,
+                                'p_tokenidx2wpidx': p_tokenidx2wpidx,
+                                'passage_token_charidxs': passage_token_charidxs,
+                                'passage_tokens': passage_tokens,
+                            })
 
-                        predicted_span = tuple(best_span.detach().cpu().numpy())
-                        start_char_offset = question_token_offsets[predicted_span[0]][0]
-                        end_char_offset = question_token_offsets[predicted_span[1]][1]
-                        predicted_answer = original_question[start_char_offset:end_char_offset]
+                        predicted_answer: Union[str, List[str]] = self.span_answer.decode_answer(
+                            **span_answer_decode_inputs)
+
+                    elif progtype == "QuestionSpanAnswer":
+                        raise NotImplementedError
                     elif progtype == "YearDifference":
                         # Distribution over year_differences vector
                         year_differences_dist = denotation._value.detach().cpu().numpy()
@@ -1068,62 +1103,6 @@ class DROPParserBERT(DROPParserBase):
         )
 
         return metric_dict
-
-    @staticmethod
-    def _get_span_answer_log_prob(
-        answer_as_spans: torch.LongTensor, span_log_probs: Tuple[torch.Tensor, torch.Tensor]
-    ) -> torch.Tensor:
-        """ Compute the log_marginal_likelihood for the answer_spans given log_probs for start/end
-            Compute log_likelihood (product of start/end probs) of each ans_span
-            Sum the prob (logsumexp) for each span and return the log_likelihood
-
-        Parameters:
-        -----------
-        answer: ``torch.LongTensor`` Shape: (number_of_spans, 2)
-            These are the gold spans
-        span_log_probs: ``torch.FloatTensor``
-            2-Tuple with tensors of Shape: (length_of_sequence) for span_start/span_end log_probs
-
-        Returns:
-        log_marginal_likelihood_for_passage_span
-        """
-
-        # Unsqueezing dim=0 to make a batch_size of 1
-        answer_as_spans = answer_as_spans.unsqueeze(0)
-
-        span_start_log_probs, span_end_log_probs = span_log_probs
-        span_start_log_probs = span_start_log_probs.unsqueeze(0)
-        span_end_log_probs = span_end_log_probs.unsqueeze(0)
-
-        # (batch_size, number_of_ans_spans)
-        gold_passage_span_starts = answer_as_spans[:, :, 0]
-        gold_passage_span_ends = answer_as_spans[:, :, 1]
-        # Some spans are padded with index -1,
-        # so we clamp those paddings to 0 and then mask after `torch.gather()`.
-        gold_passage_span_mask = (gold_passage_span_starts != -1).long()
-        gold_passage_span_mask_bool: torch.BoolTensor = gold_passage_span_mask.bool()
-        clamped_gold_passage_span_starts = allenutil.replace_masked_values(
-            gold_passage_span_starts, gold_passage_span_mask_bool, 0
-        )
-        clamped_gold_passage_span_ends = allenutil.replace_masked_values(
-            gold_passage_span_ends, gold_passage_span_mask_bool, 0
-        )
-        # Shape: (batch_size, # of answer spans)
-        log_likelihood_for_span_starts = torch.gather(span_start_log_probs, 1, clamped_gold_passage_span_starts)
-        log_likelihood_for_span_ends = torch.gather(span_end_log_probs, 1, clamped_gold_passage_span_ends)
-        # Shape: (batch_size, # of answer spans)
-        log_likelihood_for_spans = log_likelihood_for_span_starts + log_likelihood_for_span_ends
-        # For those padded spans, we set their log probabilities to be very small negative value
-        log_likelihood_for_spans = allenutil.replace_masked_values(
-            log_likelihood_for_spans, gold_passage_span_mask_bool, -1e7
-        )
-        # Shape: (batch_size, )
-        log_marginal_likelihood_for_span = allenutil.logsumexp(log_likelihood_for_spans)
-
-        # Squeezing the batch-size 1
-        log_marginal_likelihood_for_span = log_marginal_likelihood_for_span.squeeze(-1)
-
-        return log_marginal_likelihood_for_span
 
     @staticmethod
     def get_valid_start_actionids(answer_types: List[List[str]], action2actionidx: Dict[str, int],

@@ -163,13 +163,17 @@ class PassageSpanAnswer:
             passage_span_end_log_probs: Tensor,
             start_logits,
             end_logits,
+            bio_logprobs=None,
             loss=0.0,
             debug_value="",
     ) -> None:
         """ Tuple of start_log_probs and end_log_probs tensor """
         self.start_logits = start_logits
         self.end_logits = end_logits
+        self.passage_span_start_log_probs = passage_span_start_log_probs
+        self.passage_span_end_log_probs = passage_span_end_log_probs
         self._value = (passage_span_start_log_probs, passage_span_end_log_probs)
+        self.bio_logprobs = bio_logprobs
         self.loss = loss
         self.debug_value = debug_value
 
@@ -1348,44 +1352,44 @@ class DropLanguageV2(DomainLanguage):
 
         return YearDifference(year_difference_dist=year_difference_dist, loss=loss, debug_value=debug_value)
 
-    @predicate
-    def extract_passagespan_answer(self) -> PassageSpanAnswer:
-        with Profile("pass-span-ans"):
-            # Shape: (passage_length, encoded_dim)
-            passage_repr = self.modeled_passage if self.modeled_passage is not None else self.encoded_passage
-
-            # Shape: (passage_length, 2)
-            passage_ans_startend_logits = self.parameters.oneshot_psa_startend_predictor(passage_repr)
-            # Shape: (passage_length,)
-            span_start_logits = passage_ans_startend_logits[:, 0]
-            span_end_logits = passage_ans_startend_logits[:, 1]
-
-            passage_mask_bool: torch.BoolTensor = self.passage_mask.bool()
-            span_start_logits = allenutil.replace_masked_values(span_start_logits, passage_mask_bool, -1e32)
-            span_end_logits = allenutil.replace_masked_values(span_end_logits, passage_mask_bool, -1e32)
-
-            span_start_log_probs = allenutil.masked_log_softmax(span_start_logits, passage_mask_bool)
-            span_end_log_probs = allenutil.masked_log_softmax(span_end_logits, passage_mask_bool)
-
-            span_start_log_probs = allenutil.replace_masked_values(span_start_log_probs, passage_mask_bool, -1e32)
-            span_end_log_probs = allenutil.replace_masked_values(span_end_log_probs, passage_mask_bool, -1e32)
-
-            loss = 0.0
-
-            debug_value = ""
-            if self._debug:
-                debug_info_dict = {"extract_passagespan_answer": []}
-                self.modules_debug_info[-1].append(debug_info_dict)
-                debug_value += f"OneShotPassageSpanAnswer extraction: nothing to visualize"
-
-        return PassageSpanAnswer(
-            passage_span_start_log_probs=span_start_log_probs,
-            passage_span_end_log_probs=span_end_log_probs,
-            start_logits=span_start_logits,
-            end_logits=span_end_logits,
-            loss=loss,
-            debug_value=debug_value,
-        )
+    # @predicate
+    # def extract_passagespan_answer(self) -> PassageSpanAnswer:
+    #     with Profile("pass-span-ans"):
+    #         # Shape: (passage_length, encoded_dim)
+    #         passage_repr = self.modeled_passage if self.modeled_passage is not None else self.encoded_passage
+    #
+    #         # Shape: (passage_length, 2)
+    #         passage_ans_startend_logits = self.parameters.oneshot_psa_startend_predictor(passage_repr)
+    #         # Shape: (passage_length,)
+    #         span_start_logits = passage_ans_startend_logits[:, 0]
+    #         span_end_logits = passage_ans_startend_logits[:, 1]
+    #
+    #         passage_mask_bool: torch.BoolTensor = self.passage_mask.bool()
+    #         span_start_logits = allenutil.replace_masked_values(span_start_logits, passage_mask_bool, -1e32)
+    #         span_end_logits = allenutil.replace_masked_values(span_end_logits, passage_mask_bool, -1e32)
+    #
+    #         span_start_log_probs = allenutil.masked_log_softmax(span_start_logits, passage_mask_bool)
+    #         span_end_log_probs = allenutil.masked_log_softmax(span_end_logits, passage_mask_bool)
+    #
+    #         span_start_log_probs = allenutil.replace_masked_values(span_start_log_probs, passage_mask_bool, -1e32)
+    #         span_end_log_probs = allenutil.replace_masked_values(span_end_log_probs, passage_mask_bool, -1e32)
+    #
+    #         loss = 0.0
+    #
+    #         debug_value = ""
+    #         if self._debug:
+    #             debug_info_dict = {"extract_passagespan_answer": []}
+    #             self.modules_debug_info[-1].append(debug_info_dict)
+    #             debug_value += f"OneShotPassageSpanAnswer extraction: nothing to visualize"
+    #
+    #     return PassageSpanAnswer(
+    #         passage_span_start_log_probs=span_start_log_probs,
+    #         passage_span_end_log_probs=span_end_log_probs,
+    #         start_logits=span_start_logits,
+    #         end_logits=span_end_logits,
+    #         loss=loss,
+    #         debug_value=debug_value,
+    #     )
 
     @predicate
     def select_passagespan_answer(self, passage_attention: PassageAttention) -> PassageSpanAnswer:
@@ -1406,21 +1410,29 @@ class DropLanguageV2(DomainLanguage):
                 scaled_passage_attentions.unsqueeze(0), self.passage_mask.unsqueeze(0)
             ).squeeze(0)
 
-            # Shape: (passage_lengths, 2)
-            passage_span_logits = self.parameters.passage_startend_predictor(passage_span_hidden_reprs)
+            span_start_log_probs, span_end_log_probs, span_start_logits, span_end_logits = None, None, None, None
+            passage_bio_logprobs = None
+            if self.parameters.passage_startend_predictor is not None:
+                # Shape: (passage_lengths, 2)
+                passage_span_logits = self.parameters.passage_startend_predictor(passage_span_hidden_reprs)
 
-            # Shape: (passage_length)
-            span_start_logits = passage_span_logits[:, 0]
-            span_end_logits = passage_span_logits[:, 1]
+                # Shape: (passage_length)
+                span_start_logits = passage_span_logits[:, 0]
+                span_end_logits = passage_span_logits[:, 1]
 
-            span_start_logits = allenutil.replace_masked_values(span_start_logits, passage_mask_bool, -1e32)
-            span_end_logits = allenutil.replace_masked_values(span_end_logits, passage_mask_bool, -1e32)
+                span_start_logits = allenutil.replace_masked_values(span_start_logits, passage_mask_bool, -1e32)
+                span_end_logits = allenutil.replace_masked_values(span_end_logits, passage_mask_bool, -1e32)
 
-            span_start_log_probs = allenutil.masked_log_softmax(span_start_logits, passage_mask_bool)
-            span_end_log_probs = allenutil.masked_log_softmax(span_end_logits, passage_mask_bool)
+                span_start_log_probs = allenutil.masked_log_softmax(span_start_logits, passage_mask_bool)
+                span_end_log_probs = allenutil.masked_log_softmax(span_end_logits, passage_mask_bool)
 
-            span_start_log_probs = allenutil.replace_masked_values(span_start_log_probs, passage_mask_bool, -1e32)
-            span_end_log_probs = allenutil.replace_masked_values(span_end_log_probs, passage_mask_bool, -1e32)
+                span_start_log_probs = allenutil.replace_masked_values(span_start_log_probs, passage_mask_bool, -1e32)
+                span_end_log_probs = allenutil.replace_masked_values(span_end_log_probs, passage_mask_bool, -1e32)
+
+            elif self.parameters.passage_bio_predictor is not None:
+                # Shape: (passage_length, num_bio_tags)
+                passage_span_logits = self.parameters.passage_bio_predictor(passage_span_hidden_reprs)
+                passage_bio_logprobs = allenutil.masked_log_softmax(passage_span_logits, dim=-1, mask=None)
 
             loss = passage_attention.loss
 
@@ -1441,6 +1453,7 @@ class DropLanguageV2(DomainLanguage):
             passage_span_end_log_probs=span_end_log_probs,
             start_logits=span_start_logits,
             end_logits=span_end_logits,
+            bio_logprobs=passage_bio_logprobs,
             loss=loss,
             debug_value=debug_value,
         )

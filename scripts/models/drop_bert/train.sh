@@ -33,6 +33,9 @@ export GPU=0
 export TRAINING_DATA_FILE=${TRAINFILE}
 export VAL_DATA_FILE=${VALFILE}
 
+export BIO_TAG=true
+export BIO_LABEL=BIO
+
 export COUNT_FIXED=false
 export AUXLOSS=true
 
@@ -67,9 +70,9 @@ CHECKPOINT_ROOT=./resources/checkpoints
 SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop-w-qdmr/${DATASET_NAME}
 MODEL_DIR=drop_parser_bert
 PD_1=Qattn_${QATTLOSS}/EXCLOSS_${EXCLOSS}/MMLLOSS_${MMLLOSS}/aux_${AUXLOSS}/SUPEPOCHS_${SUPEPOCHS}_HEM_${HARDEM_EPOCH}_BM_${BEAMSIZE}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}_BIO
 
-# SERIALIZATION_DIR=./resources/semqa/checkpoints/test
+# SERIALIZATION_DIR=./resources/checkpoints/test
 
 #######################################################################################################################
 
