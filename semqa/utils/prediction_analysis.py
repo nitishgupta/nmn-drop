@@ -17,7 +17,7 @@ class NMNPredictionInstance:
         self.top_logical_form_prob: float = pred_dict.get("top_logical_form_prob", "")
         self.f1_score: float = pred_dict.get("f1", 0.0)
         self.exact_match: float = pred_dict.get("em", 0.0)
-        self.correct: bool = True if self.f1_score > 0.6 else False
+        self.correct: bool = True if self.f1_score > 0.5 else False
 
 
 def read_nmn_prediction_file(jsonl_file) -> List[NMNPredictionInstance]:

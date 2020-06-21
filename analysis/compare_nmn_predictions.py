@@ -95,7 +95,7 @@ if __name__ == "__main__":
     modules_of_interest = ["year_difference_single_event",
                            "year_difference_two_events",
                            "compare_num_gt", "compare_num_lt",
-                           "compare_date_gt", "compare_date_gt",
+                           "compare_date_gt", "compare_date_lt",
                            "select_min_num", "select_max_num",
                            "aggregate_count",
                            "select_num", "filter_passage", "project_passage",
