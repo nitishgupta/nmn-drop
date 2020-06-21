@@ -802,11 +802,11 @@ class DROPParserBERT(DROPParserBase):
                                 "passage_mask": passage_mask[i, :],
                             })
                         log_likelihood = self.span_answer.gold_log_marginal_likelihood(**span_answer_loss_inputs)
-                        pattn_loss = self.span_answer.passage_attention_loss(
-                            passage_attention=denotation.passage_attn, passage_mask=passage_mask[i, :],
-                            answer_spans_for_possible_taggings=answer_spans_for_possible_taggings[i],
-                            device_id=self.device_id)
-                        total_aux_loss += pattn_loss
+                        # pattn_loss = self.span_answer.passage_attention_loss(
+                        #     passage_attention=denotation.passage_attn, passage_mask=passage_mask[i, :],
+                        #     answer_spans_for_possible_taggings=answer_spans_for_possible_taggings[i],
+                        #     device_id=self.device_id)
+                        # total_aux_loss += pattn_loss
                     elif progtype == "QuestionSpanAnswer":
                         raise NotImplementedError
                     elif progtype == "YearDifference":
@@ -953,6 +953,7 @@ class DROPParserBERT(DROPParserBase):
                                 'p_tokenidx2wpidx': p_tokenidx2wpidx,
                                 'passage_token_charidxs': passage_token_charidxs,
                                 'passage_tokens': passage_tokens,
+                                'original_question': original_question,
                             })
 
                         predicted_answer: Union[str, List[str]] = self.span_answer.decode_answer(

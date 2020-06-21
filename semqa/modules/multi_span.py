@@ -143,7 +143,8 @@ class MultiSpanAnswer(SpanAnswer):
                       p_text: str,
                       passage_token_charidxs: List[int],
                       passage_tokens: List[str],
-                      p_tokenidx2wpidx: List[List[int]] = None) -> List[str]:
+                      p_tokenidx2wpidx: List[List[int]] = None,
+                      original_question: str = None) -> List[str]:
 
         """ Decode answer from tag-log-probs
 

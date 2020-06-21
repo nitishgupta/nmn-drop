@@ -7,13 +7,13 @@ export BEAMSIZE=1
 export DEBUG=true
 
 # SAVED MODEL
-MODEL_DIR=./resources/checkpoints/drop-w-qdmr/qdmr-filter-post-v5/drop_parser_bert/Qattn_true/EXCLOSS_true/MMLLOSS_true/aux_true/SUPEPOCHS_0_HEM_0_BM_1/S_42_IO
+MODEL_DIR=./resources/checkpoints/drop-w-qdmr/qdmr-filter-post-v6/drop_parser_bert/Qattn_true/EXCLOSS_true/aux_true/BIO_false_IO/SUPEPOCHS_0_HEM_0_BM_1/S_2
 PREDICTION_DIR=${MODEL_DIR}/predictions
 MODEL_TAR=${MODEL_DIR}/model.tar.gz
 mkdir ${PREDICTION_DIR}
 
 DATASET_DIR=/shared/nitishg/data/drop-w-qdmr
-DATASET_NAME=qdmr-filter-post-v5
+DATASET_NAME=qdmr-filter-post-v6
 
 FULL_VALFILE=${DATASET_DIR}/${DATASET_NAME}/drop_dataset_dev.json
 
@@ -24,9 +24,6 @@ VIS_PREDICTION_FILE=${PREDICTION_DIR}/${DATASET_NAME}_dev_visualize.txt
 JSONL_PREDICTOR=drop_parser_jsonl_predictor
 JSONL_PREDICTION_FILE=${PREDICTION_DIR}/${DATASET_NAME}_dev_predictions.jsonl
 
-# Prediction output in a JSON-L file similar to MTMSN
-#PREDICTOR=drop_mtmsnstyle_predictor
-#PREDICTION_FILE=${PREDICTION_DIR}/drop_dev_preds_wDAS.jsonl
 
 allennlp predict --output-file ${VIS_PREDICTION_FILE} \
                  --predictor ${VIS_PREDICTOR} \
@@ -38,15 +35,15 @@ allennlp predict --output-file ${VIS_PREDICTION_FILE} \
                  --overrides "{"model": { "beam_size": ${BEAMSIZE}, "debug": ${DEBUG}}}" \
                  ${MODEL_TAR} ${FULL_VALFILE}
 
-#allennlp predict --output-file ${JSONL_PREDICTION_FILE} \
-#                 --predictor ${JSONL_PREDICTOR} \
-#                 --cuda-device ${GPU} \
-#                 --include-package ${INCLUDE_PACKAGE} \
-#                 --silent \
-#                 --batch-size 4 \
-#                 --use-dataset-reader \
-#                 --overrides "{"model": { "beam_size": ${BEAMSIZE}, "debug": ${DEBUG}}}" \
-#                 ${MODEL_TAR} ${FULL_VALFILE}
+allennlp predict --output-file ${JSONL_PREDICTION_FILE} \
+                 --predictor ${JSONL_PREDICTOR} \
+                 --cuda-device ${GPU} \
+                 --include-package ${INCLUDE_PACKAGE} \
+                 --silent \
+                 --batch-size 4 \
+                 --use-dataset-reader \
+                 --overrides "{"model": { "beam_size": ${BEAMSIZE}, "debug": ${DEBUG}}}" \
+                 ${MODEL_TAR} ${FULL_VALFILE}
 
 printf "\n"
 echo -e "Vis predictions file saved at: ${VIS_PREDICTION_FILE}"
