@@ -2,6 +2,7 @@ import logging
 from typing import List, Dict, Any, Tuple, Optional, Set, Union
 import numpy as np
 from overrides import overrides
+from collections import defaultdict
 import torch
 import gc
 
@@ -672,6 +673,11 @@ class DROPParserBERT(DROPParserBase):
                                                           program_supervised=program_supervised,
                                                           gold_program_dicts=gold_program_dicts,
                                                           gold_function2actionidx_maps=gold_function2actionidx_maps)
+
+            self.add_weighted_question_vector_to_sideargs(batch_action_seqs=batch_actionseqs,
+                                                          batch_actionseq_sideargs=batch_actionseq_sideargs,
+                                                          question_passage=question_passage,
+                                                          question_attn_mask_threshold=0.1)
 
             # Adding Date-Comparison supervised event groundings to relevant actions
             # max_passage_len = encoded_passage.size()[1]
@@ -1546,6 +1552,66 @@ class DROPParserBERT(DROPParserBase):
                     # supervision_idx: range(0, num_of_functions) - index into inorder_supervision_dicts
                     # action_idx: range(0, len(pred_sideargs)) - index into the actions
                     pred_sideargs[action_idx].update(inorder_supervision_dicts[supervision_idx])
+
+    def add_weighted_question_vector_to_sideargs(self,
+                                                 batch_action_seqs: List[List[List[str]]],
+                                                 batch_actionseq_sideargs: List[List[List[Dict]]],
+                                                 question_passage: TextFieldTensors,
+                                                 question_attn_mask_threshold: float = 0.1):
+        relevant_actions = [
+            "PassageNumber -> select_implicit_num",
+            "PassageAttention -> select_passage",
+            "<PassageAttention:PassageAttention> -> filter_passage",
+            "<PassageAttention:PassageAttention> -> project_passage"
+        ]
+
+        # List of (instance_idx, prog_idx, action_idx, question_attention) -- question-attention for relevant actions
+        insidxprogaction_qattn = []
+
+        for instance_idx in range(len(batch_action_seqs)):
+            for progidx, (action_seq, sideargs) in enumerate(zip(batch_action_seqs[instance_idx],
+                                                                 batch_actionseq_sideargs[instance_idx])):
+                for actionidx, (action_str, sidearg_dict) in enumerate(zip(action_seq, sideargs)):
+                    if action_str in relevant_actions:
+                        question_attention = sidearg_dict["question_attention"]
+                        insidxprogaction_qattn.append((instance_idx, progidx, actionidx, question_attention))
+
+        # Textfield to hold masked-question token_ids, mask, type_ids etc. for relevant question-attentions from above
+        question_tf = {"tokens": {}}   # Our BERT token-indexer name is hardcoded to "tokens" / same as question_passage
+        input_keys = []   # "token_ids", "mask", "mask", "type_ids", "segment_concat_mask"
+        for key in question_passage["tokens"]:
+            question_tf["tokens"][key] = []     # This would hold the input-tensors that will be concat before feeding
+            input_keys.append(key)
+
+        for (insidx, progidx, actionidx, question_attn) in insidxprogaction_qattn:
+            # For each question-attention for an action, append a masked-question input
+            question_attn_mask = (question_attn > question_attn_mask_threshold).long()
+            for key in input_keys:
+                input_tensor = question_passage["tokens"][key][insidx, 0:self.max_ques_len + 2].clone()
+                if key not in ["type_ids", "segment_concat_mask"]:
+                    input_tensor[1:-1] = question_attn_mask * input_tensor[1:-1]    # skip [CLS] and [SEP]
+                question_tf["tokens"][key].append(input_tensor.unsqueeze(0))    # unsqueezing for concat later
+
+        # Make a batch of all the masked-question reprs to feed into BERT
+        for key in input_keys:
+            # Shape: (num_relevant_actions, self.max_ques_len + 2)
+            question_tf["tokens"][key] = torch.cat(question_tf["tokens"][key], dim=0)
+
+        # Decontextualized question representation - (num_relevant_action, self.max_ques_len + 2, BERT_DIM)
+        decont_q_reprs = self._text_field_embedder(question_tf)
+
+        group_idx = 0
+        for (insidx, progidx, actionidx, question_attn) in insidxprogaction_qattn:
+            question_attn_mask = (question_attn > question_attn_mask_threshold).float()
+            sidearg_dict = batch_actionseq_sideargs[insidx][progidx][actionidx]
+            decont_q = decont_q_reprs[group_idx, :, :][1:-1]
+            # Mask the question-token representations and compute a sum representation
+            weighted_question_repr = torch.sum(decont_q * question_attn_mask.unsqueeze(1), dim=0)
+            sidearg_dict.update({"weighted_question_vector": weighted_question_repr})
+            group_idx += 1
+
+
+
 
 
 

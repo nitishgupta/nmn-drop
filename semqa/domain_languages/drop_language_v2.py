@@ -492,28 +492,11 @@ class DropLanguageV2(DomainLanguage):
 
         return gt_mat, lt_mat
 
-    # @predicate_with_side_args(['question_attention'])
-    # def find_QuestionAttention(self, question_attention: Tensor) -> QuestionAttention:
-    #
-    #     debug_value = ""
-    #     if self._debug:
-    #         qattn_vis_complete, qattn_vis_most = dlutils.listTokensVis(question_attention, self.metadata["question_tokens"])
-    #         debug_value = qattn_vis_most
-    #
-    #     return QuestionAttention(question_attention, debug_value=debug_value)
-
-    # @predicate_with_side_args(["question_attention", "passage_attention"])
-    @predicate_with_side_args(["question_attention"])
-    def select_passage(self, question_attention: Tensor) -> PassageAttention:
+    @predicate_with_side_args(["question_attention", "weighted_question_vector"])
+    def select_passage(self, question_attention: Tensor, weighted_question_vector: Tensor) -> PassageAttention:
         with Profile("find-pattn"):
-            question_attention = question_attention * self.question_mask
-            # SMA
-            # passage_similarity_ex = question_attention.unsqueeze(0).mm(self.question_passage_similarity)
-            # passage_similarity = passage_similarity_ex.squeeze(0)
-
-            # BLA
             # Shape: (ques_encoding_dim) q = \sum p_i * h_i
-            weighted_question_vector = torch.sum(self.encoded_question * question_attention.unsqueeze(1), 0)
+            # weighted_question_vector = torch.sum(self.encoded_question * question_attention.unsqueeze(1), 0)
             weighted_question_vector_ex = weighted_question_vector.unsqueeze(0)
             passage_matrix = self.encoded_passage.unsqueeze(0)
             # (passage_length, )  s_i = sim(q, p_i)
@@ -526,34 +509,24 @@ class DropLanguageV2(DomainLanguage):
 
             debug_value = ""
             if self._debug:
-                qattn_vis_complete, qattn_vis_most = dlutils.listTokensVis(
-                    question_attention, self.metadata["question_tokens"]
-                )
-                debug_value += f"Qattn: {qattn_vis_complete}"
-                pattn_vis_complete, pattn_vis_most = dlutils.listTokensVis(
-                    passage_attention, self.metadata["passage_tokens"]
-                )
-                most_attended_spans = dlutils.mostAttendedSpans(passage_attention, self.metadata["passage_tokens"])
                 qattn_output = Output(output_type="question", values=question_attention, label="ques_attn")
                 pattn_output = Output(output_type="passage", values=passage_attention, label="passage_attn")
-                # debug_info_dict = {"find": {"passage": passage_attention,
-                #                             "question": question_attention}}
                 # debug_info_dict is a dictionary from {module_name: List[Output]}
                 debug_info_dict = {"select_passage": [qattn_output, pattn_output]}
                 self.modules_debug_info[-1].append(debug_info_dict)
 
         return PassageAttention(passage_attention, debug_value=debug_value)
 
-    @predicate_with_side_args(["question_attention"])
+    @predicate_with_side_args(["question_attention", "weighted_question_vector"])
     def filter_passage(
-            self, passage_attention: PassageAttention, question_attention: Tensor
+            self, passage_attention: PassageAttention, question_attention: Tensor,
+            weighted_question_vector: Tensor
     ) -> PassageAttention:
         with Profile("filter-attn"):
             passage_attn: Tensor = passage_attention._value
 
-            question_attention = question_attention * self.question_mask
             # Shape: (ques_encoding_dim)
-            weighted_question_vector = torch.sum(self.encoded_question * question_attention.unsqueeze(1), 0)
+            # weighted_question_vector = torch.sum(self.encoded_question * question_attention.unsqueeze(1), 0)
 
             # Shape: (passage_length, encoded_dim)
             passage_repr = self.modeled_passage if self.modeled_passage is not None else self.encoded_passage
@@ -637,17 +610,16 @@ class DropLanguageV2(DomainLanguage):
 
         return PassageAttention(filtered_passage_attention, loss=loss, debug_value=debug_value)
 
-    @predicate_with_side_args(["question_attention"])
+    @predicate_with_side_args(["question_attention", "weighted_question_vector"])
     def project_passage(
-            self, passage_attention: PassageAttention, question_attention: Tensor
+            self, passage_attention: PassageAttention, question_attention: Tensor, weighted_question_vector: Tensor
     ) -> PassageAttention:
         with Profile("relocate-attn"):
             passage_attn: Tensor = passage_attention._value
             passage_attn = passage_attn * self.passage_mask
 
-            question_attention = question_attention * self.question_mask
             # Shape: (encoding_dim)
-            weighted_question_vector = torch.sum(self.encoded_question * question_attention.unsqueeze(1), 0)
+            # weighted_question_vector = torch.sum(self.encoded_question * question_attention.unsqueeze(1), 0)
 
             # Shape: (passage_length, encoded_dim)
             passage_repr = self.modeled_passage if self.modeled_passage is not None else self.encoded_passage
@@ -1639,15 +1611,11 @@ class DropLanguageV2(DomainLanguage):
         return PassageNumber(passage_number_dist=number_distribution, loss=loss, debug_value=debug_value)
 
 
-    def compute_implicitnum_distribution(self, question_attention: Tensor):
+    def compute_implicitnum_distribution(self, weighted_question_vector: Tensor):
         """ Given a question attention, compute a distribution over implicit numbers for this language.
             See compute_date_distribution for details
         """
         with Profile("implicit-num"):
-            question_attention = question_attention * self.question_mask
-            # Shape: (encoding_dim)
-            weighted_question_vector = torch.sum(self.encoded_question * question_attention.unsqueeze(1), 0)
-
             # unsqueeze -- one for num-of-vecs and one for batch
             weighted_question_vector_ex = weighted_question_vector.unsqueeze(0).unsqueeze(0)
 
@@ -1666,9 +1634,12 @@ class DropLanguageV2(DomainLanguage):
             num_distribution = clamp_distribution(num_distribution)
         return num_distribution
 
-    @predicate_with_side_args(["question_attention"])
-    def select_implicit_num(self, question_attention: Tensor) -> PassageNumber:
-        number_distribution = self.compute_implicitnum_distribution(question_attention=question_attention)
+    @predicate_with_side_args(["question_attention", "weighted_question_vector"])
+    def select_implicit_num(self, question_attention: Tensor, weighted_question_vector: Tensor) -> PassageNumber:
+        question_attention = question_attention * self.question_mask
+        # Shape: (encoding_dim)
+        # weighted_question_vector = torch.sum(self.encoded_question * question_attention.unsqueeze(1), 0)
+        number_distribution = self.compute_implicitnum_distribution(weighted_question_vector=weighted_question_vector)
         loss = 0.0
         debug_value = ""
         if self._debug:
