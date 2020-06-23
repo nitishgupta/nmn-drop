@@ -50,6 +50,13 @@ def filter_qids_w_logicalforms(instances: List[NMNPredictionInstance], logical_f
     return filtered_qids
 
 
+def get_qid2nmninstance_map(instances: List[NMNPredictionInstance]) -> Dict[str, NMNPredictionInstance]:
+    qid2nmninstance = {}
+    for instance in instances:
+        qid2nmninstance[instance.query_id] = instance
+    return qid2nmninstance
+
+
 
 
 

@@ -2,7 +2,7 @@ from typing import List, Tuple, Dict, Union, Any
 import json
 import argparse
 
-from semqa.utils.qdmr_utils import convert_nestedexpr_to_tuple
+from utils.util import round_all
 from semqa.utils.prediction_analysis import NMNPredictionInstance, read_nmn_prediction_file, avg_f1, get_correct_qids, \
     filter_qids_w_logicalforms
 
@@ -45,7 +45,13 @@ def print_about_model(pred_instances: List[NMNPredictionInstance], modules_of_in
 
     for module_name in modules_of_interest:
         w_module, correct_w_module = get_correct_w_module(pred_instances, module_name=module_name)
-        print("Module: {} \t T:{}  C: {}".format(module_name, w_module, correct_w_module))
+        if w_module > 0:
+            perc_correct_w_module = (float(correct_w_module)/float(w_module))*100.0
+        else:
+            perc_correct_w_module = 0.0
+        perc_correct_w_module = round_all(perc_correct_w_module, 1)
+        print("Module: {} \t T:{}  C: {} Perc: {} %".format(module_name, w_module, correct_w_module,
+                                                            perc_correct_w_module))
 
 
 def model_comparison(pred_instances_1: List[NMNPredictionInstance], pred_instances_2: List[NMNPredictionInstance]):
