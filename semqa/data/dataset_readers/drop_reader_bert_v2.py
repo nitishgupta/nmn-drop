@@ -373,6 +373,8 @@ class DROPReaderV2(DatasetReader):
             field = ProductionRuleField(production_rule, is_global_rule=True)
             production_rule_fields.append(field)
         action_field = ListField(production_rule_fields)
+        fields = {}
+        fields["actions"] = action_field
 
         # Word-piece tokenize the tokens in Q and P. Get maps;
         #  tokenidx2wpidx: List[List[int]] map from token idx to list of word-piece indices that correspond to it
@@ -400,7 +402,8 @@ class DROPReaderV2(DatasetReader):
         question_wps.extend([pad_token_str] * ques_padding_len)
         q_wpidx2tokenidx.extend([-1] * ques_padding_len)
 
-        question_wps_tokens = [Token(text=t, text_id=hf_tokenizer.convert_tokens_to_ids(t)) for t in question_wps]
+        question_wps_tokens: List[Token] = [Token(text=t, text_id=hf_tokenizer.convert_tokens_to_ids(t))
+                                            for t in question_wps]
 
         # Passage_len = Max seq len - CLS - SEP - SEP - Max_Qlen -- Questions will be padded to max length
         max_passage_wps = self.max_transformer_length - 3 - self.max_question_wps
@@ -410,16 +413,27 @@ class DROPReaderV2(DatasetReader):
         p_token_len = last_p_tokenidx + 1
         p_tokenidx2wpidx = p_tokenidx2wpidx[0:p_token_len]
 
-        passage_wps.append(sep_token_str)
-        p_wpidx2tokenidx.append(-1)
-        passage_wps_tokens = [Token(text=t, text_id=hf_tokenizer.convert_tokens_to_ids(t)) for t in passage_wps]
+        # passage_wps.append(sep_token_str)
+        # p_wpidx2tokenidx.append(-1)
+
+        passage_wps_tokens: List[Token] = [Token(text=t, text_id=hf_tokenizer.convert_tokens_to_ids(t))
+                                           for t in passage_wps]
         passage_wps_len = len(passage_wps)
 
         cls_token = Token(cls_token_str, text_id=cls_token_id)
         sep_token = Token(sep_token_str, text_id=sep_token_id)
 
         # This would be in the input to BERT
-        question_passage_tokens: List[Token] = [cls_token] + question_wps_tokens + [sep_token] + passage_wps_tokens
+        question_passage_tokens: List[Token] = [cls_token] + question_wps_tokens + [sep_token] + \
+                                                passage_wps_tokens + [sep_token]
+
+        fields["question"] = TextField([cls_token] + question_wps_tokens + [sep_token], self._token_indexers)
+        fields["passage"] = TextField([cls_token] + passage_wps_tokens + [sep_token], self._token_indexers)
+        fields["question_passage"] = TextField(question_passage_tokens, self._token_indexers)
+        p_sentboundary_wps_field, _ = spans_into_listofspanfields(
+            spans=p_sent_boundaries, tokenidx2wpidx=p_tokenidx2wpidx,
+            seq_wps_len=passage_wps_len, field=fields["passage"], end_exclusive=True)
+        fields["p_sentboundary_wps"] = p_sentboundary_wps_field
 
         # Now need to take care of metadata due to passage length truncation
         # 1. Date and Number mentions - remove mentions that exceed passage length, recompute mention2entidx and values
@@ -443,19 +457,8 @@ class DROPReaderV2(DatasetReader):
             wpidx2tokenidx=q_wpidx2tokenidx, tokens=question_tokens, token_charidxs=question_charidxs
         )
 
-        answer_passage_spans = process_spans(p_token_len, answer_passage_spans)
-        answer_question_spans = process_spans(q_token_len, answer_question_spans)
-
-        fields = {}
-        fields["actions"] = action_field
-        fields["question"] = TextField(question_wps_tokens, self._token_indexers)
-        fields["passage"] = TextField(passage_wps_tokens, self._token_indexers)
-        fields["question_passage"] = TextField(question_passage_tokens, self._token_indexers)
-        p_sentboundary_wps_field, _ = spans_into_listofspanfields(
-            spans=p_sent_boundaries, tokenidx2wpidx=p_tokenidx2wpidx,
-            seq_wps_len=passage_wps_len, field=fields["passage"], end_exclusive=True)
-
-        fields["p_sentboundary_wps"] = p_sentboundary_wps_field
+        # answer_passage_spans = process_spans(p_token_len, answer_passage_spans)
+        # answer_question_spans = process_spans(q_token_len, answer_question_spans)
 
         # Passage Number
         passage_number_values = [int(x) if int(x) == x else x for x in p_num_normvals]

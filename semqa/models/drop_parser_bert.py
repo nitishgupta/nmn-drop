@@ -2,7 +2,6 @@ import logging
 from typing import List, Dict, Any, Tuple, Optional, Set, Union
 import numpy as np
 from overrides import overrides
-from collections import defaultdict
 import torch
 import gc
 
@@ -26,8 +25,6 @@ from allennlp_semparse.state_machines import BeamSearch
 from allennlp_semparse.state_machines import ConstrainedBeamSearch
 from allennlp_semparse.fields.production_rule_field import ProductionRule
 
-from semqa.state_machines.constrained_beam_search import FirstStepConstrainedBeamSearch
-from semqa.data.fields.labels_field import LabelsField
 from semqa.utils.rc_utils import DropEmAndF1
 from semqa.state_machines.prefixed_beam_search import PrefixedConstrainedBeamSearch
 from semqa.models.utils import semparse_utils
@@ -36,16 +33,12 @@ from semqa.models.drop_parser_base import DROPParserBase
 from semqa.domain_languages.drop_language_v2 import (
     DropLanguageV2,
     Date,
-    QuestionSpanAnswer,
-    PassageSpanAnswer,
-    YearDifference,
-    PassageNumber,
-    ComposedNumber,
     CountNumber,
 )
 from semqa.domain_languages.drop_execution_parameters import ExecutorParameters
-from semqa.modules.multi_span import MultiSpanAnswer
-from semqa.modules.single_span import SingleSpanAnswer
+from semqa.modules.spans import SingleSpanAnswer, MultiSpanAnswer
+from semqa.modules.qp_encodings import BertJointQPEncoding, BertIndependentQPEncoding
+from semqa.modules.qrepr_module.qrepr_to_module import QReprModuleExecution
 import datasets.drop.constants as dropconstants
 from semqa.profiler.profile import Profile, profile_func_decorator
 
@@ -68,8 +61,9 @@ class DROPParserBERT(DROPParserBase):
         max_decoding_steps: int,
         transformer_model_name: str,
         bio_tagging: bool,
-        bio_label_scheme: str = "BIO",
-        scaling_bert: bool = False,
+        qp_encoding_style: str = "bert_joint_qp_encoder",
+        qrepr_style: str = "attn",
+        bio_label_scheme: str = "IO",
         countfixed: bool = False,
         auxwinloss: bool = False,
         excloss: bool = False,
@@ -93,9 +87,6 @@ class DROPParserBERT(DROPParserBase):
             regularizer=regularizer,
         )
 
-        if scaling_bert:
-            raise NotImplementedError
-        self.scaling_bert = scaling_bert
         self._text_field_embedder: BasicTextFieldEmbedder = BasicTextFieldEmbedder(
             {"tokens": PretrainedTransformerEmbedder(transformer_model_name)}
         )
@@ -103,6 +94,22 @@ class DROPParserBERT(DROPParserBase):
         self._allennlp_tokenizer = PretrainedTransformerTokenizer(model_name=transformer_model_name)
         self._tokenizer = self._allennlp_tokenizer.tokenizer
         self._pad_token_id = self._tokenizer.pad_token_id
+        self._sep_token_id = self._tokenizer.sep_token_id
+
+        if qp_encoding_style == "bert_joint_qp_encoder":
+            self.qp_encoder = BertJointQPEncoding(text_field_embedder=self._text_field_embedder,
+                                                  pad_token_id=self._pad_token_id,
+                                                  sep_token_id=self._sep_token_id)
+        elif qp_encoding_style == "bert_independent_qp_encoding":
+            self.qp_encoder = BertIndependentQPEncoding(text_field_embedder=self._text_field_embedder,
+                                                        pad_token_id=self._pad_token_id,
+                                                        sep_token_id=self._sep_token_id)
+        else:
+            raise NotImplementedError
+
+
+        self.qrepr_module_exec = QReprModuleExecution(qrepr_style=qrepr_style,
+                                                      qp_encoding_style=qp_encoding_style)
 
         self.max_ques_len = max_ques_len
 
@@ -296,25 +303,18 @@ class DROPParserBERT(DROPParserBase):
             if self.profile_steps % self.profile_freq == 0:
                 logger.info(Profile.to_string())
 
-        question_passage_tokens = question_passage["tokens"]["token_ids"]
-        pad_mask = (question_passage_tokens != self._pad_token_id).long()
-        question_passage["tokens"]["mask"] = pad_mask
-        question_passage["tokens"]["type_ids"][:, self.max_ques_len + 1:] = 1  # type-id = 1 starting from [SEP] after Q
+        qp_encoder_output = self.qp_encoder.get_representation(question=question,
+                                                               passage=passage,
+                                                               question_passage=question_passage,
+                                                               max_ques_len=self.max_ques_len)
 
-        with Profile(scope_name="bert-run"):
-            # Shape: (batch_size, seqlen, bert_dim); (batch_size, bert_dim)
-            # if not self.scaling_bert:
-            bert_out = self._text_field_embedder(question_passage)
-            bert_pooled_out = bert_out[:, 0, :]     # CLS embedding
-
-        # Skip [CLS]; then the next max_ques_len tokens are question tokens
-        encoded_question = bert_out[:, 1:self.max_ques_len + 1, :]
-        question_mask = (pad_mask[:, 1:self.max_ques_len + 1]).float()
-        # Skip [CLS] Q_tokens [SEP]; the passage includes the [SEP] at the end
-        ques_w_cls_sep_len = 1 + self.max_ques_len + 1
-        encoded_passage = bert_out[:, ques_w_cls_sep_len:, :]
-        passage_mask = (pad_mask[:, ques_w_cls_sep_len:]).float()
-        passage_token_idxs = question_passage_tokens[:, ques_w_cls_sep_len:]
+        question_token_idxs = qp_encoder_output["question_token_idxs"]
+        passage_token_idxs = qp_encoder_output["passage_token_idxs"]
+        question_mask = qp_encoder_output["question_mask"]
+        passage_mask = qp_encoder_output["passage_mask"]
+        encoded_question = qp_encoder_output["encoded_question"]
+        encoded_passage = qp_encoder_output["encoded_passage"]
+        bert_pooled_out = qp_encoder_output["pooled_encoding"]
 
         batch_size = len(actions)
 
@@ -674,35 +674,17 @@ class DROPParserBERT(DROPParserBase):
                                                           gold_program_dicts=gold_program_dicts,
                                                           gold_function2actionidx_maps=gold_function2actionidx_maps)
 
-            self.add_weighted_question_vector_to_sideargs(batch_action_seqs=batch_actionseqs,
-                                                          batch_actionseq_sideargs=batch_actionseq_sideargs,
-                                                          question_passage=question_passage,
-                                                          question_attn_mask_threshold=0.1)
-
-            # Adding Date-Comparison supervised event groundings to relevant actions
-            # max_passage_len = encoded_passage.size()[1]
-            # self.passage_attention_to_sidearg(
-            #     qtypes,
-            #     batch_actionseqs,
-            #     batch_actionseq_sideargs,
-            #     pattn_supervised,
-            #     passage_attn_supervision,
-            #     max_passage_len,
-            #     self.device_id,
-            # )
-            #
-            # self.datecompare_eventdategr_to_sideargs(
-            #     qtypes, batch_actionseqs, batch_actionseq_sideargs, datecomp_ques_event_date_groundings, self.device_id
-            # )
-            #
-            # self.numcompare_eventnumgr_to_sideargs(
-            #     qtypes,
-            #     execution_supervised,
-            #     batch_actionseqs,
-            #     batch_actionseq_sideargs,
-            #     numcomp_qspan_num_groundings,
-            #     self.device_id,
-            # )
+            self.qrepr_module_exec.add_weighted_question_vector_to_sideargs(
+                batch_action_seqs=batch_actionseqs,
+                batch_actionseq_sideargs=batch_actionseq_sideargs,
+                text_field_embedder=self._text_field_embedder,
+                question_encoding=encoded_question,
+                question_mask=question_mask,
+                question=question,
+                question_passage=question_passage,
+                max_ques_len=self.max_ques_len,
+                device_id=self.device_id,
+                question_attn_mask_threshold=0.1)
 
         # PRINT PRED PROGRAMS
         # for idx, instance_progs in enumerate(batch_actionseqs):
@@ -1391,43 +1373,6 @@ class DROPParserBERT(DROPParserBase):
 
         return final_states
 
-    # def aux_count_loss(self, passage_attention, passage_mask, answer_as_count, count_mask):
-    #     if torch.sum(count_mask) == 0:
-    #         loss, accuracy = 0.0, 0.0
-    #         return loss, accuracy
-    #
-    #     batch_size = passage_attention.size()[0]
-    #     # List of (B, P) shaped tensors
-    #     scaled_attentions = [passage_attention * sf for sf in self._executor_parameters.passage_attention_scalingvals]
-    #     # Shape: (B, passage_length, num_scaling_factors)
-    #     scaled_passage_attentions = torch.stack(scaled_attentions, dim=2)
-    #     # Shape: (B, hidden_dim)
-    #     count_hidden_repr = self._executor_parameters.passage_attention_to_count(
-    #         scaled_passage_attentions, passage_mask
-    #     )
-    #     # Shape: (B, num_counts)
-    #     passage_span_logits = self._executor_parameters.passage_count_predictor(count_hidden_repr)
-    #     count_distribution = torch.softmax(passage_span_logits, dim=1)
-    #
-    #     loss = 0
-    #     accuracy = 0
-    #     if answer_as_count is not None:
-    #         # (B, num_counts)
-    #         answer_as_count = answer_as_count.float()
-    #         count_log_probs = torch.log(count_distribution + 1e-40)
-    #         log_likelihood = torch.sum(count_log_probs * answer_as_count * count_mask.unsqueeze(1).float())
-    #
-    #         loss = -1 * log_likelihood
-    #         loss = loss / torch.sum(count_mask).float()
-    #
-    #         # List of predicted count idxs
-    #         count_idx = torch.argmax(count_distribution, 1)
-    #         gold_count_idxs = torch.argmax(answer_as_count, 1)
-    #         correct_vec = (count_idx == gold_count_idxs).float() * count_mask.float()
-    #         accuracy = (torch.sum(correct_vec) / torch.sum(count_mask)).detach().cpu().numpy()
-    #
-    #     return loss, accuracy
-
     def masking_blockdiagonal(self, passage_length, window, device_id):
         """ Make a (passage_length, passage_length) tensor M of 1 and -1 in which for each row x,
             M[x, y] = -1 if y < x - window or y > x + window, else it is 1.
@@ -1553,62 +1498,6 @@ class DROPParserBERT(DROPParserBase):
                     # action_idx: range(0, len(pred_sideargs)) - index into the actions
                     pred_sideargs[action_idx].update(inorder_supervision_dicts[supervision_idx])
 
-    def add_weighted_question_vector_to_sideargs(self,
-                                                 batch_action_seqs: List[List[List[str]]],
-                                                 batch_actionseq_sideargs: List[List[List[Dict]]],
-                                                 question_passage: TextFieldTensors,
-                                                 question_attn_mask_threshold: float = 0.1):
-        relevant_actions = [
-            "PassageNumber -> select_implicit_num",
-            "PassageAttention -> select_passage",
-            "<PassageAttention:PassageAttention> -> filter_passage",
-            "<PassageAttention:PassageAttention> -> project_passage"
-        ]
-
-        # List of (instance_idx, prog_idx, action_idx, question_attention) -- question-attention for relevant actions
-        insidxprogaction_qattn = []
-
-        for instance_idx in range(len(batch_action_seqs)):
-            for progidx, (action_seq, sideargs) in enumerate(zip(batch_action_seqs[instance_idx],
-                                                                 batch_actionseq_sideargs[instance_idx])):
-                for actionidx, (action_str, sidearg_dict) in enumerate(zip(action_seq, sideargs)):
-                    if action_str in relevant_actions:
-                        question_attention = sidearg_dict["question_attention"]
-                        insidxprogaction_qattn.append((instance_idx, progidx, actionidx, question_attention))
-
-        # Textfield to hold masked-question token_ids, mask, type_ids etc. for relevant question-attentions from above
-        question_tf = {"tokens": {}}   # Our BERT token-indexer name is hardcoded to "tokens" / same as question_passage
-        input_keys = []   # "token_ids", "mask", "mask", "type_ids", "segment_concat_mask"
-        for key in question_passage["tokens"]:
-            question_tf["tokens"][key] = []     # This would hold the input-tensors that will be concat before feeding
-            input_keys.append(key)
-
-        for (insidx, progidx, actionidx, question_attn) in insidxprogaction_qattn:
-            # For each question-attention for an action, append a masked-question input
-            question_attn_mask = (question_attn > question_attn_mask_threshold).long()
-            for key in input_keys:
-                input_tensor = question_passage["tokens"][key][insidx, 0:self.max_ques_len + 2].clone()
-                if key not in ["type_ids", "segment_concat_mask"]:
-                    input_tensor[1:-1] = question_attn_mask * input_tensor[1:-1]    # skip [CLS] and [SEP]
-                question_tf["tokens"][key].append(input_tensor.unsqueeze(0))    # unsqueezing for concat later
-
-        # Make a batch of all the masked-question reprs to feed into BERT
-        for key in input_keys:
-            # Shape: (num_relevant_actions, self.max_ques_len + 2)
-            question_tf["tokens"][key] = torch.cat(question_tf["tokens"][key], dim=0)
-
-        # Decontextualized question representation - (num_relevant_action, self.max_ques_len + 2, BERT_DIM)
-        decont_q_reprs = self._text_field_embedder(question_tf)
-
-        group_idx = 0
-        for (insidx, progidx, actionidx, question_attn) in insidxprogaction_qattn:
-            question_attn_mask = (question_attn > question_attn_mask_threshold).float()
-            sidearg_dict = batch_actionseq_sideargs[insidx][progidx][actionidx]
-            decont_q = decont_q_reprs[group_idx, :, :][1:-1]
-            # Mask the question-token representations and compute a sum representation
-            weighted_question_repr = torch.sum(decont_q * question_attn_mask.unsqueeze(1), dim=0)
-            sidearg_dict.update({"weighted_question_vector": weighted_question_repr})
-            group_idx += 1
 
 
 

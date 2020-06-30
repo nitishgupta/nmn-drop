@@ -8,11 +8,10 @@ export MKL_NUM_THREADS=4
 
 ### DATASET PATHS -- should be same across models for same dataset
 DATASET_DIR=/shared/nitishg/data/drop-w-qdmr
-DATASET_NAME=qdmr-filter-post-v6
-# drop_iclr600_wqdmr
+DATASET_NAME=qdmr-filter-post-v6_iclr600
+# qdmr-filter-post-v6
 # drop_iclr_600
-# drop_iclrfull_wqdmr
-# drop_wqdmr_programs-ns
+# drop_iclr_full
 
 TRAINFILE=${DATASET_DIR}/${DATASET_NAME}/drop_dataset_train.json
 VALFILE=${DATASET_DIR}/${DATASET_NAME}/drop_dataset_dev.json
@@ -25,7 +24,11 @@ CONFIGFILE=training_config/drop_parser_bert_v2.jsonnet
 
 export DATASET_READER="drop_reader_bert"
 
-export SCALING_BERT=false
+# Options: bert_joint_qp_encoder (default) ; bert_independent_qp_encoding
+export QP_ENC="bert_joint_qp_encoder"
+
+# Options: attn (default) ; decont ; decont_qp
+export Q_REPR="attn"
 
 # Check CONFIGFILE for environment variables to set
 export GPU=0
@@ -47,10 +50,10 @@ export INTERPRET=false
 
 # Whether strong supervison instances should be trained on first, if yes for how many epochs
 export SUPFIRST=true
-export SUPEPOCHS=0
+export SUPEPOCHS=5
 
 # -1 will not run HardEM; HardEM will kick after EPOCH num of epochs
-export HARDEM_EPOCH=0
+export HARDEM_EPOCH=5
 
 export BS=4
 export DROPOUT=0.2
@@ -59,7 +62,7 @@ export SEED=42
 
 export BEAMSIZE=1
 export MAX_DECODE_STEP=14
-export EPOCHS=42
+export EPOCHS=40
 
 export GC_FREQ=500
 export PROFILE_FREQ=0
@@ -69,8 +72,8 @@ export DEBUG=false
 CHECKPOINT_ROOT=./resources/checkpoints
 SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop-w-qdmr/${DATASET_NAME}
 MODEL_DIR=drop_parser_bert
-PD_1=Qattn_${QATTLOSS}/EXCLOSS_${EXCLOSS}/aux_${AUXLOSS}/BIO_${BIO_TAG}_${BIO_LABEL}/SUPEPOCHS_${SUPEPOCHS}_HEM_${HARDEM_EPOCH}_BM_${BEAMSIZE}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}_DeCont
+PD_1=Qattn_${QATTLOSS}/EXCLOSS_${EXCLOSS}/aux_${AUXLOSS}/${BIO_LABEL}_${BIO_TAG}/SUPEPOCHS_${SUPEPOCHS}_HEM_${HARDEM_EPOCH}_BM_${BEAMSIZE}
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}
 
 # SERIALIZATION_DIR=./resources/checkpoints/test
 

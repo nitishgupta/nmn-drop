@@ -1,8 +1,8 @@
-from typing import Dict, List, Tuple
+from typing import List, Tuple
 
 import torch
 import allennlp.nn.util as allenutil
-from semqa.modules.span_answer import SpanAnswer
+from semqa.modules.spans.span_answer import SpanAnswer
 from semqa.utils.rc_utils import get_best_span
 
 

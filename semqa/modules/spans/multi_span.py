@@ -1,6 +1,5 @@
-from typing import List, Dict, Tuple, Any
+from typing import List, Dict, Tuple
 
-import numpy as np
 import warnings
 import torch
 from itertools import product
@@ -9,7 +8,7 @@ from collections import OrderedDict
 
 from allennlp.nn.util import replace_masked_values, logsumexp
 
-from semqa.modules.span_answer import SpanAnswer
+from semqa.modules.spans.span_answer import SpanAnswer
 from semqa.modules.viterbi_decoding import allowed_transitions, viterbi_tags
 
 class MultiSpanAnswer(SpanAnswer):

@@ -6,6 +6,8 @@ local beam_size = utils.parse_number(std.extVar("BEAMSIZE"));
 local supervised_epochs = utils.parse_number(std.extVar("SUPEPOCHS"));
 local bio_tagging = utils.boolparser(std.extVar("BIO_TAG"));
 local bio_label_scheme = std.extVar("BIO_LABEL");
+local qp_encoding_style = std.extVar("QP_ENC");
+local qrepr_style = std.extVar("Q_REPR");
 
 {
     "dataset_reader": {
@@ -61,7 +63,8 @@ local bio_label_scheme = std.extVar("BIO_LABEL");
         "bio_label_scheme": bio_label_scheme,
 
         "transformer_model_name": bert_model,
-        "scaling_bert": utils.boolparser(std.extVar("SCALING_BERT")),
+        "qp_encoding_style": qp_encoding_style,
+        "qrepr_style": qrepr_style,
 
         "max_ques_len": 50,
 

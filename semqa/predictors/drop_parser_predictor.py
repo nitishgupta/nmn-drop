@@ -78,6 +78,7 @@ class PredictionData:
             "answer_question_spans" in self.metadata else []
 
         self.question_id: str = self.metadata["question_id"]
+        self.passage_id: str = self.metadata["passage_id"]
         self.question: str = self.metadata["question"]
         self.passage: str = self.metadata["passage"]
         self.unpadded_q_wps_len: int = self.metadata["unpadded_q_wps_len"]
@@ -196,7 +197,7 @@ class DropNMNPredictor(Predictor):
             gold_program = program_node.get_nested_expression_with_strings()
 
         out_str = ""
-        out_str += "qid: {}".format(prediction_data.question_id) + "\n"
+        out_str += "qid: {} \t pid: {}".format(prediction_data.question_id, prediction_data.passage_id) + "\n"
         out_str += prediction_data.question + "\n"
         out_str += prediction_data.passage + "\n"
 
