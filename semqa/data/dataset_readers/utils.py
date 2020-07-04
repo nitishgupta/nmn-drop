@@ -2,9 +2,10 @@ from typing import Dict, List, Tuple, Any
 import string
 import itertools
 from collections import defaultdict
+import numpy as np
 
 from allennlp.data import Token
-from allennlp.data.fields import ListField, SpanField, Field, LabelField, SequenceField
+from allennlp.data.fields import ListField, SpanField, Field, LabelField, SequenceField, ArrayField
 from allennlp.data.tokenizers import SpacyTokenizer
 
 from semqa.data.fields.labels_field import LabelsField
@@ -128,7 +129,6 @@ def extract_answer_info_from_annotation(
     return answer_type, answer_texts
 
 
-
 def get_single_answer_span_fields(
         passage_tokens: List[Token],
         max_passage_token_len: int,
@@ -136,7 +136,7 @@ def get_single_answer_span_fields(
         spacy_tokenizer: SpacyTokenizer,
         passage_field: SequenceField,
         p_tokenidx2wpidx: List[List[int]]=None
-) -> Tuple[ListField, ListField, List[Tuple[int, int]], bool]:
+) -> Tuple[ListField, ArrayField, ListField, List[Tuple[int, int]], bool]:
     """ Get span-answer fields for a single-span prediction from a start/end predictor(tagger).
 
     For each answer-text, find all possible answer token-spans (convert to wp-spans if needed). This would be
@@ -160,19 +160,21 @@ def get_single_answer_span_fields(
                                                            answer_texts=tokenized_answer_texts)  # end is _inclusive_
     if len(answer_spans) == 0:
         answer_spans_field = ListField([SpanField(-1, -1, passage_field)])
+        answer_spans_mask = ArrayField(np.array([0], dtype=np.int32), padding_value=0, dtype=np.int32)
         answer_spans_for_possible_taggings_field = ListField([ListField([SpanField(-1, -1, passage_field)])])
-        return answer_spans_field, answer_spans_for_possible_taggings_field, answer_spans, False
+        return answer_spans_field, answer_spans_mask, answer_spans_for_possible_taggings_field, answer_spans, False
 
     if p_tokenidx2wpidx is not None:
         answer_spans: List[Tuple[int, int]] = convert_token_spans_to_wp_spans(answer_spans, p_tokenidx2wpidx)
 
     # ListField[SpanField]
     answer_spans_field = ListField([SpanField(x, y, passage_field) for (x, y) in answer_spans])
+    answer_spans_mask = ArrayField(np.array([1]*len(answer_spans), dtype=np.int32), padding_value=0, dtype=np.int32)
     # ListField[ListField[SpanField]]
     answer_spans_for_possible_taggings_field = ListField([ListField([SpanField(x, y, passage_field)])
                                                           for (x, y) in answer_spans])
 
-    return answer_spans_field, answer_spans_for_possible_taggings_field, answer_spans, True
+    return answer_spans_field, answer_spans_mask, answer_spans_for_possible_taggings_field, answer_spans, True
 
 
 def index_text_to_tokens(text: str, tokens: List[Token]):
@@ -281,9 +283,12 @@ class BIOAnswerGenerator:
 
 
     def get_bio_labels(self,
-                       answer_annotation: Dict[str, Any], passage_tokens: List[Token], max_passage_len: int,
+                       answer_annotation: Dict[str, Any],
+                       passage_tokens: List[Token],
+                       max_passage_len: int,
                        passage_field: SequenceField,
-                       p_tokenidx2wpidx: List[List[int]]=None, passage_wps_len: int = None):
+                       p_tokenidx2wpidx: List[List[int]] = None,
+                       passage_wps_len: int = None):
         """
 
         Most of this is based on
@@ -291,8 +296,6 @@ class BIOAnswerGenerator:
          0911e72dfc9f4473f46b154f9090de0a1a2b943b/
          src/data/dataset_readers/answer_field_generators/tagged_answer_generator.py#L30`
         """
-        fields: Dict[str, Field] = {}
-
         # First find answer-spans based passage tokens
         passage_tokens = passage_tokens[:max_passage_len]
         answer_type, answer_texts = extract_answer_info_from_annotation(answer_annotation)
@@ -316,25 +319,18 @@ class BIOAnswerGenerator:
 
         passage_len = len(passage_tokens) if passage_wps_len is None else passage_wps_len
 
+        # Only gets instantiated in one case -- find below
+        packed_gold_spans_list: List[Tuple[List[Span]]] = None
+
         if len(all_spans) > 0:
             has_answer = True
             # Create BIO label-sequences
-            no_answer_bios = self._get_empty_answer(passage_len)
-
-            # text_to_disjoint_bios: List[ListField] = []
             flexibility_count = 1
             for answer_text in tokenized_answer_texts:
                 spans = spans_dict[answer_text] if answer_text in spans_dict else []
                 if len(spans) == 0:
                     continue
                 flexibility_count *= ((2 ** len(spans)) - 1)    # 2^n_spans - 1 = all non-empty combinations of this ans
-                # disjoint_bios: List[LabelsField] = []
-                # for span_ind, span in enumerate(spans):
-                #     bios = self._create_sequence_labels([span], passage_len)
-                #     disjoint_bios.append(LabelsField(bios))
-                # text_to_disjoint_bios.append(ListField(disjoint_bios))
-
-            # fields['answer_as_text_to_disjoint_bios'] = ListField(text_to_disjoint_bios)
 
             if (flexibility_count < self._flexibility_threshold):
                 # generate all non-empty span combinations for each answer_text
@@ -347,8 +343,8 @@ class BIOAnswerGenerator:
                         all_combinations += list(itertools.combinations(spans, i))
 
                 # calculate cartesian product between all span-combinations for each answer-text
-                # Each element in this list is a possible combination of spans from different answer-texts,
-                # Each tagging is a Tuple[List[Span]], where size of this tuple is len(answer-texts) and each List[Span]
+                # Each element in this list is a possible combination of spans from different answer-texts, i.e.
+                # each tagging is a Tuple[List[Span]], where size of this tuple is len(answer-texts) and each List[Span]
                 # is a combination of spans for that answer-text.
                 packed_gold_spans_list: List[Tuple[List[Span]]] = \
                     itertools.product(*list(spans_combinations_dict.values()))
@@ -363,8 +359,14 @@ class BIOAnswerGenerator:
 
                 # ListField[LabelsField]
                 answer_spans_as_bios_field = ListField(bios_list)
+                bios_mask = [1] * len(bios_list)
+                bios_field_mask = ArrayField(np.array(bios_mask, dtype=np.int32), padding_value=0, dtype=np.int32)
                 # ListField[ListField[SpanField]]
                 answer_spans_for_possible_taggings_field = ListField(answer_spans_for_possible_taggings)
+
+                # recomputing since generator gets used up above
+                packed_gold_spans_list: List[Tuple[List[Span]]] = \
+                    itertools.product(*list(spans_combinations_dict.values()))
 
                 # fields['answer_as_list_of_bios'] = ListField(bios_list)
                 # fields['answer_as_text_to_disjoint_bios'] = ListField([ListField([no_answer_bios])])
@@ -372,6 +374,8 @@ class BIOAnswerGenerator:
                 # Create a single tagging with all spans
                 all_spans_bio_labels = LabelsField(self._create_sequence_labels(all_spans, passage_len))
                 answer_spans_as_bios_field = ListField([all_spans_bio_labels])   # single tagging
+                bios_mask = [1]
+                bios_field_mask = ArrayField(np.array(bios_mask, dtype=np.int32), padding_value=0, dtype=np.int32)
                 answer_spans_for_possible_taggings = [
                     ListField([SpanField(x, y, passage_field) for (x, y) in all_spans])]
                 answer_spans_for_possible_taggings_field = ListField(answer_spans_for_possible_taggings)
@@ -382,15 +386,17 @@ class BIOAnswerGenerator:
             # fields['is_bio_mask'] = LabelField(1, skip_indexing=True)
         else:
             answer_spans_as_bios_field = ListField([self._get_empty_answer(passage_len)])
+            bios_mask = [0]
+            bios_field_mask = ArrayField(np.array(bios_mask, dtype=np.int32), padding_value=0, dtype=np.int32)
             answer_spans_for_possible_taggings_field = ListField([ListField([SpanField(-1, -1, passage_field)])])
             has_answer = False
-            # fields.update(self.get_empty_answer_fields(passage_len))
 
-        return answer_spans_as_bios_field, answer_spans_for_possible_taggings_field, all_spans, has_answer
+        return (answer_spans_as_bios_field, bios_field_mask, answer_spans_for_possible_taggings_field, all_spans,
+                packed_gold_spans_list, spans_dict, has_answer)
         # return fields, has_answer
 
     @staticmethod
-    def _get_empty_answer(seq_len: int):
+    def _get_empty_answer(seq_len: int) -> LabelsField:
         return LabelsField([0] * seq_len)
 
     def get_empty_answer_fields(self, passage_len: int) -> Dict[str, Field]:

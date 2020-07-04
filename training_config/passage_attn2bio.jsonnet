@@ -1,4 +1,4 @@
-local utils = import "utils.libsonnet";
+local utils = import 'utils.libsonnet';
 
 local batch_size = utils.parse_number(std.extVar("BS"));
 local input_size = utils.parse_number(std.extVar("ISIZE"));
@@ -7,34 +7,25 @@ local num_layers = utils.parse_number(std.extVar("LAYERS"));
 
 {
   "dataset_reader": {
-      "type": "passage_attn2count_reader",
-      "min_passage_length": 100,
-      "max_passage_length": 600,
-      "min_span_length": 5,
-      "max_span_length": 15,
-      "samples_per_bucket_count": 2000,
-      "normalized": true,
-      "withnoise": true,
+      "type": "passage_attn2bio_reader",
+      "joint_count": false,
+      "count_samples_per_bucket_count": 200
   },
 
   "validation_dataset_reader": {
-      "type": "passage_attn2count_reader",
-      "min_passage_length": 100,
-      "max_passage_length": 600,
-      "min_span_length": 5,
-      "max_span_length": 15,
-      "samples_per_bucket_count": 500,
-      "normalized": true,
-      "withnoise": true,
+      "type": "passage_attn2bio_reader",
+      "joint_count": false,
+      "count_samples_per_bucket_count": 100
   },
 
-  "train_data_path": "",
-  "validation_data_path": "",
+  "train_data_path": std.extVar("TRAIN_FILE"),
+  "validation_data_path": std.extVar("VAL_FILE"),
 
   "model": {
-      "type": "drop_pattn2count",
+      "type": "drop_pattn2bio",
 
-      "passage_attention_to_count": {
+      "joint_count": false,
+      "passage_attention_to_span": {
           "type": std.extVar("TYPE"),
           "input_size": input_size,
           "hidden_size": hidden_size,
@@ -42,7 +33,7 @@ local num_layers = utils.parse_number(std.extVar("LAYERS"));
           "bidirectional": true,
           "dropout": 0.2
       },
-  },
+},
 
   "data_loader": {
       "batch_sampler": {
@@ -56,7 +47,7 @@ local num_layers = utils.parse_number(std.extVar("LAYERS"));
   "trainer": {
       "checkpointer": {"num_serialized_models_to_keep": 1},
       "grad_norm": 5,
-      "patience": 5,
+      "patience": 15,
       "cuda_device": utils.parse_number(std.extVar("GPU")),
       "num_epochs": utils.parse_number(std.extVar("EPOCHS")),
       "optimizer": {
@@ -72,7 +63,7 @@ local num_layers = utils.parse_number(std.extVar("LAYERS"));
           "type": "exponential",
           "decay": 0.9999
       },
-      "validation_metric": "+acc"
+      "validation_metric": "+total_acc"
   },
 
   "random_seed": utils.parse_number(std.extVar("SEED")),

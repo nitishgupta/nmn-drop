@@ -179,7 +179,7 @@ class DROPReaderV2(DatasetReader):
             max_question_wps: int = 50,
             max_transformer_length: int = 512,
             bio_tagging: bool = False,
-            bio_label_scheme: str = "BIO",
+            bio_label_scheme: str = "IO",
             only_strongly_supervised: bool = False,
             skip_instances: bool = False,
             skip_if_progtype_mismatch_anstype: bool = False,
@@ -594,8 +594,8 @@ class DROPReaderV2(DatasetReader):
                 # "span_bio_labels": `LabelsField` BIO tags with all spans
                 # "is_bio_mask": `LabelField` one of {0, 1} to indicate if span answers
                 # span_answer_fields, has_passage_span_ans \
-                (answer_spans_as_bios_field, answer_spans_for_possible_taggings_field,
-                 all_spans, has_passage_span_ans) = self.bio_answer_generator.get_bio_labels(
+                (answer_spans_as_bios_field, bios_mask, answer_spans_for_possible_taggings_field,
+                 all_spans, packed_gold_spans_list, _, has_passage_span_ans) = self.bio_answer_generator.get_bio_labels(
                     answer_annotation=answer_annotation,
                     passage_tokens=spacy_passage_tokens,
                     max_passage_len=p_token_len,
@@ -605,10 +605,11 @@ class DROPReaderV2(DatasetReader):
 
                 metadata.update({"answer_passage_spans": all_spans})
                 span_answer_fields = {"passage_span_answer": answer_spans_as_bios_field,
+                                      "passage_span_answer_mask": bios_mask,
                                       "answer_spans_for_possible_taggings": answer_spans_for_possible_taggings_field}
 
             else:
-                (passage_span_answer_field, answer_spans_for_possible_taggings_field,
+                (passage_span_answer_field, answer_spans_mask, answer_spans_for_possible_taggings_field,
                  answer_passage_spans, has_passage_span_ans) = get_single_answer_span_fields(
                     passage_tokens=spacy_passage_tokens,
                     max_passage_token_len=p_token_len,
@@ -619,6 +620,7 @@ class DROPReaderV2(DatasetReader):
 
                 metadata.update({"answer_passage_spans": answer_passage_spans})
                 span_answer_fields = {"passage_span_answer": passage_span_answer_field,
+                                      "passage_span_answer_mask": answer_spans_mask,
                                       "answer_spans_for_possible_taggings": answer_spans_for_possible_taggings_field}
 
 

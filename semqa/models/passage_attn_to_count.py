@@ -37,8 +37,7 @@ class PassageAttnToCount(Model):
         assert len(self.scaling_vals) == self.passage_attention_to_count.get_input_dim()
 
         self.num_counts = 10
-        # self.passage_count_predictor = torch.nn.Linear(self.passage_attention_to_count.get_output_dim(),
-        #                                                self.num_counts, bias=False)
+        self.variance = 0.2
 
         # We want to predict a score for each passage token
         self.passage_count_hidden2logits = torch.nn.Linear(
@@ -102,10 +101,8 @@ class PassageAttnToCount(Model):
         # Shape: (1, count_vals)
         self.countvals = allenutil.get_range_vector(10, device=device_id).unsqueeze(0).float()
 
-        variance = 0.2
-
         # Shape: (batch_size, count_vals)
-        l2_by_vsquared = torch.pow(self.countvals - passage_count_mean, 2) / (2 * variance * variance)
+        l2_by_vsquared = torch.pow(self.countvals - passage_count_mean, 2) / (2 * self.variance * self.variance)
         exp_val = torch.exp(-1 * l2_by_vsquared) + 1e-30
         # Shape: (batch_size, count_vals)
         count_distribution = exp_val / (torch.sum(exp_val, 1, keepdim=True))

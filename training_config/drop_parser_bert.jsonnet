@@ -2,15 +2,22 @@ local utils = import 'utils.libsonnet';
 local bert_model = "bert-base-uncased";
 local batch_size = utils.parse_number(std.extVar("BS"));
 local max_length = 512;
+local beam_size = utils.parse_number(std.extVar("BEAMSIZE"));
+local supervised_epochs = utils.parse_number(std.extVar("SUPEPOCHS"));
+local bio_tagging = utils.boolparser(std.extVar("BIO_TAG"));
+local bio_label_scheme = std.extVar("BIO_LABEL");
+local qp_encoding_style = std.extVar("QP_ENC");
+local qrepr_style = std.extVar("Q_REPR");
 
 {
     "dataset_reader": {
-        "type": std.extVar("DATASET_READER"),
+        "type": "drop_reader_bert_v2",
         "lazy": false,
         "skip_instances": true,
-        "skip_due_to_gold_programs": true,
+        "skip_if_progtype_mismatch_anstype": false,
         "convert_spananswer_to_num": true,
-        "question_length_limit": 50,
+        "max_question_wps": 50,
+        "max_transformer_length": max_length,
         "tokenizer": {
           "model_name": bert_model,
           "add_special_tokens": false,
@@ -22,14 +29,15 @@ local max_length = 512;
             "max_length": max_length
           }
         },
+        "bio_tagging": bio_tagging,
+        "bio_label_scheme": bio_label_scheme,
     },
 
     "validation_dataset_reader": {
-        "type": std.extVar("DATASET_READER"),
+        "type": "drop_reader_bert_v2",
         "lazy": false,
         "skip_instances": false,
-        "skip_due_to_gold_programs": false,
-        "question_length_limit": 50,
+        "max_question_wps": 50,
         "tokenizer": {
           "model_name": bert_model,
           "add_special_tokens": false
@@ -40,7 +48,9 @@ local max_length = 512;
             "model_name": bert_model,
             "max_length": max_length
           }
-        }
+        },
+        "bio_tagging": bio_tagging,
+        "bio_label_scheme": bio_label_scheme,
     },
 
     "train_data_path": std.extVar("TRAINING_DATA_FILE"),
@@ -49,8 +59,12 @@ local max_length = 512;
     "model": {
         "type": "drop_parser_bert",
 
+        "bio_tagging": bio_tagging,
+        "bio_label_scheme": bio_label_scheme,
+
         "transformer_model_name": bert_model,
-        "scaling_bert": utils.boolparser(std.extVar("SCALING_BERT")),
+        "qp_encoding_style": qp_encoding_style,
+        "qrepr_style": qrepr_style,
 
         "max_ques_len": 50,
 
@@ -67,14 +81,6 @@ local max_length = 512;
             "bidirectional": true,
         },
 
-        "question_attention_to_span": {
-            "type": "gru",
-            "input_size": 4,
-            "hidden_size": 20,
-            "num_layers": 3,
-            "bidirectional": true,
-        },
-
         "passage_attention_to_count": {
             "type": "gru",
             "input_size": 4,
@@ -85,7 +91,7 @@ local max_length = 512;
 
         "action_embedding_dim": 100,
 
-        "beam_size": utils.parse_number(std.extVar("BEAMSIZE")),
+        "beam_size": beam_size,
 
         "max_decoding_steps": utils.parse_number(std.extVar("MAX_DECODE_STEP")),
         "dropout": utils.parse_number(std.extVar("DROPOUT")),
@@ -98,6 +104,12 @@ local max_length = 512;
                          "weights_file_path": "./pattn2count_ckpt/best.th"
                      },
                 ],
+//                ["passage_attention_to_span|passage_bio_predictor",
+//                     {
+//                         "type": "pretrained",
+//                         "weights_file_path": "./pattn2bio_BIO_v1_4000/best.th"
+//                     },
+//                ],
             ],
             "prevent_regexes": [".*_text_field_embedder.*"],
         },
@@ -116,7 +128,24 @@ local max_length = 512;
         "interpret": utils.boolparser(std.extVar("INTERPRET"))
     },
 
+//    "data_loader": {
+//      "batch_sampler": {
+//        "type": "basic",
+//        "sampler": {"type": "random"},
+//        "batch_size": batch_size,
+//        "drop_last": false,
+//      },
+//    },
+
     "data_loader": {
+      "sampler": {
+        "type": "curriculum",
+        "supervised_epochs": supervised_epochs,
+      },
+      "batch_size": batch_size,
+    },
+
+    "validation_data_loader": {
       "batch_sampler": {
         "type": "basic",
         "sampler": {"type": "random"},
@@ -124,7 +153,6 @@ local max_length = 512;
         "drop_last": false,
       },
     },
-
 
     "trainer": {
         "checkpointer": {"num_serialized_models_to_keep": 1},
@@ -134,7 +162,7 @@ local max_length = 512;
         "num_epochs": utils.parse_number(std.extVar("EPOCHS")),
         "optimizer": {
             "type": "huggingface_adamw",
-            "lr": 1e-5
+            "lr": 2e-5
         },
         "validation_metric": "+f1",
     },

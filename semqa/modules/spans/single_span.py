@@ -30,6 +30,7 @@ class SingleSpanAnswer(SpanAnswer):
         """
 
         answer_as_spans: torch.LongTensor = kwargs["passage_span_answer"]
+        passage_span_answer_mask: torch.LongTensor = kwargs["passage_span_answer_mask"]
         span_start_log_probs: torch.FloatTensor = kwargs["span_start_log_probs"]
         span_end_log_probs: torch.FloatTensor = kwargs["span_end_log_probs"]
 

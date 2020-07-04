@@ -46,8 +46,6 @@ class PAttn2CountReader(DatasetReader):
         min_span_length=5,
         max_span_length=15,
         samples_per_bucket_count=1000,
-        normalized=True,
-        withnoise=True,
     ) -> None:
         super().__init__(lazy)
 
@@ -55,37 +53,8 @@ class PAttn2CountReader(DatasetReader):
         self._max_passage_length = max_passage_length
         self._min_span_length = min_span_length
         self._max_span_length = max_span_length
-        self._normalized = True  # normalized
-        self._withnoise = True  # withnoise
         self.samples_per_bucket_count = samples_per_bucket_count
         self.num_instances = 0
-
-    # def _read(self, file_path: str):
-    #     # pylint: disable=logging-fstring-interpolation
-    #     logger.info(f"Reading file from: {file_path}\n")
-    #
-    #     instances: List[Instance] = []
-    #
-    #     with open(file_path, 'r') as f:
-    #         data_dicts = json.load(f)
-    #
-    #     for d in data_dicts:
-    #         attention = d['attention']
-    #         count_value = d['count_value']
-    #         passage_length = len(attention)
-    #
-    #         fields = {}
-    #         fields["passage_attention"] = ArrayField(np.array(attention), padding_value=-1)
-    #         fields["passage_lengths"] = MetadataField(passage_length)
-    #         fields["count_answer"] = LabelField(count_value, skip_indexing=True)
-    #
-    #         instances.append(Instance(fields))
-    #         self.num_instances += 1
-    #     # random.shuffle(instances)
-    #     print(f"TotalInstances: {self.num_instances}")
-    #     print(f"Data read!")
-    #
-    #     return instances
 
     @overrides
     def _read(self, file_path: str):
@@ -242,57 +211,3 @@ class PAttn2CountReader(DatasetReader):
             min_length_buckets = min_length_buckets[:-1]
 
         return list(zip(min_length_buckets, max_length_buckets))
-
-    # def sample_spans(self, seqlen, num_spans, span_length):
-    #     # We need a gap of atleast 1 token between two spans. Number of heads is computed based on longer spans (+1)
-    #     # and offset is also up by +1
-    #     # Range of Number of possible span starts
-    #     num_heads = seqlen - (span_length - 1 + 1) * num_spans
-    #     if num_heads < num_spans:
-    #         return None
-    #     indices = range(seqlen - (span_length - 1) * num_spans)
-    #     result = []
-    #     offset = 0
-    #     # Randomly sample n=num_spans heads
-    #     for i in sorted(random.sample(indices, num_spans)):
-    #         # These heads are 0-indexed, to this we add the offset we've covered in the seq
-    #         i += offset
-    #         result.append((i, i + span_length))
-    #         offset += span_length - 1 + 1
-    #     return result
-
-
-# for i in range(self._num_training_samples):
-#     fields: Dict[str, Field] = {}
-#
-#     passage_length = random.randint(self._min_passage_length, self._max_passage_length)
-#     attention = [0.0 for _ in range(passage_length)]
-#
-#     count_value = random.randint(0, 7)
-#
-#     if count_value > 0:
-#         span_lengths = [random.randint(1, self._max_span_length)
-#                         for _ in range(count_value)]
-#
-#         # Sample n=count_value spans of the same length. Ends are exclusive
-#         # sampled_spans = self.sample_spans(passage_length, count_value, span_length)
-#         sampled_spans = self.sample_spansfor_variablelength(passage_length, count_value, span_lengths)
-#         if sampled_spans is None:
-#             continue
-#
-#         for (start, end) in sampled_spans:
-#             attention[start:end] = [1.0] * (end - start)
-#
-#     attention = [x + abs(random.gauss(0, 0.05)) for x in attention]
-#
-#     attention_sum = sum(attention)
-#     attention = [float(x)/attention_sum for x in attention]
-#
-#     fields["passage_attention"] = ArrayField(np.array(attention), padding_value=-1)
-#
-#     fields["passage_lengths"] = MetadataField(passage_length)
-#
-#     fields["count_answer"] = LabelField(count_value, skip_indexing=True)
-#
-#     instances.append(Instance(fields))
-#     self.num_instances += 1

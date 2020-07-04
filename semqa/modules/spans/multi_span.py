@@ -18,6 +18,7 @@ class MultiSpanAnswer(SpanAnswer):
                  decoding_style: str,
                  training_style: str,
                  labels: Dict[str, int],
+                 empty_decoding: bool = False,
                  generation_top_k: int = 0,
                  unique_decoding: bool = True,
                  substring_unique_decoding: bool = True) -> None:
@@ -27,6 +28,7 @@ class MultiSpanAnswer(SpanAnswer):
         self._unique_decoding = unique_decoding
         self._substring_unique_decoding = substring_unique_decoding
         self._prediction_method = prediction_method     # "argmax", "viterbi"
+        self.empty_decoding = empty_decoding   # if False, do not allow empty-span answer, i.e. predict atleast one span
         self._decoding_style = decoding_style
         self._training_style = training_style
         self._labels = labels
@@ -57,8 +59,7 @@ class MultiSpanAnswer(SpanAnswer):
 
     def gold_log_marginal_likelihood(self,
                                      passage_span_answer: torch.LongTensor,
-                                     # answer_as_list_of_bios: torch.LongTensor,
-                                     # span_bio_labels: torch.LongTensor,
+                                     passage_span_answer_mask: torch.LongTensor,
                                      log_probs: torch.FloatTensor,
                                      passage_mask: torch.FloatTensor):
         """ Compute log-marginal likelihood for the gold-seqs
@@ -87,12 +88,14 @@ class MultiSpanAnswer(SpanAnswer):
         #     warnings.warn('One of answer_as_list_of_bios or span_bio_labels need to be un-masked')
 
         gold_bio_seqs = passage_span_answer
+        gold_bio_seqs_mask = passage_span_answer_mask
         if gold_bio_seqs.sum() == 0:
             #  If log-loss is being computed during validation for an instance with no gold-spans
             warnings.warn('One of answer_as_list_of_bios or span_bio_labels need to be un-masked')
 
 
         log_marginal_likelihood = self._marginal_likelihood(gold_bio_seqs=gold_bio_seqs,
+                                                            gold_bio_seqs_mask=gold_bio_seqs_mask,
                                                             log_probs=log_probs,
                                                             seq_mask=passage_mask)
 
@@ -101,15 +104,19 @@ class MultiSpanAnswer(SpanAnswer):
 
     def _marginal_likelihood(self,
                              gold_bio_seqs: torch.LongTensor,
+                             gold_bio_seqs_mask: torch.LongTensor,
                              log_probs: torch.FloatTensor,
                              seq_mask: torch.FloatTensor):
         """ Compute marginal log-likelihood for the gold-seqs given the log-probabilities for tags
 
         Parameters:
         -----------
-        gold_bio_seqs: `(num_gold_seqs, seq_length)
+        gold_bio_seqs: `(num_gold_seqs, seq_length)`
             Multiple gold BIO-tag gold seqs for a single instance.
-            Some of the sequences can be empty (all 0s) and need to be masked
+            /// Some of the sequences can be empty (all 0s) and need to be masked ///
+        gold_bio_seqs_mask: `(num_gold_seqs, )`
+            0/1 mask to indicate if gold-seq is masked or not. An empty (all 0s) seq may still be unmasked and may be
+            used to supervise a NO-spans tagging
         log_probs: `(seq_length, num_tags)
             Need to be masked with (-1e7)
         seq_mask: `(seq_length)`
@@ -124,17 +131,48 @@ class MultiSpanAnswer(SpanAnswer):
         # Shape: (num_gold_seqs, seq_length)
         log_likelihoods = torch.gather(expanded_log_probs, dim=-1, index=gold_bio_seqs.unsqueeze(-1)).squeeze(-1)
 
-        # Shape: (num_gold_seqs)
-        correct_sequences_pad_mask = (gold_bio_seqs.sum(-1) > 0)
+        # # Shape: (num_gold_seqs)
+        # correct_sequences_pad_mask = (gold_bio_seqs.sum(-1) > 0)
 
         # Shape: (num_gold_seqs)
         seqs_log_likelihood = log_likelihoods.sum(dim=-1)
-        seqs_log_likelihood = replace_masked_values(seqs_log_likelihood, correct_sequences_pad_mask, -1e7)
+        seqs_log_likelihood = replace_masked_values(seqs_log_likelihood, gold_bio_seqs_mask.bool(), -1e32)
 
         # This would compute log \sum \exp(seq-log-prob) = \log\sum(seq-prob)
         log_marginal_likelihood = logsumexp(seqs_log_likelihood)
 
+        # If all gold-seqs are masked, then mask the log_marginal_likelihood
+        combined_gold_seqs_mask = (gold_bio_seqs_mask.sum() > 0).float()
+        log_marginal_likelihood = log_marginal_likelihood * combined_gold_seqs_mask
+
         return log_marginal_likelihood
+
+    def get_predicted_tags(self,
+                           log_probs: torch.LongTensor,
+                           passage_mask: torch.FloatTensor):
+
+        # prediction_method = 'argmax' if self.training else self._prediction_method
+        prediction_method = 'viterbi'  # if self.training else self._prediction_method
+
+        # Shape: (non-masked_passage_length)
+        masked_indices = passage_mask.nonzero().squeeze()
+        masked_log_probs = log_probs[masked_indices]
+
+        if prediction_method == 'viterbi':
+            # Shape should be (1, 2, non-masked_passage_length) -- 1 for batch_size, top_k=2
+            top_two_masked_predicted_tags = torch.Tensor(viterbi_tags(logits=masked_log_probs.unsqueeze(0),
+                                                                      transitions=self._transitions,
+                                                                      constraint_mask=self._constraint_mask, top_k=2))
+            masked_predicted_tags = top_two_masked_predicted_tags[0, 0, :]
+            # Empty output is allowed now; given that we're pretraining with zero-count
+            if masked_predicted_tags.sum(dim=-1) == 0 and not self.empty_decoding:
+                masked_predicted_tags = top_two_masked_predicted_tags[0, 1, :]
+        elif prediction_method == 'argmax':
+            masked_predicted_tags = torch.argmax(masked_log_probs, dim=-1)
+        else:
+            raise Exception("Illegal prediction_method")
+
+        return masked_predicted_tags
 
     def decode_answer(self,
                       log_probs: torch.LongTensor,
@@ -154,26 +192,9 @@ class MultiSpanAnswer(SpanAnswer):
 
 
         """
-
-        # prediction_method = 'argmax' if self.training else self._prediction_method
-        prediction_method = 'viterbi'   # if self.training else self._prediction_method
-
-        # Shape: (non-masked_passage_length)
-        masked_indices = passage_mask.nonzero().squeeze()
-        masked_log_probs = log_probs[masked_indices]
-
-        if prediction_method == 'viterbi':
-            # Shape should be (1, 2, non-masked_passage_length) -- 1 for batch_size, top_k=2
-            top_two_masked_predicted_tags = torch.Tensor(viterbi_tags(logits=masked_log_probs.unsqueeze(0),
-                                                                      transitions=self._transitions,
-                                                                      constraint_mask=self._constraint_mask, top_k=2))
-            masked_predicted_tags = top_two_masked_predicted_tags[0, 0, :]
-            if masked_predicted_tags.sum(dim=-1) == 0:
-                masked_predicted_tags = top_two_masked_predicted_tags[0, 1, :]
-        elif prediction_method == 'argmax':
-            masked_predicted_tags = torch.argmax(masked_log_probs, dim=-1)
-        else:
-            raise Exception("Illegal prediction_method")
+        # Sequence containing indices for BIO tags
+        masked_predicted_tags: torch.LongTensor = self.get_predicted_tags(log_probs=log_probs,
+                                                                          passage_mask=passage_mask)
 
         if p_tokenidx2wpidx is not None:
             predicted_token_tags = masked_predicted_tags.cpu().tolist()
@@ -181,6 +202,7 @@ class MultiSpanAnswer(SpanAnswer):
         else:
             predicted_token_tags = masked_predicted_tags.cpu().tolist()
 
+        # Convert BIO tag indices to spans
         predicted_span_idxs: List[Tuple[int, int]] = self.convert_tags_to_spans(predicted_token_tags)
         predicted_answer_spans: List[str] = []
         for span in predicted_span_idxs:

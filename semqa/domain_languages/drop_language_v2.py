@@ -1459,7 +1459,7 @@ class DropLanguageV2(DomainLanguage):
             passage_token_sigmoids = passage_token_sigmoids * self.passage_mask
 
             count_mean = torch.sum(passage_token_sigmoids)
-            variance = 0.5
+            variance = 0.2
 
             loss = 0
             loss += passage_attention.loss

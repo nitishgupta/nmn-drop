@@ -1,6 +1,6 @@
 #!/usr/bin/env
 
-SERIALIZATION_DIR=./resources/checkpoints/drop-w-qdmr/qdmr-filter-post-v5/drop_parser_bert/Qattn_true/EXCLOSS_true/MMLLOSS_true/aux_true/SUPEPOCHS_0_HEM_0_BM_1/S_42_BIO
+SERIALIZATION_DIR=/shared/nitishg/checkpoints/drop_pattn2bio/T_gru/Isize_4/Hsize_20/Layers_3/S_1/
 WEIGHTS_TH=best.th
 
 MODEL_ARCHIVE=${SERIALIZATION_DIR}/model.tar.gz

@@ -4,7 +4,6 @@ local batch_size = utils.parse_number(std.extVar("BS"));
 local max_length = 512;
 local beam_size = utils.parse_number(std.extVar("BEAMSIZE"));
 local supervised_epochs = utils.parse_number(std.extVar("SUPEPOCHS"));
-local bio_tagging = utils.boolparser(std.extVar("BIO_TAG"));
 local bio_label_scheme = std.extVar("BIO_LABEL");
 local qp_encoding_style = std.extVar("QP_ENC");
 local qrepr_style = std.extVar("Q_REPR");
@@ -29,7 +28,7 @@ local qrepr_style = std.extVar("Q_REPR");
             "max_length": max_length
           }
         },
-        "bio_tagging": bio_tagging,
+        "bio_tagging": true,
         "bio_label_scheme": bio_label_scheme,
     },
 
@@ -49,7 +48,7 @@ local qrepr_style = std.extVar("Q_REPR");
             "max_length": max_length
           }
         },
-        "bio_tagging": bio_tagging,
+        "bio_tagging": true,
         "bio_label_scheme": bio_label_scheme,
     },
 
@@ -59,8 +58,9 @@ local qrepr_style = std.extVar("Q_REPR");
     "model": {
         "type": "drop_parser_bert",
 
-        "bio_tagging": bio_tagging,
+        "bio_tagging": true,
         "bio_label_scheme": bio_label_scheme,
+        "tie_biocount": true,
 
         "transformer_model_name": bert_model,
         "qp_encoding_style": qp_encoding_style,
@@ -73,32 +73,7 @@ local qrepr_style = std.extVar("Q_REPR");
           "normalize": true
         },
 
-        "passage_attention_bio_encoder": {
-            "type": "gru",
-            "input_size": 4,
-            "hidden_size": 20,
-            "num_layers": 3,
-            "bidirectional": true,
-            "dropout": 0.2
-        },
-
         "passage_attention_to_span": {
-            "type": "gru",
-            "input_size": 4,
-            "hidden_size": 20,
-            "num_layers": 2,
-            "bidirectional": true,
-        },
-
-        "question_attention_to_span": {
-            "type": "gru",
-            "input_size": 4,
-            "hidden_size": 20,
-            "num_layers": 3,
-            "bidirectional": true,
-        },
-
-        "passage_attention_to_count": {
             "type": "gru",
             "input_size": 4,
             "hidden_size": 20,
@@ -115,10 +90,10 @@ local qrepr_style = std.extVar("Q_REPR");
 
         "initializers": {
             "regexes": [
-                ["passage_attention_to_count|passage_count_hidden2logits",
+                ["passage_attention_to_span|passage_bio_predictor|passage_count_hidden2logits",
                      {
                          "type": "pretrained",
-                         "weights_file_path": "./pattn2count_ckpt/best.th"
+                         "weights_file_path": "./pattn2bio_v001_4000/best.th"
                      },
                 ],
             ],

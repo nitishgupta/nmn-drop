@@ -1,29 +1,37 @@
 from typing import List, Dict, Union
-from semqa.utils.squad_eval import metric_max_over_ground_truths
-from semqa.utils.drop_eval import get_metrics as drop_em_and_f1, answer_json_to_strings
+import random
 
+def isSpanOverlap(s1, s2):
+    """ Returns True if the spans overlap. Works with exclusive end spans
 
-def f1metric(prediction: Union[str, List], ground_truths: List):  # type: ignore
+    s1, s2 : Tuples containing span start and end (exclusive)
+    srt_idx, end_idx: Idxs of span_srt and span_end in the input tuples
     """
-    Parameters
-    ----------a
-    prediction: ``Union[str, List]``
-        The predicted answer from the model evaluated. This could be a string, or a list of string
-        when multiple spans are predicted as answer.
-    ground_truths: ``List``
-        All the ground truth answer annotations.
-    """
-    # If you wanted to split this out by answer type, you could look at [1] here and group by
-    # that, instead of only keeping [0].
-    ground_truth_answer_strings = [answer_json_to_strings(annotation)[0] for annotation in ground_truths]
-    exact_match, f1_score = metric_max_over_ground_truths(drop_em_and_f1, prediction, ground_truth_answer_strings)
+    start1, end1 = s1[0], s1[1]
+    start2, end2 = s2[0], s2[1]
 
-    return (exact_match, f1_score)
+    return max(start1, start2) <= min(end1, end2)
+
+def sample_spans(seqlen, span_lengths: List[int]):
+    sum_lengths = sum(span_lengths)
+    num_heads = seqlen - (sum_lengths + len(span_lengths) - 1)
+
+    if num_heads < 0:
+        return None
+
+    res = set()
+    for _, spanlen in enumerate(span_lengths):
+        s = random.randint(0, seqlen - spanlen)
+        e = s + spanlen - 1
+        while any(isSpanOverlap((s,e), span) for span in res):
+            s = random.randint(0, seqlen - spanlen)
+            e = s + spanlen - 1
+        res.add((s, e))
+
+    return res
+
+res = sample_spans(10, span_lengths=[1, 3, 4])
+
+print(res)
 
 
-annotations = [{'number': '', 'date': {'day': '', 'month': '', 'year': ''}, 'spans': ['1000']}]
-
-prediction = ['-1000']
-
-
-print(f1metric(prediction, annotations))

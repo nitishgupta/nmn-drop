@@ -55,15 +55,15 @@ class DROPParserBERT(DROPParserBase):
         action_embedding_dim: int,
         transitionfunc_attention: Attention,
         passage_attention_to_span: Seq2SeqEncoder,
-        question_attention_to_span: Seq2SeqEncoder,
-        passage_attention_to_count: Seq2SeqEncoder,
         beam_size: int,
         max_decoding_steps: int,
         transformer_model_name: str,
         bio_tagging: bool,
+        bio_label_scheme: str = "IO",
+        tie_biocount: bool = False,
+        passage_attention_to_count: Seq2SeqEncoder = None,
         qp_encoding_style: str = "bert_joint_qp_encoder",
         qrepr_style: str = "attn",
-        bio_label_scheme: str = "IO",
         countfixed: bool = False,
         auxwinloss: bool = False,
         excloss: bool = False,
@@ -154,6 +154,7 @@ class DROPParserBERT(DROPParserBase):
         else:
             self._dropout = lambda x: x
 
+        self.passage_attention_bio_encoder = None
         self.passage_attention_to_span = passage_attention_to_span
         self.passage_startend_predictor = None
         self.passage_bio_predictor = None
@@ -178,19 +179,17 @@ class DROPParserBERT(DROPParserBase):
                                                          len(self.bio_labels))
         else:
             self.span_answer = SingleSpanAnswer()
+            self.passage_attention_to_span = passage_attention_to_span
             self.passage_startend_predictor = torch.nn.Linear(self.passage_attention_to_span.get_output_dim(), 2)
 
         self.num_counts = 10
-        self.passage_attention_to_count = passage_attention_to_count
-        self.passage_count_predictor = torch.nn.Linear(
-            self.passage_attention_to_count.get_output_dim(), self.num_counts, bias=False
-        )
+        if tie_biocount:
+            self.passage_attention_to_count = self.passage_attention_to_span
+        else:
+            self.passage_attention_to_count = passage_attention_to_count
         self.passage_count_hidden2logits = torch.nn.Linear(
             self.passage_attention_to_count.get_output_dim(), 1, bias=True
         )
-
-        # self.passage_count_predictor.bias.data.zero_()
-        # self.passage_count_predictor.bias.requires_grad = False
 
         self._num_implicit_nums = len(DropLanguageV2.implicit_numbers)
 
@@ -200,9 +199,7 @@ class DROPParserBERT(DROPParserBase):
             passage_attention_to_span=self.passage_attention_to_span,
             passage_startend_predictor=self.passage_startend_predictor,
             passage_bio_predictor=self.passage_bio_predictor,
-            question_attention_to_span=question_attention_to_span,
             passage_attention_to_count=self.passage_attention_to_count,
-            passage_count_predictor=self.passage_count_predictor,
             passage_count_hidden2logits=self.passage_count_hidden2logits,
             num_implicit_nums=self._num_implicit_nums,
             dropout=dropout,
@@ -271,7 +268,8 @@ class DROPParserBERT(DROPParserBase):
         # answer_as_text_to_disjoint_bios: torch.LongTensor = None,  # (bs, answer_texts, spans_per_text, passage_length)
         # span_bio_labels: torch.LongTensor = None,            # (batch_size, passage_length)  single tag-seq per example
         # is_bio_mask: torch.LongTensor = None,                # (batch_size, )
-        passage_span_answer: torch.LongTensor = None,  # BIO: (bs, num_tagging, passage_len), S/E: (bs, num_spans, 2)
+        passage_span_answer: torch.LongTensor = None,     # BIO: (bs, num_tagging, passage_len), S/E: (bs, num_spans, 2)
+        passage_span_answer_mask: torch.LongTensor = None,   # BIO: (bs, num_tagging), S/E: (bs, num_spans)
         answer_spans_for_possible_taggings: torch.LongTensor = None,    # (batch_size, num_tagging, num_spans, 2)
         # answer_as_passage_spans: torch.LongTensor = None,
         answer_as_question_spans: torch.LongTensor = None,
@@ -776,7 +774,8 @@ class DROPParserBERT(DROPParserBase):
 
                     if progtype == "PassageSpanAnswer":
                         # Tuple of start, end log_probs
-                        span_answer_loss_inputs = {"passage_span_answer": passage_span_answer[i]}
+                        span_answer_loss_inputs = {"passage_span_answer": passage_span_answer[i],
+                                                   "passage_span_answer_mask": passage_span_answer_mask[i]}
                         if not self.bio_tagging:
                             span_answer_loss_inputs.update({
                                 "span_start_log_probs": denotation.passage_span_start_log_probs,
@@ -790,6 +789,7 @@ class DROPParserBERT(DROPParserBase):
                                 "passage_mask": passage_mask[i, :],
                             })
                         log_likelihood = self.span_answer.gold_log_marginal_likelihood(**span_answer_loss_inputs)
+
                         # pattn_loss = self.span_answer.passage_attention_loss(
                         #     passage_attention=denotation.passage_attn, passage_mask=passage_mask[i, :],
                         #     answer_spans_for_possible_taggings=answer_spans_for_possible_taggings[i],

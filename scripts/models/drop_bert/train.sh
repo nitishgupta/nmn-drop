@@ -8,9 +8,10 @@ export MKL_NUM_THREADS=4
 
 ### DATASET PATHS -- should be same across models for same dataset
 DATASET_DIR=/shared/nitishg/data/drop-w-qdmr
-DATASET_NAME=drop_iclr600
+DATASET_NAME=qdmr-filter-post-v6
 # qdmr-filter-post-v6
-# drop_iclr_600
+# qdmr-v6_iclr600
+# drop_iclr600
 # drop_iclr_full
 
 TRAINFILE=${DATASET_DIR}/${DATASET_NAME}/drop_dataset_train.json
@@ -20,7 +21,7 @@ VALFILE=${DATASET_DIR}/${DATASET_NAME}/drop_dataset_dev.json
 INCLUDE_PACKAGE=semqa
 
 ### TRAINING MODEL CONFIG -- should be same across datasets for the same model
-CONFIGFILE=training_config/drop_parser_bert_v2.jsonnet
+CONFIGFILE=training_config/drop_parser_bert.jsonnet
 
 export DATASET_READER="drop_reader_bert"
 
@@ -50,15 +51,15 @@ export INTERPRET=false
 
 # Whether strong supervison instances should be trained on first, if yes for how many epochs
 export SUPFIRST=true
-export SUPEPOCHS=5
+export SUPEPOCHS=0
 
 # -1 will not run HardEM; HardEM will kick after EPOCH num of epochs
-export HARDEM_EPOCH=5
+export HARDEM_EPOCH=0
 
 export BS=4
 export DROPOUT=0.2
 
-export SEED=1
+export SEED=21
 
 export BEAMSIZE=1
 export MAX_DECODE_STEP=14
@@ -73,9 +74,9 @@ CHECKPOINT_ROOT=./resources/checkpoints
 SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop-w-qdmr/${DATASET_NAME}
 MODEL_DIR=drop_parser_bert
 PD_1=Qattn_${QATTLOSS}/EXCLOSS_${EXCLOSS}/aux_${AUXLOSS}/${BIO_LABEL}_${BIO_TAG}/SUPEPOCHS_${SUPEPOCHS}_HEM_${HARDEM_EPOCH}_BM_${BEAMSIZE}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}_cnt_pretrain
 
-# SERIALIZATION_DIR=./resources/checkpoints/test
+# SERIALIZATION_DIR=./resources/checkpoints/test1
 
 #######################################################################################################################
 
