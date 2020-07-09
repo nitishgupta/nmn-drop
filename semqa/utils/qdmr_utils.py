@@ -289,7 +289,7 @@ def convert_answer(answer_annotation: Dict[str, Union[str, Dict, List]]) -> Tupl
 
     answer_texts = []
     if answer_type is None:  # No answer
-        return None
+        pass
     elif answer_type == "spans":
         # answer_content is a list of string in this case
         answer_texts = answer_content

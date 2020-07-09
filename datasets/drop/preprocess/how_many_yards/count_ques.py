@@ -133,7 +133,6 @@ def preprocess_HowManyYardsCount_ques(dataset):
             question_lower = original_question.lower()
             question_tokens = question_answer[constants.question_tokens]
             tokenizedquestion_lower = " ".join([t.lower() for t in question_tokens])
-            qlen = len(question_tokens)
             if any(span in question_lower for span in COUNT_TRIGRAMS):
                 (find_or_filter, filter_qattn, find_qattn) = count_program_qattn(tokenizedquestion_lower)
                 qtype = find_or_filter + "_count"

@@ -114,7 +114,7 @@ if __name__ == "__main__":
     outputdir = args.outputdir
 
     # Raise error if directory already exists
-    os.makedirs(outputdir)
+    os.makedirs(outputdir, exist_ok=True)
 
     FILES_TO_MERGE = ["drop_dataset_train.json", "drop_dataset_dev.json"]
 

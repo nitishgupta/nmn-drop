@@ -767,7 +767,7 @@ def update_question_attention(dataset: Dict):
                 continue
             else:
                 program_node = node_from_dict(qa[constants.program_supervision])
-                program_node = add_question_attention_supervision(program_node, question_lemmas)
+                program_node = add_question_attention_supervisioan(program_node, question_lemmas)
                 qa[constants.program_supervision] = program_node.to_dict()
 
     return dataset

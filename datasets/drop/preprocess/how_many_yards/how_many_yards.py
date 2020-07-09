@@ -167,61 +167,6 @@ def hmyw_program_qattn(tokenized_queslower: str):
     return find_or_filter, min_max_or_num, filter_qattn, find_qattn
 
 
-#
-# def get_question_attention(question_tokens: List[str]) -> Tuple[List[int], List[int]]:
-#     tokens_with_find_attention = [
-#         "touchdown",
-#         "run",
-#         "pass",
-#         "field",
-#         "goal",
-#         "passing",
-#         "TD",
-#         "td",
-#         "rushing",
-#         "kick",
-#         "scoring",
-#         "drive",
-#         "touchdowns",
-#         "reception",
-#         "interception",
-#         "return",
-#         "goals",
-#     ]
-#     tokens_with_no_attention = [
-#         "how",
-#         "How",
-#         "many",
-#         "yards",
-#         "was",
-#         "the",
-#         "longest",
-#         "shortest",
-#         "?",
-#         "of",
-#         "in",
-#         "game",
-#     ]
-#     qlen = len(question_tokens)
-#     find_qattn = [0.0] * qlen
-#     filter_qattn = [0.0] * qlen
-#
-#     for i, token in enumerate(question_tokens):
-#         if token in tokens_with_no_attention:
-#             continue
-#         if token in tokens_with_find_attention:
-#             find_qattn[i] = 1.0
-#         else:
-#             filter_qattn[i] = 1.0
-#
-#     if sum(find_qattn) == 0:
-#         find_qattn = None
-#     if sum(filter_qattn) == 0:
-#         filter_qattn = None
-#
-#     return find_qattn, filter_qattn
-
-
 def get_find_node(find_qattn):
     find_node = Node(predicate="select_passage")
     find_node.supervision["question_attention_supervision"] = find_qattn
