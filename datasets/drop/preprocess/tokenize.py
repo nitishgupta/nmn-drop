@@ -158,6 +158,22 @@ def convert_answer(answer_annotation: Dict[str, Union[str, Dict, List]]) -> Tupl
     return answer_type, answer_texts
 
 
+def _convert_orig_token_span_to_hyphen_tokenization_idxs(orig_token_idx_spans: List[Tuple[int, int]],
+                                                         original_tokens: List[Token], tokens: List[Token]):
+    token_charidxs = [token.idx for token in tokens]
+    charidx2tokenidx = {}
+    for tokenidx, (char_idx, t) in enumerate(zip(token_charidxs, tokens)):
+        charidx2tokenidx[char_idx] = tokenidx                       # start of token
+        charidx2tokenidx[char_idx + len(t.text) - 1] = tokenidx     # end of token
+
+    # orig_token_idx_spans: (start-inclusive, end-exclusive)
+    span_charidxs = [(original_tokens[x].idx, original_tokens[y - 1].idx + len(original_tokens[y - 1]))
+                     for (x, y) in orig_token_idx_spans]
+
+    span_token_idxs = [(charidx2tokenidx[start_char_idx], charidx2tokenidx[end_char_idx - 1] + 1) for
+                           (start_char_idx, end_char_idx) in span_charidxs]
+    return span_token_idxs
+
 def processPassage(input_args):
     """ This function needs to accomplish the following:
     1. Tokenize the passage and maintain char-idxs into original passage
@@ -169,38 +185,41 @@ def processPassage(input_args):
 
     passage_id, passage_info = input_args
 
-    passage_text: str = passage_info[constants.passage].strip()
-    cleaned_passage_text = unicodedata.normalize("NFKD", passage_text)
-    cleaned_passage_text = util.pruneMultipleSpaces(cleaned_passage_text)
-    passage_spacydoc = spacyutils.getSpacyDoc(cleaned_passage_text, spacy_nlp)
-    passage_tokens = [t for t in passage_spacydoc]
-    passage_tokens: List[Token] = split_tokens_by_hyphen(passage_tokens)
+    passage_info_additions = {}
 
+    passage_text: str = passage_info[constants.passage]
+    passage_spacydoc = spacyutils.getSpacyDoc(passage_text, spacy_nlp)
+    original_passage_tokens = [t for t in passage_spacydoc]
+    passage_tokens: List[Token] = split_tokens_by_hyphen(original_passage_tokens)
     passage_token_charidxs = [token.idx for token in passage_tokens]
     passage_token_texts: List[str] = [t.text for t in passage_tokens]
 
-    # Adding tokenized passage, and
-    passage_info[constants.cleaned_passage] = cleaned_passage_text
-    passage_info[constants.tokenized_passage] = " ".join(passage_token_texts)
+    passage_info["passage_tokens"] = passage_token_texts
     passage_info[constants.passage_charidxs] = passage_token_charidxs
 
-    # Remaking the doc for running NER on new tokenization
-    new_passage_doc = spacyutils.getSpacyDoc(" ".join(passage_token_texts), spacy_whitespacetokenizer)
-
-    assert len(passage_tokens) == len(" ".join(passage_token_texts).split(" "))
-    assert len(new_passage_doc) == len(passage_tokens)
-
     # List[Tuple[int, int]] -- start (inclusive) and end (exclusive) token idxs for sentence boundaries
-    sentence_idxs = sorted([(sentence.start, sentence.end) for sentence in new_passage_doc.sents],
-                           key=lambda x: x[0])
-    passage_info[constants.passage_sent_idxs] = sentence_idxs
+    # These token_idxs are in terms of the original tokenization, before splitting on hypens
+    sentence_original_tokens_idxs = sorted([(sentence.start, sentence.end) for sentence in passage_spacydoc.sents],
+                                           key=lambda x: x[0])
+    sentence_token_idxs = _convert_orig_token_span_to_hyphen_tokenization_idxs(
+        orig_token_idx_spans=sentence_original_tokens_idxs, original_tokens=original_passage_tokens,
+        tokens=passage_tokens)
 
-    passage_ners = spacyutils.getNER(new_passage_doc)
+    passage_info[constants.passage_sent_idxs] = sentence_token_idxs
+
+    # List of (text, ent.start, ent.end, ent.label_) tuples -- these token-idxs are original idxs
+    passage_ners = spacyutils.getNER(passage_spacydoc)
+    ner_orig_token_idx_spans = [(x, y) for (_, x, y, _) in passage_ners]
+    ner_text_labels = [(x, y) for (x, _, _, y) in passage_ners]
+    ner_token_idxs = _convert_orig_token_span_to_hyphen_tokenization_idxs(ner_orig_token_idx_spans,
+                                                                          original_passage_tokens, passage_tokens)
+    passage_ners = [(a, x, y, b) for ((a, b), (x, y)) in zip(ner_text_labels, ner_token_idxs)]
 
     (parsed_dates, normalized_date_idxs, normalized_date_values, num_date_entities) = ner_process.parseDateNERS(
         passage_ners, passage_token_texts
     )
     _check_validity_of_spans(spans=[(s, e) for _, (s, e), _ in parsed_dates], len_seq=len(passage_tokens))
+    # normalized_number_values - is sorted and mentions are arranged accordingly
     (parsed_nums, normalized_num_idxs, normalized_number_values, num_num_entities) = ner_process.parseNumNERS(
         passage_ners, passage_token_texts
     )
@@ -217,26 +236,23 @@ def processPassage(input_args):
     # Maybe add whitespace info later
     qa_pairs: List[Dict] = passage_info[constants.qa_pairs]
     for qa in qa_pairs:
-        question: str = qa[constants.question].strip()
-        cleaned_question = unicodedata.normalize("NFKD", question)
-        cleaned_question = util.pruneMultipleSpaces(cleaned_question)
-
-        q_spacydoc = spacyutils.getSpacyDoc(cleaned_question, spacy_nlp)
-        question_tokens = [t for t in q_spacydoc]
-        question_tokens = split_tokens_by_hyphen(question_tokens)
+        additional_qa_info = {}
+        question: str = qa[constants.question]
+        q_spacydoc = spacyutils.getSpacyDoc(question, spacy_nlp)
+        original_question_tokens = [t for t in q_spacydoc]
+        question_tokens: List[Token] = split_tokens_by_hyphen(original_question_tokens)
         question_token_charidxs = [token.idx for token in question_tokens]
         question_token_texts = [t.text for t in question_tokens]
 
-        qa[constants.cleaned_question] = cleaned_question
-        qa[constants.tokenized_question] = " ".join(question_token_texts)
-        # new_qa[constants.original_question] = original_question
+        qa["question_tokens"] = question_token_texts
         qa[constants.question_charidxs] = question_token_charidxs
 
-        # Remaking the doc for running NER on new tokenization
-        new_question_doc = spacyutils.getSpacyDoc(" ".join(question_token_texts), spacy_whitespacetokenizer)
-        assert len(new_question_doc) == len(question_tokens)
-
-        q_ners = spacyutils.getNER(new_question_doc)
+        q_ners = spacyutils.getNER(q_spacydoc)
+        ner_orig_token_idx_spans = [(x, y) for (_, x, y, _) in q_ners]
+        ner_text_labels = [(x, y) for (x, _, _, y) in q_ners]
+        ner_token_idxs = _convert_orig_token_span_to_hyphen_tokenization_idxs(ner_orig_token_idx_spans,
+                                                                              original_question_tokens, question_tokens)
+        q_ners = [(a, x, y, b) for ((a, b), (x, y)) in zip(ner_text_labels, ner_token_idxs)]
         (parsed_dates, normalized_date_idxs, normalized_date_values, num_date_entities) = ner_process.parseDateNERS(
             q_ners, question_token_texts
         )
@@ -267,11 +283,9 @@ def processPassage(input_args):
         # answer_texts_for_evaluation = [' '.join(answer_texts)]
         tokenized_answer_texts = []
         for answer_text in answer_texts:
-            answer_text = unicodedata.normalize("NFKD", answer_text)
-            answer_text = util.pruneMultipleSpaces(answer_text)
             answer_spacydoc = spacyutils.getSpacyDoc(answer_text, spacy_nlp)
-            answer_tokens = [t for t in answer_spacydoc]
-            answer_tokens = split_tokens_by_hyphen(answer_tokens)
+            original_answer_tokens = [t for t in answer_spacydoc]
+            answer_tokens: List[Token] = split_tokens_by_hyphen(original_answer_tokens)
             answer_token_texts = [t.text for t in answer_tokens]
             tokenized_answer_texts.append(" ".join(answer_token_texts))
 
@@ -296,7 +310,7 @@ def processPassage(input_args):
                 print(f"Answer span not found in passage. passageid: {passage_id}. queryid: {qa[constants.query_id]}")
                 print(f"Answer Texts: {answer_texts}")
                 print(f"Tokenized_Answer Texts: {tokenized_answer_texts}")
-                print(passage_info[constants.tokenized_passage])
+                print(passage_info[constants.passage])
                 qa[constants.answer_type] = constants.UNK_TYPE
                 print()
         elif answer_type == "number":

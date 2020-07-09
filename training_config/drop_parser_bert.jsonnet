@@ -11,7 +11,7 @@ local qrepr_style = std.extVar("Q_REPR");
 
 {
     "dataset_reader": {
-        "type": "drop_reader_bert_v2",
+        "type": "drop_reader_bert",
         "lazy": false,
         "skip_instances": true,
         "skip_if_progtype_mismatch_anstype": false,
@@ -34,7 +34,7 @@ local qrepr_style = std.extVar("Q_REPR");
     },
 
     "validation_dataset_reader": {
-        "type": "drop_reader_bert_v2",
+        "type": "drop_reader_bert",
         "lazy": false,
         "skip_instances": false,
         "max_question_wps": 50,

@@ -6,7 +6,7 @@ from semqa.utils.qdmr_utils import read_drop_dataset, node_from_dict, nested_exp
     convert_nestedexpr_to_tuple, convert_answer, read_jsonl
 
 from datasets.drop import constants
-from semqa.domain_languages.drop_language_v2 import Date
+from semqa.domain_languages.drop_language import Date
 
 
 def convert_to_tsv(jsondict: Dict):

@@ -11,9 +11,9 @@ from semqa.utils.qdmr_utils import Node, QDMRExample, nested_expression_to_lisp,
 
 from allennlp.data.tokenizers import SpacyTokenizer, Token
 
-from semqa.domain_languages.drop_language_v2 import DropLanguageV2, get_empty_language_object
+from semqa.domain_languages.drop_language import DropLanguage, get_empty_language_object
 
-nmndrop_language: DropLanguageV2 = get_empty_language_object()
+nmndrop_language: DropLanguage = get_empty_language_object()
 
 function2returntype_mapping = get_domainlang_function2returntype_mapping(nmndrop_language)
 

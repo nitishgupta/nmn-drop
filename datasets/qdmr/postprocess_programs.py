@@ -8,7 +8,7 @@ from typing import List, Tuple, Dict, Union, Callable
 
 from analysis.qdmr.program_diagnostics import is_potential_filter_num
 from semqa.utils.qdmr_utils import read_drop_dataset, node_from_dict, Node, nested_expression_to_lisp
-from semqa.domain_languages.drop_language_v2 import DropLanguageV2, get_empty_language_object
+from semqa.domain_languages.drop_language import DropLanguage, get_empty_language_object
 from allennlp.data.tokenizers import SpacyTokenizer
 
 from datasets.drop import constants
@@ -22,7 +22,7 @@ from datasets.drop import constants
 spacy_tokenizer = SpacyTokenizer()
 print(spacy_tokenizer.spacy.tokenizer)
 
-nmndrop_language: DropLanguageV2 = get_empty_language_object()
+nmndrop_language: DropLanguage = get_empty_language_object()
 
 
 def tokenize(text):
@@ -767,7 +767,7 @@ def update_question_attention(dataset: Dict):
                 continue
             else:
                 program_node = node_from_dict(qa[constants.program_supervision])
-                program_node = add_question_attention_supervisioan(program_node, question_lemmas)
+                program_node = add_question_attention_supervision(program_node, question_lemmas)
                 qa[constants.program_supervision] = program_node.to_dict()
 
     return dataset

@@ -1,4 +1,4 @@
-from semqa.domain_languages.drop_language_v2 import get_empty_language_object
+from semqa.domain_languages.drop_language import get_empty_language_object
 from semqa.utils.qdmr_utils import node_from_dict, read_drop_dataset, nested_expression_to_lisp, \
     get_inorder_function_list, function_to_action_string_alignment
 from datasets.drop import constants

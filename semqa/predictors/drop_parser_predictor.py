@@ -10,7 +10,7 @@ from allennlp.models import Model
 from allennlp.predictors.predictor import Predictor
 from allennlp_semparse.common.util import lisp_to_nested_expression
 from semqa.domain_languages.domain_language_utils import mostAttendedSpans, listTokensVis
-from semqa.domain_languages.drop_language_v2 import Output, output_from_dict
+from semqa.domain_languages.drop_language import Output, output_from_dict
 
 from semqa.utils.squad_eval import metric_max_over_ground_truths
 from semqa.utils.drop_eval import get_metrics as drop_em_and_f1, answer_json_to_strings

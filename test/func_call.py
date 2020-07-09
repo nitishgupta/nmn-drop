@@ -1,5 +1,5 @@
 from semqa.utils.qdmr_utils import Node, nested_expression_to_tree, nested_expression_to_lisp
-from semqa.domain_languages.drop_language_v2 import DropLanguageV2, get_empty_language_object
+from semqa.domain_languages.drop_language import DropLanguage, get_empty_language_object
 
 droplang = get_empty_language_object()
 

@@ -8,7 +8,7 @@ export MKL_NUM_THREADS=4
 
 ### DATASET PATHS -- should be same across models for same dataset
 DATASET_DIR=/shared/nitishg/data/drop-w-qdmr
-DATASET_NAME=only-num-sup
+DATASET_NAME=qdmr-filter-post-v6
 # qdmr-filter-post-v6
 # qdmr-v6_iclr600
 # drop_iclr600
@@ -76,7 +76,7 @@ MODEL_DIR=drop_parser_bert
 PD_1=Qattn_${QATTLOSS}/EXCLOSS_${EXCLOSS}/aux_${AUXLOSS}/${BIO_LABEL}_${BIO_TAG}/SUPEPOCHS_${SUPEPOCHS}_HEM_${HARDEM_EPOCH}_BM_${BEAMSIZE}
 SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}
 
-# SERIALIZATION_DIR=./resources/checkpoints/test1
+SERIALIZATION_DIR=./resources/checkpoints/test
 
 #######################################################################################################################
 

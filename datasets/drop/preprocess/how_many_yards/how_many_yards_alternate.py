@@ -10,9 +10,9 @@ import re
 from enum import Enum
 
 from semqa.utils.qdmr_utils import Node, nested_expression_to_lisp, nested_expression_to_tree, lisp_to_nested_expression
-from semqa.domain_languages.drop_language_v2 import DropLanguageV2, get_empty_language_object
+from semqa.domain_languages.drop_language import DropLanguage, get_empty_language_object
 
-drop_language: DropLanguageV2 = get_empty_language_object()
+drop_language: DropLanguage = get_empty_language_object()
 
 
 class MinMaxNum(Enum):

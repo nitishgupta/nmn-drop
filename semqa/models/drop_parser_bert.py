@@ -30,8 +30,8 @@ from semqa.state_machines.prefixed_beam_search import PrefixedConstrainedBeamSea
 from semqa.models.utils import semparse_utils
 from semqa.utils import qdmr_utils
 from semqa.models.drop_parser_base import DROPParserBase
-from semqa.domain_languages.drop_language_v2 import (
-    DropLanguageV2,
+from semqa.domain_languages.drop_language import (
+    DropLanguage,
     Date,
     CountNumber,
 )
@@ -191,7 +191,7 @@ class DROPParserBERT(DROPParserBase):
             self.passage_attention_to_count.get_output_dim(), 1, bias=True
         )
 
-        self._num_implicit_nums = len(DropLanguageV2.implicit_numbers)
+        self._num_implicit_nums = len(DropLanguage.implicit_numbers)
 
         self._executor_parameters = ExecutorParameters(
             question_encoding_dim=self.bert_dim,
@@ -436,7 +436,7 @@ class DROPParserBERT(DROPParserBase):
 
         with Profile("lang_init"):
             languages = [
-                DropLanguageV2(
+                DropLanguage(
                     rawemb_question=question_rawemb_aslist[i],
                     embedded_question=question_embedded_aslist[i],
                     encoded_question=question_encoded_aslist[i],
@@ -1245,7 +1245,7 @@ class DROPParserBERT(DROPParserBase):
 
     def getInitialDecoderState(
         self,
-        languages: List[DropLanguageV2],
+        languages: List[DropLanguage],
         actions: List[List[ProductionRule]],
         encoded_question: torch.FloatTensor,
         question_mask: torch.FloatTensor,
@@ -1302,7 +1302,7 @@ class DROPParserBERT(DROPParserBase):
     def initialState_forInstanceIndices(
         self,
         instances_list: List[int],
-        languages: List[DropLanguageV2],
+        languages: List[DropLanguage],
         actions: List[List[ProductionRule]],
         encoded_question: torch.FloatTensor,
         question_mask: torch.FloatTensor,
@@ -1461,7 +1461,7 @@ class DROPParserBERT(DROPParserBase):
 
 
     def add_aux_supervision_to_program_side_args(self,
-                                                 languages: List[DropLanguageV2],
+                                                 languages: List[DropLanguage],
                                                  batch_action_seqs: List[List[List[str]]],
                                                  batch_actionseq_sideargs: List[List[List[Dict]]],
                                                  program_supervised: List[bool],

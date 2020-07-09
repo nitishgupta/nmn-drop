@@ -3,7 +3,7 @@ import json
 from nltk.corpus import stopwords
 import os
 import datasets.drop.constants as constants
-from semqa.domain_languages.drop_language import Date, DropLanguage
+from semqa.domain_languages.drop_language import Date
 from semqa.utils import qdmr_utils
 import argparse
 

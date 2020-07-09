@@ -9,7 +9,7 @@ from typing import List, Tuple, Dict, Union, Callable
 
 from semqa.utils.qdmr_utils import read_drop_dataset, node_from_dict, Node, nested_expression_to_lisp, \
     convert_answer, convert_nestedexpr_to_tuple, write_jsonl
-from semqa.domain_languages.drop_language_v2 import Date
+from semqa.domain_languages.drop_language import Date
 
 from datasets.drop import constants
 
