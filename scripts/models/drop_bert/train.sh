@@ -8,7 +8,7 @@ export MKL_NUM_THREADS=4
 
 ### DATASET PATHS -- should be same across models for same dataset
 DATASET_DIR=/shared/nitishg/data/drop-w-qdmr
-DATASET_NAME=qdmr-filter-post-v6
+DATASET_NAME=ss-minmax
 # qdmr-filter-post-v6
 # qdmr-v6_iclr600
 # drop_iclr600
@@ -43,11 +43,13 @@ export BIO_LABEL=IO
 export COUNT_FIXED=false
 export AUXLOSS=true
 
-export EXCLOSS=true
+export EXCLOSS=false
 export QATTLOSS=true
 export MMLLOSS=true
 
 export INTERPRET=false
+
+export SHRDSUB=true
 
 # Whether strong supervison instances should be trained on first, if yes for how many epochs
 export SUPFIRST=true
@@ -73,7 +75,7 @@ export DEBUG=false
 CHECKPOINT_ROOT=./resources/checkpoints
 SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop-w-qdmr/${DATASET_NAME}
 MODEL_DIR=drop_parser_bert
-PD_1=Qattn_${QATTLOSS}/EXCLOSS_${EXCLOSS}/aux_${AUXLOSS}/${BIO_LABEL}_${BIO_TAG}/SUPEPOCHS_${SUPEPOCHS}_HEM_${HARDEM_EPOCH}_BM_${BEAMSIZE}
+PD_1=Qattn_${QATTLOSS}/EXCLOSS_${EXCLOSS}/aux_${AUXLOSS}/${BIO_LABEL}_${BIO_TAG}/SHRDSUB_${SHRDSUB}/SUPEPOCHS_${SUPEPOCHS}_HEM_${HARDEM_EPOCH}_BM_${BEAMSIZE}
 SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}
 
 SERIALIZATION_DIR=./resources/checkpoints/test

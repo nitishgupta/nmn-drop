@@ -326,6 +326,14 @@ def get_inorder_function_list(node: Node) -> List[str]:
     return inorder_func_list
 
 
+def get_postorder_function_list(node: Node) -> List[str]:
+    postorder_func_list = []
+    for c in node.children:
+        postorder_func_list.extend(get_postorder_function_list(c))
+    postorder_func_list.append(node.predicate)
+    return postorder_func_list
+
+
 def get_inorder_supervision_list(node: Node) -> List[Dict]:
     inorder_supervision_list = [node.supervision]
     for c in node.children:

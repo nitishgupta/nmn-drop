@@ -29,6 +29,7 @@ from semqa.utils.rc_utils import DropEmAndF1
 from semqa.state_machines.prefixed_beam_search import PrefixedConstrainedBeamSearch
 from semqa.models.utils import semparse_utils
 from semqa.utils import qdmr_utils
+from semqa.utils.qdmr_utils import Node
 from semqa.models.drop_parser_base import DROPParserBase
 from semqa.domain_languages.drop_language import (
     DropLanguage,
@@ -41,6 +42,8 @@ from semqa.modules.qp_encodings import BertJointQPEncoding, BertIndependentQPEnc
 from semqa.modules.qrepr_module.qrepr_to_module import QReprModuleExecution
 import datasets.drop.constants as dropconstants
 from semqa.profiler.profile import Profile, profile_func_decorator
+
+from semqa.modules.shared_substructure_module import shared_substructure_utils
 
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -64,6 +67,7 @@ class DROPParserBERT(DROPParserBase):
         passage_attention_to_count: Seq2SeqEncoder = None,
         qp_encoding_style: str = "bert_joint_qp_encoder",
         qrepr_style: str = "attn",
+        shared_substructure: bool = False,
         countfixed: bool = False,
         auxwinloss: bool = False,
         excloss: bool = False,
@@ -205,10 +209,13 @@ class DROPParserBERT(DROPParserBase):
             dropout=dropout,
         )
 
+        self.shared_substructure = shared_substructure
+
         self.modelloss_metric = Average()
         self.excloss_metric = Average()
         self.qattloss_metric = Average()
         self.mmlloss_metric = Average()
+        self.shrdsubloss_metric = Average()
         self.auxwinloss_metric = Average()
         self._drop_metrics = DropEmAndF1()
 
@@ -264,14 +271,9 @@ class DROPParserBERT(DROPParserBase):
         year_differences_mat: List[np.array],
         count_values: List[List[int]],
         actions: List[List[ProductionRule]],
-        # answer_as_list_of_bios: torch.LongTensor = None,       # (batch_size, num_tag_seqs, passage_length)
-        # answer_as_text_to_disjoint_bios: torch.LongTensor = None,  # (bs, answer_texts, spans_per_text, passage_length)
-        # span_bio_labels: torch.LongTensor = None,            # (batch_size, passage_length)  single tag-seq per example
-        # is_bio_mask: torch.LongTensor = None,                # (batch_size, )
         passage_span_answer: torch.LongTensor = None,     # BIO: (bs, num_tagging, passage_len), S/E: (bs, num_spans, 2)
         passage_span_answer_mask: torch.LongTensor = None,   # BIO: (bs, num_tagging), S/E: (bs, num_spans)
         answer_spans_for_possible_taggings: torch.LongTensor = None,    # (batch_size, num_tagging, num_spans, 2)
-        # answer_as_passage_spans: torch.LongTensor = None,
         answer_as_question_spans: torch.LongTensor = None,
         answer_as_passage_number: List[List[int]] = None,
         answer_as_composed_number: List[List[int]] = None,
@@ -285,6 +287,13 @@ class DROPParserBERT(DROPParserBase):
         gold_action_seqs: List[Tuple[List[List[int]], List[List[int]]]] = None,
         gold_function2actionidx_maps: List[List[List[int]]] = None,
         gold_program_dicts: List[List[Union[Dict, None]]] = None,
+        sharedsub_question_passage: TextFieldTensors = None,
+        sharedsub_program_nodes: Optional[List[Node]] = None,
+        sharedsub_function2actionidx_maps: Optional[List[List[List[int]]]] = None,
+        sharedsub_program_lisp: Union[None, List[List[str]]] = None,
+        sharedsub_orig_program_lisp: Union[None, List[str]] = None,
+        orig_sharedsub_postorder_node_idx: Union[List[List[Tuple[int, int]]], None] = None,
+        sharedsub_mask: torch.LongTensor = None,
         epoch_num: List[int] = None,
         metadata: List[Dict[str, Any]] = None,
     ) -> Dict[str, torch.Tensor]:
@@ -401,28 +410,14 @@ class DROPParserBERT(DROPParserBase):
         """ Parser setup """
         # Shape: (B, encoding_dim)
         question_encoded_final_state = bert_pooled_out
-        rawemb_question = encoded_question
-        projected_embedded_question = encoded_question
-        rawemb_passage = modeled_passage
-        projected_embedded_passage = modeled_passage
-        question_rawemb_aslist = [rawemb_question[i] for i in range(batch_size)]
-        question_embedded_aslist = [projected_embedded_question[i] for i in range(batch_size)]
         question_encoded_aslist = [encoded_question[i] for i in range(batch_size)]
         question_mask_aslist = [question_mask[i] for i in range(batch_size)]
-        passage_rawemb_aslist = [rawemb_passage[i] for i in range(batch_size)]
-        passage_embedded_aslist = [projected_embedded_passage[i] for i in range(batch_size)]
         passage_encoded_aslist = [encoded_passage[i] for i in range(batch_size)]
         passage_modeled_aslist = [modeled_passage[i] for i in range(batch_size)]
-        passage_mask_aslist = [passage_mask[i] for i in range(batch_size)]
-        q2p_attention_aslist = [question_passage_attention[i] for i in range(batch_size)]
-        p2q_attention_aslist = [passage_question_attention[i] for i in range(batch_size)]
-        # p2pdate_similarity_aslist = [passage_passage_token2date_similarity[i] for i in range(batch_size)]
-        # p2pnum_similarity_aslist = [passage_passage_token2num_similarity[i] for i in range(batch_size)]
         p2pdate_alignment_aslist = [passage_passage_token2date_alignment[i] for i in range(batch_size)]
         p2pstartdate_alignment_aslist = [passage_passage_token2startdate_alignment[i] for i in range(batch_size)]
         p2penddate_alignment_aslist = [passage_passage_token2enddate_alignment[i] for i in range(batch_size)]
         p2pnum_alignment_aslist = [passage_passage_token2num_alignment[i] for i in range(batch_size)]
-        # passage_token2datetoken_sim_aslist = [passage_token2datetoken_similarity[i] for i in range(batch_size)]
         size_composednums_aslist = [len(x) for x in composed_numbers]
         # Shape: (size_num_support_i, max_num_add_combs_i, 2) where _i is per instance
         add_num_combination_aslist = [
@@ -437,14 +432,8 @@ class DROPParserBERT(DROPParserBase):
         with Profile("lang_init"):
             languages = [
                 DropLanguage(
-                    rawemb_question=question_rawemb_aslist[i],
-                    embedded_question=question_embedded_aslist[i],
-                    encoded_question=question_encoded_aslist[i],
-                    rawemb_passage=passage_rawemb_aslist[i],
-                    embedded_passage=passage_embedded_aslist[i],
                     encoded_passage=passage_encoded_aslist[i],
                     modeled_passage=passage_modeled_aslist[i],
-                    question_mask=question_mask_aslist[i],
                     passage_mask=passage_mask[i],  # passage_mask_aslist[i],
                     passage_sentence_boundaries=p_sentboundary_wps[i],
                     passage_tokenidx2dateidx=passageidx2dateidx[i],
@@ -458,8 +447,6 @@ class DROPParserBERT(DROPParserBase):
                     year_differences=year_differences[i],
                     year_differences_mat=year_differences_mat[i],
                     count_num_values=count_values[i],
-                    question_passage_attention=q2p_attention_aslist[i],
-                    passage_question_attention=p2q_attention_aslist[i],
                     passage_token2date_alignment=p2pdate_alignment_aslist[i],
                     passage_token2startdate_alignment=p2pstartdate_alignment_aslist[i],
                     passage_token2enddate_alignment=p2penddate_alignment_aslist[i],
@@ -705,11 +692,46 @@ class DROPParserBERT(DROPParserBase):
             batch_actionseqs, languages, batch_actionseq_sideargs
         )
 
+        if self.training and self.shared_substructure:
+            orig_action_seqs: List[List[str]] = []
+            orig_module_outs: List[List[Dict]] = []
+            for batchidx in range(batch_size):
+                instance_actionseqs: List[List[str]] = batch_actionseqs[batchidx]
+                # 0-th program is max-score; for instances with gold-program there should ideally be only (gold) program
+                if not instance_actionseqs:
+                    orig_action_seqs.append([])
+                    orig_module_outs.append([])
+                    sharedsub_mask[batchidx, :] = 0
+                else:
+                    orig_action_seqs.append(instance_actionseqs[0])
+                    orig_module_outs.append(languages[batchidx].modules_debug_info[0])
+
+            sharedsub_loss = shared_substructure_utils.compute_loss(
+                device_id=self.device_id,
+                max_ques_len=self.max_ques_len,
+                qp_encoder=self.qp_encoder,
+                languages=languages,
+                sharedsub_question_passage=sharedsub_question_passage,
+                sharedsub_program_nodes=sharedsub_program_nodes,
+                sharedsub_function2actionidx_maps=sharedsub_function2actionidx_maps,
+                sharedsub_program_lisp=sharedsub_program_lisp,
+                sharedsub_orig_program_lisp=sharedsub_orig_program_lisp,
+                orig_sharedsub_postorder_node_idx=orig_sharedsub_postorder_node_idx,
+                sharedsub_mask=sharedsub_mask,
+                orig_action_seqs=orig_action_seqs,
+                orig_program_outputs=orig_module_outs,
+            )
+            if sharedsub_loss != 0.0:
+                self.shrdsubloss_metric(sharedsub_loss.item())
+        else:
+            sharedsub_loss = 0.0
+
         output_dict = {}
         # Computing losses if gold answers are given
         if answer_program_start_types is not None:
             # Execution losses --
             total_aux_loss = allenutil.move_to_device(torch.tensor(0.0), self.device_id).float()
+            total_aux_loss += sharedsub_loss
 
             total_aux_loss += aux_win_loss
             if aux_win_loss != 0:
@@ -1084,6 +1106,7 @@ class DROPParserBERT(DROPParserBase):
         qatt_loss = self.qattloss_metric.get_metric(reset)
         mml_loss = self.mmlloss_metric.get_metric(reset)
         winloss = self.auxwinloss_metric.get_metric(reset)
+        shrdloss = self.shrdsubloss_metric.get_metric(reset)
         exact_match, f1_score = self._drop_metrics.get_metric(reset)
         metric_dict.update(
             {
@@ -1092,7 +1115,8 @@ class DROPParserBERT(DROPParserBase):
                 "ans": model_loss,
                 "exc": exec_loss,
                 "qatt": qatt_loss,
-                "mml": mml_loss,
+                # "mml": mml_loss,
+                "ss": shrdloss,
                 "win": winloss,
             }
         )
@@ -1458,7 +1482,6 @@ class DROPParserBERT(DROPParserBase):
         # Increase inwindow likelihod and decrease outwindow-negative-entropy
         loss = -1 * inwindow_likelihood + outwindow_negentropies
         return loss
-
 
     def add_aux_supervision_to_program_side_args(self,
                                                  languages: List[DropLanguage],

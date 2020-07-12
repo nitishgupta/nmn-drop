@@ -8,6 +8,7 @@ local bio_tagging = utils.boolparser(std.extVar("BIO_TAG"));
 local bio_label_scheme = std.extVar("BIO_LABEL");
 local qp_encoding_style = std.extVar("QP_ENC");
 local qrepr_style = std.extVar("Q_REPR");
+local shared_substructure = utils.boolparser(std.extVar("SHRDSUB"));
 
 {
     "dataset_reader": {
@@ -31,6 +32,7 @@ local qrepr_style = std.extVar("Q_REPR");
         },
         "bio_tagging": bio_tagging,
         "bio_label_scheme": bio_label_scheme,
+        "shared_substructure": shared_substructure,
     },
 
     "validation_dataset_reader": {
@@ -61,6 +63,8 @@ local qrepr_style = std.extVar("Q_REPR");
 
         "bio_tagging": bio_tagging,
         "bio_label_scheme": bio_label_scheme,
+
+        "shared_substructure": shared_substructure,
 
         "transformer_model_name": bert_model,
         "qp_encoding_style": qp_encoding_style,

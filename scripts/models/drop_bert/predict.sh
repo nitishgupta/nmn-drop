@@ -7,19 +7,18 @@ export BEAMSIZE=1
 export DEBUG=true
 
 # SAVED MODEL
-MODEL_DIR=./resources/checkpoints/drop-w-qdmr/drop_iclr_600/drop_parser_bert/Qattn_true/EXCLOSS_true/aux_true/IO_false/SUPEPOCHS_5_HEM_5_BM_1/S_42_IndQP_DeCTX
+MODEL_DIR=./resources/checkpoints/drop-w-qdmr/ss-minmax/drop_parser_bert/Qattn_true/EXCLOSS_true/aux_true/IO_false/SHRDSUB_true/SUPEPOCHS_0_HEM_0_BM_1/S_10
 PREDICTION_DIR=${MODEL_DIR}/predictions
 MODEL_TAR=${MODEL_DIR}/model.tar.gz
 mkdir ${PREDICTION_DIR}
 
 DATASET_DIR=/shared/nitishg/data/drop-w-qdmr
-DATASET_NAME=drop_iclr_600
+DATASET_NAME=ss-minmax
 # qdmr-filter-post-v6
 # drop_iclr_600
 
 FULL_VALFILE=${DATASET_DIR}/${DATASET_NAME}/drop_dataset_dev.json
 
-# Prediction output including verbose execution logs
 VIS_PREDICTOR=drop_parser_predictor
 VIS_PREDICTION_FILE=${PREDICTION_DIR}/${DATASET_NAME}_dev_visualize.txt
 

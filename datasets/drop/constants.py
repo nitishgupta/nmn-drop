@@ -84,6 +84,8 @@ ques_attention_supervision = "ques_attention_supervision"
 question_attention_supervision = "question_attention_supervision"
 date_entidxs = "date_entidxs"
 num_entidxs = "num_entidxs"
+shared_substructure_annotations = "shared_substructure_annotations"
+
 
 # Date comparision question-type
 DATECOMP_QTYPE = "date_comparison"

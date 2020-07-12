@@ -169,7 +169,7 @@ def process_num_mentions(max_token_len: int, num_mens, num_entidxs, num_normvals
 
 
 @DatasetReader.register("drop_reader_bert")
-class DROPReaderV2(DatasetReader):
+class DROPReader(DatasetReader):
     def __init__(
             self,
             lazy: bool = True,
@@ -180,6 +180,7 @@ class DROPReaderV2(DatasetReader):
             max_transformer_length: int = 512,
             bio_tagging: bool = False,
             bio_label_scheme: str = "IO",
+            shared_substructure: bool = False,
             only_strongly_supervised: bool = False,
             skip_instances: bool = False,
             skip_if_progtype_mismatch_anstype: bool = False,
@@ -221,6 +222,9 @@ class DROPReaderV2(DatasetReader):
             self.bio_answer_generator = BIOAnswerGenerator(ignore_question=True,
                                                            flexibility_threshold=1000,
                                                            labels=labels)
+
+        # Parse and make fields for shared-substructure supervision for certain questions
+        self.shared_substructure = shared_substructure
 
         self.max_passage_nums = 0
         self.max_composed_nums = 0
@@ -279,8 +283,13 @@ class DROPReaderV2(DatasetReader):
                 program_supervision = qa.get(constants.program_supervision, None)
                 program_supervised = True if program_supervision is not None else False
                 execution_supervised = qa.get(constants.execution_supervised, False)
-
                 strongly_supervised = program_supervised and execution_supervised
+
+                # shared substructure annotations
+                shared_substructure_annotations = None
+                if self.shared_substructure and constants.shared_substructure_annotations in qa:
+                    shared_substructure_annotations: List[Dict] = qa[constants.shared_substructure_annotations]
+
 
                 instance = self.text_to_instance(
                     question,
@@ -303,6 +312,7 @@ class DROPReaderV2(DatasetReader):
                     program_supervision,
                     execution_supervised,
                     strongly_supervised,
+                    shared_substructure_annotations,
                     answer_passage_spans,
                     answer_question_spans,
                     question_id,
@@ -352,6 +362,7 @@ class DROPReaderV2(DatasetReader):
             program_supervision: Dict,
             execution_supervised: bool,
             strongly_supervised: bool,
+            shared_substructure_annotations: Union[None, List[Dict]],
             answer_passage_spans: List[Tuple[int, int]],
             answer_question_spans: List[Tuple[int, int]],
             question_id: str = None,
@@ -386,9 +397,9 @@ class DROPReaderV2(DatasetReader):
         # Truncate question_wps and wpidx2tokenidx to maximum allowable length
         question_wps = question_wps[0:self.max_question_wps]
         q_wpidx2tokenidx = q_wpidx2tokenidx[0:self.max_question_wps]
+        unpadded_q_wps_len = len(question_wps)
         last_q_tokenidx = q_wpidx2tokenidx[-1]  # The last token_idx after truncation
         q_token_len = last_q_tokenidx + 1
-        unpadded_q_wps_len = len(question_wps)
         # NOTE: Last token's all word-pieces might not be included; take precaution later
         q_tokenidx2wpidx = q_tokenidx2wpidx[0:q_token_len]
 
@@ -774,17 +785,63 @@ class DROPReaderV2(DatasetReader):
         # This list is made here since it can get modfied due to program-supervision
         fields["answer_program_start_types"] = MetadataField(answer_program_start_types)
 
-        # outdict = {
-        #     "question": question,
-        #     "passage": passage,
-        #     "program_supervision": node_from_dict(program_supervision).get_nested_expression_with_strings(),
-        #     "answer_annotation": answer_annotation,
-        #     "answer_passage_spans": answer_passage_spans,
-        #     "passage_number_values": passage_number_values,
-        #     "passage_date_values": passage_date_values,
-        #     "year_differences": year_differences,
-        #     "composed_numbers": composed_numbers,
-        # }
+        if self.shared_substructure and shared_substructure_annotations is not None and program_supervision:
+            # There might be plenty; we'll only use one
+            shared_substruc_dict: Dict = shared_substructure_annotations[0]
+            aux_question: str = shared_substruc_dict[constants.question]
+            aux_question_tokens: List[str] = shared_substruc_dict[constants.question_tokens]
+            aux_program_node: Node = node_from_dict(shared_substruc_dict[constants.program_supervision])
+            aux_program_lisp = nested_expression_to_lisp(aux_program_node.get_nested_expression())
+            orig_program_lisp: str = shared_substruc_dict["orig_program_lisp"]
+            origprog_postorder_node_idx = shared_substruc_dict["origprog_postorder_node_idx"]
+            sharedprog_postorder_node_idx = shared_substruc_dict["sharedprog_postorder_node_idx"]
+
+            aux_question_wps, aux_q_tokenidx2wpidx, aux_q_wpidx2tokenidx = tokenize_bert(self._tokenizer,
+                                                                                         aux_question_tokens)
+            # Truncate question_wps and wpidx2tokenidx to maximum allowable length
+            aux_question_wps = aux_question_wps[0:self.max_question_wps]
+            aux_q_wpidx2tokenidx = aux_q_wpidx2tokenidx[0:self.max_question_wps]
+            unpadded_aux_q_wps_len = len(aux_question_wps)
+
+            aux_q_token_len = aux_q_wpidx2tokenidx[-1] + 1
+            aux_q_tokenidx2wpidx = aux_q_tokenidx2wpidx[0:aux_q_token_len]
+
+            ques_padding_len = self.max_question_wps - len(question_wps)
+            aux_question_wps.extend([pad_token_str] * ques_padding_len)
+            aux_q_wpidx2tokenidx.extend([-1] * ques_padding_len)
+
+            question_attention_supervision_to_wps(aux_program_node, aux_q_tokenidx2wpidx, unpadded_aux_q_wps_len,
+                                                  self.max_question_wps)
+
+            aux_question_wps_tokens: List[Token] = [Token(text=t, text_id=hf_tokenizer.convert_tokens_to_ids(t))
+                                                    for t in aux_question_wps]
+
+            aux_question_passage_tokens: List[Token] = [cls_token] + aux_question_wps_tokens + [sep_token] + \
+                                                        passage_wps_tokens + [sep_token]
+
+            # Making lists sice one question might have multiple aux-supervisions
+            fields["sharedsub_question_passage"] = ListField([
+                TextField(aux_question_passage_tokens, self._token_indexers)])
+            fields["sharedsub_program_nodes"] = MetadataField([aux_program_node])
+            fields["sharedsub_program_lisp"] = MetadataField([aux_program_lisp])
+            fields["sharedsub_orig_program_lisp"] = MetadataField(orig_program_lisp)
+            action_seq: List[str] = language.logical_form_to_action_sequence(aux_program_lisp)
+            gold_function2actionidx_map: List[int] = function_to_action_string_alignment(aux_program_node, action_seq)
+            fields["sharedsub_function2actionidx_maps"] = MetadataField([gold_function2actionidx_map])
+            fields["orig_sharedsub_postorder_node_idx"] = MetadataField([(origprog_postorder_node_idx,
+                                                                          sharedprog_postorder_node_idx)])
+            fields["sharedsub_mask"] = ArrayField(np.array([1]), padding_value=0)
+        else:
+            # Make empty fields so that TextField gets padded appropriately
+            aux_question_passage_tokens: List[Token] = [cls_token, sep_token, sep_token]
+            fields["sharedsub_question_passage"] = ListField([
+                TextField(aux_question_passage_tokens, self._token_indexers)])
+            fields["sharedsub_program_nodes"] = MetadataField([None])
+            fields["sharedsub_program_lisp"] = MetadataField([None])
+            fields["sharedsub_orig_program_lisp"] = MetadataField(None)
+            fields["sharedsub_function2actionidx_maps"] = MetadataField([None])
+            fields["orig_sharedsub_postorder_node_idx"] = MetadataField([(-1, -1)])
+            fields["sharedsub_mask"] = ArrayField(np.array([0]), padding_value=0)
 
         fields["metadata"] = MetadataField(metadata)
         return Instance(fields)

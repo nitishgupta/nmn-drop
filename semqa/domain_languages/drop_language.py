@@ -277,13 +277,7 @@ class DropLanguage(DomainLanguage):
     # TODO(nitish): Defaulting all parameters to None since in the reader we create an
     def __init__(
             self,
-            rawemb_question: Tensor,
-            embedded_question: Tensor,
-            encoded_question: Tensor,
-            rawemb_passage: Tensor,
-            embedded_passage: Tensor,
             encoded_passage: Tensor,
-            question_mask: Tensor,
             passage_mask: Tensor,
             passage_sentence_boundaries: Tensor,
             passage_tokenidx2dateidx: torch.LongTensor,
@@ -297,8 +291,6 @@ class DropLanguage(DomainLanguage):
             year_differences: List[int],
             year_differences_mat: np.array,
             count_num_values: List[int],
-            question_passage_attention: Tensor,
-            passage_question_attention: Tensor,
             passage_token2date_alignment: Tensor,
             passage_token2startdate_alignment: Tensor,
             passage_token2enddate_alignment: Tensor,
@@ -318,16 +310,9 @@ class DropLanguage(DomainLanguage):
 
         super().__init__(start_types=start_types)
 
-        if embedded_question is None:
+        if encoded_passage is None:
             return
 
-        self.rawemb_question = rawemb_question
-        self.embedded_question = embedded_question
-        self.encoded_question = encoded_question
-        self.question_mask = question_mask
-
-        self.rawemb_passage = rawemb_passage
-        self.embedded_passage = embedded_passage
         self.encoded_passage = encoded_passage
         self.modeled_passage = modeled_passage
         self.passage_mask = passage_mask
@@ -340,7 +325,6 @@ class DropLanguage(DomainLanguage):
         self.passage_sentence_ends_masked = self.passage_sentence_boundaries[:, 1] * self.passage_sentboundary_mask
 
         self.passage_encoding_dim = self.modeled_passage.size()[-1]
-        self.question_encoding_dim = self.encoded_question.size()[-1]
 
         # Shape: (passage_length, )
         self.passage_tokenidx2dateidx = passage_tokenidx2dateidx.long()
@@ -386,12 +370,6 @@ class DropLanguage(DomainLanguage):
 
         self.device_id = device_id
 
-        # Shape: (question_length, passage_length)
-        self.question_passage_attention = (
-            question_passage_attention
-        )  # initialization_returns["question_passage_attention"]
-        # Shape: (passage_length, question_length)
-        self.passage_question_attention = passage_question_attention
         # Shape: (passage_length, passage_length)
         self.passage_passage_token2date_alignment = passage_token2date_alignment
         self.passage_passage_token2startdate_alignment = passage_token2startdate_alignment
@@ -457,7 +435,6 @@ class DropLanguage(DomainLanguage):
     def compute_date_comparison_matrices(date_values: List[Date], device_id: int):
         date_gt_mat = [[0 for _ in range(len(date_values))] for _ in range(len(date_values))]
         date_lt_mat = [[0 for _ in range(len(date_values))] for _ in range(len(date_values))]
-        # self.encoded_passage.new_zeros(self.num_passage_dates, self.num_passage_dates)
         for i in range(len(date_values)):
             for j in range(len(date_values)):
                 date_gt_mat[i][j] = 1.0 if date_values[i] > date_values[j] else 0.0
@@ -495,8 +472,6 @@ class DropLanguage(DomainLanguage):
     @predicate_with_side_args(["question_attention", "weighted_question_vector"])
     def select_passage(self, question_attention: Tensor, weighted_question_vector: Tensor) -> PassageAttention:
         with Profile("find-pattn"):
-            # Shape: (ques_encoding_dim) q = \sum p_i * h_i
-            # weighted_question_vector = torch.sum(self.encoded_question * question_attention.unsqueeze(1), 0)
             weighted_question_vector_ex = weighted_question_vector.unsqueeze(0)
             passage_matrix = self.encoded_passage.unsqueeze(0)
             # (passage_length, )  s_i = sim(q, p_i)
@@ -507,15 +482,14 @@ class DropLanguage(DomainLanguage):
                                                          memory_efficient=True)
             passage_attention = clamp_distribution(passage_attention)
 
-            debug_value = ""
-            if self._debug:
-                qattn_output = Output(output_type="question", values=question_attention, label="ques_attn")
-                pattn_output = Output(output_type="passage", values=passage_attention, label="passage_attn")
-                # debug_info_dict is a dictionary from {module_name: List[Output]}
-                debug_info_dict = {"select_passage": [qattn_output, pattn_output]}
-                self.modules_debug_info[-1].append(debug_info_dict)
+            # if self._debug:
+            qattn_output = Output(output_type="question", values=question_attention, label="ques_attn")
+            pattn_output = Output(output_type="passage", values=passage_attention, label="passage_attn")
+            # debug_info_dict is a dictionary from {module_name: List[Output]}
+            debug_info_dict = {"select_passage": [qattn_output, pattn_output]}
+            self.modules_debug_info[-1].append(debug_info_dict)
 
-        return PassageAttention(passage_attention, debug_value=debug_value)
+        return PassageAttention(passage_attention, debug_value="")
 
     @predicate_with_side_args(["question_attention", "weighted_question_vector"])
     def filter_passage(
@@ -524,9 +498,6 @@ class DropLanguage(DomainLanguage):
     ) -> PassageAttention:
         with Profile("filter-attn"):
             passage_attn: Tensor = passage_attention._value
-
-            # Shape: (ques_encoding_dim)
-            # weighted_question_vector = torch.sum(self.encoded_question * question_attention.unsqueeze(1), 0)
 
             # Shape: (passage_length, encoded_dim)
             passage_repr = self.modeled_passage if self.modeled_passage is not None else self.encoded_passage
@@ -617,9 +588,6 @@ class DropLanguage(DomainLanguage):
         with Profile("relocate-attn"):
             passage_attn: Tensor = passage_attention._value
             passage_attn = passage_attn * self.passage_mask
-
-            # Shape: (encoding_dim)
-            # weighted_question_vector = torch.sum(self.encoded_question * question_attention.unsqueeze(1), 0)
 
             # Shape: (passage_length, encoded_dim)
             passage_repr = self.modeled_passage if self.modeled_passage is not None else self.encoded_passage
@@ -1593,22 +1561,11 @@ class DropLanguage(DomainLanguage):
         loss += grounding_loss
         loss += passage_attention.loss
 
-        debug_value = ""
-        if self._debug:
-            # number_dist = myutils.round_all(myutils.tocpuNPList(number_distribution), 3)
-            # topk_numdist = dlutils.topProbMassElems(attention=number_distribution, support=self.passage_num_values, k=5)
-            # # _, pattn_vis_most = dlutils.listTokensVis(passage_attn, self.metadata["passage_tokens"])
-            # top_spans = dlutils.mostAttendedSpans(passage_attn, self.metadata["passage_tokens"])
-            # debug_value += f"PassageNumber: {number_dist}"
-            # debug_value += f"\ntopk-num-dist: {topk_numdist}"
-            # debug_value += f"\ninput-pattn-top-spans: {top_spans}"
-            num_output = Output(output_type="numbers", values=number_distribution, label="number_dist")
-            debug_info_dict = {"select_num": [num_output]}
-            # debug_info_dict = {"find-num": {"number": number_distribution,
-            #                                 "passage_input": passage_attn,
-            #                                 "passage_number": passage_numtoken_probs}}
-            self.modules_debug_info[-1].append(debug_info_dict)
-        return PassageNumber(passage_number_dist=number_distribution, loss=loss, debug_value=debug_value)
+        # if self._debug:
+        num_output = Output(output_type="numbers", values=number_distribution, label="number_dist")
+        debug_info_dict = {"select_num": [num_output]}
+        self.modules_debug_info[-1].append(debug_info_dict)
+        return PassageNumber(passage_number_dist=number_distribution, loss=loss, debug_value="")
 
 
     def compute_implicitnum_distribution(self, weighted_question_vector: Tensor):
@@ -1636,9 +1593,6 @@ class DropLanguage(DomainLanguage):
 
     @predicate_with_side_args(["question_attention", "weighted_question_vector"])
     def select_implicit_num(self, question_attention: Tensor, weighted_question_vector: Tensor) -> PassageNumber:
-        question_attention = question_attention * self.question_mask
-        # Shape: (encoding_dim)
-        # weighted_question_vector = torch.sum(self.encoded_question * question_attention.unsqueeze(1), 0)
         number_distribution = self.compute_implicitnum_distribution(weighted_question_vector=weighted_question_vector)
         loss = 0.0
         debug_value = ""
@@ -1663,17 +1617,12 @@ class DropLanguage(DomainLanguage):
         (minmax_num_pattn, inputpattn_num_dist, inputpattn_numtoken_probs, minmax_numtoken_probs,
          loss, debug_value) = self.minmaxNumPattn_module(
             passage_attention=passage_attention, min_max_op="min", num_entidxs_supervision=num_entidxs)
-        if self._debug:
-            num_input = Output(output_type="passage", values=inputpattn_numtoken_probs, label="number_input")
-            minmax_out = Output(output_type="passage", values=minmax_numtoken_probs, label="min_number")
-            pattn_output = Output(output_type="passage", values=minmax_num_pattn, label="passage_attn")
-            debug_info_dict = {"select_min_num": [num_input, minmax_out, pattn_output]}
-            # debug_info_dict = {"find-min-num": {"passage": minmax_num_pattn,
-            #                                     "passage_input": passage_attention._value,
-            #                                     "number_input": inputpattn_num_dist,
-            #                                     "passage_input_number": inputpattn_numtoken_probs,
-            #                                     "passage_minmax_number": minmax_numtoken_probs}}
-            self.modules_debug_info[-1].append(debug_info_dict)
+        # if self._debug:
+        num_input = Output(output_type="passage", values=inputpattn_numtoken_probs, label="number_input")
+        minmax_out = Output(output_type="passage", values=minmax_numtoken_probs, label="min_number")
+        pattn_output = Output(output_type="passage", values=minmax_num_pattn, label="passage_attn")
+        debug_info_dict = {"select_min_num": [num_input, minmax_out, pattn_output]}
+        self.modules_debug_info[-1].append(debug_info_dict)
         return PassageAttention(passage_attention=minmax_num_pattn, loss=loss, debug_value=debug_value)
 
     @predicate_with_side_args(["num_entidxs"])
@@ -1681,17 +1630,12 @@ class DropLanguage(DomainLanguage):
         (minmax_num_pattn, inputpattn_num_dist, inputpattn_numtoken_probs, minmax_numtoken_probs,
          loss, debug_value) = self.minmaxNumPattn_module(
             passage_attention=passage_attention, min_max_op="max", num_entidxs_supervision=num_entidxs)
-        if self._debug:
-            num_input = Output(output_type="passage", values=inputpattn_numtoken_probs, label="number_input")
-            minmax_out = Output(output_type="passage", values=minmax_numtoken_probs, label="max_number")
-            pattn_output = Output(output_type="passage", values=minmax_num_pattn, label="passage_attn")
-            debug_info_dict = {"select_max_num": [num_input, minmax_out, pattn_output]}
-            # debug_info_dict = {"find-max-num": {"passage": minmax_num_pattn,
-            #                                     "passage_input": passage_attention._value,
-            #                                     "number_input": inputpattn_num_dist,
-            #                                     "passage_input_number": inputpattn_numtoken_probs,
-            #                                     "passage_minmax_number": minmax_numtoken_probs}}
-            self.modules_debug_info[-1].append(debug_info_dict)
+        # if self._debug:
+        num_input = Output(output_type="passage", values=inputpattn_numtoken_probs, label="number_input")
+        minmax_out = Output(output_type="passage", values=minmax_numtoken_probs, label="max_number")
+        pattn_output = Output(output_type="passage", values=minmax_num_pattn, label="passage_attn")
+        debug_info_dict = {"select_max_num": [num_input, minmax_out, pattn_output]}
+        self.modules_debug_info[-1].append(debug_info_dict)
         return PassageAttention(passage_attention=minmax_num_pattn, loss=loss, debug_value=debug_value)
 
     def minmaxNumPattn_module(self, passage_attention: PassageAttention, min_max_op: str, num_entidxs_supervision=None):
@@ -1836,14 +1780,8 @@ class DropLanguage(DomainLanguage):
 
 def get_empty_language_object() -> DropLanguage:
     droplanguage = DropLanguage(
-        rawemb_question=None,
-        embedded_question=None,
-        encoded_question=None,
-        rawemb_passage=None,
-        embedded_passage=None,
         encoded_passage=None,
         modeled_passage=None,
-        question_mask=None,
         passage_mask=None,
         passage_sentence_boundaries=None,
         passage_tokenidx2dateidx=None,
@@ -1857,8 +1795,6 @@ def get_empty_language_object() -> DropLanguage:
         year_differences=None,
         year_differences_mat=None,
         count_num_values=None,
-        question_passage_attention=None,
-        passage_question_attention=None,
         passage_token2date_alignment=None,
         passage_token2startdate_alignment=None,
         passage_token2enddate_alignment=None,
