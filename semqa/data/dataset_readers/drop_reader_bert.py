@@ -229,7 +229,7 @@ class DROPReader(DatasetReader):
         self.max_passage_nums = 0
         self.max_composed_nums = 0
 
-        self.max_num_instances = 50     # -1 to deactivate
+        self.max_num_instances = -1     # -1 to deactivate
 
     @overrides
     def _read(self, file_path: str):
@@ -806,7 +806,7 @@ class DROPReader(DatasetReader):
             aux_q_token_len = aux_q_wpidx2tokenidx[-1] + 1
             aux_q_tokenidx2wpidx = aux_q_tokenidx2wpidx[0:aux_q_token_len]
 
-            ques_padding_len = self.max_question_wps - len(question_wps)
+            ques_padding_len = self.max_question_wps - len(aux_question_wps)
             aux_question_wps.extend([pad_token_str] * ques_padding_len)
             aux_q_wpidx2tokenidx.extend([-1] * ques_padding_len)
 

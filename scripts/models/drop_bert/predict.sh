@@ -7,7 +7,7 @@ export BEAMSIZE=1
 export DEBUG=true
 
 # SAVED MODEL
-MODEL_DIR=./resources/checkpoints/drop-w-qdmr/ss-minmax/drop_parser_bert/Qattn_true/EXCLOSS_true/aux_true/IO_false/SHRDSUB_true/SUPEPOCHS_0_HEM_0_BM_1/S_10
+MODEL_DIR=./resources/checkpoints/drop-w-qdmr/ss-minmax/drop_parser_bert/Qattn_true/EXCLOSS_false/aux_true/IO_false/SHRDSUB_true/SUPEPOCHS_0_HEM_0_BM_1/S_10_sumattn
 PREDICTION_DIR=${MODEL_DIR}/predictions
 MODEL_TAR=${MODEL_DIR}/model.tar.gz
 mkdir ${PREDICTION_DIR}
@@ -36,15 +36,15 @@ allennlp predict --output-file ${VIS_PREDICTION_FILE} \
                  --overrides "{"model": { "beam_size": ${BEAMSIZE}, "debug": ${DEBUG}}}" \
                  ${MODEL_TAR} ${FULL_VALFILE}
 
-allennlp predict --output-file ${JSONL_PREDICTION_FILE} \
-                 --predictor ${JSONL_PREDICTOR} \
-                 --cuda-device ${GPU} \
-                 --include-package ${INCLUDE_PACKAGE} \
-                 --silent \
-                 --batch-size 4 \
-                 --use-dataset-reader \
-                 --overrides "{"model": { "beam_size": ${BEAMSIZE}, "debug": ${DEBUG}}}" \
-                 ${MODEL_TAR} ${FULL_VALFILE}
+#allennlp predict --output-file ${JSONL_PREDICTION_FILE} \
+#                 --predictor ${JSONL_PREDICTOR} \
+#                 --cuda-device ${GPU} \
+#                 --include-package ${INCLUDE_PACKAGE} \
+#                 --silent \
+#                 --batch-size 4 \
+#                 --use-dataset-reader \
+#                 --overrides "{"model": { "beam_size": ${BEAMSIZE}, "debug": ${DEBUG}}}" \
+#                 ${MODEL_TAR} ${FULL_VALFILE}
 
 printf "\n"
 echo -e "Vis predictions file saved at: ${VIS_PREDICTION_FILE}"

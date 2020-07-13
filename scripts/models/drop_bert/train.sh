@@ -8,7 +8,7 @@ export MKL_NUM_THREADS=4
 
 ### DATASET PATHS -- should be same across models for same dataset
 DATASET_DIR=/shared/nitishg/data/drop-w-qdmr
-DATASET_NAME=ss-minmax
+DATASET_NAME=ss-iclr
 # qdmr-filter-post-v6
 # qdmr-v6_iclr600
 # drop_iclr600
@@ -58,10 +58,10 @@ export SUPEPOCHS=0
 # -1 will not run HardEM; HardEM will kick after EPOCH num of epochs
 export HARDEM_EPOCH=0
 
-export BS=4
+export BS=2
 export DROPOUT=0.2
 
-export SEED=10
+export SEED=42
 
 export BEAMSIZE=1
 export MAX_DECODE_STEP=14
@@ -78,7 +78,7 @@ MODEL_DIR=drop_parser_bert
 PD_1=Qattn_${QATTLOSS}/EXCLOSS_${EXCLOSS}/aux_${AUXLOSS}/${BIO_LABEL}_${BIO_TAG}/SHRDSUB_${SHRDSUB}/SUPEPOCHS_${SUPEPOCHS}_HEM_${HARDEM_EPOCH}_BM_${BEAMSIZE}
 SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}
 
-SERIALIZATION_DIR=./resources/checkpoints/test
+# SERIALIZATION_DIR=./resources/checkpoints/test
 
 #######################################################################################################################
 

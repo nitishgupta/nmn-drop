@@ -80,6 +80,9 @@ class QReprModuleExecution():
                 for actionidx, (action_str, sidearg_dict) in enumerate(zip(action_seq, sideargs)):
                     if action_str in self.relevant_actions:
                         question_attention = sidearg_dict["question_attention"]
+                        # if "question_attention_supervision" in sidearg_dict:
+                        #     import pdb
+                        #     pdb.set_trace()
                         question_attention = question_attention * question_mask[instance_idx, :]
                         weighted_question_vector = torch.sum(
                             question_encoding[instance_idx, :, :] * question_attention.unsqueeze(1), dim=0)

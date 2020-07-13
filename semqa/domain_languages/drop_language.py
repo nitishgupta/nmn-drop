@@ -1378,17 +1378,9 @@ class DropLanguage(DomainLanguage):
 
             loss = passage_attention.loss
 
-            debug_value = ""
-            if self._debug:
-                debug_info_dict = {"select_passagespan_answer": []}
-                # debug_info_dict = {"span": {"span_start_logits": span_start_logits,
-                #                             "span_end_logits": span_end_logits,
-                #                             "passage_input": passage_attn}}
-                self.modules_debug_info[-1].append(debug_info_dict)
-                _, pattn_vis_most = dlutils.listTokensVis(passage_attn, self.metadata["passage_tokens"])
-                most_attended_spans = dlutils.mostAttendedSpans(passage_attn, self.metadata["passage_tokens"])
-                # debug_value += f"Pattn: {pattn_vis_most}\n"
-                debug_value += f"MostAttendedSpans: {most_attended_spans}"
+            #if self._debug:
+            debug_info_dict = {"select_passagespan_answer": []}
+            self.modules_debug_info[-1].append(debug_info_dict)
 
         return PassageSpanAnswer(
             passage_span_start_log_probs=span_start_log_probs,
@@ -1398,7 +1390,7 @@ class DropLanguage(DomainLanguage):
             passage_attn=passage_attn,
             bio_logprobs=passage_bio_logprobs,
             loss=loss,
-            debug_value=debug_value,
+            debug_value="",
         )
 
     @predicate

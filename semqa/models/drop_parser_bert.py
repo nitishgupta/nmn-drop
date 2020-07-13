@@ -24,6 +24,7 @@ from allennlp_semparse.state_machines.trainers.maximum_marginal_likelihood impor
 from allennlp_semparse.state_machines import BeamSearch
 from allennlp_semparse.state_machines import ConstrainedBeamSearch
 from allennlp_semparse.fields.production_rule_field import ProductionRule
+from semqa.modules.symbolic.utils import compute_token_symbol_alignments
 
 from semqa.utils.rc_utils import DropEmAndF1
 from semqa.state_machines.prefixed_beam_search import PrefixedConstrainedBeamSearch
@@ -344,28 +345,28 @@ class DROPParserBERT(DROPParserBase):
 
         # Passage Token - Date Alignment
         # Shape: (batch_size, passage_length, passage_length)
-        passage_passage_token2date_alignment = self.compute_token_symbol_alignments(
+        passage_passage_token2date_alignment = compute_token_symbol_alignments(
             modeled_passage=modeled_passage,
             passage_mask=passage_mask,
             passageidx2symbolidx=passageidx2dateidx,
             passage_to_symbol_attention_params=self._executor_parameters.passage_to_date_attention
         )
 
-        passage_passage_token2startdate_alignment = self.compute_token_symbol_alignments(
+        passage_passage_token2startdate_alignment = compute_token_symbol_alignments(
             modeled_passage=modeled_passage,
             passage_mask=passage_mask,
             passageidx2symbolidx=passageidx2dateidx,
             passage_to_symbol_attention_params=self._executor_parameters.passage_to_start_date_attention
         )
 
-        passage_passage_token2enddate_alignment = self.compute_token_symbol_alignments(
+        passage_passage_token2enddate_alignment = compute_token_symbol_alignments(
             modeled_passage=modeled_passage,
             passage_mask=passage_mask,
             passageidx2symbolidx=passageidx2dateidx,
             passage_to_symbol_attention_params=self._executor_parameters.passage_to_end_date_attention
         )
         # Passage Token - Num Alignment
-        passage_passage_token2num_alignment = self.compute_token_symbol_alignments(
+        passage_passage_token2num_alignment = compute_token_symbol_alignments(
             modeled_passage=modeled_passage,
             passage_mask=passage_mask,
             passageidx2symbolidx=passageidx2numberidx,
@@ -693,6 +694,7 @@ class DROPParserBERT(DROPParserBase):
         )
 
         if self.training and self.shared_substructure:
+        # if self.shared_substructure:
             orig_action_seqs: List[List[str]] = []
             orig_module_outs: List[List[Dict]] = []
             for batchidx in range(batch_size):
@@ -709,6 +711,9 @@ class DROPParserBERT(DROPParserBase):
             sharedsub_loss = shared_substructure_utils.compute_loss(
                 device_id=self.device_id,
                 max_ques_len=self.max_ques_len,
+                executor_parameters=self._executor_parameters,
+                passageidx2dateidx=passageidx2dateidx,
+                passageidx2numberidx=passageidx2numberidx,
                 qp_encoder=self.qp_encoder,
                 languages=languages,
                 sharedsub_question_passage=sharedsub_question_passage,
@@ -720,7 +725,12 @@ class DROPParserBERT(DROPParserBase):
                 sharedsub_mask=sharedsub_mask,
                 orig_action_seqs=orig_action_seqs,
                 orig_program_outputs=orig_module_outs,
+                year_differences_mat=year_differences_mat,
+                metadata=metadata,
+                question_passage=question_passage,
             )
+            # sharedsub_loss = 5 * sharedsub_loss
+
             if sharedsub_loss != 0.0:
                 self.shrdsubloss_metric(sharedsub_loss.item())
         else:
@@ -1050,47 +1060,6 @@ class DROPParserBERT(DROPParserBase):
 
         return output_dict
 
-    def compute_token_symbol_alignments(
-        self, modeled_passage, passage_mask, passageidx2symbolidx, passage_to_symbol_attention_params
-    ):
-        """Compute the passage_token-to-passage_date alignment matrix.
-
-        Args:
-        -----
-            modeled_passage: (batch_size, passage_length, hidden_dim)
-                Contextual passage repr.
-            passage_mask: (batch_size, passage_length)
-                Passage mask
-            passageidx2dateidx: (batch_size, passage_length)
-                For date-tokens, the index of the date-entity it belongs to, o/w masked with value = -1
-            passage_to_date_attention_params: Some matrix-attention parameterization for computing the alignment matrix
-
-        Returns:
-        --------
-            pasage_passage_token2symbol_aligment: (batch_size, passage_length, passage_length)
-                Alignment matrix from passage_token (dim=1) to passage_date (dim=2)
-                Should be masked in dim=2 for tokens that are not date-tokens
-        """
-        # ### Passage Token - Date Alignment
-        # Shape: (batch_size, passage_length, passage_length)
-        passage_passage_token2symbol_similarity = passage_to_symbol_attention_params(modeled_passage, modeled_passage)
-        passage_passage_token2symbol_similarity = passage_passage_token2symbol_similarity * passage_mask.unsqueeze(1)
-        passage_passage_token2symbol_similarity = passage_passage_token2symbol_similarity * passage_mask.unsqueeze(2)
-
-        # Shape: (batch_size, passage_length) -- masking for number tokens in the passage
-        passage_tokenidx2symbolidx_mask = (passageidx2symbolidx > -1).float()
-        # Shape: (batch_size, passage_length, passage_length)
-        passage_passage_token2symbol_similarity = (
-            passage_passage_token2symbol_similarity * passage_tokenidx2symbolidx_mask.unsqueeze(1)
-        )
-        # Shape: (batch_size, passage_length, passage_length)
-        pasage_passage_token2symbol_aligment = allenutil.masked_softmax(
-            passage_passage_token2symbol_similarity,
-            mask=passage_tokenidx2symbolidx_mask.unsqueeze(1).bool(),
-            memory_efficient=True,
-        )
-        return pasage_passage_token2symbol_aligment
-
     def compute_avg_norm(self, tensor):
         dim0_size = tensor.size()[0]
         dim1_size = tensor.size()[1]
@@ -1257,8 +1226,7 @@ class DROPParserBERT(DROPParserBase):
                             attn_sum = torch.sum(pred_attn * gold_attn_tensor)
                             loss += torch.log(attn_sum + 1e-40)
                             # log_question_attention = torch.log(pred_attn + 1e-40) * mask
-                            # l = torch.sum(log_question_attention * gold_attn_tensor)
-                            # loss += l
+                            # loss += torch.sum(log_question_attention * gold_attn_tensor)
                             normalizer += 1
 
         if normalizer == 0:

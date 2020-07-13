@@ -1,15 +1,17 @@
 from typing import List, Tuple, Dict, Union, Optional
 
 from enum import Enum
-
+import numpy as np
 import torch
-from allennlp.nn.util import move_to_device
+from allennlp.nn.util import move_to_device, masked_softmax
 from allennlp.data.fields.text_field import TextFieldTensors
 from allennlp.modules.text_field_embedders import TextFieldEmbedder
 import torch.nn.functional as F
 
+from semqa.domain_languages.drop_execution_parameters import ExecutorParameters
 from semqa.domain_languages.drop_language import DropLanguage, Output
 from semqa.modules.qp_encodings import BertJointQPEncoding, QPEncoding
+from semqa.modules.symbolic.utils import compute_token_symbol_alignments
 from semqa.utils.qdmr_utils import get_postorder_function_list, get_inorder_supervision_list, Node
 
 import logging
@@ -19,6 +21,9 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 def compute_loss(
         device_id: int,
         max_ques_len: int,
+        executor_parameters: ExecutorParameters,
+        passageidx2dateidx: torch.LongTensor,
+        passageidx2numberidx: torch.LongTensor,
         qp_encoder: QPEncoding,
         languages: List[DropLanguage],
         sharedsub_question_passage: TextFieldTensors,
@@ -29,7 +34,10 @@ def compute_loss(
         orig_sharedsub_postorder_node_idx: List[Union[List[Tuple[int, int]], None]],
         sharedsub_mask: torch.LongTensor,
         orig_action_seqs: List[List[str]],
+        year_differences_mat: List[np.array],
         orig_program_outputs: List[List[Dict]],
+        metadata: List,
+        question_passage: TextFieldTensors,
 ):
     """Encode shared-substructure question, execute auxiliary-programs, and compute loss against original execution.
 
@@ -84,6 +92,10 @@ def compute_loss(
     flat_aux_func2actionidx_mapping: List[List[int]] = []
     flat_orig_sharedsub_postorder_nodeidxs: List[Tuple[int, int]] = []
 
+    # Slice the original p2date and p2num indices and concat to make mapping for auxiliary
+    aux_passageidx2dateidx_list = []
+    aux_passageidx2numberidx_list = []
+
     flat_aux_question_passage["tokens"] = {}
     for key in BERT_KEYS:
         flat_aux_question_passage["tokens"][key] = []   # making list now which will be concat later
@@ -100,6 +112,9 @@ def compute_loss(
             flat_aux_program_nodes.append(sharedsub_program_nodes[bidx][i])
             flat_aux_func2actionidx_mapping.append(sharedsub_function2actionidx_maps[bidx][i])
             flat_orig_sharedsub_postorder_nodeidxs.append(orig_sharedsub_postorder_node_idx[bidx][i])
+            aux_passageidx2dateidx_list.append(passageidx2dateidx[bidx].unsqueeze(0))
+            aux_passageidx2numberidx_list.append(passageidx2numberidx[bidx].unsqueeze(0))
+
 
     if not group_idxs:
         return loss
@@ -118,6 +133,56 @@ def compute_loss(
     encoded_passage = flat_aux_qp_encoding["encoded_passage"]
     bert_pooled_out = flat_aux_qp_encoding["pooled_encoding"]
 
+    passage_len = passage_mask.size()[1]
+
+    aux_passageidx2dateidx = torch.cat(aux_passageidx2dateidx_list, dim=0)
+    aux_passageidx2numberidx = torch.cat(aux_passageidx2numberidx_list, dim=0)
+
+    aux_passageidx2dateidx = aux_passageidx2dateidx[:, 0:passage_len]
+    aux_passageidx2numberidx = aux_passageidx2numberidx[:, 0:passage_len]
+
+    if encoded_passage.size()[1] != aux_passageidx2dateidx.size()[1]:
+        import pdb
+        pdb.set_trace()
+
+    (passage_token2date, passage_token2startdate,
+     passage_token2enddate, passage_token2num) = compute_aux_token_symbol_alignments(
+        modeled_passage=encoded_passage, passage_mask=passage_mask, executor_parameters=executor_parameters,
+        passageidx2dateidx=aux_passageidx2dateidx, passageidx2numberidx=aux_passageidx2numberidx)
+
+    aux_languages = []
+    for i, batch_idx in enumerate(group_idxs):
+        language = languages[batch_idx]
+        aux_language = DropLanguage(
+                    encoded_passage=encoded_passage[i],
+                    modeled_passage=encoded_passage[i],
+                    passage_mask=passage_mask[i],  # passage_mask_aslist[i],
+                    passage_sentence_boundaries=language.passage_sentence_boundaries,
+                    passage_tokenidx2dateidx=aux_passageidx2dateidx[i],
+                    passage_date_values=language.passage_date_values,
+                    passage_tokenidx2numidx=aux_passageidx2numberidx[i],
+                    passage_num_values=language.passage_num_values,
+                    composed_numbers=language.composed_numbers,
+                    passage_number_sortedtokenidxs=language.passage_number_sortedtokenidxs,
+                    add_num_combination_indices=language.add_num_combination_indices,
+                    sub_num_combination_indices=language.sub_num_combination_indices,
+                    year_differences=language.year_differences,
+                    year_differences_mat=year_differences_mat[batch_idx],
+                    count_num_values=language.count_num_values,
+                    passage_token2date_alignment=passage_token2date[i],
+                    passage_token2startdate_alignment=passage_token2startdate[i],
+                    passage_token2enddate_alignment=passage_token2enddate[i],
+                    passage_token2num_alignment=passage_token2num[i],
+                    parameters=language.parameters,
+                    start_types=None,  # batch_start_types[i],
+                    device_id=device_id,
+                    debug=language._debug,
+                    metadata=metadata[i]
+        )
+
+        aux_languages.append(aux_language)
+
+
     for i, batch_idx in enumerate(group_idxs):
         orig_decoded_action_seq: List[str] = orig_action_seqs[batch_idx]
         orig_decoded_prog_lisp: str = languages[i].action_sequence_to_logical_form(orig_decoded_action_seq)
@@ -132,7 +197,8 @@ def compute_loss(
         program_lisp = flat_aux_program_lisps[i]
 
         function2actionidx_map: List[int] = flat_aux_func2actionidx_mapping[i]
-        language = languages[batch_idx]
+        language = aux_languages[i]
+        # language = languages[batch_idx]
         action_seq: List[str] = language.logical_form_to_action_sequence(program_lisp)
         prog_sideargs: List[Dict] = [{} for _ in action_seq]
 
@@ -148,11 +214,12 @@ def compute_loss(
         for sidearg_dict in prog_sideargs:
             if "question_attention_supervision" in sidearg_dict:
                 # For shared-substructure aux programs, the supervised question-attention will be used as the predicted
-                # question attention
+                # question attention for weighted_question_vector
                 gold_attn = sidearg_dict["question_attention_supervision"]
                 sidearg_dict["question_attention"] = sidearg_dict["question_attention_supervision"]
                 gold_attn_tensor: torch.FloatTensor = move_to_device(
                     torch.FloatTensor(gold_attn), cuda_device=device_id)
+                gold_attn_tensor = F.softmax(gold_attn_tensor, dim=0)
 
                 gold_attn_len = len(gold_attn)
                 q_encoding = encoded_question[i, 0:gold_attn_len, :]
@@ -176,11 +243,54 @@ def compute_loss(
         if orig_output_type != sharedsub_output_type:
             logger.warning(f"Orig output type ({orig_output_type}) is not the same as "
                            f"sharedsub output type ({sharedsub_output_type})")
+            continue
+
+        if orig_output_tensor.size() != sharedsub_output_tensor.size():
+            # Needed when sharedsub passage get's less padding than the original
+            length = sharedsub_output_tensor.size()[0]
+            orig_output_tensor = orig_output_tensor[:length]
+
         # Ideally we would perform a masked_log, but due to clamping masked values are 1e-20
         loss += (F.kl_div(orig_output_tensor.log(), sharedsub_output_tensor, reduction="mean") +
                  F.kl_div(sharedsub_output_tensor.log(), orig_output_tensor, reduction="mean"))
 
     return loss
+
+
+def compute_aux_token_symbol_alignments(modeled_passage, passage_mask, executor_parameters,
+                                        passageidx2dateidx, passageidx2numberidx):
+    # Passage Token - Date Alignment
+    # Shape: (batch_size, passage_length, passage_length)
+    passage_passage_token2date_alignment = compute_token_symbol_alignments(
+        modeled_passage=modeled_passage,
+        passage_mask=passage_mask,
+        passageidx2symbolidx=passageidx2dateidx,
+        passage_to_symbol_attention_params=executor_parameters.passage_to_date_attention
+    )
+
+    passage_passage_token2startdate_alignment = compute_token_symbol_alignments(
+        modeled_passage=modeled_passage,
+        passage_mask=passage_mask,
+        passageidx2symbolidx=passageidx2dateidx,
+        passage_to_symbol_attention_params=executor_parameters.passage_to_start_date_attention
+    )
+
+    passage_passage_token2enddate_alignment = compute_token_symbol_alignments(
+        modeled_passage=modeled_passage,
+        passage_mask=passage_mask,
+        passageidx2symbolidx=passageidx2dateidx,
+        passage_to_symbol_attention_params=executor_parameters.passage_to_end_date_attention
+    )
+    # Passage Token - Num Alignment
+    passage_passage_token2num_alignment = compute_token_symbol_alignments(
+        modeled_passage=modeled_passage,
+        passage_mask=passage_mask,
+        passageidx2symbolidx=passageidx2numberidx,
+        passage_to_symbol_attention_params=executor_parameters.passage_to_num_attention
+    )
+
+    return (passage_passage_token2date_alignment, passage_passage_token2startdate_alignment,
+            passage_passage_token2enddate_alignment, passage_passage_token2num_alignment)
 
 def get_module_output(module_outputs: Dict[str, List[Output]]) -> Tuple[str, torch.Tensor]:
     """Get the actual module output to compute loss against given all debug-outputs from a module.
