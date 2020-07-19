@@ -32,27 +32,6 @@ def tokenize(text: str) -> List[str]:
     return [t.text for t in tokens]
 
 
-#
-# def number_comparison_filter(question: str) -> bool:
-#     """ Figures whether the question is a number comparison or not. """
-#     question_lower = question.lower()
-#     football_ques_spans = ["first half", "second half", "quarter", "touchdown", "field goals"]
-#     relevant = True
-#     if any(span in question_lower for span in NUMBER_COMPARISON):
-#         or_split = question_lower.split(" or ")
-#         if len(or_split) != 2:
-#             relevant = False
-#         comma_split = question_lower.split(",")
-#         if len(comma_split) > 2:
-#             relevant = False
-#         # were there more / fewer -- remove these difficult football questions
-#         if any(span in question_lower for span in football_ques_spans):
-#             relevant = False
-#     else:
-#         relevant = False
-#     return relevant
-
-
 def is_num_comparison(question: str, nested_expr_tuple: Tuple):
     if nested_expr_tuple in [('select_passagespan_answer', ('compare_num_lt', 'select_passage', 'select_passage')),
                              ('select_passagespan_answer', ('compare_num_gt', 'select_passage', 'select_passage'))]:
@@ -330,13 +309,14 @@ def num_comparison_aux_supervision(dataset: Dict, THRESHOLD: int = 10):
 
             question_answer[constants.program_supervision] = program_node.to_dict()
 
-    print(f"Total num questions:{total_ques}  num_date_compare_ques:{num_number_compare_ques}")
+    print(f"Total num questions:{total_ques}  num of num_compare_ques:{num_number_compare_ques}")
     print(f"Num of QA with annotated numbers: {numexamaples_w_nums_annotated}")
 
     return dataset
 
 
 if __name__ == "__main__":
+    print()
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_dir")
     args = parser.parse_args()

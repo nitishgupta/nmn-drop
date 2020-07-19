@@ -330,8 +330,22 @@ def get_postorder_function_list(node: Node) -> List[str]:
     postorder_func_list = []
     for c in node.children:
         postorder_func_list.extend(get_postorder_function_list(c))
+
     postorder_func_list.append(node.predicate)
     return postorder_func_list
+
+
+def get_postorder_function_and_arg_list(node: Node) -> Tuple[List[str], List[str]]:
+    postorder_func_list = []
+    postorder_arg_list = []
+    for c in node.children:
+        c_func_list, c_arg_list = get_postorder_function_and_arg_list(c)
+        postorder_func_list.extend(c_func_list)
+        postorder_arg_list.extend(c_arg_list)
+
+    postorder_func_list.append(node.predicate)
+    postorder_arg_list.append(node.string_arg)
+    return postorder_func_list, postorder_arg_list
 
 
 def get_inorder_supervision_list(node: Node) -> List[Dict]:

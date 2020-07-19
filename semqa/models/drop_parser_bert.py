@@ -335,43 +335,49 @@ class DROPParserBERT(DROPParserBase):
         question_passage_similarity = self.qp_matrix_attention(encoded_question, modeled_passage)
         passage_question_similarity = question_passage_similarity.transpose(1, 2)
 
-        question_passage_attention = allenutil.masked_softmax(
-            question_passage_similarity, passage_mask.unsqueeze(1).bool(), memory_efficient=True
-        )
+        # question_passage_attention = allenutil.masked_softmax(
+        #     question_passage_similarity, passage_mask.unsqueeze(1).bool(), memory_efficient=True
+        # )
+        #
+        # passage_question_attention = allenutil.masked_softmax(
+        #     passage_question_similarity, question_mask.unsqueeze(1).bool(), memory_efficient=True
+        # )
 
-        passage_question_attention = allenutil.masked_softmax(
-            passage_question_similarity, question_mask.unsqueeze(1).bool(), memory_efficient=True
-        )
+        passage_for_numdate = modeled_passage
+
+        # passage_bert_out = self._text_field_embedder(passage)
+        # passage_for_numdate = passage_bert_out[:, 1:-1, :] * passage_mask.unsqueeze(-1)
 
         # Passage Token - Date Alignment
         # Shape: (batch_size, passage_length, passage_length)
         passage_passage_token2date_alignment = compute_token_symbol_alignments(
-            modeled_passage=modeled_passage,
+            modeled_passage=passage_for_numdate,
             passage_mask=passage_mask,
             passageidx2symbolidx=passageidx2dateidx,
             passage_to_symbol_attention_params=self._executor_parameters.passage_to_date_attention
         )
 
         passage_passage_token2startdate_alignment = compute_token_symbol_alignments(
-            modeled_passage=modeled_passage,
+            modeled_passage=passage_for_numdate,
             passage_mask=passage_mask,
             passageidx2symbolidx=passageidx2dateidx,
             passage_to_symbol_attention_params=self._executor_parameters.passage_to_start_date_attention
         )
 
         passage_passage_token2enddate_alignment = compute_token_symbol_alignments(
-            modeled_passage=modeled_passage,
+            modeled_passage=passage_for_numdate,
             passage_mask=passage_mask,
             passageidx2symbolidx=passageidx2dateidx,
             passage_to_symbol_attention_params=self._executor_parameters.passage_to_end_date_attention
         )
         # Passage Token - Num Alignment
         passage_passage_token2num_alignment = compute_token_symbol_alignments(
-            modeled_passage=modeled_passage,
+            modeled_passage=passage_for_numdate,
             passage_mask=passage_mask,
             passageidx2symbolidx=passageidx2numberidx,
             passage_to_symbol_attention_params=self._executor_parameters.passage_to_num_attention
         )
+
         # json_dicts = []
         # for i in range(batch_size):
         #     ques_tokens = metadata[i]['question_tokens']
@@ -728,6 +734,7 @@ class DROPParserBERT(DROPParserBase):
                 year_differences_mat=year_differences_mat,
                 metadata=metadata,
                 question_passage=question_passage,
+                encodedpassage_for_numdate=None,
             )
             # sharedsub_loss = 5 * sharedsub_loss
 

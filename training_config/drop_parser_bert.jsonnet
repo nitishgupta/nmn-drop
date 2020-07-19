@@ -81,7 +81,7 @@ local shared_substructure = utils.boolparser(std.extVar("SHRDSUB"));
             "type": "gru",
             "input_size": 4,
             "hidden_size": 20,
-            "num_layers": 2,
+            "num_layers": 3,
             "bidirectional": true,
         },
 

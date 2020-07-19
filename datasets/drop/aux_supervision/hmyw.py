@@ -292,14 +292,7 @@ def hmyw_aux_supervision(dataset: Dict, THRESHOLD: int = 10):
                         question_answer[constants.execution_supervised] = True
                         numexamaples_w_nums_annotated += 1
 
-                    # else:
-                    #     print(" ".join(question_tokens))
-                    #     print(program_node.get_nested_expression_with_strings())
-                    #     print(" ".join(passage_tokens))
-                    #     print(number_values1)
-                    #     print(number_values2)
-                    #     print(answer_number)
-                    #     print()
+            question_answer[constants.program_supervision] = program_node.to_dict()
 
     print(f"Total num questions:{total_ques}  hmyw questions :{relevant_ques}")
     print(f"Num of QA with annotated numbers: {numexamaples_w_nums_annotated}")
@@ -309,6 +302,7 @@ def hmyw_aux_supervision(dataset: Dict, THRESHOLD: int = 10):
 
 
 if __name__ == "__main__":
+    print()
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_dir")
     args = parser.parse_args()

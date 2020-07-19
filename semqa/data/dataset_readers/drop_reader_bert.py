@@ -225,6 +225,7 @@ class DROPReader(DatasetReader):
 
         # Parse and make fields for shared-substructure supervision for certain questions
         self.shared_substructure = shared_substructure
+        self.num_w_ss = 0
 
         self.max_passage_nums = 0
         self.max_composed_nums = 0
@@ -338,6 +339,7 @@ class DROPReader(DatasetReader):
         logger.info(f"supervised-program-type mismatches answer-type(s): {self.num_supprogtype_mismatch_anstype}")
         logger.info("Max passage nums: {} Max composed nums : {} ".format(self.max_passage_nums,
                                                                           self.max_composed_nums))
+        logger.info("Instances w/ shared-substructure annotation: {}".format(self.num_w_ss))
 
     @overrides
     def text_to_instance(
@@ -831,6 +833,9 @@ class DROPReader(DatasetReader):
             fields["orig_sharedsub_postorder_node_idx"] = MetadataField([(origprog_postorder_node_idx,
                                                                           sharedprog_postorder_node_idx)])
             fields["sharedsub_mask"] = ArrayField(np.array([1]), padding_value=0)
+            self.num_w_ss += 1
+
+        # elif not self.shared_substructure:
         else:
             # Make empty fields so that TextField gets padded appropriately
             aux_question_passage_tokens: List[Token] = [cls_token, sep_token, sep_token]
@@ -842,6 +847,9 @@ class DROPReader(DatasetReader):
             fields["sharedsub_function2actionidx_maps"] = MetadataField([None])
             fields["orig_sharedsub_postorder_node_idx"] = MetadataField([(-1, -1)])
             fields["sharedsub_mask"] = ArrayField(np.array([0]), padding_value=0)
+        # else:
+        #     return None
+
 
         fields["metadata"] = MetadataField(metadata)
         return Instance(fields)

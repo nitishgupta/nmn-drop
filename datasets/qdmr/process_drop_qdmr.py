@@ -12,6 +12,8 @@ from semqa.utils.qdmr_utils import Node, QDMRExample, nested_expression_to_lisp,
 from allennlp.data.tokenizers import SpacyTokenizer, Token
 
 from semqa.domain_languages.drop_language import DropLanguage, get_empty_language_object
+from datasets.qdmr.postprocess_programs import get_postprocessed_dataset, remove_uncompilable_programs, \
+    update_question_attention
 
 nmndrop_language: DropLanguage = get_empty_language_object()
 
@@ -381,8 +383,10 @@ def get_drop_programs(qdmr_examples: List[QDMRExample], drop_data) -> Dict[str, 
 
 def prune_dropdata_wprograms(drop_data, drop_passageid2qid2program):
     """Prune drop data to questions that contain executable nmn-program supervision."""
+    num_passages, num_ques = 0, 0
     pruned_drop_data = {}
     for passage_id, qid2program in drop_passageid2qid2program.items():
+        num_passages += 1
         passage_info = drop_data[passage_id]
         new_qa_pairs = []
         qa_pairs = passage_info[constants.qa_pairs]
@@ -394,8 +398,10 @@ def prune_dropdata_wprograms(drop_data, drop_passageid2qid2program):
             root_predicate = program_supervision.predicate
             qa[constants.program_supervision] = program_supervision.to_dict()
             new_qa_pairs.append(qa)
+            num_ques += 1
         passage_info[constants.qa_pairs] = new_qa_pairs
         pruned_drop_data[passage_id] = passage_info
+    print("\nProgram processing completed! Num passages: {} Num questions: {}".format(num_passages, num_ques))
     return pruned_drop_data
 
 
@@ -407,7 +413,11 @@ def main(args):
     drop_passageid2qid2program = get_drop_programs(qdmr_examples, drop_data)
 
     pruned_drop_data = prune_dropdata_wprograms(drop_data, drop_passageid2qid2program)
-    print(f"Total passages: {len(pruned_drop_data)}")
+
+    print("\nStarting post-processing to correct programs")
+    postprocessed_dataset = get_postprocessed_dataset(pruned_drop_data)
+    postprocessed_dataset = remove_uncompilable_programs(postprocessed_dataset)
+    postprocessed_dataset = update_question_attention(postprocessed_dataset)
 
     output_json = args.output_json
     output_dir = os.path.split(output_json)[0]
@@ -416,7 +426,7 @@ def main(args):
 
     print(f"Writing drop data with program-supervision: {output_json}")
     with open(output_json, 'w') as outf:
-        json.dump(pruned_drop_data, outf, indent=4)
+        json.dump(postprocessed_dataset, outf, indent=4)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 #!/usr/bin/env
 
-SERIALIZATION_DIR=./resources/checkpoints/drop-w-qdmr/ss-iclr/drop_parser_bert/Qattn_true/EXCLOSS_false/aux_true/IO_false/SHRDSUB_true/SUPEPOCHS_0_HEM_0_BM_1/S_10_sumattn
+SERIALIZATION_DIR=./resources/checkpoints/drop-w-qdmr/iclr-full-qdmr-filter-v2-ss/drop_parser_bert/Qattn_true/EXCLOSS_true/aux_true/IO_true/SHRDSUB_false/SUPEPOCHS_0_HEM_0_BM_1/S_42
 WEIGHTS_TH=best.th
 
 MODEL_ARCHIVE=${SERIALIZATION_DIR}/model.tar.gz

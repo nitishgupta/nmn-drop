@@ -9,7 +9,8 @@ from typing import List, Tuple, Dict, Union, Callable
 
 from analysis.qdmr.program_diagnostics import is_potential_filter_num
 from semqa.utils.qdmr_utils import read_drop_dataset, node_from_dict, Node, nested_expression_to_lisp, \
-    lisp_to_nested_expression, nested_expression_to_tree, get_postorder_function_list
+    lisp_to_nested_expression, nested_expression_to_tree, get_postorder_function_list, \
+    get_postorder_function_and_arg_list
 from semqa.domain_languages.drop_language import DropLanguage, get_empty_language_object
 from allennlp.data.tokenizers import SpacyTokenizer
 
@@ -127,6 +128,9 @@ def num_minmax_question(program_node: Node, question: str, question_tokens: List
 
 
 def project_minmax_question(program_node: Node, question: str, question_tokens: List[str]) -> List[Dict]:
+    """ Using string arg instead of question_attention since the attention is annotated heuristically and can be
+        noisy due to duplicate stop-words etc.
+    """
     program_lisp = nested_expression_to_lisp(program_node.get_nested_expression())
     minmax_lisps = ["(select_passagespan_answer (project_passage (select_max_num select_passage)))",
                     "(select_passagespan_answer (project_passage (select_min_num select_passage)))"]
@@ -137,7 +141,10 @@ def project_minmax_question(program_node: Node, question: str, question_tokens: 
         return None
 
     original_select_node = program_node.children[0].children[0].children[0]
-    original_ques_attn = original_select_node.supervision.get("question_attention_supervision", None)
+    string_arg = original_select_node.string_arg
+    if string_arg is None:
+        return None
+    # original_ques_attn = original_select_node.supervision.get("question_attention_supervision", None)
 
     # Draw a min/max program and replace the "Who scored" with "How many yards was"
     max_lisp = "(select_num (select_max_num select_passage))"
@@ -145,32 +152,39 @@ def project_minmax_question(program_node: Node, question: str, question_tokens: 
 
     if random.random() < 0.5:
         aux_program_lisp = min_lisp
-        aux_question_tokens = [x if x != "longest" else "shortest" for x in question_tokens] # map longest to shortest
-        superlative_index = aux_question_tokens.index("shortest")
+        # aux_question_tokens = [x if x != "longest" else "shortest" for x in question_tokens] # map longest to shortest
+        # superlative_index = aux_question_tokens.index("shortest")
     else:
         aux_program_lisp = max_lisp
-        aux_question_tokens = [x if x != "shortest" else "longest" for x in question_tokens]  # map shortest to longest
-        superlative_index = aux_question_tokens.index("longest")
+        # aux_question_tokens = [x if x != "shortest" else "longest" for x in question_tokens]  # map shortest to longest
+        # superlative_index = aux_question_tokens.index("longest")
 
     # replace first two "Who scored" tokens
-    aux_question_tokens = ["How", "many", "yards", "was"] + aux_question_tokens[2:]
-    aux_question = " ".join(aux_question_tokens)
+    superlative = "longest" if aux_program_lisp == max_lisp else "shortest"
+    aux_question = "How many yards was the " + superlative + " " + string_arg.strip() + " ?"
+    aux_question_tokens = tokenize(aux_question)
+    superlative_index = aux_question_tokens.index("longest") if aux_program_lisp == max_lisp \
+        else aux_question_tokens.index("shortest")
+    # ["How", "many", "yards", "was"] + aux_question_tokens[2:]
+    # aux_question = " ".join(aux_question_tokens)
 
     aux_nested_expr = lisp_to_nested_expression(aux_program_lisp)
     aux_program_node = nested_expression_to_tree(aux_nested_expr)
 
-    if original_ques_attn is not None:
-        aux_ques_attn = copy.deepcopy(original_ques_attn)
-        aux_ques_attn = [0, 0, 0, 0] + aux_ques_attn[2:]
-        if len(aux_ques_attn) != len(aux_question_tokens):
-            return None
-        select_node = aux_program_node.children[0].children[0]
-        select_node.supervision["question_attention_supervision"] = aux_ques_attn
-    else:
-        # Attend all tokens apart from "How many yards was", "?" and "superlative"
-        question_attention_supervision = [0] * len(aux_question_tokens)
-        question_attention_supervision[4:-1] = [1] * (len(aux_question_tokens) - 4 - 1)  # `how many yards was` and `?`
-        question_attention_supervision[superlative_index] = 0
+    # if original_ques_attn is not None:
+    #     aux_ques_attn = copy.deepcopy(original_ques_attn)
+    #     aux_ques_attn = [0, 0, 0, 0] + aux_ques_attn[2:]
+    #     if len(aux_ques_attn) != len(aux_question_tokens):
+    #         return None
+    #     select_node = aux_program_node.children[0].children[0]
+    #     select_node.supervision["question_attention_supervision"] = aux_ques_attn
+    # else:
+    # Attend all tokens apart from "How many yards was", "?" and "superlative"
+    question_attention_supervision = [0] * len(aux_question_tokens)
+    question_attention_supervision[4:-1] = [1] * (len(aux_question_tokens) - 4 - 1)  # `how many yards was` and `?`
+    question_attention_supervision[superlative_index] = 0
+    select_node = aux_program_node.children[0].children[0]
+    select_node.supervision["question_attention_supervision"] = question_attention_supervision
 
     # We can hard-code this to the index for the `select_passage` for both original and shared program
     origprog_postorder_node_idx = 0
@@ -188,6 +202,9 @@ def project_minmax_question(program_node: Node, question: str, question_tokens: 
 
 
 def count_select_question(program_node: Node, question: str, question_tokens: List[str]) -> List[Dict]:
+    """ Using string arg instead of question_attention since the attention is annotated heuristically and can be
+        noisy due to duplicate stop-words etc.
+    """
     program_lisp = nested_expression_to_lisp(program_node.get_nested_expression())
     count_select_lisp = "(aggregate_count select_passage)"
 
@@ -195,27 +212,23 @@ def count_select_question(program_node: Node, question: str, question_tokens: Li
         return None
 
     original_select_node = program_node.children[0]
-    original_ques_attn = original_select_node.supervision.get("question_attention_supervision", None)
+    string_arg = original_select_node.string_arg
+    if string_arg is None:
+        return None
+    # original_ques_attn = original_select_node.supervision.get("question_attention_supervision", None)
 
     # Change "How many X ?" -> "What X ?" with program (select_passagespan_answer select_passage)
-    aux_question = question.replace("How many", "What")
-    aux_question_tokens = ["What"] + question_tokens[2:]
+    aux_question = "What " + string_arg.strip() + " ?"
+    aux_question_tokens = tokenize(aux_question)
     aux_program_lisp = "(select_passagespan_answer select_passage)"
 
     aux_nested_expr = lisp_to_nested_expression(aux_program_lisp)
     aux_program_node = nested_expression_to_tree(aux_nested_expr)
 
-    if original_ques_attn is not None:
-        aux_ques_attn = copy.deepcopy(original_ques_attn)
-        aux_ques_attn = aux_ques_attn[1:]  # replaced two tokens w/ one
-        select_node = aux_program_node.children[0]
-        select_node.supervision["question_attention_supervision"] = aux_ques_attn
-    else:
-        # question - attention for all X tokens
-        aux_question_attention = [1] * len(aux_question_tokens)
-        aux_question_attention[0] = 0
-        aux_question_attention[-1] = 0
-        aux_program_node.children[0].supervision["question_attention_supervision"] = aux_question_attention
+    # question - attention for all X tokens
+    aux_question_attention = [0] * len(aux_question_tokens)
+    aux_question_attention[1:-1] = [1] * (len(aux_question_tokens) - 2)
+    aux_program_node.children[0].supervision["question_attention_supervision"] = aux_question_attention
 
     # We can hard-code this to the index for the `select_passage` for both original and shared program
     origprog_postorder_node_idx = 0
@@ -232,6 +245,155 @@ def count_select_question(program_node: Node, question: str, question_tokens: Li
     return [return_dict]
 
 
+def convert_select_node_into_aux_question(select_node: Node, pre_tokens: List[str]):
+    if not select_node.string_arg:
+        return None
+
+    pre_string = " ".join(pre_tokens)
+    question = pre_string + " " + select_node.string_arg.strip() + " ?"
+    question_tokens = tokenize(question)
+    ques_attention = [0] * len(question_tokens)
+    ques_attention[len(pre_tokens):-1] = [1] * (len(question_tokens) - len(pre_tokens) - 1)
+
+    aux_program_lisp = "(select_passagespan_answer select_passage)"
+    aux_nested_expr = lisp_to_nested_expression(aux_program_lisp)
+    aux_program_node = nested_expression_to_tree(aux_nested_expr)
+    aux_program_node.children[0].supervision["question_attention_supervision"] = ques_attention
+
+    return {
+        "question": question,
+        "question_tokens": question_tokens,
+        "ques_attention": ques_attention,
+        "aux_program_node": aux_program_node
+    }
+
+
+def year_diff_two_events(program_node: Node, question: str, question_tokens: List[str]) -> List[Dict]:
+    """ Using string arg instead of question_attention since the attention is annotated heuristically and can be
+        noisy due to duplicate stop-words etc.
+    """
+    program_lisp = nested_expression_to_lisp(program_node.get_nested_expression())
+    year_diff_two_lisp = "(year_difference_two_events select_passage select_passage)"
+
+    if program_lisp != year_diff_two_lisp:
+        return None
+
+    select_1_node = program_node.children[0]
+    select_2_node = program_node.children[1]
+
+    select1_ques_dict = convert_select_node_into_aux_question(select_1_node, pre_tokens=["Which"])
+    select2_ques_dict = convert_select_node_into_aux_question(select_2_node, pre_tokens=["Which"])
+
+    ss_dicts = []
+    if select1_ques_dict is not None:
+        select1_ss_dict = get_substructure_annotation_dict(
+                                         aux_question=select1_ques_dict["question"],
+                                         aux_question_tokens=select1_ques_dict["question_tokens"],
+                                         aux_program_node=select1_ques_dict["aux_program_node"],
+                                         orig_program_lisp=program_lisp,
+                                         orig_question=question,
+                                         origprog_postorder_node_idx=0,   # first select is post-order idx 0
+                                         sharedprog_postorder_node_idx=0)
+        ss_dicts.append(select1_ss_dict)
+
+    if select2_ques_dict is not None:
+        select2_ss_dict = get_substructure_annotation_dict(
+                                         aux_question=select2_ques_dict["question"],
+                                         aux_question_tokens=select2_ques_dict["question_tokens"],
+                                         aux_program_node=select2_ques_dict["aux_program_node"],
+                                         orig_program_lisp=program_lisp,
+                                         orig_question=question,
+                                         origprog_postorder_node_idx=1,   # second select is post-order idx 1
+                                         sharedprog_postorder_node_idx=0)
+        ss_dicts.append(select2_ss_dict)
+
+    if ss_dicts:
+        return ss_dicts
+    else:
+        return None
+
+
+def passage_arithmetic(program_node: Node, question: str, question_tokens: List[str]) -> List[Dict]:
+    """ Using string arg instead of question_attention since the attention is annotated heuristically and can be
+        noisy due to duplicate stop-words etc.
+
+    Post order : ['select_passage', 'select_num', 'select_passage', 'select_num', 'passagenumber_difference']
+    """
+    program_lisp = nested_expression_to_lisp(program_node.get_nested_expression())
+    passage_diff_lisp = "(passagenumber_difference (select_num select_passage) (select_num select_passage))"
+    passage_add_lisp = "(passagenumber_addition (select_num select_passage) (select_num select_passage))"
+    passage_arith_lisp = [passage_diff_lisp, passage_add_lisp]
+
+    if program_lisp not in passage_arith_lisp:
+        return None
+
+    select_1_node = program_node.children[0].children[0]
+    select_2_node = program_node.children[1].children[0]
+
+    select1_ques_dict = convert_select_node_into_aux_question(select_1_node, pre_tokens=["What", "were"])
+    select2_ques_dict = convert_select_node_into_aux_question(select_2_node, pre_tokens=["What", "were"])
+
+    ss_dicts = []
+    if select1_ques_dict is not None:
+        select1_ss_dict = get_substructure_annotation_dict(
+                                         aux_question=select1_ques_dict["question"],
+                                         aux_question_tokens=select1_ques_dict["question_tokens"],
+                                         aux_program_node=select1_ques_dict["aux_program_node"],
+                                         orig_program_lisp=program_lisp,
+                                         orig_question=question,
+                                         origprog_postorder_node_idx=0,   # first select is post-order idx 0
+                                         sharedprog_postorder_node_idx=0)
+        ss_dicts.append(select1_ss_dict)
+
+    if select2_ques_dict is not None:
+        select2_ss_dict = get_substructure_annotation_dict(
+                                         aux_question=select2_ques_dict["question"],
+                                         aux_question_tokens=select2_ques_dict["question_tokens"],
+                                         aux_program_node=select2_ques_dict["aux_program_node"],
+                                         orig_program_lisp=program_lisp,
+                                         orig_question=question,
+                                         origprog_postorder_node_idx=2,   # second select is post-order idx 2
+                                         sharedprog_postorder_node_idx=0)
+        ss_dicts.append(select2_ss_dict)
+
+    if ss_dicts:
+        return ss_dicts
+    else:
+        return None
+
+
+def project_select(program_node: Node, question: str, question_tokens: List[str]) -> Union[List[Dict], None]:
+    """ Using string arg instead of question_attention since the attention is annotated heuristically and can be
+        noisy due to duplicate stop-words etc.
+    """
+    program_lisp = nested_expression_to_lisp(program_node.get_nested_expression())
+    project_select_lisp = "(select_passagespan_answer (project_passage select_passage))"
+
+    if program_lisp != project_select_lisp:
+        return None
+
+    select_node = program_node.children[0].children[0]
+
+    select_ques_dict = convert_select_node_into_aux_question(select_node, pre_tokens=["What", "was"])
+
+    ss_dicts = []
+    if select_ques_dict is not None:
+        select1_ss_dict = get_substructure_annotation_dict(
+                                         aux_question=select_ques_dict["question"],
+                                         aux_question_tokens=select_ques_dict["question_tokens"],
+                                         aux_program_node=select_ques_dict["aux_program_node"],
+                                         orig_program_lisp=program_lisp,
+                                         orig_question=question,
+                                         origprog_postorder_node_idx=0,   # first select is post-order idx 0
+                                         sharedprog_postorder_node_idx=0)
+        ss_dicts.append(select1_ss_dict)
+
+    if ss_dicts:
+        return ss_dicts
+    else:
+        return None
+
+
 def get_postprocessed_dataset(dataset: Dict, prune_dataset: bool) -> Tuple[Dict, str]:
     """ Filter dataset to remove "select_passagespan_answer(select_passage)" questions.
 
@@ -243,6 +405,7 @@ def get_postprocessed_dataset(dataset: Dict, prune_dataset: bool) -> Tuple[Dict,
 
     filtered_data = {}
     total_qa = 0
+    num_output_qa = 0
     num_substruct_qa = 0
 
     # Different types of questions for which we can augment shared-substructure questions
@@ -250,6 +413,9 @@ def get_postprocessed_dataset(dataset: Dict, prune_dataset: bool) -> Tuple[Dict,
         "num_minmax": num_minmax_question,
         "count_select": count_select_question,
         "project_minmax": project_minmax_question,
+        "year_diff_two_events": year_diff_two_events,
+        "project_select": project_select,
+        "passage_arithmetic": passage_arithmetic
     }
 
     qtype2conversion = defaultdict(int)
@@ -271,7 +437,7 @@ def get_postprocessed_dataset(dataset: Dict, prune_dataset: bool) -> Tuple[Dict,
                     return_dicts: List[Dict] = processing_function(program_node, question, question_tokens)
                     if return_dicts is not None:
                         qtype2conversion[qtype] += 1
-                        # if processing_function == count_select_question:
+                        # if processing_function == project_select:
                         #     print()
                         #     print(question)
                         #     print(program_node.to_dict())
@@ -329,6 +495,7 @@ def main(args):
         print(f"Writing data w/ shared-substructures to: {output_json}")
         with open(output_json, 'w') as outf:
             json.dump(dataset_w_sharedsub, outf, indent=4)
+        print()
 
     stats_file = os.path.join(output_dir, "stats.txt")
     print(f"\nWriting stats to: {stats_file}")

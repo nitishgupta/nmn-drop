@@ -183,7 +183,8 @@ def aux_window_loss(ptop_attention, passage_mask, inwindow_mask):
     return inwindow_aux_loss
 
 
-def mostAttendedSpans(attention_vec: Union[torch.FloatTensor, List[float]], tokens: List[str], span_length=5):
+def mostAttendedSpans(attention_vec: Union[torch.FloatTensor, List[float]], tokens: List[str], span_length=5,
+                      num_spans: int = 5):
     """ Visualize an attention vector for a list of tokens
 
         Parameters:
@@ -216,7 +217,7 @@ def mostAttendedSpans(attention_vec: Union[torch.FloatTensor, List[float]], toke
 
     top_spans = [sorted_spanattn[0][0]]
     idx = 1
-    while len(top_spans) < 5 and idx < len(sorted_spanattn):
+    while len(top_spans) < num_spans and idx < len(sorted_spanattn):
         span = sorted_spanattn[idx][0]
         keep_span = True
         for in_span in top_spans:

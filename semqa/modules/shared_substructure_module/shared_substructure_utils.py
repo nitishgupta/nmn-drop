@@ -38,6 +38,7 @@ def compute_loss(
         orig_program_outputs: List[List[Dict]],
         metadata: List,
         question_passage: TextFieldTensors,
+        encodedpassage_for_numdate=None,
 ):
     """Encode shared-substructure question, execute auxiliary-programs, and compute loss against original execution.
 
@@ -115,7 +116,6 @@ def compute_loss(
             aux_passageidx2dateidx_list.append(passageidx2dateidx[bidx].unsqueeze(0))
             aux_passageidx2numberidx_list.append(passageidx2numberidx[bidx].unsqueeze(0))
 
-
     if not group_idxs:
         return loss
 
@@ -133,21 +133,23 @@ def compute_loss(
     encoded_passage = flat_aux_qp_encoding["encoded_passage"]
     bert_pooled_out = flat_aux_qp_encoding["pooled_encoding"]
 
-    passage_len = passage_mask.size()[1]
-
     aux_passageidx2dateidx = torch.cat(aux_passageidx2dateidx_list, dim=0)
     aux_passageidx2numberidx = torch.cat(aux_passageidx2numberidx_list, dim=0)
 
+    if encodedpassage_for_numdate is None:
+        encodedpassage_for_numdate = encoded_passage
+    else:
+        encodedpassage_for_numdate_list = [encodedpassage_for_numdate[bidx, :, :].unsqueeze(0) for bidx in group_idxs]
+        encodedpassage_for_numdate = torch.cat(encodedpassage_for_numdate_list, dim=0)
+
+    passage_len = passage_mask.size()[1]
     aux_passageidx2dateidx = aux_passageidx2dateidx[:, 0:passage_len]
     aux_passageidx2numberidx = aux_passageidx2numberidx[:, 0:passage_len]
-
-    if encoded_passage.size()[1] != aux_passageidx2dateidx.size()[1]:
-        import pdb
-        pdb.set_trace()
+    encodedpassage_for_numdate = encodedpassage_for_numdate[:, 0:passage_len, :]
 
     (passage_token2date, passage_token2startdate,
      passage_token2enddate, passage_token2num) = compute_aux_token_symbol_alignments(
-        modeled_passage=encoded_passage, passage_mask=passage_mask, executor_parameters=executor_parameters,
+        modeled_passage=encodedpassage_for_numdate, passage_mask=passage_mask, executor_parameters=executor_parameters,
         passageidx2dateidx=aux_passageidx2dateidx, passageidx2numberidx=aux_passageidx2numberidx)
 
     aux_languages = []
@@ -228,7 +230,12 @@ def compute_loss(
                 sidearg_dict["weighted_question_vector"] = weighted_question_vector
 
         language.modules_debug_info.append([])
-        actionseq_denotation = language.execute_action_sequence(action_seq, prog_sideargs)
+        try:
+            actionseq_denotation = language.execute_action_sequence(action_seq, prog_sideargs)
+        except:
+            print(action_seq)
+            print(program_lisp)
+            continue
 
         sharedsub_prog_outputs: List[Dict] = language.modules_debug_info[-1]
         orig_prog_outputs: List[Dict] = orig_program_outputs[batch_idx]

@@ -56,8 +56,16 @@ def logicalform_distribution(nmn_instances: List[NMNPredictionInstance], mtmsn_i
         print(f"{lf}")
         total_nmn_correct = sum(lf2nmn_correct[lf])
         total_mtmsn_correct = sum(lf2mtmsn_correct[lf])
+        mtmsn_correct_qids = lf2mtmsn_correctqids[lf]
+        nmn_correct_qids = lf2nmn_correctqids[lf]
+        common_correct_qids = mtmsn_correct_qids.intersection(nmn_correct_qids)
+        correct_in_mtmsn_not_nmn = mtmsn_correct_qids.difference(nmn_correct_qids)
+        all_qids = set(lf2qids[lf])
+        incorrect_in_both = all_qids.difference(mtmsn_correct_qids.union(nmn_correct_qids))
         print(f"Total: {len(lf2qids[lf])}  NMN:{total_nmn_correct}  MTMSN:{total_mtmsn_correct} "
-              f"Common correct: {len(lf2nmn_correctqids[lf].intersection(lf2mtmsn_correctqids[lf]))}")
+              f"Common correct: {len(common_correct_qids)}")
+        print(f"Correct in MTMSN not in NMN: \n{correct_in_mtmsn_not_nmn}")
+        print(f"Incorrect in both: \n{incorrect_in_both}")
         print()
 
 
@@ -96,10 +104,10 @@ def model_comparison(nmn_predictions: List[NMNPredictionInstance], mtmsn_predict
     print(f"Correct intersection between model-1 and model-2")
     print(len(common_correct))
 
-    print(f"Correct in MTMSN but not in NMN")
+    # print(f"Correct in MTMSN but not in NMN")
     correct_in_mtmsn_qids = correct_mtmsn_qids.difference(correct_nmn_qids)
-    diff_qids = [instance.query_id for instance in nmn_predictions if instance.query_id in correct_in_mtmsn_qids]
-    print(diff_qids)
+    # diff_qids = [instance.query_id for instance in nmn_predictions if instance.query_id in correct_in_mtmsn_qids]
+    # print(diff_qids)
 
     print(f"Correct in NMN but not in MTMSN")
     correct_in_nmn_qids = correct_nmn_qids.difference(correct_mtmsn_qids)
@@ -113,6 +121,7 @@ def model_comparison(nmn_predictions: List[NMNPredictionInstance], mtmsn_predict
     #     print(k)
     #     print(v)
 
+    print("\nPerformance by NMN predicted logical form:\n")
     logicalform_distribution(nmn_predictions, mtmsn_predictions)
 
 
@@ -130,7 +139,10 @@ if __name__ == "__main__":
     # This is a JSON file
     mtmsn_preds: List[NMNPredictionInstance] = read_mtmsn_predictions(args.mtmsn_preds_json)
 
+    print(f"NMN: {args.our_preds_jsonl}")
     model_stats(nmn_preds)
+
+    print(f"MTMSN: {args.mtmsn_preds_json}")
     model_stats(mtmsn_preds)
 
     model_comparison(nmn_preds, mtmsn_preds)

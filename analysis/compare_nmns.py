@@ -1,6 +1,7 @@
 from typing import List, Tuple, Dict, Union, Any
 import json
 import argparse
+from collections import defaultdict
 
 from utils.util import round_all
 from semqa.utils.prediction_analysis import NMNPredictionInstance, read_nmn_prediction_file, avg_f1, get_correct_qids, \
@@ -54,6 +55,51 @@ def print_about_model(pred_instances: List[NMNPredictionInstance], modules_of_in
                                                             perc_correct_w_module))
 
 
+def logicalform_distribution(pred_instances_1: List[NMNPredictionInstance],
+                             pred_instances_2: List[NMNPredictionInstance]):
+    lf2qids = defaultdict(list)
+    qid2lf = defaultdict(str)
+    lf2nmn1_correct = defaultdict(list)
+    lf2nmn1_correctqids = defaultdict(set)
+    for instance in pred_instances_1:
+        qid = instance.query_id
+        lf = instance.top_logical_form
+        lf2qids[lf].append(qid)
+        qid2lf[qid] = lf
+        nmn1_correct: bool = instance.correct
+        if nmn1_correct:
+            lf2nmn1_correctqids[lf].add(qid)
+        lf2nmn1_correct[lf].append(nmn1_correct)
+
+    lf2nmn2_correct = defaultdict(list)
+    lf2nmn2_correctqids = defaultdict(set)
+    for mtmsn_ins in pred_instances_2:
+        qid = mtmsn_ins.query_id
+        lf = qid2lf[qid]
+        mtmsn_correct = mtmsn_ins.correct
+        lf2nmn2_correct[lf].append(mtmsn_correct)
+        if mtmsn_correct:
+            lf2nmn2_correctqids[lf].add(qid)
+
+    sorted_lf = sorted(lf2qids.keys(), key=lambda x: len(lf2qids[x]), reverse=True)
+    for lf in sorted_lf:
+        print(f"{lf}")
+        total_nmn1_correct = sum(lf2nmn1_correct[lf])
+        total_nmn2_correct = sum(lf2nmn2_correct[lf])
+        nmn2_correct_qids = lf2nmn2_correctqids[lf]
+        nmn_correct_qids = lf2nmn1_correctqids[lf]
+        common_correct_qids = nmn2_correct_qids.intersection(nmn_correct_qids)
+        correct_in_nmn2_not_nmn1 = nmn2_correct_qids.difference(nmn_correct_qids)
+        all_qids = set(lf2qids[lf])
+        incorrect_in_both = all_qids.difference(nmn2_correct_qids.union(nmn_correct_qids))
+        print(f"Total: {len(lf2qids[lf])}  NMN-1:{total_nmn1_correct}  NMN-2:{total_nmn2_correct} "
+              f"Common correct: {len(common_correct_qids)}")
+        print(f"Correct in NMN-2 not in NMN-1: \n{correct_in_nmn2_not_nmn1}")
+        print(f"Incorrect in both: \n{incorrect_in_both}")
+        print()
+
+
+
 def model_comparison(pred_instances_1: List[NMNPredictionInstance], pred_instances_2: List[NMNPredictionInstance]):
     correct_qids1 = set(get_correct_qids(pred_instances_1))
     correct_qids2 = set(get_correct_qids(pred_instances_2))
@@ -62,6 +108,9 @@ def model_comparison(pred_instances_1: List[NMNPredictionInstance], pred_instanc
 
     print(f"Correct intersection between model-1 and model-2")
     print(len(common_correct))
+
+    correct_in_1_not_2 = correct_qids1.difference(correct_qids2)
+    correct_in_2_not_1 = correct_qids2.difference(correct_qids1)
 
     # print(f"Correct in model-1 but not in model-2")
     # diff_qids_set = correct_qids1.difference(correct_qids2)
@@ -85,6 +134,11 @@ def model_comparison(pred_instances_1: List[NMNPredictionInstance], pred_instanc
     print(f"Model 2 with select-prog: {len(qids2_w_select)}  Correct: {len(qids2_w_select_correct)}")
     print(f"Common: {len(common_w_select)}  Common-correct: {len(common_w_select_correct)}")
 
+    print(f"\nCorrect in NMN-1 but in NMN-2: {len(correct_in_1_not_2)}\n{correct_in_1_not_2}")
+    print(f"\nCorrect in NMN-2 but in NMN-1: {len(correct_in_2_not_1)}\n{correct_in_2_not_1}")
+
+    print("\nLogical form comparison\n")
+    logicalform_distribution(pred_instances_1, pred_instances_2)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

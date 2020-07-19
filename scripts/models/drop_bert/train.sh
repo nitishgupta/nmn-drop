@@ -8,7 +8,7 @@ export MKL_NUM_THREADS=4
 
 ### DATASET PATHS -- should be same across models for same dataset
 DATASET_DIR=/shared/nitishg/data/drop-w-qdmr
-DATASET_NAME=ss-iclr
+DATASET_NAME=qdmr-filter-v3-ss
 # qdmr-filter-post-v6
 # qdmr-v6_iclr600
 # drop_iclr600
@@ -37,19 +37,19 @@ export GPU=0
 export TRAINING_DATA_FILE=${TRAINFILE}
 export VAL_DATA_FILE=${VALFILE}
 
-export BIO_TAG=false
+export BIO_TAG=true
 export BIO_LABEL=IO
 
 export COUNT_FIXED=false
 export AUXLOSS=true
 
-export EXCLOSS=false
+export EXCLOSS=true
 export QATTLOSS=true
 export MMLLOSS=true
 
 export INTERPRET=false
 
-export SHRDSUB=true
+export SHRDSUB=false
 
 # Whether strong supervison instances should be trained on first, if yes for how many epochs
 export SUPFIRST=true
@@ -61,7 +61,7 @@ export HARDEM_EPOCH=0
 export BS=2
 export DROPOUT=0.2
 
-export SEED=42
+export SEED=5
 
 export BEAMSIZE=1
 export MAX_DECODE_STEP=14

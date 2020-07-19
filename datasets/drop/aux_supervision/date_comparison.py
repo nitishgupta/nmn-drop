@@ -366,13 +366,14 @@ def date_comparison_aux_supervision(dataset):
 
             question_answer[constants.program_supervision] = program_node.to_dict()
 
-    print(f"Total num questions:{total_ques}  num_date_compare_ques:{num_date_compare_ques}")
+    print(f"Total num questions:{total_ques}  num of date_compare_ques:{num_date_compare_ques}")
     print(f"Num of QA with annotated dates: {numexamaples_w_dates_annotated}")
 
     return dataset
 
 
 if __name__ == "__main__":
+    print()
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_dir")
     args = parser.parse_args()

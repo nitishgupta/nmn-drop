@@ -20,7 +20,6 @@ from datasets.drop import constants
 """
 
 spacy_tokenizer = SpacyTokenizer()
-print(spacy_tokenizer.spacy.tokenizer)
 
 nmndrop_language: DropLanguage = get_empty_language_object()
 
@@ -687,8 +686,8 @@ def get_postprocessed_dataset(dataset: Dict) -> Dict:
                 qa["preprocess_program_supervision"] = program_node.to_dict()
                 qa[constants.program_supervision] = post_processed_node.to_dict()
 
-
     print()
+    print("No questions / programs are removed at this stage")
     print(f"Number of input passages: {len(dataset)}\nNumber of input questions: {total_qa}")
     print(f"QType 2 conversion count: {qtype2conversion}")
     return dataset

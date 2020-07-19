@@ -43,6 +43,17 @@ def is_month_days_question(question: str, program_node: Node, program_lisp: str,
     return match
 
 
+def is_winlose_football_question(question: str, program_node: Node, program_lisp: str, filtertype2count: Dict):
+    match = False
+    if program_lisp != "(aggregate_count select_passage)":
+        return match
+    string_arg = program_node.children[0].string_arg.lower()
+    if (any(x in string_arg for x in ["games", "wins", "points", "losses", "win", "lose"])):
+        filtertype2count["winlose_football"] += 1
+        match = True
+    return match
+
+
 def is_removable_program(question: str, program_node: Node, filtering_functions: List[Callable],
                          filtertype2count: Dict):
     program_lisp = nested_expression_to_lisp(program_node.get_nested_expression())
@@ -67,7 +78,12 @@ def get_filtered_dataset(dataset: Dict) -> Dict:
     num_filtered_qa = 0
 
     # Any question for which any of these functions returns True will be removed from the dataset
-    filtering_functions = [is_month_days_question, is_selectans_select_question, is_second_superlative_question]
+    filtering_functions = [
+        is_month_days_question,
+        is_selectans_select_question,
+        is_second_superlative_question,
+        is_winlose_football_question
+    ]
 
     for passage_id, passage_info in dataset.items():
         filtered_qas = []
@@ -96,7 +112,13 @@ def get_filtered_dataset(dataset: Dict) -> Dict:
     print(f"Number of filtered passagess: {len(filtered_data)}\nNumber of filtered questions: {num_filtered_qa}")
     print(f"Filtertype 2 count: {filtertype2count}")
     print()
-    return filtered_data
+
+    stats = f"Filtering functions: {filtering_functions}\n"
+    stats += f"Number of input passages: {len(dataset)}\nNumber of input questions: {total_qa}\n"
+    stats += f"Number of filtered passagess: {len(filtered_data)}\nNumber of filtered questions: {num_filtered_qa}\n"
+    stats += f"Filtertype 2 count: {filtertype2count}\n"
+
+    return filtered_data, stats
 
 
 def main(args):
@@ -105,6 +127,7 @@ def main(args):
 
     FILES_TO_FILTER = ["drop_dataset_train.json", "drop_dataset_dev.json"]
 
+    stats = ""
     for filename in FILES_TO_FILTER:
         print(filename)
         input_json = os.path.join(args.input_dir, filename)
@@ -112,11 +135,19 @@ def main(args):
         print(f"Input json: {input_json}")
         print(f"OutFile: {output_json}")
 
-        filtered_data = get_filtered_dataset(dataset=read_drop_dataset(input_json))
+        stats += f"Input json: {input_json}"
+        stats += f"OutFile: {output_json}"
+        filtered_data, stats_file = get_filtered_dataset(dataset=read_drop_dataset(input_json))
+        stats += f"Stats for : {filename}\n"
+        stats += stats_file + "\n\n"
 
-        print(f"Writing merged data to : {output_json}")
+        print(f"Writing filtered data to : {output_json}")
         with open(output_json, 'w') as outf:
             json.dump(filtered_data, outf, indent=4)
+
+
+    with open(os.path.join(args.output_dir, "stats.txt"), "w") as outf:
+        outf.write(stats)
 
 
 if __name__ == "__main__":

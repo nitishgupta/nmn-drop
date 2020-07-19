@@ -128,7 +128,7 @@ def visualize_single_output_from_module(output: Output, prediction_data: Predict
     complete_attention_vis, _ = listTokensVis(attention_vec=output_attn, tokens=output_support)
     output_str += "\t" + complete_attention_vis + "\n"
     if output_type in ["passage"]:
-        most_attended_spans = mostAttendedSpans(attention_vec=output_attn, tokens=output_support)
+        most_attended_spans = mostAttendedSpans(attention_vec=output_attn, tokens=output_support, num_spans=8)
         output_str += "\t" + most_attended_spans + "\n"
 
     return output_str
