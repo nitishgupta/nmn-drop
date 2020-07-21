@@ -390,27 +390,25 @@ class DROPParserBERT(DROPParserBase):
         # exit()
         """ Aux Loss """
         if self.auxwinloss:
-            with Profile("win-mask"):
-                inwindow_mask, outwindow_mask = self.masking_blockdiagonal(passage_length, 15, self.device_id)
-            with Profile("act-loss"):
-                passage_tokenidx2numidx_mask = (passageidx2numberidx > -1).float()
-                num_aux_loss = self.window_loss_numdate(
-                    passage_passage_token2num_alignment, passage_tokenidx2numidx_mask, inwindow_mask, outwindow_mask
-                )
+            inwindow_mask, outwindow_mask = self.masking_blockdiagonal(passage_length, 15, self.device_id)
+            passage_tokenidx2numidx_mask = (passageidx2numberidx > -1).float()
+            num_aux_loss = self.window_loss_numdate(
+                passage_passage_token2num_alignment, passage_tokenidx2numidx_mask, inwindow_mask, outwindow_mask
+            )
 
-                passage_tokenidx2dateidx_mask = (passageidx2dateidx > -1).float()
-                date_aux_loss = self.window_loss_numdate(
-                    passage_passage_token2date_alignment, passage_tokenidx2dateidx_mask, inwindow_mask, outwindow_mask
-                )
+            passage_tokenidx2dateidx_mask = (passageidx2dateidx > -1).float()
+            date_aux_loss = self.window_loss_numdate(
+                passage_passage_token2date_alignment, passage_tokenidx2dateidx_mask, inwindow_mask, outwindow_mask
+            )
 
-                start_date_aux_loss = self.window_loss_numdate(
-                    passage_passage_token2startdate_alignment, passage_tokenidx2dateidx_mask, inwindow_mask,
-                    outwindow_mask)
+            start_date_aux_loss = self.window_loss_numdate(
+                passage_passage_token2startdate_alignment, passage_tokenidx2dateidx_mask, inwindow_mask,
+                outwindow_mask)
 
-                end_date_aux_loss = self.window_loss_numdate(
-                    passage_passage_token2enddate_alignment, passage_tokenidx2dateidx_mask, inwindow_mask,
-                    outwindow_mask)
-                aux_win_loss = num_aux_loss + date_aux_loss + start_date_aux_loss + end_date_aux_loss
+            end_date_aux_loss = self.window_loss_numdate(
+                passage_passage_token2enddate_alignment, passage_tokenidx2dateidx_mask, inwindow_mask,
+                outwindow_mask)
+            aux_win_loss = num_aux_loss + date_aux_loss + start_date_aux_loss + end_date_aux_loss
         else:
             aux_win_loss = 0.0
 
