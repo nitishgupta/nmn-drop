@@ -162,11 +162,14 @@ local shared_substructure = utils.boolparser(std.extVar("SHRDSUB"));
         "checkpointer": {"num_serialized_models_to_keep": 1},
         "grad_norm": 5,
         "patience": 10,
-        "cuda_device": utils.parse_number(std.extVar("GPU")), // [0, 1, 2, 3],
+        "cuda_device": utils.parse_number(std.extVar("GPU")),
         "num_epochs": utils.parse_number(std.extVar("EPOCHS")),
         "optimizer": {
             "type": "huggingface_adamw",
-            "lr": 2e-5
+            "lr": 2e-5,
+            "weight_decay": 0.0,
+            "eps": 1e-8,
+            "correct_bias": true
         },
         "validation_metric": "+f1",
     },

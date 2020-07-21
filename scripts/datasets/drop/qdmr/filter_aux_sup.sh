@@ -4,7 +4,7 @@
 INPUT_DIR=/shared/nitishg/data/drop-w-qdmr/qdmr-v1
 
 # This should be output from datasets.qdmr.process_drop_qdmr and datasets.qdmr.postprocess_programs
-OUTPUT_DIR=/shared/nitishg/data/drop-w-qdmr/qdmr-filter-v3
+OUTPUT_DIR=/shared/nitishg/data/drop-w-qdmr/qdmr-filter-v2
 
 
 python -m datasets.qdmr.filter_dataset --input_dir ${INPUT_DIR} --output_dir ${OUTPUT_DIR}

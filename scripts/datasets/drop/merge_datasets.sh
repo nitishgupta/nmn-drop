@@ -1,14 +1,11 @@
 #!/usr/bin/env bash
 
-ROOT_DIR=./resources/data/drop_acl
+DATASET_1=/shared/nitishg/data/drop-w-qdmr/qdmr-v1-ss
 
-DIR1=date_num/date_yd_num_hmyw_cnt_whoarg_600
+DATASET_2=/shared/nitishg/data/drop-w-qdmr/drop_iclr_full-ss
 
-DIR2=num/yardsdiff
+OUTPUT_DATASET=/shared/nitishg/data/drop-w-qdmr/qdmr-v1_iclrfull-ss
 
-OUTDIR=date_num/iclr20_yardsdiff
-
-
-python -m datasets.drop.merge_datasets --dir1 ${ROOT_DIR}/${DIR1} \
-                                       --dir2 ${ROOT_DIR}/${DIR2} \
-                                       --outputdir ${ROOT_DIR}/${OUTDIR}
+python -m datasets.drop.merge_datasets --dir1 ${DATASET_1} \
+                                       --dir2 ${DATASET_2} \
+                                       --outputdir ${OUTPUT_DATASET}

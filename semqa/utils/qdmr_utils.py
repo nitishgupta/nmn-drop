@@ -14,6 +14,7 @@ class Node():
         self.parent: Node = None    # None indicates root
 
         self.supervision: Dict[str, Any] = {}
+        self.extras: Dict[str, Any] = {}
 
     def add_child(self, obj):
         assert isinstance(obj, Node)
@@ -77,6 +78,7 @@ class Node():
             "string_arg": self.string_arg,
             "children": [c.to_dict() for c in self.children],
             "supervision": self.supervision,
+            "extras": self.extras
         }
         return json_dict
 
@@ -89,6 +91,7 @@ def node_from_dict(dict: Dict) -> Node:
         child_node = node_from_dict(c)
         node.add_child(child_node)
     node.supervision = dict["supervision"]
+    node.extras = dict.get("extras", {})
     return node
 
 
