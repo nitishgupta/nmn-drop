@@ -19,11 +19,26 @@ class QReprModuleExecution():
         self._qrepr_style = qrepr_style
         self._qp_encoding_style: str = qp_encoding_style
 
+        # Functions:
+        # select_passage, filter_passage, project_passage,
+        # compare_num_lt, compare_num_gt, compare_date_gt, compare_date_lt,
+        # year_difference_two_events, year_difference_single_event,
+        # select_num, select_min_num, select_max_num, select_implicit_num
+
         self.relevant_actions = [
             "PassageNumber -> select_implicit_num",
             "PassageAttention -> select_passage",
             "<PassageAttention:PassageAttention> -> filter_passage",
-            "<PassageAttention:PassageAttention> -> project_passage"
+            "<PassageAttention:PassageAttention> -> project_passage",
+            "<PassageAttention:PassageNumber> -> select_num",
+            "<PassageAttention,PassageAttention:PassageAttention> -> compare_date_gt",
+            "<PassageAttention,PassageAttention:PassageAttention> -> compare_date_lt",
+            "<PassageAttention,PassageAttention:PassageAttention> -> compare_num_gt",
+            "<PassageAttention,PassageAttention:PassageAttention> -> compare_num_lt",
+            "<PassageAttention,PassageAttention:YearDifference> -> year_difference_two_events",
+            "<PassageAttention:YearDifference> -> year_difference_single_event",
+            "<PassageAttention:PassageAttention> -> select_min_num",
+            "<PassageAttention:PassageAttention> -> select_max_num",
         ]
 
         assert self._qrepr_style in ["attn", "decont", "decont_qp"]

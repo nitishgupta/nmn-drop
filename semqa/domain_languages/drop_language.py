@@ -291,10 +291,6 @@ class DropLanguage(DomainLanguage):
             year_differences: List[int],
             year_differences_mat: np.array,
             count_num_values: List[int],
-            passage_token2date_alignment: Tensor,
-            passage_token2startdate_alignment: Tensor,
-            passage_token2enddate_alignment: Tensor,
-            passage_token2num_alignment: Tensor,
             parameters: ExecutorParameters,
             modeled_passage: Tensor = None,
             start_types=None,
@@ -329,6 +325,7 @@ class DropLanguage(DomainLanguage):
         # Shape: (passage_length, )
         self.passage_tokenidx2dateidx = passage_tokenidx2dateidx.long()
         passage_tokenidx2dateidx_mask = self.passage_tokenidx2dateidx > -1
+        self.passage_datetokens_mask_bool = self.passage_tokenidx2dateidx > -1
         self.passage_datetokens_mask_long = passage_tokenidx2dateidx_mask.long()
         self.passage_datetokens_mask_float = passage_tokenidx2dateidx_mask.float()
         # List[Date] - number of unique dates in the passage
@@ -338,6 +335,7 @@ class DropLanguage(DomainLanguage):
         # Shape: (passage_length, )
         self.passage_tokenidx2numidx = passage_tokenidx2numidx.long()
         passage_tokenidx2numidx_mask = self.passage_tokenidx2numidx > -1
+        self.passage_numtokens_mask_bool = self.passage_tokenidx2numidx > -1
         self.passage_numtokens_mask_long = passage_tokenidx2numidx_mask.long()
         self.passage_numtokens_mask_float = passage_tokenidx2numidx_mask.float()
         # List[float] - number of unique numbers in the passage (includes implicit numbers)
@@ -370,11 +368,6 @@ class DropLanguage(DomainLanguage):
 
         self.device_id = device_id
 
-        # Shape: (passage_length, passage_length)
-        self.passage_passage_token2date_alignment = passage_token2date_alignment
-        self.passage_passage_token2startdate_alignment = passage_token2startdate_alignment
-        self.passage_passage_token2enddate_alignment = passage_token2enddate_alignment
-        self.passage_passage_token2num_alignment = passage_token2num_alignment
         initialization_returns = self.initialize()
         self.date_lt_mat = initialization_returns["date_lt_mat"]
         self.date_gt_mat = initialization_returns["date_gt_mat"]
@@ -391,6 +384,10 @@ class DropLanguage(DomainLanguage):
         # List[int]
         self.count_num_values = count_num_values
         self.countvals = allenutil.move_to_device(torch.FloatTensor(range(0, 10)), cuda_device=self.device_id)
+
+        self.inwindow_mask, self.outwindow_mask = dlutils.masking_blockdiagonal(
+            passage_length=self.passage_length, window=15, device_id=self.device_id
+        )
 
         # This is a list of list, where each list element corresponds to one program execution. Each element stores
         # details related to the module execution as added by the modules below.
@@ -591,58 +588,46 @@ class DropLanguage(DomainLanguage):
 
             # Shape: (passage_length, encoded_dim)
             passage_repr = self.modeled_passage if self.modeled_passage is not None else self.encoded_passage
-            # Shape: (passage_length, encoded_dim)
-            q_p_repr = weighted_question_vector.unsqueeze(0) + passage_repr
+            question_repr = weighted_question_vector.unsqueeze(0).expand(*passage_repr.size())
+            # Shape: (passage_length, encoded_dim + encoded_dim)
+            # q_p_repr = weighted_question_vector.unsqueeze(0) + passage_repr
+            q_p_repr = torch.cat([question_repr, passage_repr], dim=1)
 
             # Shape: (passage_length, passage_length)
             passage_passage_relocate_similarity = self.parameters.relocate_matrix_attention(
                 q_p_repr.unsqueeze(0), passage_repr.unsqueeze(0)
             ).squeeze(0)
+
+            square_mask_bool = (self.passage_mask.unsqueeze(0) * self.passage_mask.unsqueeze(1)).bool()
+
             # Shape: (passage_length, passage_length)
             p_to_p_relocate_attention = allenutil.masked_softmax(
-                passage_passage_relocate_similarity, mask=self.passage_mask.unsqueeze(0), dim=-1
+                passage_passage_relocate_similarity, mask=square_mask_bool, dim=-1,
+                memory_efficient=True
             )
             p_to_p_relocate_attention = p_to_p_relocate_attention * self.passage_mask.unsqueeze(1)
-
-            passage_length = passage_attn.size()[0]
-            inwindow_mask, _ = dlutils.masking_blockdiagonal(
-                passage_length=passage_length, window=15, device_id=self.device_id
-            )
-            inwindow_aux_loss = dlutils.aux_window_loss(
-                ptop_attention=p_to_p_relocate_attention, passage_mask=self.passage_mask, inwindow_mask=inwindow_mask
-            )
 
             # Shape: (passage_length, )
             relocate_attn = (p_to_p_relocate_attention * passage_attn.unsqueeze(1)).sum(0)
             relocate_attn = clamp_distribution(relocate_attn)
 
+            inwindow_aux_loss = dlutils.aux_window_loss(ptop_attention=p_to_p_relocate_attention,
+                                                        passage_mask=self.passage_mask,
+                                                        inwindow_mask=self.inwindow_mask)
+
             loss = passage_attention.loss
-            loss += 2.0 * inwindow_aux_loss
+            loss += inwindow_aux_loss
 
             debug_value = ""
-            if self._debug:
-                qattn_vis_complete, qattn_vis_most = dlutils.listTokensVis(
-                    question_attention, self.metadata["question_tokens"]
-                )
-                debug_value += f"Qattn: {qattn_vis_complete}"
-                r_attn_vis, _ = dlutils.listTokensVis(relocate_attn, self.metadata["passage_tokens"])
-                most_attended_spans = dlutils.mostAttendedSpans(relocate_attn, self.metadata["passage_tokens"])
-                debug_value += f"\nRelocateAttn: {r_attn_vis}"
-                debug_value += f"\nMostAttended: {most_attended_spans}"
-
-                qattn_output = Output(output_type="question", values=question_attention, label="ques_attn")
-                pattn_output = Output(output_type="passage", values=relocate_attn, label="project_pattn")
-                debug_info_dict = {"project_passage": [qattn_output, pattn_output]}
-
-                # debug_info_dict = {"relocate": {"passage": relocate_attn,
-                #                                 "passage_input": passage_attn,
-                #                                 "question": question_attention}}
-                self.modules_debug_info[-1].append(debug_info_dict)
+            qattn_output = Output(output_type="question", values=question_attention, label="ques_attn")
+            pattn_output = Output(output_type="passage", values=relocate_attn, label="project_pattn")
+            debug_info_dict = {"project_passage": [qattn_output, pattn_output]}
+            self.modules_debug_info[-1].append(debug_info_dict)
 
         return PassageAttention(relocate_attn, loss=loss, debug_value=debug_value)
 
     # New Date Distribtion
-    def compute_date_scores(self, passage_attention: Tensor, date_type: str = None):
+    def compute_date_scores(self, passage_attention: Tensor, weighted_question_vector: Tensor, date_type: str = None):
         """ Given a passage over passage token2date attention (normalized), and an additional passage attention
             for token importance, compute a distribution over (unique) dates in the passage.
 
@@ -652,117 +637,150 @@ class DropLanguage(DomainLanguage):
             to in multiple places, we use scatter_add_ to get the total_score.
             Softmax over these scores is the date dist.
         """
-        with Profile("date-dist."):
-            if date_type is None:
-                passage_date_alignment_matrix = self.passage_passage_token2date_alignment
-            elif date_type == "start":
-                passage_date_alignment_matrix = self.passage_passage_token2startdate_alignment
-            elif date_type == "end":
-                passage_date_alignment_matrix = self.passage_passage_token2enddate_alignment
-            else:
-                raise NotImplementedError
+        if date_type is None:
+            qp_to_passagedate_attention = self.parameters.qp_to_numdate_attention
+        elif date_type == "start":
+            qp_to_passagedate_attention = self.parameters.qp_to_startdate_attention
+        elif date_type == "end":
+            qp_to_passagedate_attention = self.parameters.qp_to_enddate_attention
+        else:
+            raise NotImplementedError
 
-            attn_weighted_date_aligment_matrix = passage_date_alignment_matrix * passage_attention.unsqueeze(1)
-            # Shape: (passage_length, )
-            passage_date_token_probs = attn_weighted_date_aligment_matrix.sum(0)
+        # Shape: (passage_length, encoding_dim)
+        passage_repr = self.encoded_passage
+        question_repr = weighted_question_vector.unsqueeze(0).expand(*self.encoded_passage.size())
 
-            """
-            if self._debug:
-                print('-------------------------')
-                print(self.metadata['question_tokens'])
-                passage_tokens = self.metadata['passage_tokens']
-                attn, topattn = dlutils.listTokensVis(passage_attention, passage_tokens)
-                print(f"PassageAttention: Top: {topattn}")
-                print(attn)
-                print()
+        q_p_repr = torch.cat([passage_repr, question_repr], dim=1)
 
-                print("Only showing 10 date-tokens ...")
-                _, date_indices = torch.topk(self.passage_tokenidx2dateidx, k=5, dim=0)
-                date_indices = myutils.tocpuNPList(date_indices)
-                for number_idx in date_indices:
-                    token2datescores = passage_date_alignment_matrix[:, number_idx]
-                    _, top_tokens = torch.topk(token2datescores, 5, dim=0)
-                    top_tokens = myutils.tocpuNPList(top_tokens)
-                    print(f"{passage_tokens[number_idx]}")
-                    print([passage_tokens[x] for x in top_tokens])
-                    print(f"Sum: {torch.sum(token2datescores)}")
-                    compvis, _ = dlutils.listTokensVis(token2datescores, passage_tokens)
-                    print(compvis)
+        passage_similarity = qp_to_passagedate_attention(q_p_repr.unsqueeze(0),
+                                                         self.encoded_passage.unsqueeze(0)).squeeze(0)
+        passage_similarity = passage_similarity * self.passage_mask.unsqueeze(0) * self.passage_mask.unsqueeze(1)
+        # Masking non-date tokens in dim=1
+        passage_similarity = passage_similarity * self.passage_datetokens_mask_float.unsqueeze(0)
 
-                print("After passage attention; number-token-probs:")
-                attn, _ = dlutils.listTokensVis(passage_date_token_probs, passage_tokens)
-                print(attn)
-                print()
-                print("-----------------------------------")
-            """
+        p2p_date_alignment = allenutil.masked_softmax(passage_similarity,
+                                                      self.passage_datetokens_mask_bool.unsqueeze(0),
+                                                      dim=-1, memory_efficient=True)
 
-            masked_passage_tokenidx2dateidx = self.passage_datetokens_mask_long * self.passage_tokenidx2dateidx
+        passage_date_token_probs = torch.sum(p2p_date_alignment * passage_attention.unsqueeze(1), dim=0)
 
-            date_distribution = passage_attention.new_zeros(self.num_passage_dates)
-            date_distribution.scatter_add_(0, masked_passage_tokenidx2dateidx, passage_date_token_probs)
+        date_win_loss = dlutils.aux_window_loss(ptop_attention=p2p_date_alignment,
+                                                passage_mask=self.passage_mask,
+                                                inwindow_mask=self.inwindow_mask,
+                                                outwindow_mask=self.outwindow_mask,
+                                                p_tokensymbol_mask_float=self.passage_datetokens_mask_float)
 
-            date_distribution = clamp_distribution(date_distribution)
+        """
+        if self._debug:
+            print('-------------------------')
+            print(self.metadata['question_tokens'])
+            passage_tokens = self.metadata['passage_tokens']
+            attn, topattn = dlutils.listTokensVis(passage_attention, passage_tokens)
+            print(f"PassageAttention: Top: {topattn}")
+            print(attn)
+            print()
 
-            date_distribution_entropy = -1 * torch.sum(date_distribution * torch.log(date_distribution + 1e-40))
+            print("Only showing 10 date-tokens ...")
+            _, date_indices = torch.topk(self.passage_tokenidx2dateidx, k=5, dim=0)
+            date_indices = myutils.tocpuNPList(date_indices)
+            for number_idx in date_indices:
+                token2datescores = passage_date_alignment_matrix[:, number_idx]
+                _, top_tokens = torch.topk(token2datescores, 5, dim=0)
+                top_tokens = myutils.tocpuNPList(top_tokens)
+                print(f"{passage_tokens[number_idx]}")
+                print([passage_tokens[x] for x in top_tokens])
+                print(f"Sum: {torch.sum(token2datescores)}")
+                compvis, _ = dlutils.listTokensVis(token2datescores, passage_tokens)
+                print(compvis)
 
-        return date_distribution, passage_date_token_probs, date_distribution_entropy
+            print("After passage attention; number-token-probs:")
+            attn, _ = dlutils.listTokensVis(passage_date_token_probs, passage_tokens)
+            print(attn)
+            print()
+            print("-----------------------------------")
+        """
+
+        masked_passage_tokenidx2dateidx = self.passage_datetokens_mask_long * self.passage_tokenidx2dateidx
+
+        date_distribution = passage_attention.new_zeros(self.num_passage_dates)
+        date_distribution.scatter_add_(0, masked_passage_tokenidx2dateidx, passage_date_token_probs)
+
+        date_distribution = clamp_distribution(date_distribution)
+
+        date_distribution_entropy = -1 * torch.sum(date_distribution * torch.log(date_distribution + 1e-40))
+
+        return date_distribution, passage_date_token_probs, date_win_loss
 
     # New Num Distribution by first computing a number-distribution for each passage-token
-    def compute_num_distribution(self, passage_attention: Tensor):
+    def compute_num_distribution(self, passage_attention: Tensor, weighted_question_vector: Tensor):
         """ Given a passage over passage token2num attention (normalized), and an additional passage attention
             for token importance, compute a distribution over (unique) nums in the passage.
             See compute_date_distribution for details
         """
 
-        with Profile("num-dist"):
-            # Shape: (passage_length, passage_length) -- Each row is a masked-softmax over number-tokens
-            passage_number_alignment_matrix = self.passage_passage_token2num_alignment
+        # Shape: (passage_length, encoding_dim)
+        passage_repr = self.encoded_passage
+        question_repr = weighted_question_vector.unsqueeze(0).expand(*self.encoded_passage.size())
 
-            # (passage_length, passage_length)
-            attn_weighted_number_aligment_matrix = passage_number_alignment_matrix * passage_attention.unsqueeze(1)
-            # Shape: (passage_length, )
-            passage_number_token_probs = attn_weighted_number_aligment_matrix.sum(0)
+        q_p_repr = torch.cat([passage_repr, question_repr], dim=1)
 
-            """
-            if self._debug:
-                print('-------------------------')
-                print(self.metadata['question_tokens'])
-                passage_tokens = self.metadata['passage_tokens']
-                attn, topattn = dlutils.listTokensVis(passage_attention, passage_tokens)
-                print(f"PassageAttention: Top: {topattn}")
-                print(attn)
-                print()
+        passage_similarity = self.parameters.qp_to_numdate_attention(q_p_repr.unsqueeze(0),
+                                                                     self.encoded_passage.unsqueeze(0)).squeeze(0)
+        passage_similarity = passage_similarity * self.passage_mask.unsqueeze(0) * self.passage_mask.unsqueeze(1)
+        passage_similarity = passage_similarity * self.passage_numtokens_mask_float.unsqueeze(0)
 
-                print("Only showing 10 number-tokens ...")
-                _, number_indices = torch.topk(self.passage_tokenidx2numidx, k=10, dim=0)
-                number_indices = myutils.tocpuNPList(number_indices)
-                for number_idx in number_indices:
-                    token2numberscores = passage_number_alignment_matrix[:, number_idx]
-                    _, top_tokens = torch.topk(token2numberscores, 5, dim=0)
-                    top_tokens = myutils.tocpuNPList(top_tokens)
-                    print(f"{passage_tokens[number_idx]}")
-                    print([passage_tokens[x] for x in top_tokens])
-                    print(f"Sum: {torch.sum(token2numberscores)}")
-                    compvis, _ = dlutils.listTokensVis(token2numberscores, passage_tokens)
-                    print(compvis)
+        p2p_num_alignment = allenutil.masked_softmax(passage_similarity,
+                                                     self.passage_numtokens_mask_bool.unsqueeze(0),
+                                                     dim=-1, memory_efficient=True)
 
-                print("After passage attention; number-token-probs:")
-                attn, _ = dlutils.listTokensVis(passage_number_token_probs, passage_tokens)
-                print(attn)
-                print()
-                print("-----------------------------------")
-            """
+        passage_number_token_probs = torch.sum(p2p_num_alignment * passage_attention.unsqueeze(1), dim=0)
 
-            masked_passage_tokenidx2numidx = self.passage_numtokens_mask_long * self.passage_tokenidx2numidx
+        num_win_loss = dlutils.aux_window_loss(ptop_attention=p2p_num_alignment,
+                                               passage_mask=self.passage_mask,
+                                               inwindow_mask=self.inwindow_mask,
+                                               outwindow_mask=self.outwindow_mask,
+                                               p_tokensymbol_mask_float=self.passage_numtokens_mask_float)
 
-            """ normalized method with method 2 """
-            num_distribution = passage_attention.new_zeros(self.num_passage_nums)
-            num_distribution.scatter_add_(0, masked_passage_tokenidx2numidx, passage_number_token_probs)
+        """
+        if self._debug:
+            print('-------------------------')
+            print(self.metadata['question_tokens'])
+            passage_tokens = self.metadata['passage_tokens']
+            attn, topattn = dlutils.listTokensVis(passage_attention, passage_tokens)
+            print(f"PassageAttention: Top: {topattn}")
+            print(attn)
+            print()
 
-            num_distribution = clamp_distribution(num_distribution)
+            print("Only showing 10 number-tokens ...")
+            _, number_indices = torch.topk(self.passage_tokenidx2numidx, k=10, dim=0)
+            number_indices = myutils.tocpuNPList(number_indices)
+            for number_idx in number_indices:
+                token2numberscores = passage_number_alignment_matrix[:, number_idx]
+                _, top_tokens = torch.topk(token2numberscores, 5, dim=0)
+                top_tokens = myutils.tocpuNPList(top_tokens)
+                print(f"{passage_tokens[number_idx]}")
+                print([passage_tokens[x] for x in top_tokens])
+                print(f"Sum: {torch.sum(token2numberscores)}")
+                compvis, _ = dlutils.listTokensVis(token2numberscores, passage_tokens)
+                print(compvis)
 
-            num_distribution_entropy = -1 * torch.sum(num_distribution * torch.log(num_distribution + 1e-40))
-        return num_distribution, passage_number_token_probs, num_distribution_entropy
+            print("After passage attention; number-token-probs:")
+            attn, _ = dlutils.listTokensVis(passage_number_token_probs, passage_tokens)
+            print(attn)
+            print()
+            print("-----------------------------------")
+        """
+
+        masked_passage_tokenidx2numidx = self.passage_numtokens_mask_long * self.passage_tokenidx2numidx
+
+        """ normalized method with method 2 """
+        num_distribution = passage_attention.new_zeros(self.num_passage_nums)
+        num_distribution.scatter_add_(0, masked_passage_tokenidx2numidx, passage_number_token_probs)
+
+        num_distribution = clamp_distribution(num_distribution)
+        # num_distribution_entropy = -1 * torch.sum(num_distribution * torch.log(num_distribution + 1e-40))
+
+        return num_distribution, passage_number_token_probs, p2p_num_alignment, num_win_loss
 
 
     def expected_number_addsub(self, num_dist_1: torch.FloatTensor, num_dist_2: torch.FloatTensor, operation: str):
@@ -903,11 +921,13 @@ class DropLanguage(DomainLanguage):
             expected_bool = clamp_distribution(expected_bool)
         return expected_bool
 
-    def date_comparison(self, passage_attention_1, passage_attention_2, comparison: str,
-                        date1_entidxs=None, date2_entidxs=None):
+    def date_comparison(self, passage_attention_1, passage_attention_2, weighted_question_vector: Tensor,
+                        comparison: str, date1_entidxs=None, date2_entidxs=None):
 
-        date_distribution_1, passage_datetoken_prob_1, d1_dist_entropy = self.compute_date_scores(passage_attention_1)
-        date_distribution_2, passage_datetoken_prob_2, d2_dist_entropy = self.compute_date_scores(passage_attention_2)
+        date_distribution_1, passage_datetoken_prob_1, date_winloss1 = self.compute_date_scores(
+            passage_attention_1, weighted_question_vector)
+        date_distribution_2, passage_datetoken_prob_2, date_winloss2 = self.compute_date_scores(
+            passage_attention_2, weighted_question_vector)
 
         bool1 = self.expected_date_comparison(date_distribution_1, date_distribution_2, comparison)
         bool2 = self.expected_date_comparison(date_distribution_2, date_distribution_1, comparison)
@@ -918,29 +938,18 @@ class DropLanguage(DomainLanguage):
         loss2 = aux_symbol_loss(date2_entidxs, date_distribution_2)
         date_grounding_loss = loss1 + loss2
 
-        # if date1_entidxs:  # This can be None or empty; this should take care of both
-        #     date1_entidxs: List[int] = date1_entidxs  # This is a list of num_entidxs that need to be predicted
-        #     relevant_logprobs = [torch.log(date_distribution_1[x] + 1e-40) for x in date1_entidxs]
-        #     date1_loss = -1.0 * sum(relevant_logprobs)
-        #     date_grounding_loss += date1_loss
-        #
-        # if date2_entidxs:  # This can be None or empty; this should take care of both
-        #     date2_entidxs: List[int] = date2_entidxs  # This is a list of num_entidxs that need to be predicted
-        #     relevant_logprobs = [torch.log(date_distribution_2[x] + 1e-40) for x in date2_entidxs]
-        #     date2_loss = -1.0 * sum(relevant_logprobs)
-        #     date_grounding_loss += date2_loss
-
-        aux_loss = date_grounding_loss
-        # aux_loss += d1_dist_entropy + d2_dist_entropy
+        aux_loss = date_grounding_loss + date_winloss1 + date_winloss2
 
         return (date_distribution_1, date_distribution_2, bool1, bool2,
                 passage_datetoken_prob_1, passage_datetoken_prob_2, average_passage_distribution, aux_loss)
 
-    def num_comparison(self, passage_attention_1, passage_attention_2, comparison: str,
-                       num1_entidxs=None, num2_entidxs=None):
+    def num_comparison(self, passage_attention_1, passage_attention_2, weighted_question_vector: Tensor,
+                       comparison: str, num1_entidxs=None, num2_entidxs=None):
 
-        num_distribution_1, passage_numtoken_prob_1, num1_entropy = self.compute_num_distribution(passage_attention_1)
-        num_distribution_2, passage_numtoken_prob_2, num2_entropy = self.compute_num_distribution(passage_attention_2)
+        num_distribution_1, passage_numtoken_prob_1, _, num_winloss1 = self.compute_num_distribution(
+            passage_attention_1, weighted_question_vector)
+        num_distribution_2, passage_numtoken_prob_2, _, num_winloss2 = self.compute_num_distribution(
+            passage_attention_2, weighted_question_vector)
 
         bool1 = self.expected_num_comparison(num_distribution_1, num_distribution_2, comparison)
         bool2 = self.expected_num_comparison(num_distribution_2, num_distribution_1, comparison)
@@ -950,29 +959,18 @@ class DropLanguage(DomainLanguage):
         loss1 = aux_symbol_loss(num1_entidxs, num_distribution_1)
         loss2 = aux_symbol_loss(num2_entidxs, num_distribution_2)
         num_grounding_loss = loss1 + loss2
-        # num_grounding_loss = 0.0
-        # if num1_entidxs:   # This can be None or empty; this should take care of both
-        #     num1_entidxs: List[int] = num1_entidxs   # This is a list of num_entidxs that need to be predicted
-        #     relevant_logprobs = [torch.log(num_distribution_1[x] + 1e-40) for x in num1_entidxs]
-        #     num1_loss = -1.0 * sum(relevant_logprobs)
-        #     num_grounding_loss += num1_loss
-        #
-        # if num2_entidxs:  # This can be None or empty; this should take care of both
-        #     num2_entidxs: List[int] = num2_entidxs  # This is a list of num_entidxs that need to be predicted
-        #     relevant_logprobs = [torch.log(num_distribution_2[x] + 1e-40) for x in num2_entidxs]
-        #     num2_loss = -1.0 * sum(relevant_logprobs)
-        #     num_grounding_loss += num2_loss
 
-        aux_loss = num_grounding_loss
+        aux_loss = num_grounding_loss + num_winloss1 + num_winloss2
 
         return (num_distribution_1, num_distribution_2, bool1, bool2,
                 passage_numtoken_prob_1, passage_numtoken_prob_2,
                 average_passage_distribution, aux_loss)
 
     # @predicate
-    @predicate_with_side_args(["date1_entidxs", "date2_entidxs"])
+    @predicate_with_side_args(["question_attention", "weighted_question_vector", "date1_entidxs", "date2_entidxs"])
     def compare_date_lt(
             self, passage_attn_1: PassageAttention, passage_attn_2: PassageAttention,
+            question_attention: torch.Tensor, weighted_question_vector: torch.Tensor,
             date1_entidxs=None, date2_entidxs=None
     ) -> PassageAttention:
 
@@ -988,7 +986,8 @@ class DropLanguage(DomainLanguage):
             passage_datetoken_prob_2,
             average_passage_distribution,
             aux_loss,
-        ) = self.date_comparison(passage_attention_1, passage_attention_2, "lesser", date1_entidxs, date2_entidxs)
+        ) = self.date_comparison(passage_attention_1, passage_attention_2, weighted_question_vector,
+                                 "lesser", date1_entidxs, date2_entidxs)
 
         average_passage_distribution = clamp_distribution(average_passage_distribution)
         loss = 0.0
@@ -997,41 +996,23 @@ class DropLanguage(DomainLanguage):
         loss += passage_attn_2.loss
 
         debug_value = ""
-        if self._debug:
-            # _, pattn_vis_most_1 = dlutils.listTokensVis(passage_attention_1, self.metadata["passage_tokens"])
-            # _, pattn_vis_most_2 = dlutils.listTokensVis(passage_attention_2, self.metadata["passage_tokens"])
-            #
-            # date1 = myutils.round_all(myutils.tocpuNPList(date_distribution_1), 3)
-            # date2 = myutils.round_all(myutils.tocpuNPList(date_distribution_2), 3)
-            # d1_lt_d2 = myutils.round_all(myutils.tocpuNPList(prob_date1_lesser), 3)
-            # d2_lt_d1 = myutils.round_all(myutils.tocpuNPList(prob_date2_lesser), 3)
-            date1_token = myutils.round_all(myutils.tocpuNPList(passage_datetoken_prob_1), 3)
-            date2_token = myutils.round_all(myutils.tocpuNPList(passage_datetoken_prob_2), 3)
+        # if self._debug:
+        date1_token = myutils.round_all(myutils.tocpuNPList(passage_datetoken_prob_1), 3)
+        date2_token = myutils.round_all(myutils.tocpuNPList(passage_datetoken_prob_2), 3)
 
-            # debug_value += (
-            #         f"Pattn1: {pattn_vis_most_1}\n Date1: {date1}"
-            #         + f"\nPattn2: {pattn_vis_most_2}\n Date2: {date2}"
-            #         + f"\nP(D1 < D2): {d1_lt_d2}  P(D2 < D1): {d2_lt_d1}"
-            # )
+        date1_output = Output(output_type="dates", values=date_distribution_1, label="date_1")
+        date2_output = Output(output_type="dates", values=date_distribution_2, label="date_2")
+        pattn_output = Output(output_type="passage", values=average_passage_distribution, label="avg_pattn")
+        debug_info_dict = {"compare_date_lt": [date1_output, date2_output, pattn_output]}
 
-            date1_output = Output(output_type="dates", values=date_distribution_1, label="date_1")
-            date2_output = Output(output_type="dates", values=date_distribution_2, label="date_2")
-            pattn_output = Output(output_type="passage", values=average_passage_distribution, label="avg_pattn")
-            debug_info_dict = {"compare_date_lt": [date1_output, date2_output, pattn_output]}
-
-            # debug_info_dict = {"compare-date-lt": {"date_1": date_distribution_1,
-            #                                        "date_2": date_distribution_2,
-            #                                        "passage_date_1": date1_token,
-            #                                        "passage_date_2": date2_token,
-            #                                        "passage": average_passage_distribution}}
-            self.modules_debug_info[-1].append(debug_info_dict)
+        self.modules_debug_info[-1].append(debug_info_dict)
 
         return PassageAttention(average_passage_distribution, loss=loss, debug_value=debug_value)
 
-    # @predicate
-    @predicate_with_side_args(["date1_entidxs", "date2_entidxs"])
+    @predicate_with_side_args(["question_attention", "weighted_question_vector", "date1_entidxs", "date2_entidxs"])
     def compare_date_gt(
             self, passage_attn_1: PassageAttention, passage_attn_2: PassageAttention,
+            question_attention: torch.Tensor, weighted_question_vector: torch.Tensor,
             date1_entidxs=None, date2_entidxs=None
     ) -> PassageAttention:
         """ In short; outputs PA_1 if D1 > D2 i.e. is PA_1 occurred after PA_2 """
@@ -1048,7 +1029,8 @@ class DropLanguage(DomainLanguage):
             passage_datetoken_prob_2,
             average_passage_distribution,
             aux_loss,
-        ) = self.date_comparison(passage_attention_1, passage_attention_2, "greater", date1_entidxs, date2_entidxs)
+        ) = self.date_comparison(passage_attention_1, passage_attention_2, weighted_question_vector,
+                                 "greater", date1_entidxs, date2_entidxs)
         average_passage_distribution = clamp_distribution(average_passage_distribution)
 
         loss = 0.0
@@ -1057,37 +1039,19 @@ class DropLanguage(DomainLanguage):
         loss += passage_attn_2.loss
 
         debug_value = ""
-        if self._debug:
-            # _, pattn_vis_most_1 = dlutils.listTokensVis(passage_attention_1, self.metadata["passage_tokens"])
-            # _, pattn_vis_most_2 = dlutils.listTokensVis(passage_attention_2, self.metadata["passage_tokens"])
-            #
-            # date1 = myutils.round_all(myutils.tocpuNPList(date_distribution_1), 3)
-            # date2 = myutils.round_all(myutils.tocpuNPList(date_distribution_2), 3)
-            # d1_gt_d2 = myutils.round_all(myutils.tocpuNPList(prob_date1_greater), 3)
-            # d2_gt_d1 = myutils.round_all(myutils.tocpuNPList(prob_date2_greater), 3)
 
-            # debug_value += (
-            #         f"Pattn1: {pattn_vis_most_1}\n Date1: {date1}"
-            #         + f"\nPattn2: {pattn_vis_most_2}\n Date2: {date2}"
-            #         + f"\nP(D1 > D2): {d1_gt_d2}  P(D2 > D1): {d2_gt_d1}"
-            # )
-
-            date1_output = Output(output_type="dates", values=date_distribution_1, label="date_1")
-            date2_output = Output(output_type="dates", values=date_distribution_2, label="date_2")
-            pattn_output = Output(output_type="passage", values=average_passage_distribution, label="avg_pattn")
-            debug_info_dict = {"compare_date_gt": [date1_output, date2_output, pattn_output]}
-            # debug_info_dict = {"compare-date-gt": {"date_1": date_distribution_1,
-            #                                        "date_2": date_distribution_2,
-            #                                        "passage_date_1": date1_token,
-            #                                        "passage_date_2": date2_token,
-            #                                        "passage": average_passage_distribution}}
-            self.modules_debug_info[-1].append(debug_info_dict)
+        date1_output = Output(output_type="dates", values=date_distribution_1, label="date_1")
+        date2_output = Output(output_type="dates", values=date_distribution_2, label="date_2")
+        pattn_output = Output(output_type="passage", values=average_passage_distribution, label="avg_pattn")
+        debug_info_dict = {"compare_date_gt": [date1_output, date2_output, pattn_output]}
+        self.modules_debug_info[-1].append(debug_info_dict)
 
         return PassageAttention(average_passage_distribution, loss=loss, debug_value=debug_value)
 
-    @predicate_with_side_args(["num1_entidxs", "num2_entidxs"])
+    @predicate_with_side_args(["question_attention", "weighted_question_vector", "num1_entidxs", "num2_entidxs"])
     def compare_num_lt(
             self, passage_attn_1: PassageAttention, passage_attn_2: PassageAttention,
+            question_attention: torch.Tensor, weighted_question_vector: torch.Tensor,
             num1_entidxs=None, num2_entidxs=None
     ) -> PassageAttention:
 
@@ -1102,7 +1066,8 @@ class DropLanguage(DomainLanguage):
             passage_numtoken_prob_1, passage_numtoken_prob_2,
             average_passage_distribution,
             aux_loss,
-        ) = self.num_comparison(passage_attention_1, passage_attention_2, "lesser", num1_entidxs, num2_entidxs)
+        ) = self.num_comparison(passage_attention_1, passage_attention_2, weighted_question_vector,
+                                "lesser", num1_entidxs, num2_entidxs)
         average_passage_distribution = clamp_distribution(average_passage_distribution)
 
         loss = 0.0
@@ -1111,38 +1076,20 @@ class DropLanguage(DomainLanguage):
         loss += passage_attn_2.loss
 
         debug_value = ""
-        if self._debug:
-            # _, pattn_vis_most_1 = dlutils.listTokensVis(passage_attention_1, self.metadata["passage_tokens"])
-            # _, pattn_vis_most_2 = dlutils.listTokensVis(passage_attention_2, self.metadata["passage_tokens"])
-            #
-            # num1 = myutils.round_all(myutils.tocpuNPList(num_distribution_1), 3)
-            # num2 = myutils.round_all(myutils.tocpuNPList(num_distribution_2), 3)
-            # d1_lt_d2 = myutils.round_all(myutils.tocpuNPList(prob_num1_lesser), 3)
-            # d2_lt_d1 = myutils.round_all(myutils.tocpuNPList(prob_num2_lesser), 3)
 
-            # debug_value += (
-            #         f"Pattn1: {pattn_vis_most_1}\n Num1: {num1}"
-            #         + f"\nPattn2: {pattn_vis_most_2}\n Num2: {num2}"
-            #         + f"\nP(N1 < N2): {d1_lt_d2}  P(N2 < N1): {d2_lt_d1}"
-            # )
-
-            num1_output = Output(output_type="numbers", values=num_distribution_1, label="num_1")
-            num2_output = Output(output_type="numbers", values=num_distribution_2, label="num_2")
-            pattn_output = Output(output_type="passage", values=average_passage_distribution, label="avg_pattn")
-            debug_info_dict = {"compare_num_lt": [num1_output, num2_output, pattn_output]}
-            # debug_info_dict = {"compare-num-lt": {"number_1": num_distribution_1,
-            #                                       "number_2": num_distribution_2,
-            #                                       "passage_number_1": num1_token,
-            #                                       "passage_number_2": num2_token,
-            #                                       "passage": average_passage_distribution}}
-            self.modules_debug_info[-1].append(debug_info_dict)
+        num1_output = Output(output_type="numbers", values=num_distribution_1, label="num_1")
+        num2_output = Output(output_type="numbers", values=num_distribution_2, label="num_2")
+        pattn_output = Output(output_type="passage", values=average_passage_distribution, label="avg_pattn")
+        debug_info_dict = {"compare_num_lt": [num1_output, num2_output, pattn_output]}
+        self.modules_debug_info[-1].append(debug_info_dict)
 
         return PassageAttention(average_passage_distribution, loss=loss, debug_value=debug_value)
 
     # @predicate
-    @predicate_with_side_args(["num1_entidxs", "num2_entidxs"])
+    @predicate_with_side_args(["question_attention", "weighted_question_vector", "num1_entidxs", "num2_entidxs"])
     def compare_num_gt(
             self, passage_attn_1: PassageAttention, passage_attn_2: PassageAttention,
+            question_attention: torch.Tensor, weighted_question_vector: torch.Tensor,
             num1_entidxs=None, num2_entidxs=None
     ) -> PassageAttention:
         """ In short; outputs PA_1 if D1 > D2 i.e. is PA_1 occurred after PA_2
@@ -1159,7 +1106,8 @@ class DropLanguage(DomainLanguage):
             passage_numtoken_prob_1, passage_numtoken_prob_2,
             average_passage_distribution,
             aux_loss,
-        ) = self.num_comparison(passage_attention_1, passage_attention_2, "greater", num1_entidxs, num2_entidxs)
+        ) = self.num_comparison(passage_attention_1, passage_attention_2, weighted_question_vector,
+                                "greater", num1_entidxs, num2_entidxs)
         average_passage_distribution = clamp_distribution(average_passage_distribution)
 
         loss = 0.0
@@ -1168,43 +1116,29 @@ class DropLanguage(DomainLanguage):
         loss += passage_attn_2.loss
 
         debug_value = ""
-        if self._debug:
-            # _, pattn_vis_most_1 = dlutils.listTokensVis(passage_attention_1, self.metadata["passage_tokens"])
-            # _, pattn_vis_most_2 = dlutils.listTokensVis(passage_attention_2, self.metadata["passage_tokens"])
-            #
-            # num1 = myutils.round_all(myutils.tocpuNPList(num_distribution_1), 3)
-            # num2 = myutils.round_all(myutils.tocpuNPList(num_distribution_2), 3)
-            # d1_gt_d2 = myutils.round_all(myutils.tocpuNPList(prob_num1_greater), 3)
-            # d2_gt_d1 = myutils.round_all(myutils.tocpuNPList(prob_num2_greater), 3)
 
-            # debug_value += (
-            #         f"Pattn1: {pattn_vis_most_1}\n num1: {num1}"
-            #         + f"\nPattn2: {pattn_vis_most_2}\n num2: {num2}"
-            #         + f"\nP(N1 > N2): {d1_gt_d2}  P(N2 > N1): {d2_gt_d1}"
-            # )
-
-            num1_output = Output(output_type="numbers", values=num_distribution_1, label="num_1")
-            num2_output = Output(output_type="numbers", values=num_distribution_2, label="num_2")
-            pattn_output = Output(output_type="passage", values=average_passage_distribution, label="avg_pattn")
-            debug_info_dict = {"compare_num_gt": [num1_output, num2_output, pattn_output]}
-            # debug_info_dict = {"compare-num-gt": {"number_1": num_distribution_1,
-            #                                       "number_2": num_distribution_2,
-            #                                       "passage_number_1": num1_token,
-            #                                       "passage_number_2": num2_token,
-            #                                       "passage": average_passage_distribution}}
-            self.modules_debug_info[-1].append(debug_info_dict)
+        num1_output = Output(output_type="numbers", values=num_distribution_1, label="num_1")
+        num2_output = Output(output_type="numbers", values=num_distribution_2, label="num_2")
+        pattn_output = Output(output_type="passage", values=average_passage_distribution, label="avg_pattn")
+        debug_info_dict = {"compare_num_gt": [num1_output, num2_output, pattn_output]}
+        self.modules_debug_info[-1].append(debug_info_dict)
 
         return PassageAttention(average_passage_distribution, loss=loss, debug_value=debug_value)
 
-    @predicate
-    def year_difference_two_events(self, passage_attn_1: PassageAttention, passage_attn_2: PassageAttention) -> YearDifference:
+    @predicate_with_side_args(["question_attention", "weighted_question_vector"])
+    def year_difference_two_events(
+            self, passage_attn_1: PassageAttention, passage_attn_2: PassageAttention,
+            question_attention: torch.Tensor, weighted_question_vector: torch.Tensor
+    ) -> YearDifference:
         """ Given two passage spans, ground them to dates, and then return the difference between their years """
 
         passage_attention_1 = passage_attn_1._value * self.passage_mask
         passage_attention_2 = passage_attn_2._value * self.passage_mask
 
-        date_distribution_1, passage_datetoken_prob_1, d1_dist_entropy = self.compute_date_scores(passage_attention_1)
-        date_distribution_2, passage_datetoken_prob_2, d2_dist_entropy = self.compute_date_scores(passage_attention_2)
+        date_distribution_1, passage_datetoken_prob_1, date_winloss1 = self.compute_date_scores(
+            passage_attention_1, weighted_question_vector)
+        date_distribution_2, passage_datetoken_prob_2, date_winloss2 = self.compute_date_scores(
+            passage_attention_2, weighted_question_vector)
 
         # Shape: (number_of_year_differences, )
         year_difference_dist = self.expected_date_year_difference(date_distribution_1, date_distribution_2)
@@ -1212,85 +1146,47 @@ class DropLanguage(DomainLanguage):
         loss = 0.0
         loss += passage_attn_1.loss
         loss += passage_attn_2.loss
-        # If we want to use an auxiliary entropy loss
-        # loss += d1_dist_entropy + d2_dist_entropy
+        loss += date_winloss1 + date_winloss2
 
         debug_value = ""
-        if self._debug:
-            _, pattn_vis_most_1 = dlutils.listTokensVis(passage_attention_1, self.metadata["passage_tokens"])
-            _, pattn_vis_most_2 = dlutils.listTokensVis(passage_attention_2, self.metadata["passage_tokens"])
 
-            date1 = myutils.round_all(myutils.tocpuNPList(date_distribution_1), 3)
-            date2 = myutils.round_all(myutils.tocpuNPList(date_distribution_2), 3)
-            year_diff_dist = myutils.round_all(myutils.tocpuNPList(year_difference_dist), 3)
-            date1_token = myutils.round_all(myutils.tocpuNPList(passage_datetoken_prob_1), 3)
-            date2_token = myutils.round_all(myutils.tocpuNPList(passage_datetoken_prob_2), 3)
-
-            debug_value += (
-                    f"YearDiffDist: {year_diff_dist}\n"
-                    + f"\nPattn1: {pattn_vis_most_1}\n Date1: {date1}"
-                    + f"\nPattn2: {pattn_vis_most_2}\n Date2: {date2}"
-            )
-            date1_output = Output(output_type="dates", values=date_distribution_1, label="date_1")
-            date2_output = Output(output_type="dates", values=date_distribution_2, label="date_2")
-            year_diff_output = Output(output_type="year_diffs", values=year_difference_dist, label="year_diff")
-            debug_info_dict = {"year_difference_two_events": [date1_output, date2_output, year_diff_output]}
-            # debug_info_dict = {"year-diff": {"date_1": date_distribution_1,
-            #                                  "date_2": date_distribution_2,
-            #                                  "passage_date_1": date1_token,
-            #                                  "passage_date_2": date2_token,
-            #                                  "year-diff": year_difference_dist}}
-            self.modules_debug_info[-1].append(debug_info_dict)
+        date1_output = Output(output_type="dates", values=date_distribution_1, label="date_1")
+        date2_output = Output(output_type="dates", values=date_distribution_2, label="date_2")
+        year_diff_output = Output(output_type="year_diffs", values=year_difference_dist, label="year_diff")
+        debug_info_dict = {"year_difference_two_events": [date1_output, date2_output, year_diff_output]}
+        self.modules_debug_info[-1].append(debug_info_dict)
 
         return YearDifference(year_difference_dist=year_difference_dist, loss=loss, debug_value=debug_value)
 
-    @predicate
-    def year_difference_single_event(self, passage_attn: PassageAttention) -> YearDifference:
+    @predicate_with_side_args(["question_attention", "weighted_question_vector"])
+    def year_difference_single_event(
+            self, passage_attn: PassageAttention,
+            question_attention: torch.Tensor, weighted_question_vector: torch.Tensor
+    ) -> YearDifference:
         """ Given a single passage span, find its start and end dates, then return the difference in years """
 
         passage_attention = passage_attn._value * self.passage_mask
 
         # DATE_1 is end since the difference is computed as DATE_1 - DATE_2
-        date_distribution_1, passage_datetoken_prob_1, d1_dist_entropy = self.compute_date_scores(passage_attention,
-                                                                                                  date_type="end")
-        date_distribution_2, passage_datetoken_prob_2, d2_dist_entropy = self.compute_date_scores(passage_attention,
-                                                                                                  date_type="start")
+        date_distribution_1, passage_datetoken_prob_1, date_winloss1 = self.compute_date_scores(
+            passage_attention, weighted_question_vector, date_type="end")
+        date_distribution_2, passage_datetoken_prob_2, date_winloss2 = self.compute_date_scores(
+            passage_attention, weighted_question_vector, date_type="start")
 
         # Shape: (number_of_year_differences, )
         year_difference_dist = self.expected_date_year_difference(date_distribution_1, date_distribution_2)
 
         loss = 0.0
         loss += passage_attn.loss
-        # If we want to use an auxiliary entropy loss
-        # loss += d1_dist_entropy + d2_dist_entropy
+        loss += date_winloss1 + date_winloss2
 
         debug_value = ""
-        if self._debug:
-            _, pattn_vis_most_1 = dlutils.listTokensVis(passage_attention, self.metadata["passage_tokens"])
-            most_attended_spans = dlutils.mostAttendedSpans(passage_attention, self.metadata["passage_tokens"])
+        date1_output = Output(output_type="dates", values=date_distribution_1, label="date_1")
+        date2_output = Output(output_type="dates", values=date_distribution_2, label="date_2")
+        year_diff_output = Output(output_type="year_diffs", values=year_difference_dist, label="year_diff")
+        debug_info_dict = {"year_difference_single_event": [date1_output, date2_output, year_diff_output]}
 
-            date1 = myutils.round_all(myutils.tocpuNPList(date_distribution_1), 3)
-            date2 = myutils.round_all(myutils.tocpuNPList(date_distribution_2), 3)
-            year_diff_dist = myutils.round_all(myutils.tocpuNPList(year_difference_dist), 3)
-            date1_token = myutils.round_all(myutils.tocpuNPList(passage_datetoken_prob_1), 3)
-            date2_token = myutils.round_all(myutils.tocpuNPList(passage_datetoken_prob_2), 3)
-
-            debug_value += (
-                    f"YearDiffDist: {year_diff_dist}\n"
-                    + f"\nPattn1: {pattn_vis_most_1}"
-                    + f"\nMostAttendedSpans: {most_attended_spans}"
-                    + f"\n Date1: {date1}\n Date2: {date2}"
-            )
-            date1_output = Output(output_type="dates", values=date_distribution_1, label="date_1")
-            date2_output = Output(output_type="dates", values=date_distribution_2, label="date_2")
-            year_diff_output = Output(output_type="year_diffs", values=year_difference_dist, label="year_diff")
-            debug_info_dict = {"year_difference_single_event": [date1_output, date2_output, year_diff_output]}
-            # debug_info_dict = {"year-diff": {"date_1": date_distribution_1,
-            #                                  "date_2": date_distribution_2,
-            #                                  "passage_date_1": date1_token,
-            #                                  "passage_date_2": date2_token,
-            #                                  "year-diff": year_difference_dist}}
-            self.modules_debug_info[-1].append(debug_info_dict)
+        self.modules_debug_info[-1].append(debug_info_dict)
 
         return YearDifference(year_difference_dist=year_difference_dist, loss=loss, debug_value=debug_value)
 
@@ -1536,29 +1432,32 @@ class DropLanguage(DomainLanguage):
         minimum_distribution = clamp_distribution(minimum_distribution)
         return minimum_distribution
 
-    @predicate_with_side_args(["num_entidxs"])
-    def select_num(self, passage_attention: PassageAttention, num_entidxs=None) -> PassageNumber:
+    @predicate_with_side_args(["question_attention", "weighted_question_vector", "num_entidxs"])
+    def select_num(
+            self, passage_attention: PassageAttention,
+            question_attention: torch.Tensor, weighted_question_vector: torch.Tensor,
+            num_entidxs=None
+    ) -> PassageNumber:
         # This comes as a list of groundings; even though for this action there's just one
         # This can be completely-zero indicating masked. In that case, don't compute loss
         passage_attn = passage_attention._value
         # Shape: (passage_length)
         passage_attn = passage_attn * self.passage_mask
 
-        number_distribution, passage_numtoken_probs, num_dist_entropy = self.compute_num_distribution(
-            passage_attention=passage_attn)
+        number_distribution, passage_numtoken_probs, _, num_win_loss = self.compute_num_distribution(
+            passage_attention=passage_attn, weighted_question_vector=weighted_question_vector)
 
-        loss = 0.0
         grounding_loss = aux_symbol_loss(num_entidxs, number_distribution)
 
+        loss = 0.0
+        loss += num_win_loss
         loss += grounding_loss
         loss += passage_attention.loss
 
-        # if self._debug:
         num_output = Output(output_type="numbers", values=number_distribution, label="number_dist")
         debug_info_dict = {"select_num": [num_output]}
         self.modules_debug_info[-1].append(debug_info_dict)
         return PassageNumber(passage_number_dist=number_distribution, loss=loss, debug_value="")
-
 
     def compute_implicitnum_distribution(self, weighted_question_vector: Tensor):
         """ Given a question attention, compute a distribution over implicit numbers for this language.
@@ -1604,11 +1503,16 @@ class DropLanguage(DomainLanguage):
             self.modules_debug_info[-1].append(debug_info_dict)
         return PassageNumber(passage_number_dist=number_distribution, loss=loss, debug_value=debug_value)
 
-    @predicate_with_side_args(["num_entidxs"])
-    def select_min_num(self, passage_attention: PassageAttention, num_entidxs=None) -> PassageAttention:
+    @predicate_with_side_args(["question_attention", "weighted_question_vector", "num_entidxs"])
+    def select_min_num(
+        self, passage_attention: PassageAttention,
+        question_attention: torch.Tensor, weighted_question_vector: torch.Tensor,
+        num_entidxs=None
+    ) -> PassageAttention:
         (minmax_num_pattn, inputpattn_num_dist, inputpattn_numtoken_probs, minmax_numtoken_probs,
          loss, debug_value) = self.minmaxNumPattn_module(
-            passage_attention=passage_attention, min_max_op="min", num_entidxs_supervision=num_entidxs)
+            passage_attention=passage_attention, weighted_question_vector=weighted_question_vector,
+            min_max_op="min", num_entidxs_supervision=num_entidxs)
         # if self._debug:
         num_input = Output(output_type="passage", values=inputpattn_numtoken_probs, label="number_input")
         minmax_out = Output(output_type="passage", values=minmax_numtoken_probs, label="min_number")
@@ -1617,11 +1521,16 @@ class DropLanguage(DomainLanguage):
         self.modules_debug_info[-1].append(debug_info_dict)
         return PassageAttention(passage_attention=minmax_num_pattn, loss=loss, debug_value=debug_value)
 
-    @predicate_with_side_args(["num_entidxs"])
-    def select_max_num(self, passage_attention: PassageAttention, num_entidxs=None) -> PassageAttention:
+    @predicate_with_side_args(["question_attention", "weighted_question_vector", "num_entidxs"])
+    def select_max_num(
+        self, passage_attention: PassageAttention,
+        question_attention: torch.Tensor, weighted_question_vector: torch.Tensor,
+        num_entidxs=None
+    ) -> PassageAttention:
         (minmax_num_pattn, inputpattn_num_dist, inputpattn_numtoken_probs, minmax_numtoken_probs,
          loss, debug_value) = self.minmaxNumPattn_module(
-            passage_attention=passage_attention, min_max_op="max", num_entidxs_supervision=num_entidxs)
+            passage_attention=passage_attention, weighted_question_vector=weighted_question_vector,
+            min_max_op="max", num_entidxs_supervision=num_entidxs)
         # if self._debug:
         num_input = Output(output_type="passage", values=inputpattn_numtoken_probs, label="number_input")
         minmax_out = Output(output_type="passage", values=minmax_numtoken_probs, label="max_number")
@@ -1630,52 +1539,33 @@ class DropLanguage(DomainLanguage):
         self.modules_debug_info[-1].append(debug_info_dict)
         return PassageAttention(passage_attention=minmax_num_pattn, loss=loss, debug_value=debug_value)
 
-    def minmaxNumPattn_module(self, passage_attention: PassageAttention, min_max_op: str, num_entidxs_supervision=None):
+    def minmaxNumPattn_module(self, passage_attention: PassageAttention, weighted_question_vector: torch.Tensor,
+                              min_max_op: str, num_entidxs_supervision=None):
         assert min_max_op in ["min", "max"]
 
         pattn = passage_attention._value * self.passage_mask
         # Computing for debugging and aux loss purposes
-        inputpattn_num_dist, inputpnum_token_prob, _ = self.compute_num_distribution(pattn)
+        inputpattn_num_dist, inputpnum_token_prob, p2p_token2num_alignment, num_winloss = self.compute_num_distribution(
+            pattn, weighted_question_vector)
         (minmax_num_pattn, input_numtoken_probs_only, minmax_numtoken_probs_only,
-         minmaxnum_token_prob) = self.pattn_for_minmaxNum(pattn=pattn, max_min=min_max_op)
+         minmaxnum_token_prob) = self.pattn_for_minmaxNum(pattn=pattn,
+                                                          p2p_token2num_alignment=p2p_token2num_alignment,
+                                                          max_min=min_max_op)
 
         loss = aux_symbol_loss(num_entidxs_supervision, inputpattn_num_dist)
-        # if num_grounding_supervision is not None:
-        #     grounding_mask = (torch.sum(num_grounding_supervision) > 0).float()
-        #     if grounding_mask > 0:
-        #         # Number distribution for input pattn
-        #         log_probs = torch.log(inputpattn_num_dist + 1e-40) * num_grounding_supervision
-        #         log_likelihood = torch.sum(log_probs)  # Want all grounded numbers to be high, hence prod of probs
-        #         grounding_loss = -1 * grounding_mask * log_likelihood
-        #         loss += grounding_loss
+        loss += num_winloss
 
         loss += passage_attention.loss
 
-        minmax_num_distribution = None
         debug_value = ""
-        inputpattn_numtoken_probs = None
-        minmax_numtoken_probs = None
-        if self._debug:
-            minmax_num_dist, _, _ = self.compute_num_distribution(minmax_num_pattn)
-            inputpattn_numtoken_probs = myutils.round_all(myutils.tocpuNPList(inputpnum_token_prob), 3)
-            minmax_numtoken_probs = myutils.round_all(myutils.tocpuNPList(minmaxnum_token_prob), 3)
-            # minmax_token_probs = myutils.round_all(myutils.tocpuNPList(minmax_numtoken_probs), 3)
-
-            # input_topknums = dlutils.topProbMassElems(attention=inputpattn_num_dist, support=self.passage_num_values)
-            # topknums = dlutils.topProbMassElems(attention=minmax_num_dist, support=self.passage_num_values)
-            # min_pattn_comp, _ = dlutils.listTokensVis(minmax_num_pattn, self.metadata["passage_tokens"])
-            # topspans = dlutils.mostAttendedSpans(minmax_num_pattn, self.metadata["passage_tokens"])
-            # debug_value += f"{min_max_op}-pattn-module"
-            # debug_value += f"\noutput-{min_max_op}-num-pattn-most-attended-spans: {topspans}"
-            # debug_value += f"\ninput-numtoken-probs: {inputpattn_numtoken_probs}"
-            # debug_value += f"\ninput-num-dist: {input_topknums}"
-            # # debug_value += f"\nminmax-numtoken-probs: {minmax_token_probs}"
-            # debug_value += f"\ntopk-input-num-dist: {topknums}"
+        minmax_num_dist, _, _, _ = self.compute_num_distribution(minmax_num_pattn, weighted_question_vector)
+        inputpattn_numtoken_probs = myutils.round_all(myutils.tocpuNPList(inputpnum_token_prob), 3)
+        minmax_numtoken_probs = myutils.round_all(myutils.tocpuNPList(minmaxnum_token_prob), 3)
 
         return (minmax_num_pattn, inputpattn_num_dist, inputpattn_numtoken_probs, minmax_numtoken_probs,
                 loss, debug_value)
 
-    def pattn_for_minmaxNum(self, pattn: torch.FloatTensor, max_min: str):
+    def pattn_for_minmaxNum(self, pattn: torch.FloatTensor, p2p_token2num_alignment: torch.Tensor, max_min: str):
         """ Re-distribute the passage-attention based on a max number-token distribution
             The idea here is to find a `max-number-token` passage attention, i.e. given a distribution over
             passage-tokens, and for each token a distribution over numbers, find the passage-attention that contains,
@@ -1697,7 +1587,7 @@ class DropLanguage(DomainLanguage):
         """
         with Profile("pattn-minmax"):
             # Shape: (passage_length, passage_length) -- each row is a number-token-distribution
-            pattn_times_numbertokenprobs = self.passage_passage_token2num_alignment * pattn.unsqueeze(1)
+            pattn_times_numbertokenprobs = p2p_token2num_alignment * pattn.unsqueeze(1)
 
             # Shape: (passage_length, num_of_number_tokens) -- For each token, a number-token distribution, where
             # 1. The underlying numbers are sorted in increasing order
@@ -1729,15 +1619,14 @@ class DropLanguage(DomainLanguage):
 
             new_pattn = clamp_distribution(new_pattn)
 
-            minmax_number_token_distribution = None
-            if self._debug:
-                # These are the tokens ids for numbers s.t. numbers are sorted in increasing order
-                number_tokenidxs_sorted = allenutil.move_to_device(
-                    torch.LongTensor(self.passage_number_sortedtokenidxs), cuda_device=self.device_id)
-                # Scattering min-max number distribution back to tokens
-                minmax_number_token_distribution = pattn.new_zeros(self.passage_length)
-                minmax_number_token_distribution.scatter_add_(0, number_tokenidxs_sorted,
-                                                              only_numbertoken_minmaxprobs_sorted)
+            # These are the tokens ids for numbers s.t. numbers are sorted in increasing order
+            number_tokenidxs_sorted = allenutil.move_to_device(
+                torch.LongTensor(self.passage_number_sortedtokenidxs), cuda_device=self.device_id)
+            # Scattering min-max number distribution back to tokens
+            minmax_number_token_distribution = pattn.new_zeros(self.passage_length)
+            minmax_number_token_distribution.scatter_add_(0, number_tokenidxs_sorted,
+                                                          only_numbertoken_minmaxprobs_sorted)
+
         return (new_pattn, only_expected_numbertoken_probs, only_numbertoken_minmaxprobs_sorted,
                 minmax_number_token_distribution)
 
@@ -1787,10 +1676,6 @@ def get_empty_language_object() -> DropLanguage:
         year_differences=None,
         year_differences_mat=None,
         count_num_values=None,
-        passage_token2date_alignment=None,
-        passage_token2startdate_alignment=None,
-        passage_token2enddate_alignment=None,
-        passage_token2num_alignment=None,
         parameters=None,
         start_types=None,
     )

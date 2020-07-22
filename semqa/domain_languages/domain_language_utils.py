@@ -154,7 +154,7 @@ def masking_blockdiagonal(passage_length, window, device_id):
     return inwindow_mask, outwindow_mask
 
 
-def aux_window_loss(ptop_attention, passage_mask, inwindow_mask):
+def aux_window_loss(ptop_attention, passage_mask, inwindow_mask, outwindow_mask=None, p_tokensymbol_mask_float=None):
     """Auxiliary loss to encourage p-to-p attention to be within a certain window.
 
     Args:
@@ -167,6 +167,9 @@ def aux_window_loss(ptop_attention, passage_mask, inwindow_mask):
     """
     inwindow_mask = inwindow_mask * passage_mask.unsqueeze(0)
     inwindow_mask = inwindow_mask * passage_mask.unsqueeze(1)
+    if p_tokensymbol_mask_float is not None:
+        inwindow_mask = inwindow_mask * p_tokensymbol_mask_float.unsqueeze(0)
+
     inwindow_probs = ptop_attention * inwindow_mask
     # Sum inwindow_probs for each token, signifying the token can distribute its alignment prob in any way
     # Shape: (passage_length)
@@ -176,9 +179,33 @@ def aux_window_loss(ptop_attention, passage_mask, inwindow_mask):
     masked_sum_inwindow_probs = allenutil.replace_masked_values(sum_inwindow_probs, mask_sum.bool(), replace_with=1e-40)
     log_sum_inwindow_probs = torch.log(masked_sum_inwindow_probs + 1e-40) * mask_sum
     inwindow_likelihood = torch.sum(log_sum_inwindow_probs)
-    inwindow_likelihood_avg = inwindow_likelihood / torch.sum(inwindow_mask)
+
+    if torch.sum(inwindow_mask) > 0:
+        inwindow_likelihood_avg = inwindow_likelihood / torch.sum(inwindow_mask)
+    else:
+        inwindow_likelihood_avg = 0.0
 
     inwindow_aux_loss = -1.0 * inwindow_likelihood_avg
+    total_aux_loss = inwindow_aux_loss
+
+    if outwindow_mask is not None:
+        outwindow_mask = outwindow_mask * p_tokensymbol_mask_float.unsqueeze(0)
+        # For tokens outside the window, increase entropy of the distribution. i.e. -\sum p*log(p)
+        # Since we'd like to distribute the weight equally to things outside the window
+        # Shape: (passage_length, passage_length)
+        outwindow_probs = ptop_attention * outwindow_mask
+        masked_outwindow_probs = allenutil.replace_masked_values(outwindow_probs, outwindow_mask.bool(),
+                                                                 replace_with=1e-40)
+        outwindow_probs_log = torch.log(masked_outwindow_probs + 1e-40) * outwindow_mask
+        outwindow_negentropies = torch.sum(outwindow_probs * outwindow_probs_log)
+
+        if torch.sum(outwindow_mask) > 0:
+            outwindow_negentropies = outwindow_negentropies / torch.sum(outwindow_mask)
+        else:
+            outwindow_negentropies = 0.0
+
+        outwindow_aux_loss = outwindow_negentropies
+        total_aux_loss += outwindow_aux_loss
 
     return inwindow_aux_loss
 

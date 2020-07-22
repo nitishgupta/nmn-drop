@@ -40,6 +40,53 @@ class ExecutorParameters(torch.nn.Module, Registrable):
                                                            matrix_dim=passage_encoding_dim,
                                                            normalize=False)
 
+        self.qp_to_numdate_attention = BilinearMatrixAttention(
+            matrix_1_dim=question_encoding_dim + passage_encoding_dim,
+            matrix_2_dim=passage_encoding_dim,
+            activation=None)
+
+        self.relocate_matrix_attention = BilinearMatrixAttention(
+            matrix_1_dim=question_encoding_dim + passage_encoding_dim, matrix_2_dim=passage_encoding_dim,
+            activation=None)
+
+        self.qp_to_startdate_attention = BilinearMatrixAttention(
+            matrix_1_dim=question_encoding_dim + passage_encoding_dim,
+            matrix_2_dim=passage_encoding_dim,
+            activation=None)
+
+        self.qp_to_enddate_attention = BilinearMatrixAttention(
+            matrix_1_dim=question_encoding_dim + passage_encoding_dim,
+            matrix_2_dim=passage_encoding_dim,
+            activation=None)
+
+        # # We will sum the passage-token-repr to the weighted-q-repr - to use x*y combination
+        # self.relocate_matrix_attention = LinearMatrixAttention(
+        #     tensor_1_dim=passage_encoding_dim, tensor_2_dim=passage_encoding_dim, combination="x,y,x*y"
+        # )
+
+        # # This computes a passage_to_passage attention, hopefully, for each token, putting a weight on date tokens
+        # # that are related to it.
+        # self.passage_to_date_attention: MatrixAttention = BilinearMatrixAttention(
+        #     matrix_1_dim=passage_encoding_dim, matrix_2_dim=passage_encoding_dim
+        # )
+
+        # # This computes a passage_to_passage attention, hopefully, for each token, putting a weight on date tokens
+        # # that are related to it.
+        # self.passage_to_num_attention: MatrixAttention = BilinearMatrixAttention(
+        #     matrix_1_dim=passage_encoding_dim, matrix_2_dim=passage_encoding_dim
+        # )
+
+        # self.passage_to_start_date_attention: MatrixAttention = BilinearMatrixAttention(
+        #     matrix_1_dim=passage_encoding_dim, matrix_2_dim=passage_encoding_dim
+        # )
+        #
+        # self.passage_to_end_date_attention: MatrixAttention = BilinearMatrixAttention(
+        #     matrix_1_dim=passage_encoding_dim, matrix_2_dim=passage_encoding_dim
+        # )
+
+
+
+
         # RNN for Pattn -> hidden can be used for start/end, BIO, and/or count prediction from PassageAttention
         self.passage_attention_to_span = passage_attention_to_span
         # Only one of the below two are active
@@ -74,30 +121,6 @@ class ExecutorParameters(torch.nn.Module, Registrable):
             input_dim=passage_encoding_dim,
             combination="x,y")
 
-        # We will sum the passage-token-repr to the weighted-q-repr - to use x*y combination
-        self.relocate_matrix_attention = LinearMatrixAttention(
-            tensor_1_dim=passage_encoding_dim, tensor_2_dim=passage_encoding_dim, combination="x,y,x*y"
-        )
-
-        # This computes a passage_to_passage attention, hopefully, for each token, putting a weight on date tokens
-        # that are related to it.
-        self.passage_to_date_attention: MatrixAttention = BilinearMatrixAttention(
-            matrix_1_dim=passage_encoding_dim, matrix_2_dim=passage_encoding_dim
-        )
-
-        self.passage_to_start_date_attention: MatrixAttention = BilinearMatrixAttention(
-            matrix_1_dim=passage_encoding_dim, matrix_2_dim=passage_encoding_dim
-        )
-
-        self.passage_to_end_date_attention: MatrixAttention = BilinearMatrixAttention(
-            matrix_1_dim=passage_encoding_dim, matrix_2_dim=passage_encoding_dim
-        )
-
-        # This computes a passage_to_passage attention, hopefully, for each token, putting a weight on date tokens
-        # that are related to it.
-        self.passage_to_num_attention: MatrixAttention = BilinearMatrixAttention(
-            matrix_1_dim=passage_encoding_dim, matrix_2_dim=passage_encoding_dim
-        )
 
         if dropout > 0:
             self._dropout = torch.nn.Dropout(p=dropout)

@@ -332,51 +332,40 @@ class DROPParserBERT(DROPParserBase):
         modeled_passage = encoded_passage
         passage_length = modeled_passage.size()[1]
 
-        question_passage_similarity = self.qp_matrix_attention(encoded_question, modeled_passage)
-        passage_question_similarity = question_passage_similarity.transpose(1, 2)
+        # question_passage_similarity = self.qp_matrix_attention(encoded_question, modeled_passage)
+        # passage_question_similarity = question_passage_similarity.transpose(1, 2)
 
-        # question_passage_attention = allenutil.masked_softmax(
-        #     question_passage_similarity, passage_mask.unsqueeze(1).bool(), memory_efficient=True
-        # )
-        #
-        # passage_question_attention = allenutil.masked_softmax(
-        #     passage_question_similarity, question_mask.unsqueeze(1).bool(), memory_efficient=True
-        # )
-
-        passage_for_numdate = modeled_passage
-
-        # passage_bert_out = self._text_field_embedder(passage)
-        # passage_for_numdate = passage_bert_out[:, 1:-1, :] * passage_mask.unsqueeze(-1)
-
+        """ No more num-date alignment
         # Passage Token - Date Alignment
         # Shape: (batch_size, passage_length, passage_length)
         passage_passage_token2date_alignment = compute_token_symbol_alignments(
-            modeled_passage=passage_for_numdate,
+            modeled_passage=modeled_passage,
             passage_mask=passage_mask,
             passageidx2symbolidx=passageidx2dateidx,
             passage_to_symbol_attention_params=self._executor_parameters.passage_to_date_attention
         )
 
         passage_passage_token2startdate_alignment = compute_token_symbol_alignments(
-            modeled_passage=passage_for_numdate,
+            modeled_passage=modeled_passage,
             passage_mask=passage_mask,
             passageidx2symbolidx=passageidx2dateidx,
             passage_to_symbol_attention_params=self._executor_parameters.passage_to_start_date_attention
         )
 
         passage_passage_token2enddate_alignment = compute_token_symbol_alignments(
-            modeled_passage=passage_for_numdate,
+            modeled_passage=modeled_passage,
             passage_mask=passage_mask,
             passageidx2symbolidx=passageidx2dateidx,
             passage_to_symbol_attention_params=self._executor_parameters.passage_to_end_date_attention
         )
         # Passage Token - Num Alignment
         passage_passage_token2num_alignment = compute_token_symbol_alignments(
-            modeled_passage=passage_for_numdate,
+            modeled_passage=modeled_passage,
             passage_mask=passage_mask,
             passageidx2symbolidx=passageidx2numberidx,
             passage_to_symbol_attention_params=self._executor_parameters.passage_to_num_attention
         )
+        No more num-date alignment """
 
         # json_dicts = []
         # for i in range(batch_size):
@@ -389,28 +378,31 @@ class DROPParserBERT(DROPParserBase):
         # num_attentions_f.close()
         # exit()
         """ Aux Loss """
-        if self.auxwinloss:
-            inwindow_mask, outwindow_mask = self.masking_blockdiagonal(passage_length, 15, self.device_id)
-            passage_tokenidx2numidx_mask = (passageidx2numberidx > -1).float()
-            num_aux_loss = self.window_loss_numdate(
-                passage_passage_token2num_alignment, passage_tokenidx2numidx_mask, inwindow_mask, outwindow_mask
-            )
 
-            passage_tokenidx2dateidx_mask = (passageidx2dateidx > -1).float()
-            date_aux_loss = self.window_loss_numdate(
-                passage_passage_token2date_alignment, passage_tokenidx2dateidx_mask, inwindow_mask, outwindow_mask
-            )
-
-            start_date_aux_loss = self.window_loss_numdate(
-                passage_passage_token2startdate_alignment, passage_tokenidx2dateidx_mask, inwindow_mask,
-                outwindow_mask)
-
-            end_date_aux_loss = self.window_loss_numdate(
-                passage_passage_token2enddate_alignment, passage_tokenidx2dateidx_mask, inwindow_mask,
-                outwindow_mask)
-            aux_win_loss = num_aux_loss + date_aux_loss + start_date_aux_loss + end_date_aux_loss
-        else:
-            aux_win_loss = 0.0
+        """ No more window loss """
+        # if self.auxwinloss:
+        #     inwindow_mask, outwindow_mask = self.masking_blockdiagonal(passage_length, 15, self.device_id)
+        #     passage_tokenidx2numidx_mask = (passageidx2numberidx > -1).float()
+        #     num_aux_loss = self.window_loss_numdate(
+        #         passage_passage_token2num_alignment, passage_tokenidx2numidx_mask, inwindow_mask, outwindow_mask
+        #     )
+        #
+        #     passage_tokenidx2dateidx_mask = (passageidx2dateidx > -1).float()
+        #     date_aux_loss = self.window_loss_numdate(
+        #         passage_passage_token2date_alignment, passage_tokenidx2dateidx_mask, inwindow_mask, outwindow_mask
+        #     )
+        #
+        #     start_date_aux_loss = self.window_loss_numdate(
+        #         passage_passage_token2startdate_alignment, passage_tokenidx2dateidx_mask, inwindow_mask,
+        #         outwindow_mask)
+        #
+        #     end_date_aux_loss = self.window_loss_numdate(
+        #         passage_passage_token2enddate_alignment, passage_tokenidx2dateidx_mask, inwindow_mask,
+        #         outwindow_mask)
+        #     aux_win_loss = num_aux_loss + date_aux_loss + start_date_aux_loss + end_date_aux_loss
+        # else:
+        #     aux_win_loss = 0.0
+        """ No more window loss """
 
         """ Parser setup """
         # Shape: (B, encoding_dim)
@@ -419,10 +411,10 @@ class DROPParserBERT(DROPParserBase):
         question_mask_aslist = [question_mask[i] for i in range(batch_size)]
         passage_encoded_aslist = [encoded_passage[i] for i in range(batch_size)]
         passage_modeled_aslist = [modeled_passage[i] for i in range(batch_size)]
-        p2pdate_alignment_aslist = [passage_passage_token2date_alignment[i] for i in range(batch_size)]
-        p2pstartdate_alignment_aslist = [passage_passage_token2startdate_alignment[i] for i in range(batch_size)]
-        p2penddate_alignment_aslist = [passage_passage_token2enddate_alignment[i] for i in range(batch_size)]
-        p2pnum_alignment_aslist = [passage_passage_token2num_alignment[i] for i in range(batch_size)]
+        # p2pdate_alignment_aslist = [passage_passage_token2date_alignment[i] for i in range(batch_size)]
+        # p2pstartdate_alignment_aslist = [passage_passage_token2startdate_alignment[i] for i in range(batch_size)]
+        # p2penddate_alignment_aslist = [passage_passage_token2enddate_alignment[i] for i in range(batch_size)]
+        # p2pnum_alignment_aslist = [passage_passage_token2num_alignment[i] for i in range(batch_size)]
         size_composednums_aslist = [len(x) for x in composed_numbers]
         # Shape: (size_num_support_i, max_num_add_combs_i, 2) where _i is per instance
         add_num_combination_aslist = [
@@ -452,10 +444,6 @@ class DROPParserBERT(DROPParserBase):
                     year_differences=year_differences[i],
                     year_differences_mat=year_differences_mat[i],
                     count_num_values=count_values[i],
-                    passage_token2date_alignment=p2pdate_alignment_aslist[i],
-                    passage_token2startdate_alignment=p2pstartdate_alignment_aslist[i],
-                    passage_token2enddate_alignment=p2penddate_alignment_aslist[i],
-                    passage_token2num_alignment=p2pnum_alignment_aslist[i],
                     parameters=self._executor_parameters,
                     start_types=None,  # batch_start_types[i],
                     device_id=self.device_id,
@@ -748,9 +736,9 @@ class DROPParserBERT(DROPParserBase):
             total_aux_loss = allenutil.move_to_device(torch.tensor(0.0), self.device_id).float()
             total_aux_loss += sharedsub_loss
 
-            total_aux_loss += aux_win_loss
-            if aux_win_loss != 0:
-                self.auxwinloss_metric(aux_win_loss.item())
+            # total_aux_loss += aux_win_loss
+            # if aux_win_loss != 0:
+            #     self.auxwinloss_metric(aux_win_loss.item())
 
             if self.excloss:
                 exec_loss = 0.0
