@@ -166,7 +166,7 @@ local shared_substructure = utils.boolparser(std.extVar("SHRDSUB"));
         "num_epochs": utils.parse_number(std.extVar("EPOCHS")),
         "optimizer": {
             "type": "huggingface_adamw",
-            "lr": 1e-5,
+            "lr": 2e-5,
             "weight_decay": 0.0,
             "eps": 1e-8,
             "correct_bias": true

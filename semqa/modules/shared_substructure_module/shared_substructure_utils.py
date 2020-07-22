@@ -147,10 +147,10 @@ def compute_loss(
     aux_passageidx2numberidx = aux_passageidx2numberidx[:, 0:passage_len]
     encodedpassage_for_numdate = encodedpassage_for_numdate[:, 0:passage_len, :]
 
-    (passage_token2date, passage_token2startdate,
-     passage_token2enddate, passage_token2num) = compute_aux_token_symbol_alignments(
-        modeled_passage=encodedpassage_for_numdate, passage_mask=passage_mask, executor_parameters=executor_parameters,
-        passageidx2dateidx=aux_passageidx2dateidx, passageidx2numberidx=aux_passageidx2numberidx)
+    # (passage_token2date, passage_token2startdate,
+    #  passage_token2enddate, passage_token2num) = compute_aux_token_symbol_alignments(
+    #     modeled_passage=encodedpassage_for_numdate, passage_mask=passage_mask, executor_parameters=executor_parameters,
+    #     passageidx2dateidx=aux_passageidx2dateidx, passageidx2numberidx=aux_passageidx2numberidx)
 
     aux_languages = []
     for i, batch_idx in enumerate(group_idxs):
@@ -171,10 +171,10 @@ def compute_loss(
                     year_differences=language.year_differences,
                     year_differences_mat=year_differences_mat[batch_idx],
                     count_num_values=language.count_num_values,
-                    passage_token2date_alignment=passage_token2date[i],
-                    passage_token2startdate_alignment=passage_token2startdate[i],
-                    passage_token2enddate_alignment=passage_token2enddate[i],
-                    passage_token2num_alignment=passage_token2num[i],
+                    # passage_token2date_alignment=passage_token2date[i],
+                    # passage_token2startdate_alignment=passage_token2startdate[i],
+                    # passage_token2enddate_alignment=passage_token2enddate[i],
+                    # passage_token2num_alignment=passage_token2num[i],
                     parameters=language.parameters,
                     start_types=None,  # batch_start_types[i],
                     device_id=device_id,
