@@ -8,7 +8,7 @@ export MKL_NUM_THREADS=4
 
 ### DATASET PATHS -- should be same across models for same dataset
 DATASET_DIR=/shared/nitishg/data/drop-w-qdmr
-DATASET_NAME=drop_iclr_600
+DATASET_NAME=qdmr-v2_iclrfull-v2-ss
 # qdmr-filter-post-v6
 # qdmr-v6_iclr600
 # drop_iclr600
@@ -53,15 +53,15 @@ export SHRDSUB=false
 
 # Whether strong supervison instances should be trained on first, if yes for how many epochs
 export SUPFIRST=true
-export SUPEPOCHS=5
+export SUPEPOCHS=3
 
 # -1 will not run HardEM; HardEM will kick after EPOCH num of epochs
-export HARDEM_EPOCH=5
+export HARDEM_EPOCH=3
 
 export BS=2
 export DROPOUT=0.2
 
-export SEED=1337
+export SEED=42
 
 export BEAMSIZE=1
 export MAX_DECODE_STEP=14
@@ -76,7 +76,7 @@ CHECKPOINT_ROOT=./resources/checkpoints
 SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop-w-qdmr/${DATASET_NAME}
 MODEL_DIR=drop_parser_bert
 PD_1=Qattn_${QATTLOSS}/EXCLOSS_${EXCLOSS}/aux_${AUXLOSS}/${BIO_LABEL}_${BIO_TAG}/SHRDSUB_${SHRDSUB}/SUPEPOCHS_${SUPEPOCHS}_HEM_${HARDEM_EPOCH}_BM_${BEAMSIZE}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}_newHP2_qND
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}_newHP_qNDP
 
 # SERIALIZATION_DIR=./resources/checkpoints/test
 

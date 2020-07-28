@@ -462,7 +462,7 @@ def augmentDateComparisonData(dataset):
 
 
 if __name__ == "__main__":
-    print("Running data augmentation")
+    print("\nData augmentation for date-comp questions")
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_dir")

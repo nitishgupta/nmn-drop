@@ -15,6 +15,23 @@ class QREPR_METHOD(Enum):
 
 
 class QReprModuleExecution():
+    # making a static member so that the paired-data loss function can use this
+    actions_w_qattn = [
+        "PassageNumber -> select_implicit_num",
+        "PassageAttention -> select_passage",
+        "<PassageAttention:PassageAttention> -> filter_passage",
+        "<PassageAttention:PassageAttention> -> project_passage",
+        "<PassageAttention:PassageNumber> -> select_num",
+        "<PassageAttention,PassageAttention:PassageAttention> -> compare_date_gt",
+        "<PassageAttention,PassageAttention:PassageAttention> -> compare_date_lt",
+        "<PassageAttention,PassageAttention:PassageAttention> -> compare_num_gt",
+        "<PassageAttention,PassageAttention:PassageAttention> -> compare_num_lt",
+        "<PassageAttention,PassageAttention:YearDifference> -> year_difference_two_events",
+        "<PassageAttention:YearDifference> -> year_difference_single_event",
+        "<PassageAttention:PassageAttention> -> select_min_num",
+        "<PassageAttention:PassageAttention> -> select_max_num",
+    ]
+
     def __init__(self, qrepr_style: str, qp_encoding_style: str):
         self._qrepr_style = qrepr_style
         self._qp_encoding_style: str = qp_encoding_style
@@ -25,21 +42,21 @@ class QReprModuleExecution():
         # year_difference_two_events, year_difference_single_event,
         # select_num, select_min_num, select_max_num, select_implicit_num
 
-        self.relevant_actions = [
-            "PassageNumber -> select_implicit_num",
-            "PassageAttention -> select_passage",
-            "<PassageAttention:PassageAttention> -> filter_passage",
-            "<PassageAttention:PassageAttention> -> project_passage",
-            "<PassageAttention:PassageNumber> -> select_num",
-            "<PassageAttention,PassageAttention:PassageAttention> -> compare_date_gt",
-            "<PassageAttention,PassageAttention:PassageAttention> -> compare_date_lt",
-            "<PassageAttention,PassageAttention:PassageAttention> -> compare_num_gt",
-            "<PassageAttention,PassageAttention:PassageAttention> -> compare_num_lt",
-            "<PassageAttention,PassageAttention:YearDifference> -> year_difference_two_events",
-            "<PassageAttention:YearDifference> -> year_difference_single_event",
-            "<PassageAttention:PassageAttention> -> select_min_num",
-            "<PassageAttention:PassageAttention> -> select_max_num",
-        ]
+        # self.relevant_actions = [
+        #     "PassageNumber -> select_implicit_num",
+        #     "PassageAttention -> select_passage",
+        #     "<PassageAttention:PassageAttention> -> filter_passage",
+        #     "<PassageAttention:PassageAttention> -> project_passage",
+        #     "<PassageAttention:PassageNumber> -> select_num",
+        #     "<PassageAttention,PassageAttention:PassageAttention> -> compare_date_gt",
+        #     "<PassageAttention,PassageAttention:PassageAttention> -> compare_date_lt",
+        #     "<PassageAttention,PassageAttention:PassageAttention> -> compare_num_gt",
+        #     "<PassageAttention,PassageAttention:PassageAttention> -> compare_num_lt",
+        #     "<PassageAttention,PassageAttention:YearDifference> -> year_difference_two_events",
+        #     "<PassageAttention:YearDifference> -> year_difference_single_event",
+        #     "<PassageAttention:PassageAttention> -> select_min_num",
+        #     "<PassageAttention:PassageAttention> -> select_max_num",
+        # ]
 
         assert self._qrepr_style in ["attn", "decont", "decont_qp"]
 
@@ -93,7 +110,7 @@ class QReprModuleExecution():
             for progidx, (action_seq, sideargs) in enumerate(zip(batch_action_seqs[instance_idx],
                                                                  batch_actionseq_sideargs[instance_idx])):
                 for actionidx, (action_str, sidearg_dict) in enumerate(zip(action_seq, sideargs)):
-                    if action_str in self.relevant_actions:
+                    if action_str in QReprModuleExecution.actions_w_qattn:
                         question_attention = sidearg_dict["question_attention"]
                         # if "question_attention_supervision" in sidearg_dict:
                         #     import pdb
@@ -124,7 +141,7 @@ class QReprModuleExecution():
             for progidx, (action_seq, sideargs) in enumerate(zip(batch_action_seqs[instance_idx],
                                                                  batch_actionseq_sideargs[instance_idx])):
                 for actionidx, (action_str, sidearg_dict) in enumerate(zip(action_seq, sideargs)):
-                    if action_str in self.relevant_actions:
+                    if action_str in QReprModuleExecution.actions_w_qattn:
                         question_attention = sidearg_dict["question_attention"]
                         """ The code block below can be used to make model use gold-supervision instead of pred attn.
                         # if "question_attention_supervision" in sidearg_dict:
@@ -210,7 +227,7 @@ class QReprModuleExecution():
             for progidx, (action_seq, sideargs) in enumerate(zip(batch_action_seqs[instance_idx],
                                                                  batch_actionseq_sideargs[instance_idx])):
                 for actionidx, (action_str, sidearg_dict) in enumerate(zip(action_seq, sideargs)):
-                    if action_str in self.relevant_actions:
+                    if action_str in QReprModuleExecution.actions_w_qattn:
                         question_attention = sidearg_dict["question_attention"]
                         insidxprogaction_qattn.append((instance_idx, progidx, actionidx, question_attention))
 

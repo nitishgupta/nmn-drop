@@ -6,18 +6,33 @@ from collections import defaultdict
 from typing import List, Tuple, Dict, Union
 import random
 from datasets.drop import constants
-
-random.seed(100)
+from semqa.utils.qdmr_utils import node_from_dict, Node, read_drop_dataset
 
 """ 
     Remove Execution Supervised key from each question in the Train data (only)
 """
 
+execution_supervision_keys = ["date1_entidxs", "date2_entidxs", "num1_entidxs", "num2_entidxs",
+                              "num_entidxs"]
 
-def readDataset(input_json):
-    with open(input_json, "r") as f:
-        dataset = json.load(f)
-    return dataset
+
+def remove_execution_supervision(node: Node):
+    supervision_dict: Dict = node.supervision
+    for key in execution_supervision_keys:
+        supervision_dict.pop(key, None)
+
+    node.supervision = supervision_dict
+
+    new_children = []
+    for c in node.children:
+        c_new = remove_execution_supervision(c)
+        new_children.append(c_new)
+
+    node.children = []
+    for c_new in new_children:
+        node.add_child(c_new)
+
+    return node
 
 
 def removeExecutionSupervision(dataset):
@@ -25,31 +40,25 @@ def removeExecutionSupervision(dataset):
 
     total_num_passages = len(dataset)
 
-    supervision_dict = defaultdict(int)
-    exec_supervision_keys = [constants.execution_supervised, constants.strongly_supervised]
-    supervision_keys = [
-        constants.program_supervised,
-        constants.qattn_supervised,
-        constants.execution_supervised,
-        constants.strongly_supervised,
-    ]
 
     total_num_qa = 0
+    num_exec_sup = 0
 
     for passage_idx, passage_info in dataset.items():
         total_num_qa += len(passage_info[constants.qa_pairs])
         for qa in passage_info[constants.qa_pairs]:
-            for key in exec_supervision_keys:
-                qa[key] = False
+            if constants.program_supervision in qa and qa[constants.program_supervision]:
+                program_node: Node = node_from_dict(qa[constants.program_supervision])
+                execution_supervised = qa.get(constants.execution_supervised, None)
+                if execution_supervised is not None:
+                    num_exec_sup += 1 if execution_supervised else 0
+                    qa[constants.execution_supervised] = False
 
-            for key in supervision_keys:
-                if key in qa:
-                    supervision_dict[key] += 1 if qa[key] is True else 0
+                    new_program_node = remove_execution_supervision(program_node)
+                    qa[constants.program_supervision] = new_program_node.to_dict()
 
-    print()
     print(f"TotalNumPassages: {total_num_passages}")
-    print(f"Num of original question: {total_num_qa}")
-    print(f"Supervision Dict: {supervision_dict}")
+    print(f"Num of original question: {total_num_qa} num-exec-sup: {num_exec_sup}")
 
     return dataset
 
@@ -74,16 +83,19 @@ if __name__ == "__main__":
     output_trnfp = os.path.join(output_dir, train_json)
     output_devfp = os.path.join(output_dir, dev_json)
 
-    train_dataset = readDataset(input_trnfp)
-    dev_dataset = readDataset(input_devfp)
+    train_dataset = read_drop_dataset(input_trnfp)
+    dev_dataset = read_drop_dataset(input_devfp)
 
-    print("Training questions .... ")
-    print(output_dir)
+    print("\nTraining questions .... ")
     new_train_dataset = removeExecutionSupervision(train_dataset)
-    # new_dev_dataset = removeDateCompPassageWeakAnnotations(train_dataset, 0)
 
+    print("\nDev questions .... ")
+    new_dev_dataset = removeExecutionSupervision(dev_dataset)
+
+    print(f"\nOutput path: {output_trnfp}")
     with open(output_trnfp, "w") as f:
         json.dump(new_train_dataset, f, indent=4)
 
+    print(f"\nOutput path: {output_devfp}")
     with open(output_devfp, "w") as f:
-        json.dump(dev_dataset, f, indent=4)
+        json.dump(new_dev_dataset, f, indent=4)

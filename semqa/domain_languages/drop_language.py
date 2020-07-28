@@ -999,11 +999,11 @@ class DropLanguage(DomainLanguage):
         # if self._debug:
         date1_token = myutils.round_all(myutils.tocpuNPList(passage_datetoken_prob_1), 3)
         date2_token = myutils.round_all(myutils.tocpuNPList(passage_datetoken_prob_2), 3)
-
+        qattn_output = Output(output_type="question", values=question_attention, label="ques_attn")
         date1_output = Output(output_type="dates", values=date_distribution_1, label="date_1")
         date2_output = Output(output_type="dates", values=date_distribution_2, label="date_2")
         pattn_output = Output(output_type="passage", values=average_passage_distribution, label="avg_pattn")
-        debug_info_dict = {"compare_date_lt": [date1_output, date2_output, pattn_output]}
+        debug_info_dict = {"compare_date_lt": [qattn_output, date1_output, date2_output, pattn_output]}
 
         self.modules_debug_info[-1].append(debug_info_dict)
 
@@ -1039,11 +1039,11 @@ class DropLanguage(DomainLanguage):
         loss += passage_attn_2.loss
 
         debug_value = ""
-
+        qattn_output = Output(output_type="question", values=question_attention, label="ques_attn")
         date1_output = Output(output_type="dates", values=date_distribution_1, label="date_1")
         date2_output = Output(output_type="dates", values=date_distribution_2, label="date_2")
         pattn_output = Output(output_type="passage", values=average_passage_distribution, label="avg_pattn")
-        debug_info_dict = {"compare_date_gt": [date1_output, date2_output, pattn_output]}
+        debug_info_dict = {"compare_date_gt": [qattn_output, date1_output, date2_output, pattn_output]}
         self.modules_debug_info[-1].append(debug_info_dict)
 
         return PassageAttention(average_passage_distribution, loss=loss, debug_value=debug_value)
@@ -1077,10 +1077,11 @@ class DropLanguage(DomainLanguage):
 
         debug_value = ""
 
+        qattn_output = Output(output_type="question", values=question_attention, label="ques_attn")
         num1_output = Output(output_type="numbers", values=num_distribution_1, label="num_1")
         num2_output = Output(output_type="numbers", values=num_distribution_2, label="num_2")
         pattn_output = Output(output_type="passage", values=average_passage_distribution, label="avg_pattn")
-        debug_info_dict = {"compare_num_lt": [num1_output, num2_output, pattn_output]}
+        debug_info_dict = {"compare_num_lt": [qattn_output, num1_output, num2_output, pattn_output]}
         self.modules_debug_info[-1].append(debug_info_dict)
 
         return PassageAttention(average_passage_distribution, loss=loss, debug_value=debug_value)
@@ -1116,11 +1117,11 @@ class DropLanguage(DomainLanguage):
         loss += passage_attn_2.loss
 
         debug_value = ""
-
+        qattn_output = Output(output_type="question", values=question_attention, label="ques_attn")
         num1_output = Output(output_type="numbers", values=num_distribution_1, label="num_1")
         num2_output = Output(output_type="numbers", values=num_distribution_2, label="num_2")
         pattn_output = Output(output_type="passage", values=average_passage_distribution, label="avg_pattn")
-        debug_info_dict = {"compare_num_gt": [num1_output, num2_output, pattn_output]}
+        debug_info_dict = {"compare_num_gt": [qattn_output, num1_output, num2_output, pattn_output]}
         self.modules_debug_info[-1].append(debug_info_dict)
 
         return PassageAttention(average_passage_distribution, loss=loss, debug_value=debug_value)
@@ -1149,11 +1150,11 @@ class DropLanguage(DomainLanguage):
         loss += date_winloss1 + date_winloss2
 
         debug_value = ""
-
+        qattn_output = Output(output_type="question", values=question_attention, label="ques_attn")
         date1_output = Output(output_type="dates", values=date_distribution_1, label="date_1")
         date2_output = Output(output_type="dates", values=date_distribution_2, label="date_2")
         year_diff_output = Output(output_type="year_diffs", values=year_difference_dist, label="year_diff")
-        debug_info_dict = {"year_difference_two_events": [date1_output, date2_output, year_diff_output]}
+        debug_info_dict = {"year_difference_two_events": [qattn_output, date1_output, date2_output, year_diff_output]}
         self.modules_debug_info[-1].append(debug_info_dict)
 
         return YearDifference(year_difference_dist=year_difference_dist, loss=loss, debug_value=debug_value)
@@ -1181,10 +1182,11 @@ class DropLanguage(DomainLanguage):
         loss += date_winloss1 + date_winloss2
 
         debug_value = ""
+        qattn_output = Output(output_type="question", values=question_attention, label="ques_attn")
         date1_output = Output(output_type="dates", values=date_distribution_1, label="date_1")
         date2_output = Output(output_type="dates", values=date_distribution_2, label="date_2")
         year_diff_output = Output(output_type="year_diffs", values=year_difference_dist, label="year_diff")
-        debug_info_dict = {"year_difference_single_event": [date1_output, date2_output, year_diff_output]}
+        debug_info_dict = {"year_difference_single_event": [qattn_output, date1_output, date2_output, year_diff_output]}
 
         self.modules_debug_info[-1].append(debug_info_dict)
 
@@ -1454,8 +1456,9 @@ class DropLanguage(DomainLanguage):
         loss += grounding_loss
         loss += passage_attention.loss
 
+        qattn_output = Output(output_type="question", values=question_attention, label="ques_attn")
         num_output = Output(output_type="numbers", values=number_distribution, label="number_dist")
-        debug_info_dict = {"select_num": [num_output]}
+        debug_info_dict = {"select_num": [qattn_output, num_output]}
         self.modules_debug_info[-1].append(debug_info_dict)
         return PassageNumber(passage_number_dist=number_distribution, loss=loss, debug_value="")
 
@@ -1514,10 +1517,11 @@ class DropLanguage(DomainLanguage):
             passage_attention=passage_attention, weighted_question_vector=weighted_question_vector,
             min_max_op="min", num_entidxs_supervision=num_entidxs)
         # if self._debug:
+        qattn_output = Output(output_type="question", values=question_attention, label="ques_attn")
         num_input = Output(output_type="passage", values=inputpattn_numtoken_probs, label="number_input")
         minmax_out = Output(output_type="passage", values=minmax_numtoken_probs, label="min_number")
         pattn_output = Output(output_type="passage", values=minmax_num_pattn, label="passage_attn")
-        debug_info_dict = {"select_min_num": [num_input, minmax_out, pattn_output]}
+        debug_info_dict = {"select_min_num": [qattn_output, num_input, minmax_out, pattn_output]}
         self.modules_debug_info[-1].append(debug_info_dict)
         return PassageAttention(passage_attention=minmax_num_pattn, loss=loss, debug_value=debug_value)
 
@@ -1532,10 +1536,11 @@ class DropLanguage(DomainLanguage):
             passage_attention=passage_attention, weighted_question_vector=weighted_question_vector,
             min_max_op="max", num_entidxs_supervision=num_entidxs)
         # if self._debug:
+        qattn_output = Output(output_type="question", values=question_attention, label="ques_attn")
         num_input = Output(output_type="passage", values=inputpattn_numtoken_probs, label="number_input")
         minmax_out = Output(output_type="passage", values=minmax_numtoken_probs, label="max_number")
         pattn_output = Output(output_type="passage", values=minmax_num_pattn, label="passage_attn")
-        debug_info_dict = {"select_max_num": [num_input, minmax_out, pattn_output]}
+        debug_info_dict = {"select_max_num": [qattn_output, num_input, minmax_out, pattn_output]}
         self.modules_debug_info[-1].append(debug_info_dict)
         return PassageAttention(passage_attention=minmax_num_pattn, loss=loss, debug_value=debug_value)
 

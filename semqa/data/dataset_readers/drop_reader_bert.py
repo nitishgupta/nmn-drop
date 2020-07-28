@@ -22,6 +22,7 @@ from semqa.domain_languages.drop_language import DropLanguage, Date, get_empty_l
 from semqa.utils.qdmr_utils import Node, node_from_dict, nested_expression_to_lisp, \
     get_domainlang_function2returntype_mapping, get_inorder_function_list, function_to_action_string_alignment
 from datasets.drop import constants
+from utils.util import round_all
 
 from semqa.data.dataset_readers.utils import find_valid_spans, index_text_to_tokens, \
     extract_answer_info_from_annotation, split_tokens_by_hyphen, BIOAnswerGenerator, get_single_answer_span_fields
@@ -488,6 +489,7 @@ class DROPReader(DatasetReader):
             implicit_numbers=DropLanguage.implicit_numbers,
             max_number_of_numbers_to_consider=2,
         )
+        composed_numbers = round_all(composed_numbers, 5)
 
         self.max_passage_nums = max(len(passage_number_values), self.max_passage_nums)
         self.max_composed_nums = max(len(composed_numbers), self.max_composed_nums)
@@ -907,6 +909,7 @@ class DROPReader(DatasetReader):
                 # print(indexed_number_combination)
                 for sign_combination in all_sign_combinations:
                     value = sum([sign * num for (sign, num) in zip(sign_combination, number_combination)])
+                    value = round_all(value, 5)
                     if value >= 0:
                         # If 0 was originally in numbers then allow its combinations, o/w don't to avoid the
                         # combinations from getting bloated with x = x+0, 0+x, x-0

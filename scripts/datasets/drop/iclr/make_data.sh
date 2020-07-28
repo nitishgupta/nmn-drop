@@ -2,11 +2,15 @@
 
 PREPROCESS_DIR=/shared/nitishg/data/drop-w-qdmr/preprocess
 
-ICLR_SUBDATA=/shared/nitishg/data/drop-w-qdmr/iclr
+ICLR_SUBDATA=/shared/nitishg/data/drop-w-qdmr/iclrv2
 
 ANNOTATION_FOR_PARAS=600
 
 ROOT_DIR=/shared/nitishg/data/drop-w-qdmr
+
+FULL_DATA_DIR=drop_iclr_full_v2
+PARTIAL_DATA_DIR=drop_iclr_${ANNOTATION_FOR_PARAS}_v2
+
 
 python -m datasets.drop.preprocess.datecomp.date_comparison_prune --input_dir ${PREPROCESS_DIR} \
                                                                   --output_dir ${ICLR_SUBDATA}/datecomp_prune
@@ -71,13 +75,13 @@ rm -rf ${ICLR_SUBDATA}/temp3
 rm -rf ${ICLR_SUBDATA}/temp4
 
 python -m datasets.drop.preprocess.postprocess --input_dir ${ICLR_SUBDATA}/drop_iclr_full_pre \
-                                               --output_dir ${ICLR_SUBDATA}/drop_iclr_full
+                                               --output_dir ${ICLR_SUBDATA}/${FULL_DATA_DIR}
 
 rm -rf ${ICLR_SUBDATA}/drop_iclr_full_pre
 
-python -m datasets.drop.remove_strong_supervision --input_dir ${ICLR_SUBDATA}/drop_iclr_full \
-                                                  --output_dir ${ICLR_SUBDATA}/drop_iclr_${ANNOTATION_FOR_PARAS} \
+python -m datasets.drop.remove_strong_supervision --input_dir ${ICLR_SUBDATA}/${FULL_DATA_DIR} \
+                                                  --output_dir ${ICLR_SUBDATA}/${PARTIAL_DATA_DIR} \
                                                   --annotation_for_numpassages ${ANNOTATION_FOR_PARAS}
 
-cp -r ${ICLR_SUBDATA}/drop_iclr_full ${ROOT_DIR}/
-cp -r ${ICLR_SUBDATA}/drop_iclr_${ANNOTATION_FOR_PARAS} ${ROOT_DIR}/
+cp -r ${ICLR_SUBDATA}/${FULL_DATA_DIR} ${ROOT_DIR}/
+cp -r ${ICLR_SUBDATA}/${PARTIAL_DATA_DIR} ${ROOT_DIR}/

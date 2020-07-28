@@ -228,7 +228,6 @@ def pruneNumCompQuestions(dataset, THRESHOLD: int = 10) -> Dict:
     """ Prune dataset to only contain questions that qualify after certain NUM comparison question tests.
         Currently only keeping questions with a single passage SpanType answer.
     """
-
     new_dataset = {}
     total_ques = 0
     after_pruning_ques = 0
@@ -350,12 +349,14 @@ def pruneNumCompQuestions(dataset, THRESHOLD: int = 10) -> Dict:
     num_passages_after_prune = len(new_dataset)
     print(f"Passages original:{num_passages}  After Pruning:{num_passages_after_prune}")
     print(f"Questions original:{total_ques}  After pruning:{after_pruning_ques}")
-    print(f"Num of QA with annotated dates: {numexamaples_w_num_annotated}")
+    print(f"Num of QA with annotated numbers: {numexamaples_w_num_annotated}")
 
     return new_dataset
 
 
 if __name__ == "__main__":
+    print("\nPruning and heuristic annotation for num-comp questions")
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_dir")
     parser.add_argument("--output_dir")

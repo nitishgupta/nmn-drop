@@ -362,6 +362,8 @@ def pruneDateCompQuestions(dataset):
 
 
 if __name__ == "__main__":
+    print("\nPruning for date-comp questions")
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_dir")
     parser.add_argument("--output_dir")

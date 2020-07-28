@@ -13,6 +13,7 @@ from semqa.domain_languages.drop_language import DropLanguage, Output
 from semqa.modules.qp_encodings import BertJointQPEncoding, QPEncoding
 from semqa.modules.symbolic.utils import compute_token_symbol_alignments
 from semqa.utils.qdmr_utils import get_postorder_function_list, get_inorder_supervision_list, Node
+from semqa.modules.qrepr_module.qrepr_to_module import QReprModuleExecution
 
 import logging
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -204,32 +205,39 @@ def compute_loss(
         action_seq: List[str] = language.logical_form_to_action_sequence(program_lisp)
         prog_sideargs: List[Dict] = [{} for _ in action_seq]
 
-        # These are the action-idxs which produce terminal-node functions; gold_function2actionidx_maps is
-        # packed so that as multiple gold-programs are passed. we assume singe gold-program here
-
         inorder_supervision_dicts: List[Dict] = get_inorder_supervision_list(program_node)
         assert len(function2actionidx_map) == len(inorder_supervision_dicts), "each func. should have a supdict"
-        # Append the appropriate pred_sideargs idxs with the supervision-dict
+        # Update the side-arg with the appropriate supervision-dict
         for action_idx, supervision_dict in zip(function2actionidx_map, inorder_supervision_dicts):
             prog_sideargs[action_idx].update(supervision_dict)
 
-        for sidearg_dict in prog_sideargs:
-            if "question_attention_supervision" in sidearg_dict:
-                # For shared-substructure aux programs, the supervised question-attention will be used as the predicted
-                # question attention for weighted_question_vector
-                gold_attn = sidearg_dict["question_attention_supervision"]
-                sidearg_dict["question_attention"] = sidearg_dict["question_attention_supervision"]
-                gold_attn_tensor: torch.FloatTensor = move_to_device(
-                    torch.FloatTensor(gold_attn), cuda_device=device_id)
-                gold_attn_tensor = F.softmax(gold_attn_tensor, dim=0)
-
-                gold_attn_len = len(gold_attn)
+        for action, sidearg_dict in zip(action_seq, prog_sideargs):
+            # TODO: not all relevant actions would have the needed question-attention-supervision; in that case we
+            #  currently just use an all-0s attention assuming that the loss will only be computed on predicates below
+            #  such actions in the tree. E.g. In select_num(select), say select_num doesn't have the reqd. supervision,
+            #  but the loss would only be computed on select.
+            if action in QReprModuleExecution.actions_w_qattn:
+                if "question_attention_supervision" not in sidearg_dict:
+                    qlen = encoded_question.size(1)
+                    gold_attn_tensor = move_to_device(torch.zeros(qlen), cuda_device=device_id)
+                    gold_attn_len = qlen
+                    sidearg_dict["question_attention"] = gold_attn_tensor
+                else:
+                    # For shared-substructure aux programs, the supervised question-attention will be used as the predicted
+                    # question attention for weighted_question_vector
+                    gold_attn = sidearg_dict["question_attention_supervision"]
+                    sidearg_dict["question_attention"] = sidearg_dict["question_attention_supervision"]
+                    gold_attn_tensor: torch.FloatTensor = move_to_device(
+                        torch.FloatTensor(gold_attn), cuda_device=device_id)
+                    gold_attn_tensor = F.softmax(gold_attn_tensor, dim=0)
+                    gold_attn_len = len(gold_attn)
                 q_encoding = encoded_question[i, 0:gold_attn_len, :]
                 weighted_question_vector = torch.sum(
                     q_encoding * gold_attn_tensor.unsqueeze(1), dim=0)
                 sidearg_dict["weighted_question_vector"] = weighted_question_vector
 
         language.modules_debug_info.append([])
+
         try:
             actionseq_denotation = language.execute_action_sequence(action_seq, prog_sideargs)
         except:
