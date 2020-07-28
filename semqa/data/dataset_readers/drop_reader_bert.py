@@ -418,6 +418,9 @@ class DROPReader(DatasetReader):
 
         question_wps_tokens: List[Token] = [Token(text=t, text_id=hf_tokenizer.convert_tokens_to_ids(t))
                                             for t in question_wps]
+        # question_wps_tokens = [Token(text=wp_text, text_id=wp_id)
+        #                        for wp_text, wp_id in zip(question_wps,
+        #                                                  self._tokenizer.tokenizer.convert_tokens_to_ids(question_wps))]
 
         # Passage_len = Max seq len - CLS - SEP - SEP - Max_Qlen -- Questions will be padded to max length
         max_passage_wps = self.max_transformer_length - 3 - self.max_question_wps
@@ -432,6 +435,10 @@ class DROPReader(DatasetReader):
 
         passage_wps_tokens: List[Token] = [Token(text=t, text_id=hf_tokenizer.convert_tokens_to_ids(t))
                                            for t in passage_wps]
+        # passage_wps_tokens = [Token(text=wp_text, text_id=wp_id)
+        #                       for wp_text, wp_id in zip(passage_wps,
+        #                                                 self._tokenizer.tokenizer.convert_tokens_to_ids(passage_wps))]
+
         passage_wps_len = len(passage_wps)
 
         cls_token = Token(cls_token_str, text_id=cls_token_id)
@@ -440,6 +447,8 @@ class DROPReader(DatasetReader):
         # This would be in the input to BERT
         question_passage_tokens: List[Token] = [cls_token] + question_wps_tokens + [sep_token] + \
                                                 passage_wps_tokens + [sep_token]
+        # question_passage_tokens = self._tokenizer.add_special_tokens(question_wps_tokens, passage_wps_tokens)
+
 
         fields["question"] = TextField([cls_token] + question_wps_tokens + [sep_token], self._token_indexers)
         fields["passage"] = TextField([cls_token] + passage_wps_tokens + [sep_token], self._token_indexers)
