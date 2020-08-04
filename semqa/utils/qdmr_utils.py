@@ -279,6 +279,12 @@ def read_drop_dataset(input_json: str):
     return dataset
 
 
+def read_json_dataset(input_json: str):
+    with open(input_json, "r") as f:
+        dataset = json.load(f)
+    return dataset
+
+
 def convert_answer(answer_annotation: Dict[str, Union[str, Dict, List]]) -> Tuple[str, List]:
     answer_type = None
     if answer_annotation["spans"]:

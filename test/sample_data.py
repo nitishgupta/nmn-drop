@@ -1,44 +1,31 @@
 import os
 import json
+import string
+from allennlp.data.tokenizers import SpacyTokenizer
 
-input_dir = "./resources/data/drop_acl/merged_data/my1200_full"
-output_dir = input_dir
+input_json = "/shared/nitishg/data/squad/squad-train-v1.1_drop.json"
+tokenizer = SpacyTokenizer()
+STRIPPED_CHARACTERS = string.punctuation + "".join(["‘", "’", "´", "`", "_"])
 
-
-def readDataset(input_json):
+def read_json_dataset(input_json: str):
     with open(input_json, "r") as f:
         dataset = json.load(f)
     return dataset
 
 
-def make_sample(dataset, num_paras):
-    output_dataset = {}
-    paras_done = 0
-    for pid, pinfo in dataset.items():
-        output_dataset[pid] = pinfo
-        paras_done += 1
-        if paras_done == num_paras:
-            break
-    print(f"Paras sampled: {paras_done}")
-    return output_dataset
+squad_dataset = read_json_dataset(input_json)
+numq = 0
+for paraid, parainfo in squad_dataset.items():
+    for qapair in parainfo["qa_pairs"]:
+        answer_dict = qapair["answer"]
+        answer_text = answer_dict["spans"][0]
+        answer_tokens = tokenizer.tokenize(answer_text)
+        answer_text = " ".join(token.text for token in answer_tokens)
+        answer_tokens = answer_text.lower().strip(STRIPPED_CHARACTERS).split()
+        if len(answer_tokens) == 0:
+            print(answer_text)
+            import pdb
+            pdb.set_trace()
+        numq += 1
 
-
-def write_sample(input_json, output_json, num_paras):
-    input_dataset = readDataset(input_json)
-    output_dataset = make_sample(input_dataset, num_paras=num_paras)
-    with open(output_json, "w") as f:
-        json.dump(output_dataset, f, indent=4)
-
-
-def main():
-    train_json = os.path.join(input_dir, "drop_dataset_train.json")
-    output_json = os.path.join(output_dir, "sample_train.json")
-    write_sample(train_json, output_json, 50)
-
-    dev_json = os.path.join(input_dir, "drop_dataset_dev.json")
-    output_json = os.path.join(output_dir, "sample_dev.json")
-    write_sample(dev_json, output_json, 50)
-
-
-if __name__=="__main__":
-    main()
+print(numq)

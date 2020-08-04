@@ -6,7 +6,6 @@ import argparse
 from collections import defaultdict
 from typing import List, Tuple, Dict, Union, Callable
 
-from analysis.qdmr.program_diagnostics import is_potential_filter_num
 from semqa.utils.qdmr_utils import read_drop_dataset, node_from_dict, Node, nested_expression_to_lisp
 from semqa.domain_languages.drop_language import DropLanguage, get_empty_language_object
 from allennlp.data.tokenizers import SpacyTokenizer

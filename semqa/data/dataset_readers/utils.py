@@ -77,6 +77,8 @@ def find_valid_spans(
     for answer_text in answer_texts:
         answer_tokens = answer_text.lower().strip(STRIPPED_CHARACTERS).split()
         num_answer_tokens = len(answer_tokens)
+        if num_answer_tokens == 0:
+            continue
         if answer_tokens[0] not in word_positions:
             continue
         for span_start in word_positions[answer_tokens[0]]:
@@ -304,7 +306,6 @@ class BIOAnswerGenerator:
             answer_tokens = self.spacy_tokenizer.tokenize(answer_text)
             answer_tokens = split_tokens_by_hyphen(answer_tokens)
             tokenized_answer_texts.append(" ".join(token.text for token in answer_tokens))
-
         all_spans = []      # Based on wp-idx if provided, else token-idxs
         spans_dict = {}
         for i, answer_text in enumerate(tokenized_answer_texts):
