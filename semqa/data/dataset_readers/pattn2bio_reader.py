@@ -65,7 +65,7 @@ def get_bio_tagging_spans(qa: Dict,
     if not has_answer or packed_gold_spans_list is None:
         return None
 
-    all_taggings_spans = []     # Contains list of diffent taggings, each tagging is a list of spans
+    all_taggings_spans = []     # Contains list of different taggings, each tagging is a list of spans
     bio_label_list = []
     for packed_gold_spans in packed_gold_spans_list:
         spans_for_single_tagging: List[Tuple[int, int]] = [s for sublist in packed_gold_spans for s in sublist]

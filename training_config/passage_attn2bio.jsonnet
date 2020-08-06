@@ -58,7 +58,7 @@ local num_layers = utils.parse_number(std.extVar("LAYERS"));
               0.999
           ],
           "eps": 1e-07
-        },
+      },
       "moving_average": {
           "type": "exponential",
           "decay": 0.9999
@@ -69,5 +69,4 @@ local num_layers = utils.parse_number(std.extVar("LAYERS"));
   "random_seed": utils.parse_number(std.extVar("SEED")),
   "numpy_seed": utils.parse_number(std.extVar("SEED")),
   "pytorch_seed": utils.parse_number(std.extVar("SEED"))
-
 }

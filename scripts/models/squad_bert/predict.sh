@@ -7,7 +7,7 @@ export BEAMSIZE=1
 export DEBUG=true
 
 # SAVED MODEL
-MODEL_DIR=./resources/checkpoints/squad-nmn/squad/drop_parser_bert/Qattn_true/EXCLOSS_true/aux_false/IO_true/SHRDSUB_false/SUPEPOCHS_0_HEM_0_BM_1/S_42
+MODEL_DIR=./resources/checkpoints/squad-nmn/squad/drop_parser_bert/Qattn_true/EXCLOSS_true/aux_false/IO_true/SHRDSUB_false/SUPEPOCHS_0_HEM_0_BM_1/S_42_PreBIO
 PREDICTION_DIR=${MODEL_DIR}/predictions
 MODEL_TAR=${MODEL_DIR}/model.tar.gz
 mkdir ${PREDICTION_DIR}
@@ -33,27 +33,27 @@ allennlp predict --output-file ${VIS_PREDICTION_FILE} \
                  --cuda-device ${GPU} \
                  --include-package ${INCLUDE_PACKAGE} \
                  --silent \
-                 --batch-size 4 \
+                 --batch-size 8 \
                  --use-dataset-reader \
                  --overrides "{"model": { "beam_size": ${BEAMSIZE}, "debug": ${DEBUG}}}" \
                  ${MODEL_TAR} ${FULL_VALFILE} &
 
 
-allennlp predict --output-file ${JSONL_PREDICTION_FILE} \
-                 --predictor ${JSONL_PREDICTOR} \
-                 --cuda-device ${GPU} \
-                 --include-package ${INCLUDE_PACKAGE} \
-                 --silent \
-                 --batch-size 4 \
-                 --use-dataset-reader \
-                 --overrides "{"model": { "beam_size": ${BEAMSIZE}, "debug": ${DEBUG}}}" \
-                 ${MODEL_TAR} ${FULL_VALFILE} &
-
-
-allennlp evaluate --output-file ${METRICS_FILE} \
-                  --cuda-device ${GPU} \
-                  --include-package ${INCLUDE_PACKAGE} \
-                  ${MODEL_TAR} ${FULL_VALFILE}
+#allennlp predict --output-file ${JSONL_PREDICTION_FILE} \
+#                 --predictor ${JSONL_PREDICTOR} \
+#                 --cuda-device ${GPU} \
+#                 --include-package ${INCLUDE_PACKAGE} \
+#                 --silent \
+#                 --batch-size 4 \
+#                 --use-dataset-reader \
+#                 --overrides "{"model": { "beam_size": ${BEAMSIZE}, "debug": ${DEBUG}}}" \
+#                 ${MODEL_TAR} ${FULL_VALFILE} &
+#
+#
+#allennlp evaluate --output-file ${METRICS_FILE} \
+#                  --cuda-device ${GPU} \
+#                  --include-package ${INCLUDE_PACKAGE} \
+#                  ${MODEL_TAR} ${FULL_VALFILE}
 
 printf "\n"
 echo -e "Vis predictions file saved at: ${VIS_PREDICTION_FILE}"

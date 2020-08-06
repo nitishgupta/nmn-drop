@@ -7,15 +7,15 @@ export BEAMSIZE=1
 export DEBUG=true
 
 # SAVED MODEL
-MODEL_DIR=/shared/nitishg/checkpoints/drop-w-qdmr/qdmr-v2_iclrfull-v2-ss/drop_parser_bert/Qattn_true/EXCLOSS_true/aux_false/IO_true/SHRDSUB_true/SUPEPOCHS_3_HEM_3_BM_1/S_42
+MODEL_DIR=./resources/checkpoints/drop-w-qdmr/qdmr-v2_iclrfull-v2-ss/drop_parser_bert/Qattn_true/EXCLOSS_true/aux_false/IO_true/SHRDSUB_false/SUPEPOCHS_3_HEM_3_BM_1/S_10_PreBIO
 PREDICTION_DIR=${MODEL_DIR}/predictions
 MODEL_TAR=${MODEL_DIR}/model.tar.gz
 mkdir ${PREDICTION_DIR}
 
 DATASET_DIR=/shared/nitishg/data/drop-w-qdmr
-DATASET_NAME=qdmr-v1
+DATASET_NAME=drop_iclr_full
 
-TRAIN_OR_DEV=train
+TRAIN_OR_DEV=dev
 
 FULL_VALFILE=${DATASET_DIR}/${DATASET_NAME}/drop_dataset_${TRAIN_OR_DEV}.json
 

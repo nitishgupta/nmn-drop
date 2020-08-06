@@ -54,7 +54,7 @@ export SUPEPOCHS=0
 # -1 will not run HardEM; HardEM will kick after EPOCH num of epochs
 export HARDEM_EPOCH=0
 
-export BS=2
+export BS=4
 export DROPOUT=0.2
 
 export SEED=42
@@ -72,9 +72,9 @@ CHECKPOINT_ROOT=./resources/checkpoints
 SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/squad-nmn/${DATASET_NAME}
 MODEL_DIR=drop_parser_bert
 PD_1=Qattn_${QATTLOSS}/EXCLOSS_${EXCLOSS}/aux_${AUXLOSS}/${BIO_LABEL}_${BIO_TAG}/SHRDSUB_${SHRDSUB}/SUPEPOCHS_${SUPEPOCHS}_HEM_${HARDEM_EPOCH}_BM_${BEAMSIZE}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}_PreBIO
 
-# SERIALIZATION_DIR=./resources/checkpoints/test
+SERIALIZATION_DIR=./resources/checkpoints/test
 
 #######################################################################################################################
 

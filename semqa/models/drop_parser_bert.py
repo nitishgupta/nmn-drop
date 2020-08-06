@@ -295,9 +295,13 @@ class DROPParserBERT(DROPParserBase):
         sharedsub_orig_program_lisp: Union[None, List[str]] = None,
         orig_sharedsub_postorder_node_idx: Union[List[List[Tuple[int, int]]], None] = None,
         sharedsub_mask: torch.LongTensor = None,
-        epoch_num: List[int] = None,
         metadata: List[Dict[str, Any]] = None,
     ) -> Dict[str, torch.Tensor]:
+
+        if self.training:
+            epoch = self.epoch
+        else:
+            epoch = None
 
         self.gc_steps += 1
         if self.gc_steps % 500 == 0:
@@ -325,9 +329,6 @@ class DROPParserBERT(DROPParserBase):
         bert_pooled_out = qp_encoder_output["pooled_encoding"]
 
         batch_size = len(actions)
-
-        # epoch_num in AllenNLP starts from 0
-        epoch = epoch_num[0] + 1 if epoch_num is not None else None
 
         modeled_passage = encoded_passage
         passage_length = modeled_passage.size()[1]
@@ -814,12 +815,12 @@ class DROPParserBERT(DROPParserBase):
                                 "passage_mask": passage_mask[i, :],
                             })
                         log_likelihood = self.span_answer.gold_log_marginal_likelihood(**span_answer_loss_inputs)
-
-                        # pattn_loss = self.span_answer.passage_attention_loss(
-                        #     passage_attention=denotation.passage_attn, passage_mask=passage_mask[i, :],
-                        #     answer_spans_for_possible_taggings=answer_spans_for_possible_taggings[i],
-                        #     device_id=self.device_id)
-                        # total_aux_loss += pattn_loss
+                        # if epoch is not None and epoch <= 6:
+                        #     pattn_loss = self.span_answer.passage_attention_loss(
+                        #         passage_attention=denotation.passage_attn, passage_mask=passage_mask[i, :],
+                        #         answer_spans_for_possible_taggings=answer_spans_for_possible_taggings[i],
+                        #         device_id=self.device_id)
+                        #     total_aux_loss += pattn_loss
                     elif progtype == "QuestionSpanAnswer":
                         raise NotImplementedError
                     elif progtype == "YearDifference":

@@ -108,12 +108,12 @@ local shared_substructure = utils.boolparser(std.extVar("SHRDSUB"));
                          "weights_file_path": "./pattn2count_ckpt/best.th"
                      },
                 ],
-//                ["passage_attention_to_span|passage_bio_predictor",
-//                     {
-//                         "type": "pretrained",
-//                         "weights_file_path": "./pattn2bio_BIO_v1_4000/best.th"
-//                     },
-//                ],
+                ["passage_attention_to_span|passage_bio_predictor",
+                     {
+                         "type": "pretrained",
+                         "weights_file_path": "./pattn2bio_ckpt/best.th"
+                     },
+                ],
             ],
             "prevent_regexes": [".*_text_field_embedder.*"],
         },
@@ -160,6 +160,7 @@ local shared_substructure = utils.boolparser(std.extVar("SHRDSUB"));
 
     "trainer": {
         "checkpointer": {"num_serialized_models_to_keep": 1},
+        "epoch_callbacks": ["track_epoch_callback"],
         "grad_norm": 5,
         "patience": 10,
         "cuda_device": utils.parse_number(std.extVar("GPU")),
