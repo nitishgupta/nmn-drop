@@ -1,5 +1,10 @@
 #!/usr/bin/env
 
+export OMP_NUM_THREADS=4
+export OPENBLAS_NUM_THREADS=4
+export OPENMP_NUM_THREADS=4
+export MKL_NUM_THREADS=4
+
 # PACKAGE TO BE INCLUDED WHICH HOUSES ALL THE CODE
 INCLUDE_PACKAGE=semqa
 export GPU=0
@@ -13,9 +18,9 @@ MODEL_TAR=${MODEL_DIR}/model.tar.gz
 mkdir ${PREDICTION_DIR}
 
 DATASET_DIR=/shared/nitishg/data/drop-w-qdmr
-DATASET_NAME=drop_iclr_full
+DATASET_NAME=qdmr-v1
 
-TRAIN_OR_DEV=dev
+TRAIN_OR_DEV=train
 
 FULL_VALFILE=${DATASET_DIR}/${DATASET_NAME}/drop_dataset_${TRAIN_OR_DEV}.json
 

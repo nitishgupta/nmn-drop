@@ -108,12 +108,12 @@ local shared_substructure = utils.boolparser(std.extVar("SHRDSUB"));
                          "weights_file_path": "./pattn2count_ckpt/best.th"
                      },
                 ],
-                ["passage_attention_to_span|passage_bio_predictor",
-                     {
-                         "type": "pretrained",
-                         "weights_file_path": "./pattn2bio_ckpt/best.th"
-                     },
-                ],
+//                ["passage_attention_to_span|passage_bio_predictor",
+//                     {
+//                         "type": "pretrained",
+//                         "weights_file_path": "./pattn2bio_ckpt/best.th"
+//                     },
+//                ],
             ],
             "prevent_regexes": [".*_text_field_embedder.*"],
         },

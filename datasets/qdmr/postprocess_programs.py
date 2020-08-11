@@ -493,8 +493,6 @@ def add_required_minmax(qdmr_node: Node, question: str):
     return qdmr_node, change
 
 
-
-
 min_football = []
 for s in min_superlatives:
     for e in football_events:

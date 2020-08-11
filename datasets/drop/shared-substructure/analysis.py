@@ -5,9 +5,8 @@ import argparse
 from collections import defaultdict
 from typing import List, Tuple, Dict, Union
 
-from semqa.utils.qdmr_utils import read_drop_dataset, node_from_dict, Node, nested_expression_to_lisp, \
-    lisp_to_nested_expression, nested_expression_to_tree, get_postorder_function_list, \
-    get_postorder_function_and_arg_list
+from semqa.utils.qdmr_utils import read_drop_dataset, node_from_dict
+from utils.util import sortDictByValue
 from semqa.domain_languages.drop_language import DropLanguage, get_empty_language_object
 from allennlp.data.tokenizers import SpacyTokenizer
 
@@ -35,11 +34,11 @@ def tokenize(text):
 
 def get_tsv_strings(drop_dataset: Dict, output_tsv_path: str, num_of_paras: int = 100):
     paraid2questions = {}
-    paraids = []
+    paraids2count = {}
 
     for paraid, para_info in drop_dataset.items():
         paraid2questions[paraid] = []
-        paraids.append(paraid)
+        paraids2count[paraid] = 0
         for qa in para_info[constants.qa_pairs]:
             if constants.program_supervision not in qa or not qa[constants.program_supervision]:
                 continue
@@ -48,15 +47,16 @@ def get_tsv_strings(drop_dataset: Dict, output_tsv_path: str, num_of_paras: int 
             program_node = node_from_dict(qa[constants.program_supervision])
             program = program_node.get_nested_expression_with_strings()
             paraid2questions[paraid].append((qid, question, program))
+            paraids2count[paraid] += 1
 
-    random.shuffle(paraids)
+    sorted_paraid2count = sortDictByValue(paraids2count, decreasing=True)
 
     num_q = 0
     para_num = 0
     para_written = 0
     tsv_string = "ParaId\tQuery-Id\tQ-num\tQuestion\tProgram\n"
     while para_written < num_of_paras and para_num < len(paraid2questions):
-        paraid = paraids[para_num]
+        paraid = sorted_paraid2count[para_num][0]
         questions = paraid2questions[paraid]
         para_num += 1
         if len(questions) < 2:
@@ -77,8 +77,10 @@ def main(args):
     input_dir = os.path.split(input_json)[0]
     output_tsv_path = os.path.join(input_dir, args.output_tsv_name)
 
+    print("Readining dataset: {}".format(input_json))
     drop_dataset = read_drop_dataset(input_json)
 
+    print("Accumulating data and writing TSV")  
     get_tsv_strings(drop_dataset=drop_dataset, output_tsv_path=output_tsv_path)
 
 
