@@ -1,0 +1,16 @@
+{
+  "dataset_reader": {
+    "type": "bart_mlm",
+    "model_name": "facebook/bart-large",
+    "lazy": false
+  },
+
+  "model": {
+    "type": "bart",
+    "model_name": "facebook/bart-large",
+  },
+
+  "trainer": {
+    "type": "no_op"
+  }
+}
