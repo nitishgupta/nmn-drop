@@ -3,4 +3,3 @@ import semqa.data
 import semqa.domain_languages
 import semqa.models
 import semqa.predictors
-import semqa.qgen
