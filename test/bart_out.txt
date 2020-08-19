@@ -1,0 +1,2 @@
+{"predictions": [100, 437, 160, 7, 5, 1400, 452, 4, 4250, 47, 4, 2], "log_probabilities": -13.30036735534668, "predicted_tokens": ["I", "'m", "\u0120off", "\u0120to", "\u0120the", "\u0120store", "\u0120today", ".", "\u0120See", "\u0120you", ".", "</s>"]}
+{"predictions": [21031, 575, 4, 2381, 7, 5, 1400, 452, 4, 2, 2, 2, 2], "log_probabilities": -10.425472259521484, "predicted_tokens": ["Take", "\u0120care", ".", "\u0120Go", "\u0120to", "\u0120the", "\u0120store", "\u0120today", ".", "</s>", "</s>", "</s>", "</s>"]}

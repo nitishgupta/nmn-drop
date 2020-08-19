@@ -74,7 +74,7 @@ MODEL_DIR=drop_parser_bert
 PD_1=Qattn_${QATTLOSS}/EXCLOSS_${EXCLOSS}/aux_${AUXLOSS}/${BIO_LABEL}_${BIO_TAG}/SHRDSUB_${SHRDSUB}/SUPEPOCHS_${SUPEPOCHS}_HEM_${HARDEM_EPOCH}_BM_${BEAMSIZE}
 SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}_PreBIO
 
-SERIALIZATION_DIR=./resources/checkpoints/test
+#SERIALIZATION_DIR=./resources/checkpoints/test
 
 #######################################################################################################################
 

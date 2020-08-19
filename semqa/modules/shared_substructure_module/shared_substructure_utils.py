@@ -39,7 +39,6 @@ def compute_loss(
         orig_program_outputs: List[List[Dict]],
         metadata: List,
         question_passage: TextFieldTensors,
-        encodedpassage_for_numdate=None,
 ):
     """Encode shared-substructure question, execute auxiliary-programs, and compute loss against original execution.
 
@@ -55,7 +54,8 @@ def compute_loss(
 
     sharedsub_function2actionidx_maps: `List[Union[List[List[int]], None]]`
         For each instance, for each program, a list of idx mapping the function to the appropriate action in the
-        action-seq corresponding the the program. This linearization is based on an in-order traversal of the program
+        action-seq corresponding the the program. This linearization is based on an in-order traversal of the program.
+        Used to map node-level superision to the correct action's side-arg
 
     sharedsub_program_lisp: `List[List[str]]`
         For each instance, a list of aux-program lisps
@@ -137,21 +137,9 @@ def compute_loss(
     aux_passageidx2dateidx = torch.cat(aux_passageidx2dateidx_list, dim=0)
     aux_passageidx2numberidx = torch.cat(aux_passageidx2numberidx_list, dim=0)
 
-    if encodedpassage_for_numdate is None:
-        encodedpassage_for_numdate = encoded_passage
-    else:
-        encodedpassage_for_numdate_list = [encodedpassage_for_numdate[bidx, :, :].unsqueeze(0) for bidx in group_idxs]
-        encodedpassage_for_numdate = torch.cat(encodedpassage_for_numdate_list, dim=0)
-
     passage_len = passage_mask.size()[1]
     aux_passageidx2dateidx = aux_passageidx2dateidx[:, 0:passage_len]
     aux_passageidx2numberidx = aux_passageidx2numberidx[:, 0:passage_len]
-    encodedpassage_for_numdate = encodedpassage_for_numdate[:, 0:passage_len, :]
-
-    # (passage_token2date, passage_token2startdate,
-    #  passage_token2enddate, passage_token2num) = compute_aux_token_symbol_alignments(
-    #     modeled_passage=encodedpassage_for_numdate, passage_mask=passage_mask, executor_parameters=executor_parameters,
-    #     passageidx2dateidx=aux_passageidx2dateidx, passageidx2numberidx=aux_passageidx2numberidx)
 
     aux_languages = []
     for i, batch_idx in enumerate(group_idxs):
@@ -159,7 +147,7 @@ def compute_loss(
         aux_language = DropLanguage(
                     encoded_passage=encoded_passage[i],
                     modeled_passage=encoded_passage[i],
-                    passage_mask=passage_mask[i],  # passage_mask_aslist[i],
+                    passage_mask=passage_mask[i],
                     passage_sentence_boundaries=language.passage_sentence_boundaries,
                     passage_tokenidx2dateidx=aux_passageidx2dateidx[i],
                     passage_date_values=language.passage_date_values,
@@ -172,10 +160,6 @@ def compute_loss(
                     year_differences=language.year_differences,
                     year_differences_mat=year_differences_mat[batch_idx],
                     count_num_values=language.count_num_values,
-                    # passage_token2date_alignment=passage_token2date[i],
-                    # passage_token2startdate_alignment=passage_token2startdate[i],
-                    # passage_token2enddate_alignment=passage_token2enddate[i],
-                    # passage_token2num_alignment=passage_token2num[i],
                     parameters=language.parameters,
                     start_types=None,  # batch_start_types[i],
                     device_id=device_id,

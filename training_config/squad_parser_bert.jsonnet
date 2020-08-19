@@ -9,6 +9,7 @@ local bio_label_scheme = std.extVar("BIO_LABEL");
 local qp_encoding_style = std.extVar("QP_ENC");
 local qrepr_style = std.extVar("Q_REPR");
 local shared_substructure = utils.boolparser(std.extVar("SHRDSUB"));
+local gc_freq = utils.parse_number(std.extVar("GC_FREQ"));
 
 {
     "dataset_reader": {
@@ -129,7 +130,8 @@ local shared_substructure = utils.boolparser(std.extVar("SHRDSUB"));
         "debug": utils.boolparser(std.extVar("DEBUG")),
         "profile_freq": utils.parse_number(std.extVar("PROFILE_FREQ")),
         "cuda_device": utils.parse_number(std.extVar("GPU")),
-        "interpret": utils.boolparser(std.extVar("INTERPRET"))
+        "interpret": utils.boolparser(std.extVar("INTERPRET")),
+        "gc_freq": gc_freq,
     },
 
 //    "data_loader": {

@@ -72,7 +72,6 @@ class ConstituencyParserPredictor(Predictor):
     ) -> None:
         super().__init__(model, dataset_reader)
         self._tokenizer = SpacyTokenizer(language=language, pos_tags=True)
-        # self._tokenizer = SpacyTokenizer(language=language, pos_tags=True, split_on_spaces=True)
 
     def predict(self, sentence: str) -> JsonDict:
         """
@@ -85,7 +84,24 @@ class ConstituencyParserPredictor(Predictor):
         -------
         A dictionary representation of the constituency tree.
         """
-        return self.predict_json({"sentence": sentence})
+
+        output = self.predict_json({"sentence": sentence})
+
+        output.pop('class_probabilities', None)
+        output['hierplane_tree'].pop('linkNameToLabel', None)
+        output['hierplane_tree'].pop('nodeTypeToStyle', None)
+        tree = output['hierplane_tree']
+        # Spans are 4-tuple with (start, end (exclusive), span_text, span_label)
+        spans = self.get_parse_spans(tree, [])
+
+        sentence_id = None
+        # if "sentence_id" in output['metadata']:
+        #     sentence_id = output['metadata']['sentence_id']
+        tokens = output['tokens']
+
+        output_jsonl_dict = {'sentence_id': sentence_id, 'tokens': tokens, 'spans': spans}
+
+        return output_jsonl_dict
 
     @overrides
     def _json_to_instance(self, json_dict: JsonDict) -> Instance:
@@ -111,8 +127,6 @@ class ConstituencyParserPredictor(Predictor):
     @overrides
     def predict_instance(self, instance: Instance) -> JsonDict:
         outputs = self._model.forward_on_instance(instance)
-
-        print(outputs.keys())
 
         # format the NLTK tree as a string on a single line.
         tree = outputs.pop("trees")

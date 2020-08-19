@@ -22,7 +22,7 @@ with question's parse in `JSONL` format.
 Input: original squad `json` dataset, questions and their parses in `jsonl`
 
 Output: SquAD dataset in DROP `json` format with gold-program-supervision 
-based on WH-phrase
+based on WH-phrase from the constituency parse.
 ```
 bash scripts/datasets/squad/squad_to_drop.sh
 ```

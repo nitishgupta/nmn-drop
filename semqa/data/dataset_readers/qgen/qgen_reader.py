@@ -6,7 +6,7 @@ from allennlp.data.tokenizers import PretrainedTransformerTokenizer
 from overrides import overrides
 from typing import Any, Dict, Iterable, Optional
 
-from semqa.models.qgen.constants import SPAN_START_TOKEN, SPAN_END_TOKEN
+from semqa.models.qgen.constants import SPAN_START_TOKEN, SPAN_END_TOKEN, ALL_SPECIAL_TOKENS
 
 
 @DatasetReader.register('question_generation')
@@ -19,7 +19,7 @@ class QuestionGenerationDatasetReader(DatasetReader):
         self.token_indexers = {'tokens': PretrainedTransformerIndexer(model_name, namespace='tokens')}
 
         # Add the tokens which will mark the answer span
-        self.tokenizer.tokenizer.add_tokens([SPAN_START_TOKEN, SPAN_END_TOKEN])
+        self.tokenizer.tokenizer.add_tokens(ALL_SPECIAL_TOKENS)
 
     @overrides
     def _read(self, file_path: str) -> Iterable[Instance]:

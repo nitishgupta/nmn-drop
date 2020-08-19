@@ -78,6 +78,7 @@ class DROPParserBERT(DROPParserBase):
         dropout: float = 0.0,
         debug: bool = False,
         interpret: bool = False,    # This is a flag for interpret-acl20
+        gc_freq: int = 500,
         profile_freq: Optional[int] = None,
         cuda_device: int = -1,
         initializers: InitializerApplicator = InitializerApplicator(),
@@ -249,6 +250,7 @@ class DROPParserBERT(DROPParserBase):
         self.device_id = None
         self.interpret = interpret
         self.gc_steps = 0
+        self.gc_freq = gc_freq
 
     @profile_func_decorator
     @overrides
@@ -304,7 +306,7 @@ class DROPParserBERT(DROPParserBase):
             epoch = None
 
         self.gc_steps += 1
-        if self.gc_steps % 500 == 0:
+        if self.gc_steps % self.gc_freq == 0:
             gc.collect()
 
         if self.device_id is None:
@@ -720,8 +722,7 @@ class DROPParserBERT(DROPParserBase):
                 orig_program_outputs=orig_module_outs,
                 year_differences_mat=year_differences_mat,
                 metadata=metadata,
-                question_passage=question_passage,
-                encodedpassage_for_numdate=None,
+                question_passage=question_passage
             )
             # sharedsub_loss = 5 * sharedsub_loss
 

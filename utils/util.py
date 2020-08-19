@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import unicodedata
+from collections import OrderedDict
 from typing import Dict, List, Any, Tuple
 
 stopwords = None
@@ -147,6 +148,12 @@ def mostFreqKeysInDict(d: Dict) -> List[Any]:
 
 def sortDictByValue(d, decreasing=False):
     return sorted(d.items(), key=lambda x: x[1], reverse=decreasing)
+
+
+def sortedDictByValue(d, decreasing=False):
+    sorted_items = sorted(d.items(), key=lambda x: x[1], reverse=decreasing)
+    sorted_dict = OrderedDict(sorted_items)
+    return sorted_dict
 
 
 def sortDictByKey(d, decreasing=False):
