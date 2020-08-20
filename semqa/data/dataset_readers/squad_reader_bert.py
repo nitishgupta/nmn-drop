@@ -169,7 +169,7 @@ def process_num_mentions(max_token_len: int, num_mens, num_entidxs, num_normvals
     return pruned_num_mens, new_num_idxs, new_num_values, old2new_numidx, new2old_numidx
 
 
-@DatasetReader.register("drop_reader_bert")
+@DatasetReader.register("squad_reader_bert")
 class DROPReader(DatasetReader):
     def __init__(
             self,
@@ -181,7 +181,7 @@ class DROPReader(DatasetReader):
             max_transformer_length: int = 512,
             bio_tagging: bool = False,
             bio_label_scheme: str = "IO",
-            shared_substructure: bool = False,
+            use_paired_training: bool = False,
             only_strongly_supervised: bool = False,
             skip_instances: bool = False,
             skip_if_progtype_mismatch_anstype: bool = False,
@@ -225,13 +225,13 @@ class DROPReader(DatasetReader):
                                                            labels=labels)
 
         # Parse and make fields for shared-substructure supervision for certain questions
-        self.shared_substructure = shared_substructure
+        self.use_paired_training = use_paired_training
         self.num_w_ss = 0
 
         self.max_passage_nums = 0
         self.max_composed_nums = 0
 
-        self.max_num_instances = -1     # -1 to deactivate
+        self.max_num_instances = -1    # -1 to deactivate
 
     @overrides
     def _read(self, file_path: str):
@@ -289,7 +289,7 @@ class DROPReader(DatasetReader):
 
                 # shared substructure annotations
                 shared_substructure_annotations = None
-                if self.shared_substructure and constants.shared_substructure_annotations in qa:
+                if self.use_paired_training and constants.shared_substructure_annotations in qa:
                     shared_substructure_annotations: List[Dict] = qa[constants.shared_substructure_annotations]
 
 
@@ -619,7 +619,7 @@ class DROPReader(DatasetReader):
                 # "is_bio_mask": `LabelField` one of {0, 1} to indicate if span answers
                 # span_answer_fields, has_passage_span_ans \
                 (answer_spans_as_bios_field, bios_mask, answer_spans_for_possible_taggings_field,
-                 all_spans, packed_gold_spans_list, _, has_passage_span_ans) = self.bio_answer_generator.get_bio_labels(
+                 all_spans, _, _, has_passage_span_ans) = self.bio_answer_generator.get_bio_labels(
                     answer_annotation=answer_annotation,
                     passage_tokens=spacy_passage_tokens,
                     max_passage_len=p_token_len,
@@ -789,7 +789,7 @@ class DROPReader(DatasetReader):
         strongly_supervised = execution_supervised
         fields["execution_supervised"] = MetadataField(execution_supervised)
         fields["strongly_supervised"] = MetadataField(strongly_supervised)
-
+        # gold_action_seqs, gold_actionseq_masks: List[List[int]] - as multiple programs are possible
         fields["gold_action_seqs"] = MetadataField((gold_action_seqs, gold_actionseq_masks))
         fields["gold_function2actionidx_maps"] = MetadataField(gold_function2actionidx_map)
         # wrapping in a list to support multiple program-supervisions
@@ -798,66 +798,130 @@ class DROPReader(DatasetReader):
         # This list is made here since it can get modfied due to program-supervision
         fields["answer_program_start_types"] = MetadataField(answer_program_start_types)
 
-        if self.shared_substructure and shared_substructure_annotations is not None and program_supervision:
-            # There might be plenty; we'll only use one
-            shared_substruc_dict: Dict = shared_substructure_annotations[0]
-            aux_question: str = shared_substruc_dict[constants.question]
-            aux_question_tokens: List[str] = shared_substruc_dict[constants.question_tokens]
-            aux_program_node: Node = node_from_dict(shared_substruc_dict[constants.program_supervision])
-            aux_program_lisp = nested_expression_to_lisp(aux_program_node.get_nested_expression())
-            orig_program_lisp: str = shared_substruc_dict["orig_program_lisp"]
-            origprog_postorder_node_idx = shared_substruc_dict["origprog_postorder_node_idx"]
-            sharedprog_postorder_node_idx = shared_substruc_dict["sharedprog_postorder_node_idx"]
+        if self.use_paired_training and shared_substructure_annotations is not None and program_supervision:
+            """ shared_substructure_annotations: List of DROP style QA-dict with additional fields -- 
+            
+            Additional fields: "original_question", "orig_program_lisp", "origprog_postorder_node_idx",
+                "sharedprog_postorder_node_idx"
+                
+            Fields that need to be populated -- 
+            paired_question_passage: TextFieldTensors = None,
+            paired_example_mask: torch.LongTensor = None,
+            paired_passage_span_answer: torch.LongTensor = None, # BIO: (bs, num_tagging, passage_len), S/E: ...
+            paired_passage_span_answer_mask: torch.LongTensor = None,  # BIO: (bs, num_tagging), S/E: (bs, num_spans)
+            paired_program_nodes: Optional[List[List[Node]]] = None,   # List[prog-node] for paired examples for each inst.
+            paired_action_seqs: List[Tuple[List[List[int]], List[List[int]]]] = None,   # indexed-action-seqs for paired-ex
+            paired_function2actionidx_maps: List[List[List[int]]] = None,   # mapping func.(inorder) to action-seq-idx
+            paired_program_lisp: Union[None, List[List[str]]] = None,   # Lisp repr. for paired programs
+            paired_orig_program_lisp: Union[None, List[str]] = None,    # Listp repr. for original ques' program
+            orig_paired_postorder_sharednode_idx: Union[List[List[Tuple[int, int]]], None] = None,
+            """
+            num_paired_examples = 0
+            for paired_qa_dict in shared_substructure_annotations:
+                aux_question: str = paired_qa_dict[constants.question]
+                aux_question_tokens: List[str] = paired_qa_dict[constants.question_tokens]
+                aux_answer_dict: Dict = paired_qa_dict[constants.answer]
+                aux_program_node: Node = node_from_dict(paired_qa_dict[constants.program_supervision])
+                aux_program_lisp: str = nested_expression_to_lisp(aux_program_node.get_nested_expression())
+                orig_program_lisp: str = paired_qa_dict["orig_program_lisp"]
+                origprog_postorder_node_idx: int = paired_qa_dict["origprog_postorder_node_idx"]
+                sharedprog_postorder_node_idx: int = paired_qa_dict["sharedprog_postorder_node_idx"]
 
-            aux_question_wps, aux_q_tokenidx2wpidx, aux_q_wpidx2tokenidx = tokenize_bert(self._tokenizer,
-                                                                                         aux_question_tokens)
-            # Truncate question_wps and wpidx2tokenidx to maximum allowable length
-            aux_question_wps = aux_question_wps[0:self.max_question_wps]
-            aux_q_wpidx2tokenidx = aux_q_wpidx2tokenidx[0:self.max_question_wps]
-            unpadded_aux_q_wps_len = len(aux_question_wps)
+                # Paired question tokenization and processing
+                aux_question_wps, aux_q_tokenidx2wpidx, aux_q_wpidx2tokenidx = tokenize_bert(self._tokenizer,
+                                                                                             aux_question_tokens)
+                # Truncate question_wps and wpidx2tokenidx to maximum allowable length
+                aux_question_wps = aux_question_wps[0:self.max_question_wps]
+                aux_q_wpidx2tokenidx = aux_q_wpidx2tokenidx[0:self.max_question_wps]
+                unpadded_aux_q_wps_len = len(aux_question_wps)
 
-            aux_q_token_len = aux_q_wpidx2tokenidx[-1] + 1
-            aux_q_tokenidx2wpidx = aux_q_tokenidx2wpidx[0:aux_q_token_len]
+                aux_q_token_len = aux_q_wpidx2tokenidx[-1] + 1
+                aux_q_tokenidx2wpidx = aux_q_tokenidx2wpidx[0:aux_q_token_len]
+                ques_padding_len = self.max_question_wps - len(aux_question_wps)
+                aux_question_wps.extend([pad_token_str] * ques_padding_len)
+                aux_q_wpidx2tokenidx.extend([-1] * ques_padding_len)
 
-            ques_padding_len = self.max_question_wps - len(aux_question_wps)
-            aux_question_wps.extend([pad_token_str] * ques_padding_len)
-            aux_q_wpidx2tokenidx.extend([-1] * ques_padding_len)
+                question_attention_supervision_to_wps(aux_program_node, aux_q_tokenidx2wpidx, unpadded_aux_q_wps_len,
+                                                      self.max_question_wps)
 
-            question_attention_supervision_to_wps(aux_program_node, aux_q_tokenidx2wpidx, unpadded_aux_q_wps_len,
-                                                  self.max_question_wps)
+                aux_question_wps_tokens: List[Token] = [Token(text=t, text_id=hf_tokenizer.convert_tokens_to_ids(t))
+                                                        for t in aux_question_wps]
 
-            aux_question_wps_tokens: List[Token] = [Token(text=t, text_id=hf_tokenizer.convert_tokens_to_ids(t))
-                                                    for t in aux_question_wps]
 
-            aux_question_passage_tokens: List[Token] = [cls_token] + aux_question_wps_tokens + [sep_token] + \
-                                                        passage_wps_tokens + [sep_token]
+                aux_question_passage_tokens: List[Token] = self._tokenizer.add_special_tokens(aux_question_wps_tokens,
+                                                                                              passage_wps_tokens)
+                # Question-Passage TextField -- Making lists sice one question might have multiple aux-supervisions
+                fields["paired_question_passage"] = ListField([
+                    TextField(aux_question_passage_tokens, self._token_indexers)])
 
-            # Making lists sice one question might have multiple aux-supervisions
-            fields["sharedsub_question_passage"] = ListField([
-                TextField(aux_question_passage_tokens, self._token_indexers)])
-            fields["sharedsub_program_nodes"] = MetadataField([aux_program_node])
-            fields["sharedsub_program_lisp"] = MetadataField([aux_program_lisp])
-            fields["sharedsub_orig_program_lisp"] = MetadataField(orig_program_lisp)
-            action_seq: List[str] = language.logical_form_to_action_sequence(aux_program_lisp)
-            gold_function2actionidx_map: List[int] = function_to_action_string_alignment(aux_program_node, action_seq)
-            fields["sharedsub_function2actionidx_maps"] = MetadataField([gold_function2actionidx_map])
-            fields["orig_sharedsub_postorder_node_idx"] = MetadataField([(origprog_postorder_node_idx,
-                                                                          sharedprog_postorder_node_idx)])
-            fields["sharedsub_mask"] = ArrayField(np.array([1]), padding_value=0)
-            self.num_w_ss += 1
+                # Processing answer annotation; only handles span answers for now
+                spacy_passage_tokens: List[Token] = [Token(text=t, idx=idx)
+                                                     for t, idx in zip(passage_tokens, passage_charidxs)]
+                if self.bio_tagging:
+                    (aux_answer_spans_as_bios_field, aux_bios_mask, _,
+                     _, _, _, _) = self.bio_answer_generator.get_bio_labels(
+                        answer_annotation=aux_answer_dict,
+                        passage_tokens=spacy_passage_tokens,
+                        max_passage_len=p_token_len,
+                        p_tokenidx2wpidx=p_tokenidx2wpidx,
+                        passage_wps_len=passage_wps_len,
+                        passage_field=fields["passage"])
+                    fields["paired_passage_span_answer"] = ListField([aux_answer_spans_as_bios_field])
+                    fields["paired_passage_span_answer_mask"] = ListField([aux_bios_mask])
+
+                else:
+                    raise NotImplementedError
+                    # (aux_passage_span_answer_field, aux_answer_spans_mask, _, _, _) = get_single_answer_span_fields(
+                    #     passage_tokens=spacy_passage_tokens,
+                    #     max_passage_token_len=p_token_len,
+                    #     answer_annotation=aux_answer_dict,
+                    #     spacy_tokenizer=self.spacy_tokenizer,
+                    #     passage_field=fields["passage"],
+                    #     p_tokenidx2wpidx=p_tokenidx2wpidx)
+
+                # Paired-question program supervision
+                fields["paired_program_nodes"] = MetadataField([aux_program_node])
+                fields["paired_program_lisp"] = MetadataField([aux_program_lisp])
+
+                aux_action_seq: List[str] = language.logical_form_to_action_sequence(aux_program_lisp)
+                aux_actionseq_idxs: List[int] = [action2idx_map[a] for a in aux_action_seq]
+                aux_actionseq_mask: List[int] = [1 for _ in range(len(aux_actionseq_idxs))]
+                # Wrapping actionseq in a list to denote only one program per paired-example
+                # There would be another wrapping list (w/ len == num-paired-examples) over the Tuple(seq, mask)
+                fields["paired_action_seqs"] = MetadataField([([aux_actionseq_idxs], [aux_actionseq_mask])])
+                aux_function2actionidx_map: List[int] = function_to_action_string_alignment(aux_program_node,
+                                                                                            aux_action_seq)
+                fields["paired_function2actionidx_maps"] = MetadataField([aux_function2actionidx_map])
+                fields["paired_orig_program_lisp"] = MetadataField(orig_program_lisp)
+                fields["orig_paired_postorder_sharednode_idx"] = MetadataField([(origprog_postorder_node_idx,
+                                                                                 sharedprog_postorder_node_idx)])
+                fields["paired_example_mask"] = ArrayField(np.array([1]), padding_value=0)
+                self.num_w_ss += 1
 
         # elif not self.shared_substructure:
         else:
+            spacy_passage_tokens: List[Token] = [Token(text=t, idx=idx)
+                                                 for t, idx in zip(passage_tokens, passage_charidxs)]
             # Make empty fields so that TextField gets padded appropriately
             aux_question_passage_tokens: List[Token] = [cls_token, sep_token, sep_token]
-            fields["sharedsub_question_passage"] = ListField([
+            (aux_answer_spans_as_bios_field, aux_bios_mask, _,
+             _, _, _, _) = self.bio_answer_generator.get_empty_answer_returns(
+                passage_tokens=spacy_passage_tokens,
+                passage_field=fields["passage"],
+                passage_wps_len=passage_wps_len)
+
+            fields["paired_question_passage"] = ListField([
                 TextField(aux_question_passage_tokens, self._token_indexers)])
-            fields["sharedsub_program_nodes"] = MetadataField([None])
-            fields["sharedsub_program_lisp"] = MetadataField([None])
-            fields["sharedsub_orig_program_lisp"] = MetadataField(None)
-            fields["sharedsub_function2actionidx_maps"] = MetadataField([None])
-            fields["orig_sharedsub_postorder_node_idx"] = MetadataField([(-1, -1)])
-            fields["sharedsub_mask"] = ArrayField(np.array([0]), padding_value=0)
+            fields["paired_passage_span_answer"] = ListField([aux_answer_spans_as_bios_field])
+            fields["paired_passage_span_answer_mask"] = ListField([aux_bios_mask])
+
+            fields["paired_program_nodes"] = MetadataField([None])
+            fields["paired_program_lisp"] = MetadataField([None])
+            fields["paired_action_seqs"] = MetadataField([([None], [None])])
+            fields["paired_function2actionidx_maps"] = MetadataField([None])
+            fields["paired_orig_program_lisp"] = MetadataField(None)
+            fields["orig_paired_postorder_sharednode_idx"] = MetadataField([(-1, -1)])
+            fields["paired_example_mask"] = ArrayField(np.array([0]), padding_value=0)
         # else:
         #     return None
 

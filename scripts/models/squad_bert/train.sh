@@ -10,7 +10,7 @@ export MKL_NUM_THREADS=4
 DATASET_DIR=/shared/nitishg/data
 DATASET_NAME=squad
 
-TRAINFILE=${DATASET_DIR}/${DATASET_NAME}/squad-train-v1.1_drop.json
+TRAINFILE=${DATASET_DIR}/${DATASET_NAME}/squad-train-v1.1_drop-wcontrastive.json
 VALFILE=${DATASET_DIR}/${DATASET_NAME}/squad-dev-v1.1_drop.json
 
 # PACKAGE TO BE INCLUDED WHICH HOUSES ALL THE CODE
@@ -45,7 +45,7 @@ export MMLLOSS=true
 
 export INTERPRET=false
 
-export SHRDSUB=false
+export SHRDSUB=true
 
 # Whether strong supervison instances should be trained on first, if yes for how many epochs
 export SUPFIRST=true
@@ -74,7 +74,7 @@ MODEL_DIR=drop_parser_bert
 PD_1=Qattn_${QATTLOSS}/EXCLOSS_${EXCLOSS}/aux_${AUXLOSS}/${BIO_LABEL}_${BIO_TAG}/SHRDSUB_${SHRDSUB}/SUPEPOCHS_${SUPEPOCHS}_HEM_${HARDEM_EPOCH}_BM_${BEAMSIZE}
 SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}_PreBIO
 
-#SERIALIZATION_DIR=./resources/checkpoints/test
+# SERIALIZATION_DIR=./resources/checkpoints/test
 
 #######################################################################################################################
 

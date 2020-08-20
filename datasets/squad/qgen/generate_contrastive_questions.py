@@ -171,7 +171,7 @@ def get_contrastive_questions(squad_dataset: Dict, qgen_model_targz):
     q_w_pairedq = 0
 
     total_paras = 0
-    new_sample_dataset = {}
+    # new_sample_dataset = {}
 
     for passage_id, passage_info in squad_dataset.items():
         passage = passage_info[constants.passage]
@@ -205,7 +205,7 @@ def get_contrastive_questions(squad_dataset: Dict, qgen_model_targz):
             qid = qa[constants.query_id]
             progsupervision = qa.get(constants.program_supervision, None)
             total_q += 1
-            if total_q % 5000 == 0:
+            if total_q % 2000 == 0:
                 print("questions processed: {}".format(total_q))
 
             if progsupervision is None:
@@ -289,13 +289,13 @@ def get_contrastive_questions(squad_dataset: Dict, qgen_model_targz):
             q_w_pairedq += 1
 
         total_paras += 1
-        new_sample_dataset[passage_id] = passage_info
-        print(total_paras)
-        if total_paras == 10:
-            break
+        # new_sample_dataset[passage_id] = passage_info
+        # print(total_paras)
+        # if total_paras == 10:
+        #     break
 
     print("Num-questions: {}  Num-q w/ contrastive-questions: {}".format(total_q, q_w_pairedq))
-    return new_sample_dataset
+    return squad_dataset
 
 
 

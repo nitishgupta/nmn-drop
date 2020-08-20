@@ -91,7 +91,9 @@ class MultiSpanAnswer(SpanAnswer):
         gold_bio_seqs_mask = passage_span_answer_mask
         if gold_bio_seqs.sum() == 0:
             #  If log-loss is being computed during validation for an instance with no gold-spans
-            warnings.warn('One of answer_as_list_of_bios or span_bio_labels need to be un-masked')
+            warnings.warn('One of answer_as_list_of_bios or span_bio_labels need to be un-masked. M:{}'.format(
+                gold_bio_seqs_mask.sum()
+            ))
 
 
         log_marginal_likelihood = self._marginal_likelihood(gold_bio_seqs=gold_bio_seqs,

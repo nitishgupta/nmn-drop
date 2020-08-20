@@ -400,6 +400,19 @@ class BIOAnswerGenerator:
     def _get_empty_answer(seq_len: int) -> LabelsField:
         return LabelsField([0] * seq_len)
 
+    def get_empty_answer_returns(self, passage_tokens: List[Token],
+                                       passage_field: SequenceField,
+                                       passage_wps_len: int = None):
+        passage_len = len(passage_tokens) if passage_wps_len is None else passage_wps_len
+        answer_spans_as_bios_field = ListField([self._get_empty_answer(passage_len)])
+        bios_mask = [0]
+        bios_field_mask = ArrayField(np.array(bios_mask, dtype=np.int32), padding_value=0, dtype=np.int32)
+        answer_spans_for_possible_taggings_field = ListField([ListField([SpanField(-1, -1, passage_field)])])
+        has_answer = False
+
+        return (answer_spans_as_bios_field, bios_field_mask, answer_spans_for_possible_taggings_field, [],
+                None, {}, has_answer)
+
     def get_empty_answer_fields(self, passage_len: int) -> Dict[str, Field]:
         fields: Dict[str, Field] = {}
 

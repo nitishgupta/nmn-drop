@@ -13,7 +13,7 @@ local gc_freq = utils.parse_number(std.extVar("GC_FREQ"));
 
 {
     "dataset_reader": {
-        "type": "drop_reader_bert",
+        "type": "squad_reader_bert",
         "lazy": false,
         "skip_instances": true,
         "skip_if_progtype_mismatch_anstype": false,
@@ -33,11 +33,11 @@ local gc_freq = utils.parse_number(std.extVar("GC_FREQ"));
         },
         "bio_tagging": bio_tagging,
         "bio_label_scheme": bio_label_scheme,
-        "shared_substructure": shared_substructure,
+        "use_paired_training": shared_substructure,
     },
 
     "validation_dataset_reader": {
-        "type": "drop_reader_bert",
+        "type": "squad_reader_bert",
         "lazy": false,
         "skip_instances": false,
         "max_question_wps": 50,
@@ -60,7 +60,7 @@ local gc_freq = utils.parse_number(std.extVar("GC_FREQ"));
     "validation_data_path": std.extVar("VAL_DATA_FILE"),
 
     "model": {
-        "type": "drop_parser_bert",
+        "type": "squad_parser_bert",
 
         "bio_tagging": bio_tagging,
         "bio_label_scheme": bio_label_scheme,
