@@ -330,12 +330,14 @@ def pruneNumCompQuestions(dataset, THRESHOLD: int = 10) -> Dict:
             find1_node.supervision["question_attention_supervision"] = event1_attn
             find2_node.supervision["question_attention_supervision"] = event2_attn
 
+            """ Avoiding number-grounding supervision; this tends to be noisy and hurts performance
             question_answer[constants.execution_supervised] = False
             if execution_supervision is True:
                 num_compare_node.supervision["num1_entidxs"] = [event1_num_idx]
                 num_compare_node.supervision["num2_entidxs"] = [event2_num_idx]
                 question_answer[constants.execution_supervised] = True
                 numexamaples_w_num_annotated += 1
+            """
 
             question_answer[constants.program_supervision] = program_node.to_dict()
 

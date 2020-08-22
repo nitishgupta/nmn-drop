@@ -21,7 +21,7 @@ VALFILE=${DATASET_DIR}/${DATASET_NAME}/drop_dataset_dev.json
 INCLUDE_PACKAGE=semqa
 
 ### TRAINING MODEL CONFIG -- should be same across datasets for the same model
-CONFIGFILE=training_config/drop_parser_bert.jsonnet
+CONFIGFILE=training_config/drop_parser_bert_prsqnmn.jsonnet
 
 export DATASET_READER="drop_reader_bert"
 
@@ -61,13 +61,13 @@ export HARDEM_EPOCH=3
 export BS=2
 export DROPOUT=0.2
 
-export SEED=10
+export SEED=42
 
 export BEAMSIZE=1
 export MAX_DECODE_STEP=14
 export EPOCHS=40
 
-export GC_FREQ=500
+export GC_FREQ=1500
 export PROFILE_FREQ=0
 export DEBUG=false
 
@@ -76,10 +76,9 @@ CHECKPOINT_ROOT=./resources/checkpoints
 SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop-w-qdmr/${DATASET_NAME}
 MODEL_DIR=drop_parser_bert
 PD_1=Qattn_${QATTLOSS}/EXCLOSS_${EXCLOSS}/aux_${AUXLOSS}/${BIO_LABEL}_${BIO_TAG}/SHRDSUB_${SHRDSUB}/SUPEPOCHS_${SUPEPOCHS}_HEM_${HARDEM_EPOCH}_BM_${BEAMSIZE}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}_PreBIO_SqNMN
 
 # SERIALIZATION_DIR=./resources/checkpoints/test
-# SERIALIZATION_DIR=/tmp/test
 
 #######################################################################################################################
 

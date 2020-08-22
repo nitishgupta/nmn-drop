@@ -12,12 +12,17 @@ def get_correct_w_module(instances: List[NMNPredictionInstance], module_name:str
     """ Compute the number of instances w/ the given module in their predicted program and correct among them. """
     correct_and_module = 0
     w_module = 0
+    instances_w_module = []
     for instance in instances:
         if module_name in instance.top_logical_form:
             w_module += 1
+            instances_w_module.append(instance)
             if instance.correct:
                 correct_and_module += 1
-    return w_module, correct_and_module
+    avgf1 = avg_f1(instances_w_module) if instances_w_module else 0.0
+    avgf1 *= 100.0
+    avgf1 = round_all(avgf1, 1)
+    return w_module, correct_and_module, avgf1
 
 
 def compute_parser_accuracy(instances: List[NMNPredictionInstance]):
@@ -26,13 +31,17 @@ def compute_parser_accuracy(instances: List[NMNPredictionInstance]):
     """
     total_w_gold = 0
     correct = 0
+    instances_w_goldparse, instances_wo_goldparse = [], []
     for instance in instances:
         gold_logical_form = instance.gold_logical_form
         pred_logical_form = instance.top_logical_form
         if gold_logical_form:
             total_w_gold += 1
             correct += int(gold_logical_form == pred_logical_form)
-    return float(correct)/total_w_gold, total_w_gold
+            instances_w_goldparse.append(instance)
+        else:
+            instances_wo_goldparse.append(instance)
+    return float(correct)/total_w_gold, total_w_gold, instances_w_goldparse, instances_wo_goldparse
 
 
 def print_about_model(pred_instances: List[NMNPredictionInstance], modules_of_interest: List[str]):
@@ -41,22 +50,27 @@ def print_about_model(pred_instances: List[NMNPredictionInstance], modules_of_in
     correct_qids = get_correct_qids(pred_instances)
     correct_qids = set(correct_qids)
     print(f"Correct instances: {len(correct_qids)}")
-    parser_acc, total_w_gold_programs = compute_parser_accuracy(pred_instances)
+    (parser_acc, total_w_gold_programs,
+     instances_w_goldparse, instances_wo_goldparse) = compute_parser_accuracy(pred_instances)
     print(f"Parser accuracy: {parser_acc}   Total w/ gold: {total_w_gold_programs}")
+    print("F1 for instances w/ gold-parse: {}".format(avg_f1(instances_w_goldparse)))
+    print("F1 for instances w/o gold-parse: {}".format(avg_f1(instances_wo_goldparse)))
 
     for module_name in modules_of_interest:
-        w_module, correct_w_module = get_correct_w_module(pred_instances, module_name=module_name)
+        w_module, correct_w_module, avgf1_w_module = get_correct_w_module(pred_instances, module_name=module_name)
         if w_module > 0:
             perc_correct_w_module = (float(correct_w_module)/float(w_module))*100.0
         else:
             perc_correct_w_module = 0.0
         perc_correct_w_module = round_all(perc_correct_w_module, 1)
-        print("Module: {} \t T:{}  C: {} Perc: {} %".format(module_name, w_module, correct_w_module,
-                                                            perc_correct_w_module))
+        # print("Module: {} \t T:{}  F1:{}  C: {} Perc: {} %".format(module_name, w_module, avgf1_w_module,
+        #                                                            correct_w_module, perc_correct_w_module))
+        print("Module: {} \t T:{}  F1:{}".format(module_name, w_module, avgf1_w_module))
 
 
 def logicalform_distribution(pred_instances_1: List[NMNPredictionInstance],
                              pred_instances_2: List[NMNPredictionInstance]):
+    print("\nLogical form comparison -- based on predicted logical-form for NMN-1\n")
     lf2qids = defaultdict(list)
     qid2lf = defaultdict(str)
     lf2nmn1_correct = defaultdict(list)
@@ -134,10 +148,9 @@ def model_comparison(pred_instances_1: List[NMNPredictionInstance], pred_instanc
     print(f"Model 2 with select-prog: {len(qids2_w_select)}  Correct: {len(qids2_w_select_correct)}")
     print(f"Common: {len(common_w_select)}  Common-correct: {len(common_w_select_correct)}")
 
-    print(f"\nCorrect in NMN-1 but in NMN-2: {len(correct_in_1_not_2)}\n{correct_in_1_not_2}")
-    print(f"\nCorrect in NMN-2 but in NMN-1: {len(correct_in_2_not_1)}\n{correct_in_2_not_1}")
+    print(f"\nCorrect in NMN-1 but not in NMN-2: {len(correct_in_1_not_2)}\n{correct_in_1_not_2}")
+    print(f"\nCorrect in NMN-2 but not in NMN-1: {len(correct_in_2_not_1)}\n{correct_in_2_not_1}")
 
-    print("\nLogical form comparison\n")
     logicalform_distribution(pred_instances_1, pred_instances_2)
 
 if __name__ == "__main__":

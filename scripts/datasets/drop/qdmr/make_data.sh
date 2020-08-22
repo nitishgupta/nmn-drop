@@ -23,11 +23,12 @@ python -m datasets.qdmr.filter_dataset \
     --input_dir ${QDMR_OUTPUT_DIR}/processed \
     --output_dir ${QDMR_OUTPUT_DIR}/filtered \
 
+
 python -m datasets.qdmr.postprocess_programs \
     --input_dir ${QDMR_OUTPUT_DIR}/filtered \
     --output_dir ${QDMR_OUTPUT_DIR}/${QDMR_DATASET_DIR}
 
-
+# Avoid num_comparison supervision for it is noisy and hurts performance
 # python -m datasets.drop.aux_supervision.num_comparison --input_dir /shared/nitishg/data/drop-w-qdmr/qdmr/qdmr-v1
 python -m datasets.drop.aux_supervision.date_comparison --input_dir ${QDMR_OUTPUT_DIR}/${QDMR_DATASET_DIR}
 python -m datasets.drop.aux_supervision.hmyw --input_dir ${QDMR_OUTPUT_DIR}/${QDMR_DATASET_DIR}

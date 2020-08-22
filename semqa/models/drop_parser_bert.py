@@ -290,14 +290,18 @@ class DROPParserBERT(DROPParserBase):
         gold_action_seqs: List[Tuple[List[List[int]], List[List[int]]]] = None,
         gold_function2actionidx_maps: List[List[List[int]]] = None,
         gold_program_dicts: List[List[Union[Dict, None]]] = None,
-        sharedsub_question_passage: TextFieldTensors = None,
-        sharedsub_program_nodes: Optional[List[Node]] = None,
-        sharedsub_function2actionidx_maps: Optional[List[List[List[int]]]] = None,
-        sharedsub_program_lisp: Union[None, List[List[str]]] = None,
-        sharedsub_orig_program_lisp: Union[None, List[str]] = None,
-        orig_sharedsub_postorder_node_idx: Union[List[List[Tuple[int, int]]], None] = None,
-        sharedsub_mask: torch.LongTensor = None,
         metadata: List[Dict[str, Any]] = None,
+        # Fields for paired-examples training;
+        paired_question_passage: TextFieldTensors = None,
+        paired_example_mask: torch.LongTensor = None,
+        paired_passage_span_answer: torch.LongTensor = None,  # BIO: (bs, num_tagging, passage_len), S/E: ...
+        paired_passage_span_answer_mask: torch.LongTensor = None,  # BIO: (bs, num_tagging), S/E: (bs, num_spans)
+        paired_program_nodes: Optional[List[List[Node]]] = None,   # List[prog-node] for paired examples for each inst.
+        paired_action_seqs: List[List[Tuple[List[List[int]], List[List[int]]]]] = None,
+        paired_function2actionidx_maps: List[List[List[int]]] = None,  # mapping func.(inorder) to action-seq-idx
+        paired_program_lisp: Union[None, List[List[str]]] = None,  # Lisp repr. for paired programs
+        paired_orig_program_lisp: Union[None, List[str]] = None,  # Listp repr. for original ques' program
+        orig_paired_postorder_sharednode_idx: Union[List[List[Tuple[int, int]]], None] = None,
     ) -> Dict[str, torch.Tensor]:
 
         if self.training:
@@ -688,8 +692,9 @@ class DROPParserBERT(DROPParserBase):
             batch_actionseqs, languages, batch_actionseq_sideargs
         )
 
+        sharedsub_loss = 0.0
+        paired_denotation_loss = 0.0
         if self.training and self.shared_substructure:
-        # if self.shared_substructure:
             orig_action_seqs: List[List[str]] = []
             orig_module_outs: List[List[Dict]] = []
             for batchidx in range(batch_size):
@@ -698,38 +703,40 @@ class DROPParserBERT(DROPParserBase):
                 if not instance_actionseqs:
                     orig_action_seqs.append([])
                     orig_module_outs.append([])
-                    sharedsub_mask[batchidx, :] = 0
+                    paired_example_mask[batchidx, :] = 0
                 else:
                     orig_action_seqs.append(instance_actionseqs[0])
                     orig_module_outs.append(languages[batchidx].modules_debug_info[0])
 
-            sharedsub_loss = shared_substructure_utils.compute_loss(
+            sharedsub_loss, paired_denotation_loss = paired_training_utils.compute_loss(
                 device_id=self.device_id,
                 max_ques_len=self.max_ques_len,
                 executor_parameters=self._executor_parameters,
                 passageidx2dateidx=passageidx2dateidx,
                 passageidx2numberidx=passageidx2numberidx,
                 qp_encoder=self.qp_encoder,
+                actions=actions,
                 languages=languages,
-                sharedsub_question_passage=sharedsub_question_passage,
-                sharedsub_program_nodes=sharedsub_program_nodes,
-                sharedsub_function2actionidx_maps=sharedsub_function2actionidx_maps,
-                sharedsub_program_lisp=sharedsub_program_lisp,
-                sharedsub_orig_program_lisp=sharedsub_orig_program_lisp,
-                orig_sharedsub_postorder_node_idx=orig_sharedsub_postorder_node_idx,
-                sharedsub_mask=sharedsub_mask,
+                paired_example_mask=paired_example_mask,
+                paired_question_passage=paired_question_passage,
+                paired_program_nodes=paired_program_nodes,
+                paired_function2actionidx_maps=paired_function2actionidx_maps,
+                paired_program_lisp=paired_program_lisp,
+                paired_orig_program_lisp=paired_orig_program_lisp,
+                orig_paired_postorder_sharednode_idx=orig_paired_postorder_sharednode_idx,
+                paired_action_seqs=paired_action_seqs,
+                paired_passage_span_answer=paired_passage_span_answer,
+                paired_passage_span_answer_mask=paired_passage_span_answer_mask,
                 orig_action_seqs=orig_action_seqs,
                 orig_program_outputs=orig_module_outs,
                 year_differences_mat=year_differences_mat,
                 metadata=metadata,
-                question_passage=question_passage
+                bert_nmn_model=self,
             )
-            # sharedsub_loss = 5 * sharedsub_loss
+            paired_denotation_loss = paired_denotation_loss / batch_size
 
             if sharedsub_loss != 0.0:
                 self.shrdsubloss_metric(sharedsub_loss.item())
-        else:
-            sharedsub_loss = 0.0
 
         output_dict = {}
         # Computing losses if gold answers are given
@@ -737,6 +744,7 @@ class DROPParserBERT(DROPParserBase):
             # Execution losses --
             total_aux_loss = allenutil.move_to_device(torch.tensor(0.0), self.device_id).float()
             total_aux_loss += sharedsub_loss
+            total_aux_loss += paired_denotation_loss
 
             # total_aux_loss += aux_win_loss
             # if aux_win_loss != 0:

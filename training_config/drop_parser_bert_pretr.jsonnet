@@ -9,7 +9,6 @@ local bio_label_scheme = std.extVar("BIO_LABEL");
 local qp_encoding_style = std.extVar("QP_ENC");
 local qrepr_style = std.extVar("Q_REPR");
 local shared_substructure = utils.boolparser(std.extVar("SHRDSUB"));
-local gc_freq = utils.parse_number(std.extVar("GC_FREQ"));
 
 {
     "dataset_reader": {
@@ -115,8 +114,13 @@ local gc_freq = utils.parse_number(std.extVar("GC_FREQ"));
                          "weights_file_path": "./pattn2bio_ckpt/best.th"
                      },
                 ],
+                ["_text_field_embedder",
+                    {
+                        "type": "pretrained",
+                        "weights_file_path": "/shared/nitishg/checkpoints/squad-bert/S_42/best.th"
+                    }
+                ],
             ],
-            "prevent_regexes": [".*_text_field_embedder.*"],
         },
 
         "auxwinloss": utils.boolparser(std.extVar("AUXLOSS")),
@@ -130,8 +134,7 @@ local gc_freq = utils.parse_number(std.extVar("GC_FREQ"));
         "debug": utils.boolparser(std.extVar("DEBUG")),
         "profile_freq": utils.parse_number(std.extVar("PROFILE_FREQ")),
         "cuda_device": utils.parse_number(std.extVar("GPU")),
-        "interpret": utils.boolparser(std.extVar("INTERPRET")),
-        "gc_freq": gc_freq,
+        "interpret": utils.boolparser(std.extVar("INTERPRET"))
     },
 
 //    "data_loader": {

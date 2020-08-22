@@ -734,13 +734,10 @@ class DROPParserBERT(DROPParserBase):
                 metadata=metadata,
                 bert_nmn_model=self,
             )
-            # sharedsub_loss = 5 * sharedsub_loss
             paired_denotation_loss = paired_denotation_loss / batch_size
 
             if sharedsub_loss != 0.0:
                 self.shrdsubloss_metric(sharedsub_loss.item())
-        else:
-            sharedsub_loss = 0.0
 
         output_dict = {}
         # Computing losses if gold answers are given

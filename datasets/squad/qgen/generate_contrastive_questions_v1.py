@@ -2,7 +2,6 @@ from typing import List, Tuple, Dict, Union, Callable
 import os
 import json
 import argparse
-import networkx as nx
 
 from allennlp.predictors import Predictor
 from allennlp.data.tokenizers import SpacyTokenizer
@@ -70,7 +69,7 @@ def remove_overlapping_entities(entities: List[Entity], answer_offsets: CharOffs
     relevant_entities = []
     for entity in entities:
         (start, end, label) = entity
-        if not util.isSpanOverlap((start, end), answer_offsets, exclusive=False):
+        if not util.isSpanOverlap((start, end), answer_offsets, exclusive=True):
             relevant_entities.append(entity)
     return relevant_entities
 
@@ -163,53 +162,6 @@ def get_substructure_annotation_dict(aux_question: str,
     }
 
 
-def get_sentence_graph(sent):
-    # sent_start_idx = sent.start
-    edges = []
-    for token in sent:
-        tokenidx = token.i # - sent_start_idx
-        for child in token.children:
-            childidx = child.i # - sent_start_idx
-            edges.append(('{}'.format(tokenidx),
-                          '{}'.format(childidx)))
-    graph = nx.Graph(edges)
-    return graph
-
-
-def get_dep_distance_between_entities(sent_graph, ent1_tokens: List[int], ent2_tokens: List[int]):
-    """Get min dependency-distance between two entities.
-
-    Entity token idxs are global document idxs
-    """
-    min_distance = 1000000
-    for idx1 in ent1_tokens:
-        for idx2 in ent2_tokens:
-            shortest_path = shortest_dependency_path(sent_graph, idx1, idx2)
-            if shortest_path is None:
-                distance = 1000000
-            else:
-                distance = len(shortest_path)
-            min_distance = min(min_distance, distance)
-    return min_distance
-
-
-def shortest_dependency_path(graph, e1: int, e2: int):
-    try:
-        shortest_path = nx.shortest_path(graph, source=str(e1), target=str(e2))
-    except:
-        shortest_path = None
-    return shortest_path
-
-
-def get_token_idx(charoffset, spacy_doc):
-    tokenidx = None
-    for tidx, token in enumerate(spacy_doc):
-        # charoffset is inclusive; so match starting from first char
-        if token.idx <= charoffset < token.idx + len(token.text):
-            return tidx
-
-    return None
-
 
 def get_contrastive_questions(squad_dataset: Dict, qgen_model_targz):
     qgen_predictor: QuestionGenerationPredictor = get_question_generation_predictor(qgen_model_targz)
@@ -237,14 +189,14 @@ def get_contrastive_questions(squad_dataset: Dict, qgen_model_targz):
 
         passage_spacydoc = nlp_spacy(passage)
 
-        # List of (start-tokenoffset, end-tokenoffset (_inclusive), label)
+        # List of (start-charoffset, end-charoffset(_exclusive), label)
         entities: List[Entity] = []
         for ent in passage_spacydoc.ents:
             start, end = ent.start, ent.end - 1
-            # start_charoffset = passage_charoffsets[start]
-            # end_charoffset = passage_charoffsets[end] + len(passage_tokens[end])
+            start_charoffset = passage_charoffsets[start]
+            end_charoffset = passage_charoffsets[end] + len(passage_tokens[end])
             label = ent.label_
-            entities.append((start, end, label))
+            entities.append((start_charoffset, end_charoffset, label))
 
         entities = sorted(entities, key=lambda x:x[0])
 
@@ -253,7 +205,7 @@ def get_contrastive_questions(squad_dataset: Dict, qgen_model_targz):
             qid = qa[constants.query_id]
             progsupervision = qa.get(constants.program_supervision, None)
             total_q += 1
-            if total_q % 500 == 0:
+            if total_q % 2000 == 0:
                 print("questions processed: {}".format(total_q))
 
             if progsupervision is None:
@@ -268,48 +220,29 @@ def get_contrastive_questions(squad_dataset: Dict, qgen_model_targz):
             answer_start_charoffsets = list(util._KnuthMorrisPratt(passage, answer_text))
             ans_start_offset, ans_end_offset = answer_start_charoffsets[0], answer_start_charoffsets[0] + len(
                 answer_text)
+            answer_offsets = (ans_start_offset, ans_end_offset)
 
-            answer_start_tokenidx = get_token_idx(ans_start_offset, passage_spacydoc)
-            answer_end_tokenidx = get_token_idx(ans_end_offset - 1, passage_spacydoc)
-
-            if answer_start_tokenidx is None or answer_end_tokenidx is None:
+            # This sentence has answer
+            sentidx_w_answer = get_sent_idx(sent_charoffsets, (ans_start_offset, ans_end_offset))
+            if sentidx_w_answer is None:
                 continue
 
-            answer_offsets = (answer_start_tokenidx, answer_end_tokenidx)
-
-            sentence = passage_spacydoc[answer_start_tokenidx].sent
-            relevant_entities = []
-            for ent in sentence.ents:
-                start, end = ent.start, ent.end - 1
-                label = ent.label_
-                relevant_entities.append((start, end, label))
+            # These are possible new answers
+            relevant_entities = get_entities_in_sent(sent_charoffsets[sentidx_w_answer], entities)
+            if not relevant_entities:
+                # If no NEs in the sentence containing the answer
+                continue
 
             relevant_entities = remove_overlapping_entities(relevant_entities, answer_offsets)
             if not relevant_entities:
                 # If no NEs in the sentence containing the answer
                 continue
 
-            # Sort entities by token distance; helps if dependency distances clash
             relevant_entities_sorted = sort_entities_by_distance_to_ans(relevant_entities, answer_offsets)
-            sentence_graph = get_sentence_graph(sentence)
-            entity_dependency_distances = []
-            for entity in relevant_entities_sorted:
-                distance = get_dep_distance_between_entities(sentence_graph,
-                                                             range(answer_start_tokenidx,answer_end_tokenidx+1),
-                                                             range(entity[0], entity[1] + 1))
-                entity_dependency_distances.append(distance)
-            shortest_distance = min(entity_dependency_distances)
-            nearest_entity_idx = entity_dependency_distances.index(shortest_distance)
-            nearest_entity = relevant_entities_sorted[nearest_entity_idx]
-
-            nearest_entity_start_tokenidx, nearest_entity_end_tokenidx = nearest_entity[0], nearest_entity[1]
-            nearest_entity_start_charoffset = passage_spacydoc[nearest_entity_start_tokenidx].idx
-            nearest_entity_end_charoffset = (passage_spacydoc[nearest_entity_end_tokenidx].idx +
-                                             len(passage_spacydoc[nearest_entity_end_tokenidx].text))
 
             # Taking the first entity near the answer as contrastive-answer
-            contrastive_answer_offsets = [nearest_entity_start_charoffset, nearest_entity_end_charoffset]
-            contrastive_answer_text = passage[nearest_entity_start_charoffset:nearest_entity_end_charoffset]
+            contrastive_answer_offsets = relevant_entities_sorted[0][0:2]
+            contrastive_answer_text = passage[contrastive_answer_offsets[0]:contrastive_answer_offsets[1]]
 
             qgen_output = qgen_predictor.predict(passage=passage,
                                                  answer_text=contrastive_answer_text,
@@ -340,6 +273,7 @@ def get_contrastive_questions(squad_dataset: Dict, qgen_model_targz):
             }
 
             contrastive_qa_dict.update(extra_annotation)
+
 
             # contrastive_q_annodict = get_substructure_annotation_dict(
             #     aux_question=contrastive_question,
@@ -381,7 +315,7 @@ def main(args):
     print("Preparing datset with contrastive questions")
     squad_dataset_w_contrastive_questions = get_contrastive_questions(squad_train_dataset, qgen_model_targz)
 
-    output_json = f"/shared/nitishg/data/squad/squad-{train_or_dev}-v1.1_drop-wcontrastive_dep.json"
+    output_json = f"/shared/nitishg/data/squad/squad-{train_or_dev}-v1.1_drop-wcontrastive.json"
     print(f"Writing squad drop-formatted data to : {output_json}")
     with open(output_json, 'w') as outf:
         json.dump(squad_dataset_w_contrastive_questions, outf, indent=4)
