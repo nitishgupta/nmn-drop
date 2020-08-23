@@ -338,6 +338,7 @@ def date_comparison_aux_supervision(dataset):
                     month=p_date_values[answer_event_date][1],
                     day=p_date_values[answer_event_date][0],
                 )
+
                 other_event_date = Date(
                     year=p_date_values[other_event_date][2],
                     month=p_date_values[other_event_date][1],

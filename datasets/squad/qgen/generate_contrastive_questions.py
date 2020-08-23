@@ -363,9 +363,6 @@ def get_contrastive_questions(squad_dataset: Dict, qgen_model_targz):
     print("Num-questions: {}  Num-q w/ contrastive-questions: {}".format(total_q, q_w_pairedq))
     return squad_dataset
 
-
-
-
 def get_squad_json(train_or_dev):
     squad_json = f"/shared/nitishg/data/squad/squad-{train_or_dev}-v1.1_drop.json"
     return squad_json

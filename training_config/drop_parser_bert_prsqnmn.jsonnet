@@ -105,7 +105,7 @@ local shared_substructure = utils.boolparser(std.extVar("SHRDSUB"));
                 [".*",
                     {
                         "type": "pretrained",
-                        "weights_file_path": "/shared/nitishg/checkpoints/squad-nmn/squad/drop_parser_bert/Qattn_true/EXCLOSS_true/aux_false/IO_true/SHRDSUB_false/SUPEPOCHS_0_HEM_0_BM_1/S_42_PreBIO/best.th"
+                        "weights_file_path": "./resources/checkpoints/squad-nmn/squad/drop_parser_bert/Qattn_true/EXCLOSS_true/aux_false/IO_true/SHRDSUB_true/SUPEPOCHS_0_HEM_0_BM_1/S_42_PreBIO_DEP/best.th"
                     }
                 ],
             ],

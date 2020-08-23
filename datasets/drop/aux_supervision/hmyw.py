@@ -152,7 +152,6 @@ def get_number_distribution_supervision(
     return relevant_number_entidxs, number_values
 
 
-
 def _get_numbers_for_num_select_node(select_node: qdmr_utils.Node,
                                      passage_tokens, passage_num_mens, passage_num_idxs, passage_num_values):
     # This node is a select_num(select_passsage) node
@@ -166,7 +165,6 @@ def _get_numbers_for_num_select_node(select_node: qdmr_utils.Node,
         passage_num_entidxs=passage_num_idxs,
         passage_num_vals=passage_num_values)
     return relevant_number_entidxs, number_values
-
 
 
 def hmyw_aux_supervision(dataset: Dict, THRESHOLD: int = 10):

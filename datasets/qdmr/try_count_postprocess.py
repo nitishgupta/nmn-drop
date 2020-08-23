@@ -70,8 +70,8 @@ def main(args):
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir, exist_ok=True)
 
-    # FILES_TO_FILTER = ["drop_dataset_train.json", "drop_dataset_dev.json"]
-    FILES_TO_FILTER = ["drop_dataset_dev.json"]
+    FILES_TO_FILTER = ["drop_dataset_train.json", "drop_dataset_dev.json"]
+    # FILES_TO_FILTER = ["drop_dataset_dev.json"]
 
     for filename in FILES_TO_FILTER:
         print(filename)
