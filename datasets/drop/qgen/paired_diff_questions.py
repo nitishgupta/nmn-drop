@@ -296,6 +296,8 @@ def get_paired_questions_numdiff(qa_dict, passage_info, qgen_predictor):
             # Men == ("string", tokenidx, num_value)
             token1_idx = passage_info[constants.passage_num_mens][men1_idx][1]
             token2_idx = passage_info[constants.passage_num_mens][men2_idx][1]
+            num1_value = passage_info[constants.passage_num_mens][men1_idx][2]
+            num2_value = passage_info[constants.passage_num_mens][men2_idx][2]
 
     if token1_idx is None or token2_idx is None:
         return None
@@ -312,10 +314,12 @@ def get_paired_questions_numdiff(qa_dict, passage_info, qgen_predictor):
                                               passage=passage,
                                               answer_text=answer1_text,
                                               answer_start_charoffsets=[answer1_startchar])
-
+    # So we don't write "fifteen" in answer_dict, instead write "15"
+    num1_value = int(num1_value) if int(num1_value) == num1_value else num1_value
+    number_answer_str_1 = str(num1_value)
     contrastive_qa_dict_1 = make_qa_pair_dict(qid=qid + "-contrastive-1",
                                               question=contrastive_question1,
-                                              answer_text=answer1_text,
+                                              answer_text=number_answer_str_1,
                                               answer_type="number")
 
     program_supervision_lisp = "(select_num select_passage)"
@@ -343,10 +347,11 @@ def get_paired_questions_numdiff(qa_dict, passage_info, qgen_predictor):
                                               passage=passage,
                                               answer_text=passage_tokens[token2_idx],
                                               answer_start_charoffsets=[answer2_startchar])
-
+    num2_value = int(num2_value) if int(num2_value) == num2_value else num2_value
+    number_answer_str_2 = str(num2_value)
     contrastive_qa_dict_2 = make_qa_pair_dict(qid=qid + "-contrastive-2",
                                               question=contrastive_question2,
-                                              answer_text=answer2_text,
+                                              answer_text=number_answer_str_2,
                                               answer_type="number")
 
     program_supervision_lisp = "(select_num select_passage)"
@@ -494,9 +499,9 @@ def get_contrastive_questions(drop_dataset: Dict, qgen_model_targz: str) -> Dict
         "yeardiff": get_paired_questions_yeardiff,
     }
 
-    new_dataset = {}
-
+    # new_dataset = {}
     ques_w_paired_examples = 0
+    num_paired_examples = 0
     for passage_id, passage_info in drop_dataset.items():
         new_qas = []
 
@@ -509,25 +514,29 @@ def get_contrastive_questions(drop_dataset: Dict, qgen_model_targz: str) -> Dict
                                                               qgen_predictor=qgen_predictor)
             if paired_qa_dicts_1 is not None and len(paired_qa_dicts_1) > 1:
                 ques_w_paired_examples += 1
+                num_paired_examples += len(paired_qa_dicts_1)
                 qa[constants.shared_substructure_annotations] = paired_qa_dicts_1
                 qtype2cont["yeardiff"] += 1
-                new_qas.append(qa)
+                # new_qas.append(qa)
 
             paired_qa_dicts_2 = get_paired_questions_numdiff(qa_dict=qa, passage_info=passage_info,
                                                              qgen_predictor=qgen_predictor)
             if paired_qa_dicts_2 is not None and len(paired_qa_dicts_2) > 1:
                 ques_w_paired_examples += 1
+                num_paired_examples += len(paired_qa_dicts_2)
                 qa[constants.shared_substructure_annotations] = paired_qa_dicts_2
                 qtype2cont["numdiff"] += 1
-                new_qas.append(qa)
+                # new_qas.append(qa)
 
-        if new_qas:
-            passage_info[constants.qa_pairs] = new_qas
-            new_dataset[passage_id] = passage_info
+        # if new_qas:
+        #     passage_info[constants.qa_pairs] = new_qas
+        #     new_dataset[passage_id] = passage_info
 
     print(f"Total questions: {total_questions}  Ques w/ paired-examples:{ques_w_paired_examples}")
-    print("Output_dataset size: {}".format(len(new_dataset)))
-    return new_dataset
+    print(f"Num of paired questions: {num_paired_examples}")
+    # print("Output_dataset size: {}".format(len(new_dataset)))
+    # return drop_dataset
+    return drop_dataset
 
 
 def main(args):

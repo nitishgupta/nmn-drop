@@ -279,6 +279,7 @@ def pruneNumCompQuestions(dataset, THRESHOLD: int = 10) -> Dict:
             event1_tokens = question_tokens[event1_span[0]:event1_span[1]]
             event2_tokens = question_tokens[event2_span[0]:event2_span[1]]
 
+            """
             # NUMBER GROUNDING SUPERVISION
             # List of tokenidxs in passage that is a rough grounding for event 1/2
             event1_passage_tokenidxs: List[int] = matchEventToPassage(event1_tokens, passage_tokens)
@@ -316,6 +317,7 @@ def pruneNumCompQuestions(dataset, THRESHOLD: int = 10) -> Dict:
                 if qoperator == OperatorType.GT_OPERATOR:
                     if grounded_answer_num_value <= grounded_other_num_value:
                         execution_supervision = False
+            """
 
             # Compiling gold - program
             program_node: qdmr_utils.Node = get_program_supervision(operator=qoperator)

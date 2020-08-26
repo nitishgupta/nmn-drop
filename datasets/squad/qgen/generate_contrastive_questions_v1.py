@@ -218,6 +218,8 @@ def get_contrastive_questions(squad_dataset: Dict, qgen_model_targz):
                 continue
 
             answer_start_charoffsets = list(util._KnuthMorrisPratt(passage, answer_text))
+            # TODO: don't generate contrastive-questions if answer occurs more than once
+
             ans_start_offset, ans_end_offset = answer_start_charoffsets[0], answer_start_charoffsets[0] + len(
                 answer_text)
             answer_offsets = (ans_start_offset, ans_end_offset)

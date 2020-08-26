@@ -44,6 +44,7 @@ def compute_loss(
         paired_action_seqs,
         paired_passage_span_answer,
         paired_passage_span_answer_mask,
+        paired_passage_numbers_answers,
         orig_action_seqs: List[List[str]],
         year_differences_mat: List[np.array],
         orig_program_outputs: List[List[Dict]],
@@ -106,6 +107,7 @@ def compute_loss(
     flat_aux_action_seqs = []
     flat_aux_passage_span_answer = []
     flat_aux_passage_span_answer_mask = []
+    flat_aux_passage_number_answer = []
 
     # Slice the original p2date and p2num indices and concat to make mapping for auxiliary
     aux_passageidx2dateidx_list = []
@@ -130,6 +132,7 @@ def compute_loss(
             flat_aux_action_seqs.append(paired_action_seqs[bidx][i])
             flat_aux_passage_span_answer.append(paired_passage_span_answer[bidx, i, :, :].unsqueeze(0))
             flat_aux_passage_span_answer_mask.append(paired_passage_span_answer_mask[bidx, i, :].unsqueeze(0))
+            flat_aux_passage_number_answer.append(paired_passage_numbers_answers[bidx][i])
             aux_passageidx2dateidx_list.append(passageidx2dateidx[bidx].unsqueeze(0))
             aux_passageidx2numberidx_list.append(passageidx2numberidx[bidx].unsqueeze(0))
 
@@ -186,7 +189,7 @@ def compute_loss(
                     start_types=None,  # batch_start_types[i],
                     device_id=device_id,
                     debug=language._debug,
-                    metadata=metadata[i]
+                    metadata=metadata[batch_idx]
         )
         aux_languages.append(aux_language)
         aux_actions.append(actions[batch_idx])
@@ -242,22 +245,37 @@ def compute_loss(
     )
 
     for i, batch_idx in enumerate(group_idxs):
-
         # Denotation loss
         # Final denotation loss -- only works for PassageSpanAnswer and BIO-tagging
         denotation = flat_aux_denotations[i][0]  # zero since there is a single paired example in the flat notation
-        span_answer_loss_inputs = {"passage_span_answer": flat_aux_passage_span_answer[i],
-                                   "passage_span_answer_mask": flat_aux_passage_span_answer_mask[i],
-                                   "log_probs": denotation.bio_logprobs,
-                                   "passage_mask": passage_mask[i, :]}
+        denotation_type = flat_aux_denotation_types[i][0]
 
-        log_likelihood = bert_nmn_model.span_answer.gold_log_marginal_likelihood(**span_answer_loss_inputs)
+        denotation_loss = move_to_device(torch.tensor(0.0), bert_nmn_model.device_id).float()
         prog_log_prob = batch_actionseq_logprobs[i][0]
-        denotation_loss = -1.0 * (log_likelihood + prog_log_prob)
+        if denotation_type == "PassageSpanAnswer":
+            span_answer_loss_inputs = {"passage_span_answer": flat_aux_passage_span_answer[i],
+                                       "passage_span_answer_mask": flat_aux_passage_span_answer_mask[i],
+                                       "log_probs": denotation.bio_logprobs,
+                                       "passage_mask": passage_mask[i, :]}
+
+            log_likelihood = bert_nmn_model.span_answer.gold_log_marginal_likelihood(**span_answer_loss_inputs)
+            denotation_loss = -1.0 * (log_likelihood + prog_log_prob)
+
+        elif denotation_type == "PassageNumber":
+            gold_passage_number_answer = flat_aux_passage_number_answer[i]
+            pred_passagenumber_dist = denotation._value
+            pred_passagenumber_logprobs = torch.log(pred_passagenumber_dist + 1e-40)
+            gold_passagenum_dist = move_to_device(
+                torch.FloatTensor(gold_passage_number_answer), cuda_device=bert_nmn_model.device_id)
+            log_likelihood = torch.sum(pred_passagenumber_logprobs * gold_passagenum_dist)
+            denotation_loss = -1.0 * (log_likelihood + prog_log_prob)
+        else:
+            raise NotImplementedError
+
         paired_denotation_loss += denotation_loss
 
         orig_decoded_action_seq: List[str] = orig_action_seqs[batch_idx]
-        orig_decoded_prog_lisp: str = languages[i].action_sequence_to_logical_form(orig_decoded_action_seq)
+        orig_decoded_prog_lisp: str = languages[batch_idx].action_sequence_to_logical_form(orig_decoded_action_seq)
         # this is the original lisp against which the shared-sub example is written
         orig_annotated_prog_lisp = paired_orig_program_lisp[batch_idx]
         if orig_decoded_prog_lisp != orig_annotated_prog_lisp:

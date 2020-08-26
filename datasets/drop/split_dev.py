@@ -1,11 +1,9 @@
 import os
 import json
 import argparse
-from collections import defaultdict
 import random
-from utils import util
 
-random.seed(100)
+random.seed(42)
 
 
 """ Split the dev data into mydev and mytest. """
@@ -18,65 +16,82 @@ def readDataset(input_json):
 
 
 def splitDataset(dataset, perc_split: float):
-    """Split dataset based on given percentage"""
+    """Split dataset to make perc_split of train paragraphs into dev paragraphs."""
 
     total_num_passages = len(dataset)
     num_dev_paras = int(perc_split * total_num_passages)
-    num_test_paras = total_num_passages - num_dev_paras
 
     passage_idxs = list(dataset.keys())
+    passage_idxs = sorted(passage_idxs)
     random.shuffle(passage_idxs)
     dev_passage_idxs = passage_idxs[0:num_dev_paras]
-    test_passage_idxs = passage_idxs[num_dev_paras:]
-
-    total_num_qa = 0
+    train_passage_idxs = passage_idxs[num_dev_paras:]
 
     dev_dataset = {}
-    test_dataset = {}
+    train_dataset = {}
 
+    total_passages, total_questions = 0, 0
+    train_passages, dev_passages, train_questions, dev_questions = 0, 0, 0, 0
     for passage_idx, passage_info in dataset.items():
+        total_passages += 1
+        numq = len(passage_info["qa_pairs"])
+        total_questions += numq
         if passage_idx in dev_passage_idxs:
             dev_dataset[passage_idx] = passage_info
-        elif passage_idx in test_passage_idxs:
-            test_dataset[passage_idx] = passage_info
+            dev_questions += numq
+            dev_passages += 1
         else:
-            raise NotImplementedError
+            train_dataset[passage_idx] = passage_info
+            train_questions += numq
+            train_passages += 1
 
-    print(f"TotalNumPassages: {total_num_passages}")
-    print(f"Size of dev: {len(dev_dataset)} Size of test: {len(test_dataset)}")
+    print(f"\nBefore split: P: {total_passages} Q: {total_questions}")
+    print(f"After Split:\nTrain P: {train_passages} Q: {train_questions}\nDev: P:{dev_passages} Q:{dev_questions}")
 
-    return dev_dataset, test_dataset
+    return train_dataset, dev_dataset
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_dir")
     parser.add_argument("--output_dir")
-    parser.add_argument("--perc_split", type=float, required=True)
+    parser.add_argument("--dev_perc", type=float, required=True)
     args = parser.parse_args()
 
     input_dir = args.input_dir
     output_dir = args.output_dir
+    os.makedirs(output_dir, exist_ok=True)
 
-    dev_json = "drop_dataset_dev.json"
+    print(f"\nSplitting train data into train/dev from: {input_dir}")
 
-    perc_split = args.perc_split
+    # Split train into dev and test; rename dev into test
 
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir, exist_ok=True)
+    # Number of paragraphs from train to put into dev
+    dev_perc = args.dev_perc
 
-    input_devfp = os.path.join(input_dir, dev_json)
-    output_devfp = os.path.join(output_dir, "drop_dataset_mydev.json")
-    output_testfp = os.path.join(output_dir, "drop_dataset_mytest.json")
+    input_train_json = os.path.join(input_dir, "drop_dataset_train.json")
+    input_dev_json = os.path.join(input_dir, "drop_dataset_dev.json")
 
-    input_dev_dataset = readDataset(input_devfp)
+    output_train_json = os.path.join(output_dir, "drop_dataset_train.json")
+    output_dev_json = os.path.join(output_dir, "drop_dataset_dev.json")
+    output_test_json = os.path.join(output_dir, "drop_dataset_test.json")
 
-    print("Training questions .... ")
-    print(output_dir)
-    new_dev_dataset, new_test_dataset = splitDataset(input_dev_dataset, perc_split)
+    train_data = readDataset(input_train_json)
+    new_train_dataset, new_dev_dataset = splitDataset(train_data, dev_perc)
 
-    with open(output_devfp, "w") as f:
+    test_data = readDataset(input_dev_json)
+    num_test_passages = len(test_data)
+    num_test_questions = sum([len(pinfo["qa_pairs"]) for _, pinfo in test_data.items()])
+    print(f"Test data; P: {num_test_passages}  Q:{num_test_questions}")
+
+    print(f"Writing training dataset: {output_train_json}")
+    with open(output_train_json, "w") as f:
+        json.dump(new_train_dataset, f, indent=4)
+
+    print(f"Writing validation dataset: {output_dev_json}")
+    with open(output_dev_json, "w") as f:
         json.dump(new_dev_dataset, f, indent=4)
 
-    with open(output_testfp, "w") as f:
-        json.dump(new_test_dataset, f, indent=4)
+    print(f"Writing test dataset: {output_test_json}")
+    with open(output_test_json, "w") as f:
+        json.dump(test_data, f, indent=4)

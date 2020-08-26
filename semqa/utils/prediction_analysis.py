@@ -28,6 +28,8 @@ def read_nmn_prediction_file(jsonl_file) -> List[NMNPredictionInstance]:
 
 def avg_f1(instances: List[NMNPredictionInstance]) -> float:
     """ Avg F1 score for the predictions. """
+    if not instances:
+        return 0.0
     total = sum([instance.f1_score for instance in instances])
     return float(total)/float(len(instances))
 

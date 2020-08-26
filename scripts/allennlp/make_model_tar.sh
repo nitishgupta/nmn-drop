@@ -1,6 +1,6 @@
 #!/usr/bin/env
 
-SERIALIZATION_DIR=./resources/checkpoints/drop-w-qdmr/qdmr-v2_iclrfull-v2-ss-cnt/drop_parser_bert/Qattn_true/EXCLOSS_true/aux_false/IO_true/SHRDSUB_false/SUPEPOCHS_3_HEM_3_BM_1/S_42_PreBIO_SqNMN
+SERIALIZATION_DIR=./resources/checkpoints/drop-w-qdmr/qdmr-v2_iclrfull-v2-cnt-noexec/drop_parser_bert/Qattn_true/EXCLOSS_true/aux_false/IO_true/SHRDSUB_true/SUPEPOCHS_0_HEM_0_BM_1/S_10_PreBIO_SqNMN-Paired
 WEIGHTS_TH=best.th
 
 MODEL_ARCHIVE=${SERIALIZATION_DIR}/model.tar.gz

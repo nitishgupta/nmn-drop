@@ -34,6 +34,7 @@ local gc_freq = utils.parse_number(std.extVar("GC_FREQ"));
         "bio_tagging": bio_tagging,
         "bio_label_scheme": bio_label_scheme,
         "use_paired_training": shared_substructure,
+        "mode": "train",
     },
 
     "validation_dataset_reader": {
@@ -54,7 +55,8 @@ local gc_freq = utils.parse_number(std.extVar("GC_FREQ"));
         },
         "bio_tagging": bio_tagging,
         "bio_label_scheme": bio_label_scheme,
-    },
+        "mode": "test"
+},
 
     "train_data_path": std.extVar("TRAINING_DATA_FILE"),
     "validation_data_path": std.extVar("VAL_DATA_FILE"),

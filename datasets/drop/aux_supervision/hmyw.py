@@ -292,9 +292,9 @@ def hmyw_aux_supervision(dataset: Dict, THRESHOLD: int = 10):
 
             question_answer[constants.program_supervision] = program_node.to_dict()
 
-    print(f"Total num questions:{total_ques}  hmyw questions :{relevant_ques}")
-    print(f"Num of QA with annotated numbers: {numexamaples_w_nums_annotated}")
     print(prog_type_dict)
+    print(f"Total num paras: {len(dataset)}  questions:{total_ques}")
+    print(f"HMYW questions :{relevant_ques}  Num of QA with annotated numbers: {numexamaples_w_nums_annotated}")
 
     return dataset
 

@@ -10,15 +10,18 @@ INCLUDE_PACKAGE=semqa
 export GPU=0
 export BEAMSIZE=1
 export DEBUG=true
+export INTERPRET=false
 
 # SAVED MODEL
-MODEL_DIR=./resources/checkpoints/drop-w-qdmr/qdmr-v2_iclrfull-v2-ss-cnt/drop_parser_bert/Qattn_true/EXCLOSS_true/aux_false/IO_true/SHRDSUB_false/SUPEPOCHS_3_HEM_3_BM_1/S_10_PreBIO_SqNMN-Pair-OnlySSL
+MODEL_DIR=./resources/checkpoints/drop-w-qdmr/qdmr-v2_iclrfull-v2-cnt-noexec/drop_parser_bert/Qattn_true/EXCLOSS_true/aux_false/IO_true/SHRDSUB_true/SUPEPOCHS_0_HEM_0_BM_1/S_10_PreBIO_SqNMN-Paired
 PREDICTION_DIR=${MODEL_DIR}/predictions
 MODEL_TAR=${MODEL_DIR}/model.tar.gz
 mkdir ${PREDICTION_DIR}
 
 DATASET_DIR=/shared/nitishg/data/drop-w-qdmr
 DATASET_NAME=qdmr-v2
+# qdmr_iclr_compsplit1
+# qdmr-v2
 #qdmr-v2
 #drop_iclr_full_v2
 
@@ -42,7 +45,7 @@ allennlp predict --output-file ${VIS_PREDICTION_FILE} \
                  --silent \
                  --batch-size 4 \
                  --use-dataset-reader \
-                 --overrides "{"model": { "beam_size": ${BEAMSIZE}, "debug": ${DEBUG}}}" \
+                 --overrides "{"model": { "beam_size": ${BEAMSIZE}, "debug": ${DEBUG}, "interpret": ${INTERPRET}}}" \
                  ${MODEL_TAR} ${FULL_VALFILE} &
 
 allennlp predict --output-file ${JSONL_PREDICTION_FILE} \
@@ -52,12 +55,13 @@ allennlp predict --output-file ${JSONL_PREDICTION_FILE} \
                  --silent \
                  --batch-size 4 \
                  --use-dataset-reader \
-                 --overrides "{"model": { "beam_size": ${BEAMSIZE}, "debug": ${DEBUG}}}" \
+                 --overrides "{"model": { "beam_size": ${BEAMSIZE}, "debug": ${DEBUG}, "interpret": ${INTERPRET}}}" \
                  ${MODEL_TAR} ${FULL_VALFILE} &
 
 allennlp evaluate --output-file ${METRICS_FILE} \
                   --cuda-device ${GPU} \
                   --include-package ${INCLUDE_PACKAGE} \
+                  --overrides "{"model": { "beam_size": ${BEAMSIZE}, "debug": ${DEBUG}, "interpret": ${INTERPRET}}}" \
                   ${MODEL_TAR} ${FULL_VALFILE}
 
 printf "\n"

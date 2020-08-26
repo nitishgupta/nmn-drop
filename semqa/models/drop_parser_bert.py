@@ -45,6 +45,7 @@ import datasets.drop.constants as dropconstants
 from semqa.profiler.profile import Profile, profile_func_decorator
 
 from semqa.modules.shared_substructure_module import shared_substructure_utils
+from semqa.modules.shared_substructure_module import paired_training_utils
 
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -296,6 +297,7 @@ class DROPParserBERT(DROPParserBase):
         paired_example_mask: torch.LongTensor = None,
         paired_passage_span_answer: torch.LongTensor = None,  # BIO: (bs, num_tagging, passage_len), S/E: ...
         paired_passage_span_answer_mask: torch.LongTensor = None,  # BIO: (bs, num_tagging), S/E: (bs, num_spans)
+        paired_passage_numbers_answers: List[List[List[int]]] = None,
         paired_program_nodes: Optional[List[List[Node]]] = None,   # List[prog-node] for paired examples for each inst.
         paired_action_seqs: List[List[Tuple[List[List[int]], List[List[int]]]]] = None,
         paired_function2actionidx_maps: List[List[List[int]]] = None,  # mapping func.(inorder) to action-seq-idx
@@ -727,12 +729,14 @@ class DROPParserBERT(DROPParserBase):
                 paired_action_seqs=paired_action_seqs,
                 paired_passage_span_answer=paired_passage_span_answer,
                 paired_passage_span_answer_mask=paired_passage_span_answer_mask,
+                paired_passage_numbers_answers=paired_passage_numbers_answers,
                 orig_action_seqs=orig_action_seqs,
                 orig_program_outputs=orig_module_outs,
                 year_differences_mat=year_differences_mat,
                 metadata=metadata,
                 bert_nmn_model=self,
             )
+
             paired_denotation_loss = paired_denotation_loss / batch_size
 
             if sharedsub_loss != 0.0:

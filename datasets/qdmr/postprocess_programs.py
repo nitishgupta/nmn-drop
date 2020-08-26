@@ -593,6 +593,22 @@ def remove_filter_module(qdmr_node: Node, question: str):
     return qdmr_node, change
 
 
+def add_project_to_count(qdmr_node: Node, question: str):
+    change = 0
+    program_lisp = nested_expression_to_lisp(qdmr_node.get_nested_expression())
+    if program_lisp == "(aggregate_count select_passage)":
+        question_tokens = tokenize(question)
+        if not any([x in question_tokens for x in football_events]):
+            # Non football question
+            select_node = qdmr_node.children[0]
+            project_node = Node(predicate="project_passage")
+            project_node.add_child(select_node)
+            qdmr_node.children = []
+            qdmr_node.add_child(project_node)
+            change = 1
+    return qdmr_node, change
+
+
 def process_project(qdmr_node: Node, question: str):
     change = 0
     if qdmr_node.predicate == "project_passage":
@@ -651,6 +667,7 @@ def get_postprocessed_dataset(dataset: Dict) -> Dict:
         "filter_to_between_filternum": filter_to_between_filternum,
         "select_to_between_filternum": select_to_between_filternum,
         "fix_numdiff_arg_order": fix_numdiff_arg_order,
+        "project_to_count": add_project_to_count,
     }
 
     qtype2conversion = defaultdict(int)

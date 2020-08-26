@@ -174,6 +174,7 @@ class DROPReader(DatasetReader):
     def __init__(
             self,
             lazy: bool = True,
+            mode: str = "train",
             tokenizer: PretrainedTransformerTokenizer = None,
             token_indexers: Dict[str, TokenIndexer] = None,
             relaxed_span_match: bool = True,
@@ -232,6 +233,9 @@ class DROPReader(DatasetReader):
         self.max_composed_nums = 0
 
         self.max_num_instances = -1    # -1 to deactivate
+
+        assert mode in ["train", "test", "test-program"], f"Unsupported mode: {mode}"
+        self.mode = mode
 
     @overrides
     def _read(self, file_path: str):
@@ -734,7 +738,7 @@ class DROPReader(DatasetReader):
             fields["answer_as_count"] = MetadataField(answer_as_count)
             fields["composed_num_ans_composition_types"] = MetadataField(composed_num_ans_composition_types)
 
-        # End if answer-annotation
+        # Skip instance if allowed and gold-answer not in support
         if not answer_program_start_types:
             self.num_goldans_not_in_anssupport += 1
             if self.skip_instances:     # Answer not found in support. Skipping this instance
@@ -745,21 +749,37 @@ class DROPReader(DatasetReader):
         # Get gold action_seqs for strongly_supervised questions
         action2idx_map = {rule: i for i, rule in enumerate(language.all_possible_productions())}
 
-        if program_supervision:
+        if self.mode == "training":
+            if program_supervision:
+                program_node = node_from_dict(program_supervision)
+                program_return_type = self.function2returntype_mapping[program_node.predicate]
+                # Program is supervised, but cannot generate a gold-answer
+                if program_return_type not in answer_program_start_types:
+                    self.num_supprogtype_mismatch_anstype += 1
+                    if self.skip_if_progtype_mismatch_anstype:
+                        self.skip_count += 1
+                        return None
+                    else:
+                        # In such a case, we remove the program-supervision and let the model search the correct program
+                        program_supervision = None
+                else:
+                    # If sup-program return type is in answer-types, reduce answer-types to sup-program-types
+                    # This is debatable though; if we want the model to explore other programs that yield an answer of a
+                    # different type than the supervised program, we shouldn't prune answer-prog-start-types.
+                    answer_program_start_types = [program_return_type]
+        elif self.mode == "test":
+            # We don't care about the program supervision, the parser will be used to decode programs
+            pass
+        elif self.mode == "test-program":
+            # Model is in test/validation mode but the gold program-supervision will be used for evaluation
+            if not program_supervision:
+                # Currently we only support this mode if all instances are supervised
+                logger.warning("Mode: test-program, instance does not have program-supervision")
+                return None
+            # Don't know if the below is needed, adding for safety
             program_node = node_from_dict(program_supervision)
             program_return_type = self.function2returntype_mapping[program_node.predicate]
-            if program_return_type not in answer_program_start_types:
-                self.num_supprogtype_mismatch_anstype += 1
-                if self.skip_if_progtype_mismatch_anstype:
-                    self.skip_count += 1
-                    return None
-                else:
-                    program_supervision = None
-            else:
-                # If sup-program return type is in answer-types, reduce answer-types to sup-program-types
-                # This is debatable though; if we want the model to explore programs that yield the answer of a
-                # different type than the program supervisied, we shouldn't prune answer-prog-start-types.
-                answer_program_start_types = [program_return_type]
+            answer_program_start_types = [program_return_type]
 
         if program_supervision:
             program_node = node_from_dict(program_supervision)
@@ -768,7 +788,6 @@ class DROPReader(DatasetReader):
             revise_date_num_execution_supervision(program_node=program_node, old2new_dateidxs=old2new_p_dateidx,
                                                   old2new_numidxs=old2new_p_numidx)
             program_supervision = program_node.to_dict()
-
 
         # Tuple[List[List[int]], List[List[int]]]
         (
@@ -817,6 +836,16 @@ class DROPReader(DatasetReader):
             orig_paired_postorder_sharednode_idx: Union[List[List[Tuple[int, int]]], None] = None,
             """
             num_paired_examples = 0
+            qp_textfields: List[TextField] = []
+            paired_passage_span_answers = []
+            paired_passage_span_answer_masks = []
+            paired_passage_numbers_answers = []
+            paired_program_nodes = []
+            paired_program_lisps = []
+            paired_action_seqs = []
+            aux_function2actionidx_maps = []
+            orig_paired_postorder_sharednode_idxs = []
+            paired_example_masks = []
             for paired_qa_dict in shared_substructure_annotations:
                 aux_question: str = paired_qa_dict[constants.question]
                 aux_question_tokens: List[str] = paired_qa_dict[constants.question_tokens]
@@ -851,8 +880,7 @@ class DROPReader(DatasetReader):
                 aux_question_passage_tokens: List[Token] = self._tokenizer.add_special_tokens(aux_question_wps_tokens,
                                                                                               passage_wps_tokens)
                 # Question-Passage TextField -- Making lists sice one question might have multiple aux-supervisions
-                fields["paired_question_passage"] = ListField([
-                    TextField(aux_question_passage_tokens, self._token_indexers)])
+                qp_textfields.append(TextField(aux_question_passage_tokens, self._token_indexers))
 
                 # Processing answer annotation; only handles span answers for now
                 spacy_passage_tokens: List[Token] = [Token(text=t, idx=idx)
@@ -866,36 +894,83 @@ class DROPReader(DatasetReader):
                         p_tokenidx2wpidx=p_tokenidx2wpidx,
                         passage_wps_len=passage_wps_len,
                         passage_field=fields["passage"])
-                    fields["paired_passage_span_answer"] = ListField([aux_answer_spans_as_bios_field])
-                    fields["paired_passage_span_answer_mask"] = ListField([aux_bios_mask])
+                    paired_passage_span_answers.append(aux_answer_spans_as_bios_field)
+                    paired_passage_span_answer_masks.append(aux_bios_mask)
 
                 else:
                     # Non-bio tagging paired-training not implemented
                     raise NotImplementedError
 
+
+                aux_ans_as_passage_number = [0] * len(passage_number_values)
+                number_answer_str = aux_answer_dict["number"]
+                if number_answer_str:
+                    number_answer_str = number_answer_str.replace(",", "")
+                    number_answer = float(number_answer_str)
+                    if number_answer in passage_number_values:
+                        aux_ans_as_passage_number[passage_number_values.index(number_answer)] = 1
+                paired_passage_numbers_answers.append(aux_ans_as_passage_number)
+
                 # Paired-question program supervision
-                fields["paired_program_nodes"] = MetadataField([aux_program_node])
-                fields["paired_program_lisp"] = MetadataField([aux_program_lisp])
+                paired_program_nodes.append(aux_program_node)
+                paired_program_lisps.append(aux_program_lisp)
 
                 aux_action_seq: List[str] = language.logical_form_to_action_sequence(aux_program_lisp)
                 aux_actionseq_idxs: List[int] = [action2idx_map[a] for a in aux_action_seq]
                 aux_actionseq_mask: List[int] = [1 for _ in range(len(aux_actionseq_idxs))]
                 # Wrapping actionseq in a list to denote only one program per paired-example
                 # There would be another wrapping list (w/ len == num-paired-examples) over the Tuple(seq, mask)
-                fields["paired_action_seqs"] = MetadataField([([aux_actionseq_idxs], [aux_actionseq_mask])])
+                paired_action_seqs.append(([aux_actionseq_idxs], [aux_actionseq_mask]))
+
                 aux_function2actionidx_map: List[int] = function_to_action_string_alignment(aux_program_node,
                                                                                             aux_action_seq)
-                fields["paired_function2actionidx_maps"] = MetadataField([aux_function2actionidx_map])
+                aux_function2actionidx_maps.append(aux_function2actionidx_map)
                 fields["paired_orig_program_lisp"] = MetadataField(orig_program_lisp)
-                fields["orig_paired_postorder_sharednode_idx"] = MetadataField([(origprog_postorder_node_idx,
-                                                                                 sharedprog_postorder_node_idx)])
-                fields["paired_example_mask"] = ArrayField(np.array([1]), padding_value=0)
+                orig_paired_postorder_sharednode_idxs.append((origprog_postorder_node_idx,
+                                                              sharedprog_postorder_node_idx))
+                paired_example_masks.append(1)
                 self.num_w_ss += 1
+
+            # Making fields out of all paired-examples
+            fields["paired_question_passage"] = ListField(qp_textfields)
+            fields["paired_passage_span_answer"] = ListField(paired_passage_span_answers)
+            fields["paired_passage_span_answer_mask"] = ListField(paired_passage_span_answer_masks)
+            fields["paired_passage_numbers_answers"] = MetadataField(paired_passage_numbers_answers)
+            fields["paired_program_nodes"] = MetadataField(paired_program_nodes)
+            fields["paired_program_lisp"] = MetadataField(paired_program_lisps)
+            fields["paired_action_seqs"] = MetadataField(paired_action_seqs)
+            fields["paired_function2actionidx_maps"] = MetadataField(aux_function2actionidx_maps)
+            fields["orig_paired_postorder_sharednode_idx"] = MetadataField(orig_paired_postorder_sharednode_idxs)
+            fields["paired_example_mask"] = ArrayField(np.array(paired_example_masks), padding_value=0)
 
         # elif not self.shared_substructure:
         else:
+            # Paired question tokenization and processing
+            aux_question_wps, aux_q_tokenidx2wpidx, aux_q_wpidx2tokenidx = tokenize_bert(self._tokenizer,
+                                                                                         ["Why", "fail", "?"])
+            # Truncate question_wps and wpidx2tokenidx to maximum allowable length
+            aux_question_wps = aux_question_wps[0:self.max_question_wps]
+            aux_q_wpidx2tokenidx = aux_q_wpidx2tokenidx[0:self.max_question_wps]
+            unpadded_aux_q_wps_len = len(aux_question_wps)
+
+            aux_q_token_len = aux_q_wpidx2tokenidx[-1] + 1
+            aux_q_tokenidx2wpidx = aux_q_tokenidx2wpidx[0:aux_q_token_len]
+            ques_padding_len = self.max_question_wps - len(aux_question_wps)
+            aux_question_wps.extend([pad_token_str] * ques_padding_len)
+            aux_q_wpidx2tokenidx.extend([-1] * ques_padding_len)
+
+            aux_question_wps_tokens: List[Token] = [Token(text=t, text_id=hf_tokenizer.convert_tokens_to_ids(t))
+                                                    for t in aux_question_wps]
+
+            aux_question_passage_tokens: List[Token] = self._tokenizer.add_special_tokens(aux_question_wps_tokens,
+                                                                                          passage_wps_tokens)
+            # Question-Passage TextField -- Making lists sice one question might have multiple aux-supervisions
+            fields["paired_question_passage"] = ListField([
+                TextField(aux_question_passage_tokens, self._token_indexers)])
+
             spacy_passage_tokens: List[Token] = [Token(text=t, idx=idx)
                                                  for t, idx in zip(passage_tokens, passage_charidxs)]
+
             # Make empty fields so that TextField gets padded appropriately
             aux_question_passage_tokens: List[Token] = [cls_token, sep_token, sep_token]
             (aux_answer_spans_as_bios_field, aux_bios_mask, _,
@@ -904,10 +979,9 @@ class DROPReader(DatasetReader):
                 passage_field=fields["passage"],
                 passage_wps_len=passage_wps_len)
 
-            fields["paired_question_passage"] = ListField([
-                TextField(aux_question_passage_tokens, self._token_indexers)])
             fields["paired_passage_span_answer"] = ListField([aux_answer_spans_as_bios_field])
             fields["paired_passage_span_answer_mask"] = ListField([aux_bios_mask])
+            fields["paired_passage_numbers_answers"] = MetadataField([[0] * len(passage_number_values)])
 
             fields["paired_program_nodes"] = MetadataField([None])
             fields["paired_program_lisp"] = MetadataField([None])
