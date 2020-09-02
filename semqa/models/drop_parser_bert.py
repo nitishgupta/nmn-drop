@@ -298,6 +298,7 @@ class DROPParserBERT(DROPParserBase):
         paired_passage_span_answer: torch.LongTensor = None,  # BIO: (bs, num_tagging, passage_len), S/E: ...
         paired_passage_span_answer_mask: torch.LongTensor = None,  # BIO: (bs, num_tagging), S/E: (bs, num_spans)
         paired_passage_numbers_answers: List[List[List[int]]] = None,
+        paired_count_answers: List[List[List[int]]] = None,
         paired_program_nodes: Optional[List[List[Node]]] = None,   # List[prog-node] for paired examples for each inst.
         paired_action_seqs: List[List[Tuple[List[List[int]], List[List[int]]]]] = None,
         paired_function2actionidx_maps: List[List[List[int]]] = None,  # mapping func.(inorder) to action-seq-idx
@@ -730,6 +731,7 @@ class DROPParserBERT(DROPParserBase):
                 paired_passage_span_answer=paired_passage_span_answer,
                 paired_passage_span_answer_mask=paired_passage_span_answer_mask,
                 paired_passage_numbers_answers=paired_passage_numbers_answers,
+                paired_count_answers=paired_count_answers,
                 orig_action_seqs=orig_action_seqs,
                 orig_program_outputs=orig_module_outs,
                 year_differences_mat=year_differences_mat,

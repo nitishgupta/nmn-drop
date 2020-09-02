@@ -8,7 +8,7 @@
 # from allennlp.training.no_op_trainer import NoOpTrainer
 #
 #
-# parameter_filename = "semqa/qgen/bart_no_op.json"
+# parameter_filename = "semqa/paired_data/bart_no_op.json"
 # serialization_dir = "/shared/nitishg/checkpoints/bart_mlm"
 #
 # params = Params.from_file(parameter_filename)

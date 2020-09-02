@@ -135,15 +135,19 @@ def merge_datasets(train_dataset, dev_dataset):
 def main(args):
     input_dir = args.input_dir
 
+
+
     train_drop_json = os.path.join(input_dir, "drop_dataset_train.json")
-    dev_drop_json = os.path.join(input_dir, "drop_dataset_dev.json")
+    # dev_drop_json = os.path.join(input_dir, "drop_dataset_dev.json")
 
     train_lisp_examples_tsv_output = os.path.join(input_dir, "train_lisp.tsv")
 
     train_drop = read_drop_dataset(train_drop_json)
-    dev_drop = read_drop_dataset(dev_drop_json)
+    # dev_drop = read_drop_dataset(dev_drop_json)
 
-    dataset = merge_datasets(train_drop, dev_drop)
+    # dataset = merge_datasets(train_drop, dev_drop)
+
+    dataset = train_drop
 
     qid2ques, lisp2count, lisp2qids, qid2nestedexp = get_dataset_maps(drop_dataset=dataset)
 

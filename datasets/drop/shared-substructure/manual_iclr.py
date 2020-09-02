@@ -309,7 +309,7 @@ def main(args):
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
 
-    prune_dataset: bool = args.prune_dataset
+    prune_dataset: bool = args.get_composiitonal_split
 
     FILES_TO_FILTER = ["drop_dataset_train.json", "drop_dataset_dev.json"]
     stats = ""

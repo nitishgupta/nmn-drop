@@ -840,6 +840,7 @@ class DROPReader(DatasetReader):
             paired_passage_span_answers = []
             paired_passage_span_answer_masks = []
             paired_passage_numbers_answers = []
+            paired_count_answers = []
             paired_program_nodes = []
             paired_program_lisps = []
             paired_action_seqs = []
@@ -901,15 +902,18 @@ class DROPReader(DatasetReader):
                     # Non-bio tagging paired-training not implemented
                     raise NotImplementedError
 
-
                 aux_ans_as_passage_number = [0] * len(passage_number_values)
+                aux_ans_as_count = [0] * len(count_values)
                 number_answer_str = aux_answer_dict["number"]
                 if number_answer_str:
                     number_answer_str = number_answer_str.replace(",", "")
                     number_answer = float(number_answer_str)
                     if number_answer in passage_number_values:
                         aux_ans_as_passage_number[passage_number_values.index(number_answer)] = 1
+                    if number_answer in count_values:
+                        aux_ans_as_count[count_values.index(number_answer)] = 1
                 paired_passage_numbers_answers.append(aux_ans_as_passage_number)
+                paired_count_answers.append(aux_ans_as_count)
 
                 # Paired-question program supervision
                 paired_program_nodes.append(aux_program_node)
@@ -936,6 +940,7 @@ class DROPReader(DatasetReader):
             fields["paired_passage_span_answer"] = ListField(paired_passage_span_answers)
             fields["paired_passage_span_answer_mask"] = ListField(paired_passage_span_answer_masks)
             fields["paired_passage_numbers_answers"] = MetadataField(paired_passage_numbers_answers)
+            fields["paired_count_answers"] = MetadataField(paired_count_answers)
             fields["paired_program_nodes"] = MetadataField(paired_program_nodes)
             fields["paired_program_lisp"] = MetadataField(paired_program_lisps)
             fields["paired_action_seqs"] = MetadataField(paired_action_seqs)
@@ -982,6 +987,7 @@ class DROPReader(DatasetReader):
             fields["paired_passage_span_answer"] = ListField([aux_answer_spans_as_bios_field])
             fields["paired_passage_span_answer_mask"] = ListField([aux_bios_mask])
             fields["paired_passage_numbers_answers"] = MetadataField([[0] * len(passage_number_values)])
+            fields["paired_count_answers"] = MetadataField([[0] * len(count_values)])
 
             fields["paired_program_nodes"] = MetadataField([None])
             fields["paired_program_lisp"] = MetadataField([None])

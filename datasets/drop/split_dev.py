@@ -51,16 +51,26 @@ def splitDataset(dataset, perc_split: float):
     return train_dataset, dev_dataset
 
 
+def write_drop_data(dataset, filepath):
+    print(f"Writing dataset: {filepath}")
+    with open(filepath, "w") as f:
+        json.dump(dataset, f, indent=4)
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_dir")
-    parser.add_argument("--output_dir")
+    parser.add_argument("--keeporig_dirname")
     parser.add_argument("--dev_perc", type=float, required=True)
     args = parser.parse_args()
 
+    """ The new train/dev/test will replace the train/dev split in input_dir. 
+        Original train/dev split will be moved to `keeporig_dirname` inside the input_dir. 
+    """
+
     input_dir = args.input_dir
-    output_dir = args.output_dir
-    os.makedirs(output_dir, exist_ok=True)
+    keeporig_dirname = args.keeporig_dirname
+    keeporig_dir = os.path.join(input_dir, keeporig_dirname)
+    os.makedirs(keeporig_dir, exist_ok=True)
 
     print(f"\nSplitting train data into train/dev from: {input_dir}")
 
@@ -72,17 +82,24 @@ if __name__ == "__main__":
     input_train_json = os.path.join(input_dir, "drop_dataset_train.json")
     input_dev_json = os.path.join(input_dir, "drop_dataset_dev.json")
 
-    output_train_json = os.path.join(output_dir, "drop_dataset_train.json")
-    output_dev_json = os.path.join(output_dir, "drop_dataset_dev.json")
-    output_test_json = os.path.join(output_dir, "drop_dataset_test.json")
-
     train_data = readDataset(input_train_json)
+    dev_data = readDataset(input_dev_json)
+
+    print("\nMoving original train/dev split to: {}".format(keeporig_dir))
+    write_drop_data(train_data, os.path.join(keeporig_dir, "drop_dataset_train.json"))
+    write_drop_data(dev_data, os.path.join(keeporig_dir, "drop_dataset_dev.json"))
+
+    print("\nSplitting train data into train/dev")
     new_train_dataset, new_dev_dataset = splitDataset(train_data, dev_perc)
 
     test_data = readDataset(input_dev_json)
     num_test_passages = len(test_data)
     num_test_questions = sum([len(pinfo["qa_pairs"]) for _, pinfo in test_data.items()])
     print(f"Test data; P: {num_test_passages}  Q:{num_test_questions}")
+
+    output_train_json = os.path.join(input_dir, "drop_dataset_train.json")
+    output_dev_json = os.path.join(input_dir, "drop_dataset_dev.json")
+    output_test_json = os.path.join(input_dir, "drop_dataset_test.json")
 
     print(f"Writing training dataset: {output_train_json}")
     with open(output_train_json, "w") as f:

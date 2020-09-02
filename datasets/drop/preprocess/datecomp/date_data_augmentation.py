@@ -174,7 +174,7 @@ def quesEvents(qstr):
 
 
 def getEventOrderSwitchQuestion(question_answer):
-    """ Creating the question by switching the events in the question.
+    """ Creating the question by switching the order of events in the question.
         After this we don't know the exact answer_as_question_span; hence if ans_as_passage_span is []; return None
 
         For validation data we can keep all the validated_answers as the answer string doesn't change
@@ -209,6 +209,9 @@ def getEventOrderSwitchQuestion(question_answer):
     new_question_answer[constants.question] = new_question_text
     new_question_answer[constants.question_tokens] = new_question_tokens
 
+    new_event_spans: Tuple[Tuple[int, int], Tuple[int, int]] = quesEvents(new_question_text)
+    new_event1_span, new_event2_span = new_event_spans
+
     # Since we don't know the following, we will keep them blank
     new_question_answer[constants.answer_question_spans] = []
 
@@ -226,6 +229,18 @@ def getEventOrderSwitchQuestion(question_answer):
         find2_sup = find2_node.supervision
         find1_node.supervision = find2_sup
         find2_node.supervision = find1_sup
+
+        event1_token_idxs = list(range(new_event1_span[0], new_event1_span[1]))
+        event1_attn = [1 if i in event1_token_idxs else 0 for i in range(len(question_tokens))]
+        event2_token_idxs = list(range(new_event2_span[0], new_event2_span[1]))
+        event2_attn = [1 if i in event2_token_idxs else 0 for i in range(len(question_tokens))]
+        find1_node.supervision["question_attention_supervision"] = event1_attn
+        find2_node.supervision["question_attention_supervision"] = event2_attn
+
+        find1_stringarg, find2_stringarg = find1_node.string_arg, find2_node.string_arg
+        find1_node.string_arg = find2_stringarg
+        find2_node.string_arg = find1_stringarg
+        new_question_answer[constants.program_supervision] = program_node.to_dict()
 
     new_question_answer["augmented_data"] = True
     new_question_answer[constants.query_id] = question_answer[constants.query_id] + "-dc-event-switch"

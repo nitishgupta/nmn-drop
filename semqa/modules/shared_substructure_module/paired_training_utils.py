@@ -45,6 +45,7 @@ def compute_loss(
         paired_passage_span_answer,
         paired_passage_span_answer_mask,
         paired_passage_numbers_answers,
+        paired_count_answers,
         orig_action_seqs: List[List[str]],
         year_differences_mat: List[np.array],
         orig_program_outputs: List[List[Dict]],
@@ -108,6 +109,7 @@ def compute_loss(
     flat_aux_passage_span_answer = []
     flat_aux_passage_span_answer_mask = []
     flat_aux_passage_number_answer = []
+    flat_aux_count_answer = []
 
     # Slice the original p2date and p2num indices and concat to make mapping for auxiliary
     aux_passageidx2dateidx_list = []
@@ -133,6 +135,7 @@ def compute_loss(
             flat_aux_passage_span_answer.append(paired_passage_span_answer[bidx, i, :, :].unsqueeze(0))
             flat_aux_passage_span_answer_mask.append(paired_passage_span_answer_mask[bidx, i, :].unsqueeze(0))
             flat_aux_passage_number_answer.append(paired_passage_numbers_answers[bidx][i])
+            flat_aux_count_answer.append(paired_count_answers[bidx][i])
             aux_passageidx2dateidx_list.append(passageidx2dateidx[bidx].unsqueeze(0))
             aux_passageidx2numberidx_list.append(passageidx2numberidx[bidx].unsqueeze(0))
 
@@ -268,6 +271,14 @@ def compute_loss(
             gold_passagenum_dist = move_to_device(
                 torch.FloatTensor(gold_passage_number_answer), cuda_device=bert_nmn_model.device_id)
             log_likelihood = torch.sum(pred_passagenumber_logprobs * gold_passagenum_dist)
+            denotation_loss = -1.0 * (log_likelihood + prog_log_prob)
+        elif denotation_type == "CountNumber":
+            gold_count_answer = flat_aux_count_answer[i]
+            pred_count_dist = denotation._value
+            pred_count_logprobs = torch.log(pred_count_dist + 1e-40)
+            gold_count_dist = move_to_device(
+                torch.FloatTensor(gold_count_answer), cuda_device=bert_nmn_model.device_id)
+            log_likelihood = torch.sum(pred_count_logprobs * gold_count_dist)
             denotation_loss = -1.0 * (log_likelihood + prog_log_prob)
         else:
             raise NotImplementedError

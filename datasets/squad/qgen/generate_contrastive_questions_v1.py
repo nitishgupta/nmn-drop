@@ -312,7 +312,7 @@ def main(args):
     squad_train_json = get_squad_json(train_or_dev)
     squad_train_dataset = read_drop_dataset(squad_train_json)
 
-    qgen_model_targz = "/shared/nitishg/checkpoints/squad-qgen/BS_6/BEAM_1/MASKQ_false/S_42/model.tar.gz"
+    qgen_model_targz = "/shared/nitishg/checkpoints/squad-paired_data/BS_6/BEAM_1/MASKQ_false/S_42/model.tar.gz"
 
     print("Preparing datset with contrastive questions")
     squad_dataset_w_contrastive_questions = get_contrastive_questions(squad_train_dataset, qgen_model_targz)

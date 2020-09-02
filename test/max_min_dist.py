@@ -46,16 +46,18 @@ def min_dist(probs, samples=10):
 
 # numbers = [1, 3, 5, 7, 9, 11, 13]
 # probs = [3, 5, 9, 7, 1]
-probs = [0.193, 0.232, 0.002, 0.0, 0.002, 0.002, 0.0, 0.001, 0.401, 0.055, 0.108, 0.001, 0.0, 0.001, 0.001]
+# probs = [0.193, 0.232, 0.002, 0.0, 0.002, 0.002, 0.0, 0.001, 0.108, 0.055, 0.401, 0.001, 0.0, 0.001, 0.001]
+probs = [0.5, 0.1, 0.104, 0.1, 0.1, 0.096]
+print(sum(probs))
 
 # print(numbers)
 
-samples = 5
+samples = 15
 
 maxdist = max_dist(probs, samples=samples)
 mindist = min_dist(probs, samples=samples)
 # secondmaxdist = second_max_dist(probs, samples=samples)
 
-print(f"Original: {probs}")
-print(f"Maximum : {maxdist}")
-print(f"Minimum : {mindist}")
+print(f"Original: {probs}\n")
+print(f"Maximum : {maxdist}\n")
+print(f"Minimum : {mindist}\n")

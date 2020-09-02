@@ -5,6 +5,9 @@ import unicodedata
 from collections import OrderedDict
 from typing import Dict, List, Any, Tuple
 
+from allennlp.data import Token
+from allennlp.data.tokenizers import SpacyTokenizer
+
 stopwords = None
 
 
@@ -12,6 +15,51 @@ def makedir(dirpath: str):
     if not os.path.exists(dirpath):
         print(f"Making directory: {dirpath}")
         os.makedirs(dirpath)
+
+
+def _split_token_by_delimiter(token: Token, delimiter: str) -> List[Token]:
+    split_tokens = []
+    char_offset = token.idx
+    for sub_str in token.text.split(delimiter):
+        if sub_str:
+            split_tokens.append(Token(text=sub_str, idx=char_offset))
+            char_offset += len(sub_str)
+        split_tokens.append(Token(text=delimiter, idx=char_offset))
+        char_offset += len(delimiter)
+    if split_tokens:
+        split_tokens.pop(-1)
+        char_offset -= len(delimiter)
+        return split_tokens
+    else:
+        return [token]
+
+
+def split_tokens_by_hyphen(tokens: List[Token]) -> List[Token]:
+    hyphens = ["-", "–", "~"]
+    new_tokens: List[Token] = []
+
+    for token in tokens:
+        if any(hyphen in token.text for hyphen in hyphens):
+            unsplit_tokens = [token]
+            split_tokens: List[Token] = []
+            for hyphen in hyphens:
+                for unsplit_token in unsplit_tokens:
+                    if hyphen in token.text:
+                        split_tokens += _split_token_by_delimiter(unsplit_token, hyphen)
+                    else:
+                        split_tokens.append(unsplit_token)
+                unsplit_tokens, split_tokens = split_tokens, []
+            new_tokens += unsplit_tokens
+        else:
+            new_tokens.append(token)
+
+    return new_tokens
+
+
+def tokenize(text: str, spacy_tokenizer: SpacyTokenizer) -> List[Token]:
+    tokens: List[Token] = spacy_tokenizer.tokenize(text)
+    tokens = split_tokens_by_hyphen(tokens)
+    return tokens
 
 
 def count_list(input_list: List[Any], depth: int = 1) -> int:

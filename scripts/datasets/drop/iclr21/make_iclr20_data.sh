@@ -2,21 +2,21 @@
 
 PREPROCESS_DIR=/shared/nitishg/data/drop/preprocess
 
-ICLR_SUBDATA=/shared/nitishg/data/drop/iclr21/iclr20_subsets
+ICLR_SUBDATA=/shared/nitishg/data/drop/iclr21/iclr20_subsets-v2
 
-FULL_DATA_DIRNAME=iclr20_full-v1
+FULL_DATA_DIRNAME=iclr20_full-v2
 
 ICLR21_DATA_DIR=/shared/nitishg/data/drop/iclr21
 
 python -m datasets.drop.preprocess.datecomp.date_comparison_prune --input_dir ${PREPROCESS_DIR} \
-                                                                  --output_dir ${ICLR_SUBDATA}/datecomp_prune
+                                                                  --output_dir ${ICLR_SUBDATA}/datecomp #_prune
 
 
-python -m datasets.drop.preprocess.datecomp.date_data_augmentation --input_dir ${ICLR_SUBDATA}/datecomp_prune \
-                                                                   --output_dir ${ICLR_SUBDATA}/datecomp
+#python -m datasets.drop.preprocess.datecomp.date_data_augmentation --input_dir ${ICLR_SUBDATA}/datecomp_prune \
+#                                                                   --output_dir ${ICLR_SUBDATA}/datecomp
 
 # Remove temp datecomp-prune data
-rm -r ${ICLR_SUBDATA}/datecomp_prune
+# rm -r ${ICLR_SUBDATA}/datecomp_prune
 
 # NUM-COMPARISON
 python -m datasets.drop.preprocess.numcomp.make_numcomp  --input_dir ${PREPROCESS_DIR} \

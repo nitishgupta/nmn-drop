@@ -15,7 +15,7 @@ class QREPR_METHOD(Enum):
 
 
 class QReprModuleExecution():
-    # making a static member so that the paired-data loss function can use this
+    # making a static member so that the paired_data loss function can use this
     actions_w_qattn = [
         "PassageNumber -> select_implicit_num",
         "PassageAttention -> select_passage",

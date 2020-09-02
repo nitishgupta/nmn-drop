@@ -390,41 +390,10 @@ if __name__ == "__main__":
 
     new_dev_dataset = pruneDateCompQuestions(dev_dataset)
 
+
+    print("\nWriting date-compare train data to: {}".format(output_trnfp))
     with open(output_trnfp, "w") as f:
         json.dump(new_train_dataset, f, indent=4)
-
+    print("Writing date-compare dev data to: {}".format(output_devfp))
     with open(output_devfp, "w") as f:
         json.dump(new_dev_dataset, f, indent=4)
-
-    print("Written augmented datasets")
-
-
-""" DATASET CREATED THIS WAY
-
-input_dir = "./resources/data/drop_old/preprocess_new"
-output_dir = "./resources/data/drop_old/date/datecomp_traindev_pruned"
-
-if not os.path.exists(output_dir):
-    os.makedirs(output_dir, exist_ok=True)
-
-input_trnfp = os.path.join(input_dir, train_json)
-input_devfp = os.path.join(input_dir, dev_json)
-output_trnfp = os.path.join(output_dir, train_json)
-output_devfp = os.path.join(output_dir, dev_json)
-
-train_dataset = readDataset(input_trnfp)
-dev_dataset = readDataset(input_devfp)
-
-new_train_dataset = pruneDateQuestions(train_dataset, ngram_prune_only=False)
-
-new_dev_dataset = pruneDateQuestions(dev_dataset, ngram_prune_only=False)
-
-with open(output_trnfp, 'w') as f:
-    json.dump(new_train_dataset, f, indent=4)
-
-with open(output_devfp, 'w') as f:
-    json.dump(new_dev_dataset, f, indent=4)
-
-print("Written augmented datasets")
-
-"""

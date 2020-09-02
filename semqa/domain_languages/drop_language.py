@@ -295,7 +295,7 @@ class DropLanguage(DomainLanguage):
             modeled_passage: Tensor = None,
             start_types=None,
             device_id: int = -1,
-            max_samples=5,
+            max_samples=15,
             metadata={},
             debug=False,
     ) -> None:
@@ -712,11 +712,15 @@ class DropLanguage(DomainLanguage):
         return date_distribution, passage_date_token_probs, date_win_loss
 
     # New Num Distribution by first computing a number-distribution for each passage-token
-    def compute_num_distribution(self, passage_attention: Tensor, weighted_question_vector: Tensor):
+    def compute_num_distribution(self, passage_attention: Tensor, weighted_question_vector: Tensor, pdb=False):
         """ Given a passage over passage token2num attention (normalized), and an additional passage attention
             for token importance, compute a distribution over (unique) nums in the passage.
             See compute_date_distribution for details
         """
+
+        if pdb:
+            import pdb
+            pdb.set_trace()
 
         # Shape: (passage_length, encoding_dim)
         passage_repr = self.encoded_passage
@@ -1446,6 +1450,12 @@ class DropLanguage(DomainLanguage):
         # Shape: (passage_length)
         passage_attn = passage_attn * self.passage_mask
 
+        # if self.metadata["question_id"] == "715cc0d0-fdad-4db3-b83e-7067b0b65d69":
+        #     import pdb
+        #     pdb.set_trace()
+        #     number_distribution, passage_numtoken_probs, _, num_win_loss = self.compute_num_distribution(
+        #         passage_attention=passage_attn, weighted_question_vector=weighted_question_vector, pdb=True)
+
         number_distribution, passage_numtoken_probs, _, num_win_loss = self.compute_num_distribution(
             passage_attention=passage_attn, weighted_question_vector=weighted_question_vector)
 
@@ -1563,7 +1573,6 @@ class DropLanguage(DomainLanguage):
         loss += passage_attention.loss
 
         debug_value = ""
-        minmax_num_dist, _, _, _ = self.compute_num_distribution(minmax_num_pattn, weighted_question_vector)
         inputpattn_numtoken_probs = myutils.round_all(myutils.tocpuNPList(inputpnum_token_prob), 3)
         minmax_numtoken_probs = myutils.round_all(myutils.tocpuNPList(minmaxnum_token_prob), 3)
 

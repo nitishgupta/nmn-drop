@@ -12,10 +12,17 @@ Working dir: `/shared/nitishg/data/drop/iclr21`
 Train
 Number of input passages: 3881
 Number of input questions: 19204
-
 Dev
 Number of input passages: 396
 Number of input questions: 2141
+
+V2 - without data augmentation for date-compare
+Train
+Number of input passages: 3881
+Number of input questions: 16805
+Dev
+Number of input passages: 396
+Number of input questions: 1841
 ``` 
 
 ### QDMR data
@@ -56,4 +63,9 @@ iclr_qdmr-v1 merged data:
 Train: passages: 4237 questions: 20443   {'program_supervision': 20443, 'execution_supervised': 4146}
 Dev:   passages: 771  questions: 2666    {'program_supervision': 2666, 'execution_supervised': 531}
 Test:  passages: 446  questions: 2747    {'program_supervision': 2747, 'execution_supervised': 505}
+
+iclr_qdmr-v2 merged data:
+Train: passages: 4237 questions: 18283  {'program_supervision': 18283, 'execution_supervised': 2546}
+Dev:   passages: 771  questions: 2427   {'program_supervision': 2427, 'execution_supervised': 360}
+Test:  passages: 446  questions: 2447   {'program_supervision': 2447, 'execution_supervised': 274}
 ```
