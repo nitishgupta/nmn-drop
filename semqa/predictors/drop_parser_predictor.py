@@ -33,6 +33,19 @@ def compute_postorder_position_in_inorder_traversal(node: Node):
     return postorder_positions
 
 
+def convert_wordpiece_attention_to_tokens(wp_attention, tokens, wps, wpidx2tokenidx):
+    tokens_len = len(tokens)
+    wps_len = len(wps)
+    wp_attention = wp_attention[:wps_len]  # attention over word-pieces
+    if not isinstance(wp_attention, list):
+        wp_attention = wp_attention.detach().cpu().numpy().tolist()
+    token_attention = [0.0] * tokens_len   # attention over tokens
+    for token_idx, attn_value in zip(wpidx2tokenidx, wp_attention):
+        if token_idx >= 0 and token_idx < tokens_len:
+            token_attention[token_idx] += attn_value
+    return token_attention
+
+
 class PredictionData:
     def __init__(self, outputs: JsonDict):
         self.metadata: Dict = outputs["metadata"]
@@ -51,11 +64,13 @@ class PredictionData:
         self.prog_denotations: List[str] = outputs["all_predicted_answers"]
 
         modules_debug_infos = outputs["modules_debug_infos"]
+        # The execution is in an post-order linearization; need to convert this to in-order traversal for visualization
         program_execution: List[Dict] = modules_debug_infos[0] if modules_debug_infos else []
         if self.top_nested_expr:
             program_node: Node = nested_expression_to_tree(self.top_nested_expr)
             compute_postorder_position(program_node)   # adding positions to nodes if traversed in post-order
-            # These are the post-order positions of nodes when tree is traversed in-order manner
+            # These are the post-order positions of nodes when tree is traversed in-order linearization. This is the
+            # order in which we want to re-arrange the program-execution list
             postorder_position_in_inorder_traversal = compute_postorder_position_in_inorder_traversal(program_node)
             if len(postorder_position_in_inorder_traversal) == len(program_execution):
                 program_execution_vis = [program_execution[x] for x in postorder_position_in_inorder_traversal]
@@ -99,26 +114,42 @@ class PredictionData:
 
         (self.exact_match, self.f1_score) = f1metric(self.predicted_ans, self.answer_annotation_dicts)
 
+        for module_dict in program_execution:
+            for module, module_outputs in module_dict.items():
+                # This is a list of Output.to_json() dicts
+                module_outputs: List[Dict] = module_outputs
+                for module_output in module_outputs:
+                    # If the output is passage wps attention, convert it to token attention
+                    if module_output["output_type"] == "passage":
+                        wps_attn = module_output["values"]
+                        token_attn = convert_wordpiece_attention_to_tokens(wp_attention=wps_attn,
+                                                                           tokens=self.passage_tokens,
+                                                                           wps=self.passage_wps,
+                                                                           wpidx2tokenidx=self.passage_wpidx2tokenidx)
+                        module_output["values"] = token_attn
+
 
 def visualize_module_outputs(module_name: str, module_outputs: List[Dict], prediction_data: PredictionData):
     """For a module and its list of Output(s) return a string-output that can be visualized."""
     outputs: List[Output] = [output_from_dict(x) for x in module_outputs]
     output_str = f"{module_name}\n"
     for output in outputs:
-        output_str += visualize_single_output_from_module(output, prediction_data) + '\n'
+        output_str += _visualize_single_output_from_module(output, prediction_data) + '\n'
     output_str = output_str.strip() + "\n\n"
     return output_str
 
 
-def visualize_single_output_from_module(output: Output, prediction_data: PredictionData):
+def _visualize_single_output_from_module(output: Output, prediction_data: PredictionData):
     """Visualize string for single Output attention from a module. """
-    output_values = {'passage': prediction_data.passage_wps,
+    # Different types of tokens, attention over which is visualized
+    output_values = {'passage': prediction_data.passage_tokens,
                      'question': prediction_data.question_wps,
                      'numbers': prediction_data.passage_number_values,
                      'dates': prediction_data.passage_date_values,
                      'year_diffs': prediction_data.passage_year_diffs,
                      'composed_numbers': prediction_data.composed_numbers,
                      'count': prediction_data.count_values}
+    # One of the keys from above
     output_type: str = output.output_type
     output_support: List[Union[str, int, float]] = output_values[output_type]
     output_attn: List[float] = output.values
@@ -170,20 +201,6 @@ class DropNMNPredictor(Predictor):
         outputs = self._model.forward_on_instances(instances)
         return sanitize(outputs)
 
-    def _print_ExecutionValTree(self, exval_tree, depth=0):
-        """
-        exval_tree: [[root_func_name, value], [], [], []]
-        """
-        tabs = "\t" * depth
-        func_name = str(exval_tree[0][0])
-        debug_value = str(exval_tree[0][1])
-        debug_value = debug_value.replace("\n", "\n" + tabs)
-        outstr = f"{tabs}{func_name}  :\n {tabs}{debug_value}\n"
-        if len(exval_tree) > 1:
-            for child in exval_tree[1:]:
-                outstr += self._print_ExecutionValTree(child, depth + 1)
-        return outstr
-
     @overrides
     def dump_line(self, outputs: JsonDict) -> str:  # pylint: disable=no-self-use
         # Use json.dumps(outputs) + "\n" to dump a dictionary
@@ -218,7 +235,9 @@ class DropNMNPredictor(Predictor):
         out_str += f"YearDiffs: {prediction_data.passage_year_diffs}" + "\n"
 
         out_str += "Program execution" + "\n"
+        # Program execution in in-order linearization;
         for module_output_dict in prediction_data.program_execution:
+            # each dict only has a single item (module), the module can have multiple outputs
             for module_name, module_outputs in module_output_dict.items():
                 module_output_str = visualize_module_outputs(module_name=module_name, module_outputs=module_outputs,
                                                              prediction_data=prediction_data)

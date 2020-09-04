@@ -295,7 +295,7 @@ class DropLanguage(DomainLanguage):
             modeled_passage: Tensor = None,
             start_types=None,
             device_id: int = -1,
-            max_samples=15,
+            max_samples=10,
             metadata={},
             debug=False,
     ) -> None:

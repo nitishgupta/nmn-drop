@@ -8,10 +8,10 @@ export MKL_NUM_THREADS=4
 
 ### DATASET PATHS -- should be same across models for same dataset
 DATASET_DIR=/shared/nitishg/data/drop/iclr21
-DATASET_NAME=iclr_qdmr-v2-noexc
+DATASET_NAME=iclr_qdmr-v2-noexc-aug
 # iclr_qdmr-v1-noexc
 
-TRAINFILE=${DATASET_DIR}/${DATASET_NAME}/drop_dataset_train-FGS-DCYD.json
+TRAINFILE=${DATASET_DIR}/${DATASET_NAME}/drop_dataset_train-FGS-DCYD-ND.json
 VALFILE=${DATASET_DIR}/${DATASET_NAME}/drop_dataset_dev.json
 
 # PACKAGE TO BE INCLUDED WHICH HOUSES ALL THE CODE
@@ -58,7 +58,7 @@ export HARDEM_EPOCH=${SUPEPOCHS}
 export BS=2
 export DROPOUT=0.2
 
-export SEED=10
+export SEED=42
 
 export BEAMSIZE=1
 export MAX_DECODE_STEP=14
@@ -73,7 +73,7 @@ CHECKPOINT_ROOT=./resources/checkpoints
 SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop-iclr21/${DATASET_NAME}
 MODEL_DIR=drop_parser_bert
 PD_1=Qattn_${QATTLOSS}/EXCLOSS_${EXCLOSS}/aux_${AUXLOSS}/${BIO_LABEL}_${BIO_TAG}/SHRDSUB_${SHRDSUB}/SUPEPOCHS_${SUPEPOCHS}_BM_${BEAMSIZE}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}-FGS-DCYD
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}-FGS-DCYD-ND
 # _SqNMN-Paired
 
 # SERIALIZATION_DIR=./resources/checkpoints/test

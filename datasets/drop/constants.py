@@ -40,6 +40,9 @@ answer_question_spans = "answer_question_spans"
 
 answer_type = "answer_type"
 
+# This bool key is added to QA dict if it is an augmented QA example
+augmented_example = "augmented_example"
+
 # TYPES
 NUM_TYPE = "NUM"
 DATE_TYPE = "DATE"
