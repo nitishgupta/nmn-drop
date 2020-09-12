@@ -479,7 +479,6 @@ class DropLanguage(DomainLanguage):
                                                          memory_efficient=True)
             passage_attention = clamp_distribution(passage_attention)
 
-            # if self._debug:
             qattn_output = Output(output_type="question", values=question_attention, label="ques_attn")
             pattn_output = Output(output_type="passage", values=passage_attention, label="passage_attn")
             # debug_info_dict is a dictionary from {module_name: List[Output]}
@@ -549,32 +548,10 @@ class DropLanguage(DomainLanguage):
             loss = passage_attention.loss
 
             debug_value = ""
-            if self._debug:
-                qattn_vis_complete, qattn_vis_most = dlutils.listTokensVis(
-                    question_attention, self.metadata["question_tokens"]
-                )
-                debug_value += f"Qattn: {qattn_vis_complete}"
-
-                f_attn_vis, _ = dlutils.listTokensVis(filter_attn, self.metadata["passage_tokens"])
-                most_attended_spans = dlutils.mostAttendedSpans(filter_attn, self.metadata["passage_tokens"])
-                debug_value += f"\nFilterAttn: {f_attn_vis}"
-                debug_value += f"\nMostAttended: {most_attended_spans}"
-
-                pattn_vis_complete, pattn_vis_most = dlutils.listTokensVis(
-                    filtered_passage_attention, self.metadata["passage_tokens"]
-                )
-                most_attended_spans = dlutils.mostAttendedSpans(filtered_passage_attention,
-                                                                self.metadata["passage_tokens"])
-                debug_value += f"\nPattn: {pattn_vis_complete}"
-                debug_value += f"\nMostAttended: {most_attended_spans}"
-
-                qattn_output = Output(output_type="question", values=question_attention, label="ques_attn")
-                pattn_output = Output(output_type="passage", values=filtered_passage_attention, label="filtered_pattn")
-                debug_info_dict = {"filter_passage": [qattn_output, pattn_output]}
-                # debug_info_dict = {"filter": {"passage": filtered_passage_attention,
-                #                               "passage_input": passage_attn,
-                #                               "question": question_attention}}
-                self.modules_debug_info[-1].append(debug_info_dict)
+            qattn_output = Output(output_type="question", values=question_attention, label="ques_attn")
+            pattn_output = Output(output_type="passage", values=filtered_passage_attention, label="filtered_pattn")
+            debug_info_dict = {"filter_passage": [qattn_output, pattn_output]}
+            self.modules_debug_info[-1].append(debug_info_dict)
 
         return PassageAttention(filtered_passage_attention, loss=loss, debug_value=debug_value)
 
@@ -1000,14 +977,14 @@ class DropLanguage(DomainLanguage):
         loss += passage_attn_2.loss
 
         debug_value = ""
-        # if self._debug:
-        date1_token = myutils.round_all(myutils.tocpuNPList(passage_datetoken_prob_1), 3)
-        date2_token = myutils.round_all(myutils.tocpuNPList(passage_datetoken_prob_2), 3)
         qattn_output = Output(output_type="question", values=question_attention, label="ques_attn")
         date1_output = Output(output_type="dates", values=date_distribution_1, label="date_1")
         date2_output = Output(output_type="dates", values=date_distribution_2, label="date_2")
+        date1_pattn_output = Output(output_type="passage", values=passage_datetoken_prob_1, label="date_1_passage_attn")
+        date2_pattn_output = Output(output_type="passage", values=passage_datetoken_prob_2, label="date_2_passage_attn")
         pattn_output = Output(output_type="passage", values=average_passage_distribution, label="avg_pattn")
-        debug_info_dict = {"compare_date_lt": [qattn_output, date1_output, date2_output, pattn_output]}
+        debug_info_dict = {"compare_date_lt": [qattn_output, date1_output, date1_pattn_output,
+                                               date2_pattn_output, date2_output, pattn_output]}
 
         self.modules_debug_info[-1].append(debug_info_dict)
 
@@ -1046,8 +1023,11 @@ class DropLanguage(DomainLanguage):
         qattn_output = Output(output_type="question", values=question_attention, label="ques_attn")
         date1_output = Output(output_type="dates", values=date_distribution_1, label="date_1")
         date2_output = Output(output_type="dates", values=date_distribution_2, label="date_2")
+        date1_pattn_output = Output(output_type="passage", values=passage_datetoken_prob_1, label="date_1_passage_attn")
+        date2_pattn_output = Output(output_type="passage", values=passage_datetoken_prob_2, label="date_2_passage_attn")
         pattn_output = Output(output_type="passage", values=average_passage_distribution, label="avg_pattn")
-        debug_info_dict = {"compare_date_gt": [qattn_output, date1_output, date2_output, pattn_output]}
+        debug_info_dict = {"compare_date_gt": [qattn_output, date1_output, date1_pattn_output,
+                                               date2_output, date2_pattn_output, pattn_output]}
         self.modules_debug_info[-1].append(debug_info_dict)
 
         return PassageAttention(average_passage_distribution, loss=loss, debug_value=debug_value)
@@ -1084,8 +1064,11 @@ class DropLanguage(DomainLanguage):
         qattn_output = Output(output_type="question", values=question_attention, label="ques_attn")
         num1_output = Output(output_type="numbers", values=num_distribution_1, label="num_1")
         num2_output = Output(output_type="numbers", values=num_distribution_2, label="num_2")
+        num1_pattn_output = Output(output_type="passage", values=passage_numtoken_prob_1, label="num_1_passage_attn")
+        num2_pattn_output = Output(output_type="passage", values=passage_numtoken_prob_2, label="num_2_passage_attn")
         pattn_output = Output(output_type="passage", values=average_passage_distribution, label="avg_pattn")
-        debug_info_dict = {"compare_num_lt": [qattn_output, num1_output, num2_output, pattn_output]}
+        debug_info_dict = {"compare_num_lt": [qattn_output, num1_output, num1_pattn_output,
+                                              num2_output, num2_pattn_output, pattn_output]}
         self.modules_debug_info[-1].append(debug_info_dict)
 
         return PassageAttention(average_passage_distribution, loss=loss, debug_value=debug_value)
@@ -1124,8 +1107,11 @@ class DropLanguage(DomainLanguage):
         qattn_output = Output(output_type="question", values=question_attention, label="ques_attn")
         num1_output = Output(output_type="numbers", values=num_distribution_1, label="num_1")
         num2_output = Output(output_type="numbers", values=num_distribution_2, label="num_2")
+        num1_pattn_output = Output(output_type="passage", values=passage_numtoken_prob_1, label="num_1_passage_attn")
+        num2_pattn_output = Output(output_type="passage", values=passage_numtoken_prob_2, label="num_2_passage_attn")
         pattn_output = Output(output_type="passage", values=average_passage_distribution, label="avg_pattn")
-        debug_info_dict = {"compare_num_gt": [qattn_output, num1_output, num2_output, pattn_output]}
+        debug_info_dict = {"compare_num_gt": [qattn_output, num1_output, num1_pattn_output,
+                                              num2_output, num2_pattn_output, pattn_output]}
         self.modules_debug_info[-1].append(debug_info_dict)
 
         return PassageAttention(average_passage_distribution, loss=loss, debug_value=debug_value)
@@ -1157,8 +1143,11 @@ class DropLanguage(DomainLanguage):
         qattn_output = Output(output_type="question", values=question_attention, label="ques_attn")
         date1_output = Output(output_type="dates", values=date_distribution_1, label="date_1")
         date2_output = Output(output_type="dates", values=date_distribution_2, label="date_2")
+        date1_pattn_output = Output(output_type="passage", values=passage_datetoken_prob_1, label="date_1_passage_attn")
+        date2_pattn_output = Output(output_type="passage", values=passage_datetoken_prob_2, label="date_2_passage_attn")
         year_diff_output = Output(output_type="year_diffs", values=year_difference_dist, label="year_diff")
-        debug_info_dict = {"year_difference_two_events": [qattn_output, date1_output, date2_output, year_diff_output]}
+        debug_info_dict = {"year_difference_two_events": [qattn_output, date1_output, date1_pattn_output,
+                                                          date2_output, date2_pattn_output, year_diff_output]}
         self.modules_debug_info[-1].append(debug_info_dict)
 
         return YearDifference(year_difference_dist=year_difference_dist, loss=loss, debug_value=debug_value)
@@ -1189,8 +1178,11 @@ class DropLanguage(DomainLanguage):
         qattn_output = Output(output_type="question", values=question_attention, label="ques_attn")
         date1_output = Output(output_type="dates", values=date_distribution_1, label="date_1")
         date2_output = Output(output_type="dates", values=date_distribution_2, label="date_2")
+        date1_pattn_output = Output(output_type="passage", values=passage_datetoken_prob_1, label="date_1_passage_attn")
+        date2_pattn_output = Output(output_type="passage", values=passage_datetoken_prob_2, label="date_2_passage_attn")
         year_diff_output = Output(output_type="year_diffs", values=year_difference_dist, label="year_diff")
-        debug_info_dict = {"year_difference_single_event": [qattn_output, date1_output, date2_output, year_diff_output]}
+        debug_info_dict = {"year_difference_single_event": [qattn_output, date1_output, date1_pattn_output,
+                                                            date2_output, date2_pattn_output, year_diff_output]}
 
         self.modules_debug_info[-1].append(debug_info_dict)
 
@@ -1280,7 +1272,6 @@ class DropLanguage(DomainLanguage):
 
             loss = passage_attention.loss
 
-            #if self._debug:
             debug_info_dict = {"select_passagespan_answer": []}
             self.modules_debug_info[-1].append(debug_info_dict)
 
@@ -1340,18 +1331,9 @@ class DropLanguage(DomainLanguage):
             count_distribution = clamp_distribution(count_distribution)
 
             debug_value = ""
-            if self._debug:
-                countdist = myutils.round_all(myutils.tocpuNPList(count_distribution), 3)
-                psigms, pattn_vis_most = dlutils.listTokensVis(passage_token_sigmoids, self.metadata["passage_tokens"])
-                debug_value += f"CountDist: {countdist}"
-                debug_value += f"CountMean: {count_mean}"
-                debug_value += f"\nPSigms: {psigms}"
-
-                count_output = Output(output_type="count", values=count_distribution, label="count_dist")
-                debug_info_dict = {"aggregate_count": [count_output]}
-                # debug_info_dict = {"count": {"count": count_distribution,
-                #                              "passage_input": passage_attn}}
-                self.modules_debug_info[-1].append(debug_info_dict)
+            count_output = Output(output_type="count", values=count_distribution, label="count_dist")
+            debug_info_dict = {"aggregate_count": [count_output]}
+            self.modules_debug_info[-1].append(debug_info_dict)
 
         return CountNumber(count_number_dist=count_distribution, loss=loss, debug_value=debug_value)
 
@@ -1369,20 +1351,20 @@ class DropLanguage(DomainLanguage):
         loss += number_1.loss + number_2.loss
 
         debug_value = ""
-        if self._debug:
-            composed_number_dist_list = myutils.round_all(myutils.tocpuNPList(composed_number_dist), 3)
-            topknumdiff = dlutils.topProbMassElems(
-                attention=composed_number_dist, support=self.composed_numbers, k=5
-            )
-            topknum1 = dlutils.topProbMassElems(attention=numberdist_1, support=self.passage_num_values, k=5)
-            topknum2 = dlutils.topProbMassElems(attention=numberdist_2, support=self.passage_num_values, k=5)
-
-            debug_value += (
-                    f"ComposedNumberDist: {composed_number_dist_list}\n"
-                    + f"Top-num-diff: {topknumdiff}\n"
-                    + f"\n Top-Num1: {topknum1}"
-                    + f"\n Top-Num2: {topknum2}"
-            )
+        # if self._debug:
+        #     composed_number_dist_list = myutils.round_all(myutils.tocpuNPList(composed_number_dist), 3)
+        #     topknumdiff = dlutils.topProbMassElems(
+        #         attention=composed_number_dist, support=self.composed_numbers, k=5
+        #     )
+        #     topknum1 = dlutils.topProbMassElems(attention=numberdist_1, support=self.passage_num_values, k=5)
+        #     topknum2 = dlutils.topProbMassElems(attention=numberdist_2, support=self.passage_num_values, k=5)
+        #
+        #     debug_value += (
+        #             f"ComposedNumberDist: {composed_number_dist_list}\n"
+        #             + f"Top-num-diff: {topknumdiff}\n"
+        #             + f"\n Top-Num1: {topknum1}"
+        #             + f"\n Top-Num2: {topknum2}"
+        #     )
 
         return composed_number_dist, loss, debug_value
 
@@ -1396,11 +1378,10 @@ class DropLanguage(DomainLanguage):
             number_1=passage_number_1, number_2=passage_number_2, add_sub="sub"
         )
 
-        if self._debug:
-            num_diff_output = Output(output_type="composed_numbers", values=number_difference_dist, label="num_diff")
-            debug_info_dict = {"passagenumber_difference": [num_diff_output]}
-            # debug_info_dict = {"number-difference": {"difference_value": number_difference_dist}}
-            self.modules_debug_info[-1].append(debug_info_dict)
+        # if self._debug:
+        num_diff_output = Output(output_type="composed_numbers", values=number_difference_dist, label="num_diff")
+        debug_info_dict = {"passagenumber_difference": [num_diff_output]}
+        self.modules_debug_info[-1].append(debug_info_dict)
 
         return ComposedNumber(composed_number_dist=number_difference_dist, loss=loss, debug_value=debug_value)
 
@@ -1413,11 +1394,11 @@ class DropLanguage(DomainLanguage):
             number_1=passage_number_1, number_2=passage_number_2, add_sub="add"
         )
 
-        if self._debug:
-            num_add_output = Output(output_type="composed_numbers", values=number_addition_dist, label="num_add")
-            debug_info_dict = {"passagenumber_addition": [num_add_output]}
-            # debug_info_dict = {"number-addition": {"addition_value": number_addition_dist}}
-            self.modules_debug_info[-1].append(debug_info_dict)
+        # if self._debug:
+        num_add_output = Output(output_type="composed_numbers", values=number_addition_dist, label="num_add")
+        debug_info_dict = {"passagenumber_addition": [num_add_output]}
+        # debug_info_dict = {"number-addition": {"addition_value": number_addition_dist}}
+        self.modules_debug_info[-1].append(debug_info_dict)
 
         return ComposedNumber(composed_number_dist=number_addition_dist, loss=loss, debug_value=debug_value)
 
@@ -1500,20 +1481,9 @@ class DropLanguage(DomainLanguage):
         number_distribution = self.compute_implicitnum_distribution(weighted_question_vector=weighted_question_vector)
         loss = 0.0
         debug_value = ""
-        if self._debug:
-            number_dist = myutils.round_all(myutils.tocpuNPList(number_distribution), 3)
-            topk_numdist = dlutils.topProbMassElems(attention=number_distribution, support=self.passage_num_values, k=5)
-            debug_value += f"PassageNumber: {number_dist}"
-            debug_value += f"\ntopk-num-dist: {topk_numdist}"
-            qattn_vis_complete, qattn_vis_most = dlutils.listTokensVis(
-                question_attention, self.metadata["question_tokens"]
-            )
-            debug_value += f"input-qattn: {qattn_vis_complete}"
-            num_output = Output(output_type="numbers", values=number_distribution, label="number_dist")
-            debug_info_dict = {"select_implicit_num": [num_output]}
-            # debug_info_dict = {"find-implicit-num": {"number": number_distribution,
-            #                                          "question": question_attention}}
-            self.modules_debug_info[-1].append(debug_info_dict)
+        num_output = Output(output_type="numbers", values=number_distribution, label="number_dist")
+        debug_info_dict = {"select_implicit_num": [num_output]}
+        self.modules_debug_info[-1].append(debug_info_dict)
         return PassageNumber(passage_number_dist=number_distribution, loss=loss, debug_value=debug_value)
 
     @predicate_with_side_args(["question_attention", "weighted_question_vector", "num_entidxs"])
@@ -1526,7 +1496,7 @@ class DropLanguage(DomainLanguage):
          loss, debug_value) = self.minmaxNumPattn_module(
             passage_attention=passage_attention, weighted_question_vector=weighted_question_vector,
             min_max_op="min", num_entidxs_supervision=num_entidxs)
-        # if self._debug:
+
         qattn_output = Output(output_type="question", values=question_attention, label="ques_attn")
         num_input = Output(output_type="passage", values=inputpattn_numtoken_probs, label="number_input")
         minmax_out = Output(output_type="passage", values=minmax_numtoken_probs, label="min_number")
@@ -1545,7 +1515,7 @@ class DropLanguage(DomainLanguage):
          loss, debug_value) = self.minmaxNumPattn_module(
             passage_attention=passage_attention, weighted_question_vector=weighted_question_vector,
             min_max_op="max", num_entidxs_supervision=num_entidxs)
-        # if self._debug:
+
         qattn_output = Output(output_type="question", values=question_attention, label="ques_attn")
         num_input = Output(output_type="passage", values=inputpattn_numtoken_probs, label="number_input")
         minmax_out = Output(output_type="passage", values=minmax_numtoken_probs, label="max_number")
@@ -1673,7 +1643,7 @@ class DropLanguage(DomainLanguage):
     """
 
 
-def get_empty_language_object() -> DropLanguage:
+def get_empty_language_object(start_types=None) -> DropLanguage:
     droplanguage = DropLanguage(
         encoded_passage=None,
         modeled_passage=None,
@@ -1691,7 +1661,7 @@ def get_empty_language_object() -> DropLanguage:
         year_differences_mat=None,
         count_num_values=None,
         parameters=None,
-        start_types=None,
+        start_types=start_types,
     )
     return droplanguage
 

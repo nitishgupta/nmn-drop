@@ -78,7 +78,7 @@ class PredictionData:
                 program_execution_vis = program_execution[::-1]
                 print("\nLen of program : {}".format(len(postorder_position_in_inorder_traversal)))
                 print(f"Program: {self.top_nested_expr}")
-                print(f"Program execution: {[key for key in program_execution]}")
+                print(f"Program execution: {[module_dict.keys() for module_dict in program_execution]}")
                 print()
         else:
             # Some thing is wrong before; resort to assuming that the tree is fully left-branching
@@ -281,6 +281,7 @@ class DROPNMNJSONLPredictor(DropNMNPredictor):
             "top_logical_form": prediction_data.top_logical_form,
             "top_nested_expr": prediction_data.top_nested_expr,
             "top_logical_form_prob": prediction_data.top_logical_form_prob,
+            "gold_answers": prediction_data.answer_annotation_dicts,
             "f1": prediction_data.f1_score,
             "em": prediction_data.exact_match
         }
@@ -288,197 +289,238 @@ class DROPNMNJSONLPredictor(DropNMNPredictor):
         return json.dumps(output_dict) + "\n"
 
 
-@Predictor.register("drop_analysis_predictor")
-class DropQANetPredictor(Predictor):
+@Predictor.register("drop_faithfulness_predictor")
+class DROPNMNFaithFulPredictor(DropNMNPredictor):
     """
     Predictor for the :class:`~allennlp.models.bidaf.SemanticRoleLabeler` model.
     """
-
     def __init__(self, model: Model, dataset_reader: DatasetReader) -> None:
         super().__init__(model, dataset_reader)
-
-    @overrides
-    def predict_instance(self, instance: Instance) -> JsonDict:
-        outputs = self._model.forward_on_instance(instance)
-        return sanitize(outputs)
-
-    def predict_batch_instance(self, instances: List[Instance]) -> List[JsonDict]:
-        outputs = self._model.forward_on_instances(instances)
-        return sanitize(outputs)
 
     @overrides
     def dump_line(self, outputs: JsonDict) -> str:  # pylint: disable=no-self-use
         # Use json.dumps(outputs) + "\n" to dump a dictionary
 
-        out_str = ""
-        metadata = outputs["metadata"]
-        predicted_ans = outputs["predicted_answer"]
+        prediction_data = PredictionData(outputs=outputs)
 
-        # instance_spans_for_all_progs = outputs['predicted_spans']
-        # best_span = instance_spans_for_all_progs[0]
-        question_id = metadata["question_id"]
-        question = metadata["original_question"]
-        answer_annotation_dicts = metadata["answer_annotations"]
-        (exact_match, f1_score) = f1metric(predicted_ans, answer_annotation_dicts)
-
-        correct_or_not = "NC"
-        if f1_score >= 0.75:
-            correct_or_not = "C"
-
-        logical_form = outputs["logical_forms"][0]
-
-        out_str += question_id + "\t"
-        out_str += question + "\t"
-        out_str += correct_or_not + "\t"
-        out_str += logical_form + "\n"
-
-        return out_str
-
-
-@Predictor.register("drop_mtmsnstyle_predictor")
-class MTMSNStylePredictor(Predictor):
-    """
-    Predictor for the :class:`~allennlp.models.bidaf.SemanticRoleLabeler` model.
-    """
-
-    def __init__(self, model: Model, dataset_reader: DatasetReader) -> None:
-        super().__init__(model, dataset_reader)
-
-    @overrides
-    def predict_instance(self, instance: Instance) -> JsonDict:
-        outputs = self._model.forward_on_instance(instance)
-        return sanitize(outputs)
-
-    def predict_batch_instance(self, instances: List[Instance]) -> List[JsonDict]:
-        outputs = self._model.forward_on_instances(instances)
-        return sanitize(outputs)
-
-    @overrides
-    def dump_line(self, outputs: JsonDict) -> str:  # pylint: disable=no-self-use
-        # Use json.dumps(outputs) + "\n" to dump a dictionary
-
-        out_str = ""
-        metadata = outputs["metadata"]
-        predicted_ans = outputs["predicted_answer"]
-
-        # instance_spans_for_all_progs = outputs['predicted_spans']
-        # best_span = instance_spans_for_all_progs[0]
-        question_id = metadata["question_id"]
-        question = metadata["original_question"]
-        answer_annotation_dicts = metadata["answer_annotations"]
-        program_probs = outputs["batch_actionseq_probs"]  # List size is the same as number of programs predicted
-        (exact_match, f1_score) = f1metric(predicted_ans, answer_annotation_dicts)
-        logical_forms = outputs["logical_forms"]
-        if logical_forms:
-            logical_form = logical_forms[0]
-        else:
-            logical_form = "NO PROGRAM PREDICTED"
-        if program_probs:
-            prog_prob = program_probs[0]
-        else:
-            prog_prob = 0.0
+        # Node in a dict format
+        program_supervision: Union[Dict, None] = prediction_data.program_supervision
+        gold_program_lisp = ""
+        gold_nested_expr = []
+        if program_supervision:
+            program_node = node_from_dict(program_supervision)
+            nested_expr = program_node.get_nested_expression()
+            gold_program_lisp = nested_expression_to_lisp(nested_expr)
+            gold_nested_expr = program_node.get_nested_expression_with_strings()
 
         output_dict = {
-            "query_id": question_id,
-            "question": question,
-            "text": predicted_ans,
-            "type": logical_form,
-            "prog_prob": prog_prob,
-            "f1": f1_score,
-            "em": exact_match,
-            "gold_answer": answer_annotation_dicts
+            "question": prediction_data.question,
+            "query_id": prediction_data.question_id,
+            "gold_logical_form": gold_program_lisp,
+            "gold_nested_expr": gold_nested_expr,
+            "predicted_ans": prediction_data.predicted_ans,
+            "top_logical_form": prediction_data.top_logical_form,
+            "top_nested_expr": prediction_data.top_nested_expr,
+            "top_logical_form_prob": prediction_data.top_logical_form_prob,
+            "f1": prediction_data.f1_score,
+            "em": prediction_data.exact_match,
+            "program_execution": sanitize(prediction_data.program_execution)
         }
 
         return json.dumps(output_dict) + "\n"
 
 
-@Predictor.register("drop_interpret_predictor")
-class DropNMNPredictor(Predictor):
-    """
-    Predictor for the :class:`~allennlp.models.bidaf.SemanticRoleLabeler` model.
-    """
-
-    def __init__(self, model: Model, dataset_reader: DatasetReader) -> None:
-        super().__init__(model, dataset_reader)
-
-    @overrides
-    def predict_instance(self, instance: Instance) -> JsonDict:
-        outputs = self._model.forward_on_instance(instance)
-        return sanitize(outputs)
-
-    def predict_batch_instance(self, instances: List[Instance]) -> List[JsonDict]:
-        outputs = self._model.forward_on_instances(instances)
-        return sanitize(outputs)
-
-    def _print_ExecutionValTree(self, exval_tree, depth=0):
-        """
-        exval_tree: [[root_func_name, value], [], [], []]
-        """
-        tabs = "\t" * depth
-        func_name = str(exval_tree[0][0])
-        debug_value = str(exval_tree[0][1])
-        debug_value = debug_value.replace("\n", "\n" + tabs)
-        outstr = f"{tabs}{func_name}  :\n {tabs}{debug_value}\n"
-        if len(exval_tree) > 1:
-            for child in exval_tree[1:]:
-                outstr += self._print_ExecutionValTree(child, depth + 1)
-        return outstr
-
-    @overrides
-    def dump_line(self, outputs: JsonDict) -> str:  # pylint: disable=no-self-use
-        # Use json.dumps(outputs) + "\n" to dump a dictionary
-
-        metadata = outputs["metadata"]
-        predicted_ans = outputs["predicted_answer"]
-        module_debug_infos = outputs["modules_debug_infos"]
-        passage_mask = outputs["passage_mask"]
-        passage_token_idxs = outputs["passage_token_idxs"]
-
-        gold_passage_span_ans = metadata["answer_passage_spans"] if "answer_passage_spans" in metadata else []
-        gold_question_span_ans = metadata["answer_question_spans"] if "answer_question_spans" in metadata else []
-
-        # instance_spans_for_all_progs = outputs['predicted_spans']
-        # best_span = instance_spans_for_all_progs[0]
-        question_id = metadata["question_id"]
-        question = metadata["original_question"]
-        qtype = metadata["qtype"]
-        passage = metadata["original_passage"]
-        passage_id = metadata["passage_id"]
-        passage_tokens = metadata["passage_orig_tokens"]
-        passage_wps = metadata["passage_tokens"]
-        passage_wpidx2tokenidx = metadata["passage_wpidx2tokenidx"]
-        answer_annotation_dicts = metadata["answer_annotations"]
-        passage_date_values = metadata["passage_date_values"]
-        passage_num_values = metadata["passage_number_values"]
-        composed_numbers = metadata["composed_numbers"]
-        passage_year_diffs = metadata["passage_year_diffs"]
-        (exact_match, f1_score) = f1metric(predicted_ans, answer_annotation_dicts)
-
-        output_dict = {
-            "passage_id": passage_id,
-            "query_id": question_id,
-            "question": question,
-            "qtype": qtype,
-            "f1": f1_score,
-            "em": exact_match
-        }
-        logical_forms = outputs["logical_forms"]
-        best_logical_form = logical_forms[0]
-        output_dict["predicted_logical_form"] = best_logical_form
-
-        # List of dictionary where each dictionary contains a single module_name: pattn-value pair
-        module_debug_info: List[Dict] = module_debug_infos[0]
-        # This is the length of the passage-wps w/o [SEP] at the end
-        len_passage_wps = int(sum(passage_mask)) - 1
-        output_dict["module_outputs"] = []
-        module_names = ""
-        for module_dict in module_debug_info:
-            passage_attention = [0.0] * len(passage_tokens)
-            module_name, pattn_wps = list(module_dict.items())[0]
-            module_names += module_name + " "
-            pattn_wps = pattn_wps[:len_passage_wps]  # passage-attention over word-pieces
-            for token_idx, attn_value in zip(passage_wpidx2tokenidx, pattn_wps):
-                passage_attention[token_idx] += attn_value
-            output_dict["module_outputs"].append((module_name, passage_attention))
-
-        return json.dumps(output_dict) + "\n"
+# @Predictor.register("drop_analysis_predictor")
+# class DropQANetPredictor(Predictor):
+#     """
+#     Predictor for the :class:`~allennlp.models.bidaf.SemanticRoleLabeler` model.
+#     """
+#
+#     def __init__(self, model: Model, dataset_reader: DatasetReader) -> None:
+#         super().__init__(model, dataset_reader)
+#
+#     @overrides
+#     def predict_instance(self, instance: Instance) -> JsonDict:
+#         outputs = self._model.forward_on_instance(instance)
+#         return sanitize(outputs)
+#
+#     def predict_batch_instance(self, instances: List[Instance]) -> List[JsonDict]:
+#         outputs = self._model.forward_on_instances(instances)
+#         return sanitize(outputs)
+#
+#     @overrides
+#     def dump_line(self, outputs: JsonDict) -> str:  # pylint: disable=no-self-use
+#         # Use json.dumps(outputs) + "\n" to dump a dictionary
+#
+#         out_str = ""
+#         metadata = outputs["metadata"]
+#         predicted_ans = outputs["predicted_answer"]
+#
+#         # instance_spans_for_all_progs = outputs['predicted_spans']
+#         # best_span = instance_spans_for_all_progs[0]
+#         question_id = metadata["question_id"]
+#         question = metadata["original_question"]
+#         answer_annotation_dicts = metadata["answer_annotations"]
+#         (exact_match, f1_score) = f1metric(predicted_ans, answer_annotation_dicts)
+#
+#         correct_or_not = "NC"
+#         if f1_score >= 0.75:
+#             correct_or_not = "C"
+#
+#         logical_form = outputs["logical_forms"][0]
+#
+#         out_str += question_id + "\t"
+#         out_str += question + "\t"
+#         out_str += correct_or_not + "\t"
+#         out_str += logical_form + "\n"
+#
+#         return out_str
+#
+#
+# @Predictor.register("drop_mtmsnstyle_predictor")
+# class MTMSNStylePredictor(Predictor):
+#     """
+#     Predictor for the :class:`~allennlp.models.bidaf.SemanticRoleLabeler` model.
+#     """
+#
+#     def __init__(self, model: Model, dataset_reader: DatasetReader) -> None:
+#         super().__init__(model, dataset_reader)
+#
+#     @overrides
+#     def predict_instance(self, instance: Instance) -> JsonDict:
+#         outputs = self._model.forward_on_instance(instance)
+#         return sanitize(outputs)
+#
+#     def predict_batch_instance(self, instances: List[Instance]) -> List[JsonDict]:
+#         outputs = self._model.forward_on_instances(instances)
+#         return sanitize(outputs)
+#
+#     @overrides
+#     def dump_line(self, outputs: JsonDict) -> str:  # pylint: disable=no-self-use
+#         # Use json.dumps(outputs) + "\n" to dump a dictionary
+#
+#         out_str = ""
+#         metadata = outputs["metadata"]
+#         predicted_ans = outputs["predicted_answer"]
+#
+#         # instance_spans_for_all_progs = outputs['predicted_spans']
+#         # best_span = instance_spans_for_all_progs[0]
+#         question_id = metadata["question_id"]
+#         question = metadata["original_question"]
+#         answer_annotation_dicts = metadata["answer_annotations"]
+#         program_probs = outputs["batch_actionseq_probs"]  # List size is the same as number of programs predicted
+#         (exact_match, f1_score) = f1metric(predicted_ans, answer_annotation_dicts)
+#         logical_forms = outputs["logical_forms"]
+#         if logical_forms:
+#             logical_form = logical_forms[0]
+#         else:
+#             logical_form = "NO PROGRAM PREDICTED"
+#         if program_probs:
+#             prog_prob = program_probs[0]
+#         else:
+#             prog_prob = 0.0
+#
+#         output_dict = {
+#             "query_id": question_id,
+#             "question": question,
+#             "text": predicted_ans,
+#             "type": logical_form,
+#             "prog_prob": prog_prob,
+#             "f1": f1_score,
+#             "em": exact_match,
+#             "gold_answer": answer_annotation_dicts
+#         }
+#
+#         return json.dumps(output_dict) + "\n"
+#
+#
+# @Predictor.register("drop_interpret_predictor")
+# class DropNMNPredictor(Predictor):
+#     """
+#     Predictor for the :class:`~allennlp.models.bidaf.SemanticRoleLabeler` model.
+#     """
+#
+#     def __init__(self, model: Model, dataset_reader: DatasetReader) -> None:
+#         super().__init__(model, dataset_reader)
+#
+#     @overrides
+#     def predict_instance(self, instance: Instance) -> JsonDict:
+#         outputs = self._model.forward_on_instance(instance)
+#         return sanitize(outputs)
+#
+#     def predict_batch_instance(self, instances: List[Instance]) -> List[JsonDict]:
+#         outputs = self._model.forward_on_instances(instances)
+#         return sanitize(outputs)
+#
+#     def _print_ExecutionValTree(self, exval_tree, depth=0):
+#         """
+#         exval_tree: [[root_func_name, value], [], [], []]
+#         """
+#         tabs = "\t" * depth
+#         func_name = str(exval_tree[0][0])
+#         debug_value = str(exval_tree[0][1])
+#         debug_value = debug_value.replace("\n", "\n" + tabs)
+#         outstr = f"{tabs}{func_name}  :\n {tabs}{debug_value}\n"
+#         if len(exval_tree) > 1:
+#             for child in exval_tree[1:]:
+#                 outstr += self._print_ExecutionValTree(child, depth + 1)
+#         return outstr
+#
+#     @overrides
+#     def dump_line(self, outputs: JsonDict) -> str:  # pylint: disable=no-self-use
+#         # Use json.dumps(outputs) + "\n" to dump a dictionary
+#
+#         metadata = outputs["metadata"]
+#         predicted_ans = outputs["predicted_answer"]
+#         module_debug_infos = outputs["modules_debug_infos"]
+#         passage_mask = outputs["passage_mask"]
+#         passage_token_idxs = outputs["passage_token_idxs"]
+#
+#         gold_passage_span_ans = metadata["answer_passage_spans"] if "answer_passage_spans" in metadata else []
+#         gold_question_span_ans = metadata["answer_question_spans"] if "answer_question_spans" in metadata else []
+#
+#         # instance_spans_for_all_progs = outputs['predicted_spans']
+#         # best_span = instance_spans_for_all_progs[0]
+#         question_id = metadata["question_id"]
+#         question = metadata["original_question"]
+#         qtype = metadata["qtype"]
+#         passage = metadata["original_passage"]
+#         passage_id = metadata["passage_id"]
+#         passage_tokens = metadata["passage_orig_tokens"]
+#         passage_wps = metadata["passage_tokens"]
+#         passage_wpidx2tokenidx = metadata["passage_wpidx2tokenidx"]
+#         answer_annotation_dicts = metadata["answer_annotations"]
+#         passage_date_values = metadata["passage_date_values"]
+#         passage_num_values = metadata["passage_number_values"]
+#         composed_numbers = metadata["composed_numbers"]
+#         passage_year_diffs = metadata["passage_year_diffs"]
+#         (exact_match, f1_score) = f1metric(predicted_ans, answer_annotation_dicts)
+#
+#         output_dict = {
+#             "passage_id": passage_id,
+#             "query_id": question_id,
+#             "question": question,
+#             "qtype": qtype,
+#             "f1": f1_score,
+#             "em": exact_match
+#         }
+#         logical_forms = outputs["logical_forms"]
+#         best_logical_form = logical_forms[0]
+#         output_dict["predicted_logical_form"] = best_logical_form
+#
+#         # List of dictionary where each dictionary contains a single module_name: pattn-value pair
+#         module_debug_info: List[Dict] = module_debug_infos[0]
+#         # This is the length of the passage-wps w/o [SEP] at the end
+#         len_passage_wps = int(sum(passage_mask)) - 1
+#         output_dict["module_outputs"] = []
+#         module_names = ""
+#         for module_dict in module_debug_info:
+#             passage_attention = [0.0] * len(passage_tokens)
+#             module_name, pattn_wps = list(module_dict.items())[0]
+#             module_names += module_name + " "
+#             pattn_wps = pattn_wps[:len_passage_wps]  # passage-attention over word-pieces
+#             for token_idx, attn_value in zip(passage_wpidx2tokenidx, pattn_wps):
+#                 passage_attention[token_idx] += attn_value
+#             output_dict["module_outputs"].append((module_name, passage_attention))
+#
+#         return json.dumps(output_dict) + "\n"

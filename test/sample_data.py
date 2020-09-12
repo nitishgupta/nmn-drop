@@ -1,22 +1,36 @@
 import json
 import copy
 
-file_path = "/shared/nitishg/data/squad/squad-train-v1.1.json"
-out_file_path = "/shared/nitishg/data/squad/squad-train-v1.1_sample.json"
+file_path = "/shared/nitishg/data/drop/iclr21/iclr20_subsets/datecomp/drop_dataset_dev.json"
+out_file_path = "/shared/nitishg/data/drop/iclr21/dc-aug-test/drop_dataset_test.json"
 
 with open(file_path) as dataset_file:
-    squad_dataset = json.load(dataset_file)
+    dev_dataset = json.load(dataset_file)
 
-pruned_data = {"data": []}
+paras_to_remove = []
+total_qa, final_qa = 0, 0
+for pid, passage_info in dev_dataset.items():
+    qas_to_keep = []
+    for qa in passage_info["qa_pairs"]:
+        total_qa += 1
+        qid = qa["query_id"]
+        if "-dc-" in qid:
+            qas_to_keep.append(qa)
 
-article = squad_dataset["data"][0]
-new_article = copy.deepcopy(article)
-new_article["paragraphs"] = article["paragraphs"][0]
-pruned_data["data"].append(new_article)
+    if not qas_to_keep:
+        paras_to_remove.append(pid)
+    else:
+        passage_info["qa_pairs"] = qas_to_keep
+        final_qa += len(qas_to_keep)
+
+if paras_to_remove:
+    for pid in paras_to_remove:
+        dev_dataset.pop(pid)
 
 with open(out_file_path, 'w') as outf:
-    json.dump(pruned_data, outf, indent=4)
+    json.dump(dev_dataset, outf, indent=4)
 
+print("Total: {}  Final: {}".format(total_qa, final_qa))
 
 
 

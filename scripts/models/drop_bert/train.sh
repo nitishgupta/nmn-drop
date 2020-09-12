@@ -8,10 +8,12 @@ export MKL_NUM_THREADS=4
 
 ### DATASET PATHS -- should be same across models for same dataset
 DATASET_DIR=/shared/nitishg/data/drop/iclr21
-DATASET_NAME=iclr_qdmr-v2-noexc-aug
-# iclr_qdmr-v1-noexc
+DATASET_NAME=iclr_qdmr-v3-noexc-FILTER
+# diff_compsplit-v3
+# minlt_zeroqsplit-v2
+# iclr_qdmr-v3-noexc
 
-TRAINFILE=${DATASET_DIR}/${DATASET_NAME}/drop_dataset_train-FGS-DCYD-ND.json
+TRAINFILE=${DATASET_DIR}/${DATASET_NAME}/drop_dataset_train.json
 VALFILE=${DATASET_DIR}/${DATASET_NAME}/drop_dataset_dev.json
 
 # PACKAGE TO BE INCLUDED WHICH HOUSES ALL THE CODE
@@ -46,7 +48,7 @@ export MMLLOSS=true
 
 export INTERPRET=false
 
-export SHRDSUB=true
+export SHRDSUB=false
 
 # Whether strong supervison instances should be trained on first, if yes for how many epochs
 export SUPFIRST=true
@@ -58,7 +60,7 @@ export HARDEM_EPOCH=${SUPEPOCHS}
 export BS=2
 export DROPOUT=0.2
 
-export SEED=42
+export SEED=10
 
 export BEAMSIZE=1
 export MAX_DECODE_STEP=14
@@ -73,7 +75,7 @@ CHECKPOINT_ROOT=./resources/checkpoints
 SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}/drop-iclr21/${DATASET_NAME}
 MODEL_DIR=drop_parser_bert
 PD_1=Qattn_${QATTLOSS}/EXCLOSS_${EXCLOSS}/aux_${AUXLOSS}/${BIO_LABEL}_${BIO_TAG}/SHRDSUB_${SHRDSUB}/SUPEPOCHS_${SUPEPOCHS}_BM_${BEAMSIZE}
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}-FGS-DCYD-ND
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/${PD_1}/S_${SEED}
 # _SqNMN-Paired
 
 # SERIALIZATION_DIR=./resources/checkpoints/test

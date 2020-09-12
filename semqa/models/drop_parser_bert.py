@@ -738,7 +738,6 @@ class DROPParserBERT(DROPParserBase):
                 metadata=metadata,
                 bert_nmn_model=self,
             )
-
             paired_denotation_loss = paired_denotation_loss / batch_size
 
             if sharedsub_loss != 0.0:

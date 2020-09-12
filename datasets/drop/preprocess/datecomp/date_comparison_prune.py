@@ -328,12 +328,12 @@ def pruneDateCompQuestions(dataset):
             program_node: qdmr_utils.Node = get_program_supervision(operator=question_operator)
             date_compare_node = program_node.children[0]
             find1_node, find2_node = date_compare_node.children[0], date_compare_node.children[1]
-            find1_node.string_arg = " ".join(event1_tokens)
-            find2_node.string_arg = " ".join(event2_tokens)
             event1_token_idxs = list(range(event1_span[0], event1_span[1]))
             event1_attn = [1 if i in event1_token_idxs else 0 for i in range(len(question_tokens))]
             event2_token_idxs = list(range(event2_span[0], event2_span[1]))
             event2_attn = [1 if i in event2_token_idxs else 0 for i in range(len(question_tokens))]
+            find1_node.string_arg = " ".join(event1_tokens)
+            find2_node.string_arg = " ".join(event2_tokens)
             find1_node.supervision["question_attention_supervision"] = event1_attn
             find2_node.supervision["question_attention_supervision"] = event2_attn
 

@@ -439,118 +439,12 @@ def readDataset(input_json):
     return dataset
 
 
-# def compute_interpretability_score(module_output_predictions: List[Dict], module_output_gold: Dict):
-#     """ Compute interpretability scores given module predictions and gold-annotations
-#
-#     For each question we assume the prediction is made for the gold program. Each prediction hence would contain a
-#     passage-attention for the relevant modules in the program. Similarly, the gold data would contain gold passage
-#     attentions for the relevant modules. Interpretability score will be computed using the predicted and gold p-attn.
-#
-#     The gold data sometimes combines p-attn for multiple modules, mainly for the find-module. For e.g. date-compare
-#     requires two calls to the find module and hence the predicted attentions would contain two calls to the same.
-#     Whereas, the gold annotation would contain a single annotation under the name of "find-events".
-#
-#     Interpretability score for a (predicted, gold) passage attention pair is the cross-entropy loss.
-#
-#
-#     Args:
-#     module_output_predictions: `List[Dict]`
-#         Each example contains "query_id", "question", "qtype", "f1", "em", "predicted_logical_form", and
-#         "module_outputs" as keys. "module_outputs" is a list of (module_name, pattn) tuples
-#
-#     module_output_gold: `Dict`
-#         Subset of the DROP dev data which is Interpret-dev gold data. Each qa_pair contains an additional key,
-#         "module_output_annotations" which is a List containing ("module_name", List[Span]) annotations.
-#         Each span is token-offset tuple (start, end) with exclusive-end.
-#     """
-#     skipped_due_to_predicted = 0
-#     qid2annotations = get_queryid2annotations(module_output_gold)
-#     interpretability_loss = 0.0
-#     num_examples = 0
-#     for example_dict in module_output_predictions:
-#         example = Example(example_dict)
-#         gold_annotations = qid2annotations[example.query_id]
-#         qtype = example.qtype
-#         gold_logical_forms = lfs.qtype2logicalforms[qtype]
-#
-#         # TODO: Add an assert that the predicted logical form conforms to the gold-qtype
-#         if example.predicted_program not in gold_logical_forms:
-#             skipped_due_to_predicted += 1
-#             print(example.question)
-#             print(example.qtype)
-#             print(example.predicted_program)
-#             continue
-#
-#         num_examples += 1
-#         # Depending on the qtype, we have expectations on the modules that the annotation and gold would contain.
-#         # We would now compute the interpretability score based on that
-#         supervision_type = QTYPE_TO_SUPERVISION[qtype]
-#         if supervision_type == 'TWO_FINDS_TWO_SYMBOL':
-#             interpretability_loss += interpretability_TWO_FINDS_TWO_SYMBOL(
-#                 predicted_module_outputs=example.module_outputs, gold_module_outputs=gold_annotations)
-#         elif supervision_type == 'FIND_TWO_SYMBOL':
-#             interpretability_loss += interpretability_FIND_TWO_SYMBOL(predicted_module_outputs=example.module_outputs,
-#                                                                       gold_module_outputs=gold_annotations)
-#         elif supervision_type in ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE']:
-#             interpretability_loss += interpretability_N(predicted_module_outputs=example.module_outputs,
-#                                                         gold_module_outputs=gold_annotations, N=supervision_type)
-#         else:
-#             print(supervision_type)
-#             # raise NotImplementedError("Supervision Type is unknown: {}".format(supervision_type))
-#
-#     interpretability_loss = float(interpretability_loss)/num_examples
-#     print("Skipped due to predicted: {}".format(skipped_due_to_predicted))
-#     print("Interpretability Loss (lower is better): {}".format(interpretability_loss))
-#
-#
-#     # Merge min and max interpretability scores --
-#     keys_to_merge = ['max-pattn', 'min-pattn']
-#     MODULEWISE_INTERPRETABILITY['minmax-pattn'] = sum([MODULEWISE_INTERPRETABILITY[x] for x in keys_to_merge])
-#     MODULEWISE_COUNT['minmax-pattn'] = sum([MODULEWISE_COUNT[x] for x in keys_to_merge])
-#     for key in keys_to_merge:
-#         MODULEWISE_INTERPRETABILITY.pop(key)
-#         MODULEWISE_COUNT.pop(key)
-#
-#     keys_to_merge = ['find-date', 'find-num']
-#     MODULEWISE_INTERPRETABILITY['find-arg'] = sum([MODULEWISE_INTERPRETABILITY[x] for x in keys_to_merge])
-#     MODULEWISE_COUNT['find-arg'] = sum([MODULEWISE_COUNT[x] for x in keys_to_merge])
-#     # for key in keys_to_merge:
-#     #     MODULEWISE_INTERPRETABILITY.pop(key)
-#     #     MODULEWISE_COUNT.pop(key)
-#
-#     MODULEWISE_INTERPRETABILITY_AVG = {}
-#     micro_total_score = 0.0
-#     micro_sum = 0
-#
-#
-#     for module, int_score in MODULEWISE_INTERPRETABILITY.items():
-#         print(module)
-#         MODULEWISE_INTERPRETABILITY_AVG[module] = int_score/MODULEWISE_COUNT[module]
-#         micro_total_score += int_score
-#         micro_sum += MODULEWISE_COUNT[module]
-#
-#     micro_avg = micro_total_score/micro_sum
-#
-#     print("Interpretability Micro Avg (lower is better): {}".format(micro_avg))
-#
-#     print(MODULEWISE_INTERPRETABILITY_AVG)
-#
-#     with open("interpret_drop/strong.txt", 'w') as outf:
-#         for score in MODULE_SCORE:
-#             outf.write(str(score))
-#             outf.write("\n")
-
-
 def main(args):
     nmn_predictions: List[NMNPredictionInstance] = read_nmn_prediction_file(args.nmn_pred_jsonl)
     faithfulness_data: Dict = readDataset(args.faithful_gold_json)
 
     compute_faithfulness_score(nmn_predictions, faithfulness_data)
 
-    # module_output_gold = readDataset(args.module_output_anno_json)
-    #
-    # compute_interpretability_score(module_output_predictions=module_output_pred,
-    #                                module_output_gold=module_output_gold)
 
 
 if __name__ == "__main__":

@@ -650,6 +650,32 @@ def process_project(qdmr_node: Node, question: str):
     return qdmr_node, change
 
 
+def reverse_comparenode_eventorder(qdmr_node: Node, question: str):
+    change = 0
+    relevant_lisps = ["(select_passagespan_answer (compare_date_lt select_passage select_passage))",
+                      "(select_passagespan_answer (compare_date_gt select_passage select_passage))",
+                      "(select_passagespan_answer (compare_num_lt select_passage select_passage))",
+                      "(select_passagespan_answer (compare_num_gt select_passage select_passage))"]
+    program_lisp = nested_expression_to_lisp(qdmr_node.get_nested_expression())
+
+    if program_lisp in relevant_lisps:
+        compare_node = qdmr_node.children[0]
+        select1, select2 = compare_node.children[0], compare_node.children[1]
+        compare_node.children = []
+        compare_node.add_child(select2)
+        compare_node.add_child(select1)
+
+        if "date1_entidxs" in compare_node.supervision and "date2_entidxs" in compare_node.supervision:
+            date1_sup = compare_node.supervision["date1_entidxs"]
+            date2_sup = compare_node.supervision["date2_entidxs"]
+            compare_node.supervision["date1_entidxs"] = date2_sup
+            compare_node.supervision["date2_entidxs"] = date1_sup
+
+        change = 1
+
+    return qdmr_node, change
+
+
 def get_postprocessed_dataset(dataset: Dict) -> Dict:
     """ Filter dataset to remove "select_passagespan_answer(select_passage)" questions.
     """
@@ -668,6 +694,7 @@ def get_postprocessed_dataset(dataset: Dict) -> Dict:
         "select_to_between_filternum": select_to_between_filternum,
         "fix_numdiff_arg_order": fix_numdiff_arg_order,
         "project_to_count": add_project_to_count,
+        "reverse_compare_order": reverse_comparenode_eventorder,
     }
 
     qtype2conversion = defaultdict(int)

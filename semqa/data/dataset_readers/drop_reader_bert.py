@@ -18,7 +18,8 @@ from allennlp.data.fields import Field, TextField, MetadataField, ListField, Spa
 
 from allennlp_semparse.fields import ProductionRuleField
 
-from semqa.domain_languages.drop_language import DropLanguage, Date, get_empty_language_object
+from semqa.domain_languages.drop_language import DropLanguage, Date, get_empty_language_object, PassageAttention, \
+    PassageSpanAnswer, ComposedNumber, PassageNumber, YearDifference, CountNumber
 from semqa.utils.qdmr_utils import Node, node_from_dict, nested_expression_to_lisp, \
     get_domainlang_function2returntype_mapping, get_inorder_function_list, function_to_action_string_alignment
 from datasets.drop import constants
@@ -266,7 +267,6 @@ class DROPReader(DatasetReader):
 
             # start / end (exclusive) token offsets for sentences in the passage
             p_sent_boundaries: List[Tuple[int, int]] = passage_info[constants.passage_sent_idxs]
-
             for qa in passage_info[constants.qa_pairs]:
                 total_qas += 1
                 question_id = qa[constants.query_id]

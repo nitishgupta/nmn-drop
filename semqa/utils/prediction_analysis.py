@@ -15,6 +15,8 @@ class NMNPredictionInstance:
         self.top_logical_form = pred_dict.get("top_logical_form", "")
         self.top_nested_expr: List = pred_dict.get("top_nested_expr", "")
         self.top_logical_form_prob: float = pred_dict.get("top_logical_form_prob", "")
+        self.program_execution: List[Dict] = pred_dict.get("program_execution", None)
+        self.gold_answers: float = pred_dict.get("gold_answers", [])
         self.f1_score: float = pred_dict.get("f1", 0.0)
         self.exact_match: float = pred_dict.get("em", 0.0)
         self.correct: bool = True if self.f1_score > 0.5 else False
@@ -31,6 +33,13 @@ def avg_f1(instances: List[NMNPredictionInstance]) -> float:
     if not instances:
         return 0.0
     total = sum([instance.f1_score for instance in instances])
+    return float(total)/float(len(instances))
+
+def avg_em(instances: List[NMNPredictionInstance]) -> float:
+    """ Avg EM score for the predictions. """
+    if not instances:
+        return 0.0
+    total = sum([instance.exact_match for instance in instances])
     return float(total)/float(len(instances))
 
 

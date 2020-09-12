@@ -69,3 +69,19 @@ Train: passages: 4237 questions: 18283  {'program_supervision': 18283, 'executio
 Dev:   passages: 771  questions: 2427   {'program_supervision': 2427, 'execution_supervised': 360}
 Test:  passages: 446  questions: 2447   {'program_supervision': 2447, 'execution_supervised': 274}
 ```
+
+## Compositional split
+
+### Complex diff split
+```
+python -m datasets.compositional_split.complexdiff_qsplit \
+    --input_dir /shared/nitishg/data/drop/iclr21/iclr_qdmr-v3-noexc \
+    --output_dir /shared/nitishg/data/drop/iclr21/diff_compsplit-v3
+```
+
+**Paired Data**
+```
+ python -m datasets.drop.paired_data.generate_diff_questions \
+    --input_json /shared/nitishg/data/drop/iclr21/diff_compsplit-v3/drop_dataset_train.json \
+    --output_json /shared/nitishg/data/drop/iclr21/diff_compsplit-v3/drop_dataset_train-FGS-DCYD-ND.json
+```

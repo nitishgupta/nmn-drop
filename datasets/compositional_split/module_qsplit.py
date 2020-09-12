@@ -10,8 +10,8 @@ from datasets.drop import constants
 
 
 """
-Make a question-based compositional split; move all question for test-templates in the test data and keep all questions
-for rest of the questions in the train/dev split. This would mean that some test passages would now occur in train/dev
+Make a question-based compositional split; move all questions from train/dev that contain test-modules in the test data 
+and move other test questions to train/dev split. This would mean that some test passages would now occur in train/dev
 and vice-versa, hence the name "question-based compositional split".
 
 We would have to decide how to divide the `train` questions from the test set into train/dev splits.
@@ -24,7 +24,7 @@ def dataset_stats(dataset):
     return nump, numq
 
 
-def get_composiitonal_split(train_dataset: Dict, dev_dataset: Dict, test_dataset: Dict, test_templates: List[str]):
+def get_composiitonal_split(train_dataset: Dict, dev_dataset: Dict, test_dataset: Dict, test_modules: List[str]):
     """Move test_template questions from train/dev into test. Move other template questions from test to train
 
     Parameters:
@@ -37,8 +37,8 @@ def get_composiitonal_split(train_dataset: Dict, dev_dataset: Dict, test_dataset
     """
 
     print("\nPreparing compositional-split ... ")
-    print("\nTest templates:")
-    print("{}".format("\n".join(test_templates)))
+    print("\nTest modules:")
+    print("{}".format("\n".join(test_modules)))
     print()
 
     print("Before compositional-split -- ")
@@ -46,6 +46,7 @@ def get_composiitonal_split(train_dataset: Dict, dev_dataset: Dict, test_dataset
     print("Dev dataset: {}".format(dataset_stats(dev_dataset)))
     print("Test dataset: {}".format(dataset_stats(test_dataset)))
 
+    test_templates = set()
     train_paras_to_remove = []
     for pid, passage_info in train_dataset.items():
         pruned_train_qas = []
@@ -53,8 +54,8 @@ def get_composiitonal_split(train_dataset: Dict, dev_dataset: Dict, test_dataset
             if constants.program_supervision in qa and qa[constants.program_supervision]:
                 progam_node = node_from_dict(qa[constants.program_supervision])
                 program_lisp = nested_expression_to_lisp(progam_node.get_nested_expression())
-
-                if program_lisp in test_templates:
+                if any([x in program_lisp for x in test_modules]):
+                    test_templates.add(program_lisp)
                     if pid not in test_dataset:
                         test_dataset[pid] = copy.deepcopy(passage_info)
                         # Empty questions for this passage in test data
@@ -79,7 +80,8 @@ def get_composiitonal_split(train_dataset: Dict, dev_dataset: Dict, test_dataset
             if constants.program_supervision in qa and qa[constants.program_supervision]:
                 progam_node = node_from_dict(qa[constants.program_supervision])
                 program_lisp = nested_expression_to_lisp(progam_node.get_nested_expression())
-                if program_lisp in test_templates:
+                if any([x in program_lisp for x in test_modules]):
+                    test_templates.add(program_lisp)
                     if pid not in test_dataset:
                         test_dataset[pid] = copy.deepcopy(passage_info)
                         # Empty questions for this passage in test data
@@ -103,7 +105,8 @@ def get_composiitonal_split(train_dataset: Dict, dev_dataset: Dict, test_dataset
             if constants.program_supervision in qa and qa[constants.program_supervision]:
                 progam_node = node_from_dict(qa[constants.program_supervision])
                 program_lisp = nested_expression_to_lisp(progam_node.get_nested_expression())
-                if program_lisp in test_templates:
+                if any([x in program_lisp for x in test_modules]):
+                    test_templates.add(program_lisp)
                     pruned_test_questions.append(qa)
                 else:
                     if pid not in train_dataset:
@@ -125,6 +128,10 @@ def get_composiitonal_split(train_dataset: Dict, dev_dataset: Dict, test_dataset
 
     for pid in test_paras_to_remove:
         test_dataset.pop(pid)
+
+    test_templates = list(test_templates)
+    print("\nTest templates:")
+    print("{}".format("\n".join(test_templates)))
 
     print("\nAfter compositional-split -- ")
     print("Train dataset: {}".format(dataset_stats(train_dataset)))
@@ -152,16 +159,11 @@ def main(args):
     dev_drop = read_drop_dataset(dev_drop_json)
     test_drop = read_drop_dataset(test_drop_json)
 
-    test_templates = ["(passagenumber_difference (select_num (select_max_num select_passage)) (select_num (select_max_num select_passage)))",
-                      "(passagenumber_difference (select_num (select_max_num select_passage)) (select_num (select_min_num select_passage)))",
-                      "(passagenumber_difference (select_num (project_passage select_passage)) (select_num (project_passage select_passage)))",
-                      "(passagenumber_difference (select_num (project_passage select_passage)) (select_num select_passage))",
-                      "(passagenumber_difference (select_num select_passage) (select_num (select_max_num select_passage)))",
-                      "(passagenumber_difference (select_num (select_max_num select_passage)) (select_num select_passage))",
-                      "(passagenumber_difference (select_num select_passage) (select_num (select_min_num select_passage)))",
-                      "(passagenumber_difference (select_num (select_min_num select_passage)) (select_num (select_max_num select_passage)))"]
+    test_modules = ["select_min_num",
+                    "compare_date_lt",
+                    "compare_num_lt"]
 
-    trdata, devdata, testdata = get_composiitonal_split(train_drop, dev_drop, test_drop, test_templates=test_templates)
+    trdata, devdata, testdata = get_composiitonal_split(train_drop, dev_drop, test_drop, test_modules=test_modules)
 
     output_dir = args.output_dir
     os.makedirs(output_dir, exist_ok=True)

@@ -361,7 +361,7 @@ for e in football_events:
 def get_num_minmax_paired_questions(qa_dict, passage_info, qgen_predictor):
     program_node = node_from_dict(qa_dict[constants.program_supervision])
     program_lisp = nested_expression_to_lisp(program_node.get_nested_expression())
-    max_lisp = "(select_num (select_max_num select_passage))"
+    max_lisp = "(select_num (select_max_num (select_passage))"
     min_lisp = "(select_num (select_min_num select_passage))"
 
     orig_program_lisp = None
@@ -412,8 +412,8 @@ def get_num_minmax_paired_questions(qa_dict, passage_info, qgen_predictor):
 def get_numminmax_to_select_paired_questions(qa_dict, passage_info, qgen_predictor):
     program_node = node_from_dict(qa_dict[constants.program_supervision])
     program_lisp = nested_expression_to_lisp(program_node.get_nested_expression())
-    max_lisp = "(select_num (select_max_num select_passage))"
-    min_lisp = "(select_num (select_min_num select_passage))"
+    max_lisp = "(select_num (select_max_num (filter_passage select_passage)))"
+    min_lisp = "(select_num (select_min_num (filter_passage select_passage)))"
 
     orig_program_lisp = None
     if program_lisp == min_lisp:
@@ -447,7 +447,16 @@ def get_numminmax_to_select_paired_questions(qa_dict, passage_info, qgen_predict
     if question_tokens[0:4] != ["How", "many", "yards", "was"]:
         return None
 
-    aux_tokens = ["What", "were"] + question_tokens[4:]
+    select_node = program_node.children[0].children[0].children[0]
+    if select_node.string_arg is not None:
+        tokens = tokenize(select_node.string_arg, spacy_tokenizer=spacy_tokenizer)
+    elif "question_attention_supervision" in select_node.supervision:
+        qattn = select_node.supervision["question_attention_supervision"]
+        tokens = [t for i, t in enumerate(question_tokens) if qattn[i] == 1]
+    else:
+        return None
+
+    aux_tokens = ["What", "were"] + tokens + ["?"]
     aux_tokens = [t for t in aux_tokens if t not in ["longest", "shortest"]]
     aux_question = " ".join(aux_tokens)
 
@@ -459,6 +468,9 @@ def get_numminmax_to_select_paired_questions(qa_dict, passage_info, qgen_predict
         aux_question = aux_question.replace("touchdown", "touchdowns")
     elif "goal" in aux_question:
         aux_question = aux_question.replace("goal", "goals")
+
+    print(question)
+    print(aux_question)
 
     aux_program_lisp = "(select_passagespan_answer select_passage)"
     # aux_program_lisp = "(select_passage)"
@@ -631,7 +643,8 @@ def get_countselect_to_select_paired_questions(qa_dict, passage_info, qgen_predi
     program_lisp = nested_expression_to_lisp(program_node.get_nested_expression())
     question = qa_dict[constants.question]
 
-    count_select_lisp = "(aggregate_count select_passage)"
+    count_select_lisp = "(aggregate_count (filter_passage select_passage))"
+    # count_select_lisp = "(aggregate_count select_passage)"
 
     if program_lisp != count_select_lisp:
         return None
@@ -642,8 +655,26 @@ def get_countselect_to_select_paired_questions(qa_dict, passage_info, qgen_predi
     if not any([x in question_tokens for x in football_events]):
         return None
 
-    aux_tokens = ["What"] + question_tokens[2:]
+    select_node = program_node.children[0].children[0]
+    if select_node.string_arg is not None:
+        tokens = tokenize(select_node.string_arg, spacy_tokenizer=spacy_tokenizer)
+        tokens = [t.text for t in tokens]
+    elif "question_attention_supervision" in select_node.supervision:
+        qattn = select_node.supervision["question_attention_supervision"]
+        tokens = [t for i, t in enumerate(question_tokens) if qattn[i] == 1]
+    else:
+        return None
+
+    aux_tokens = ["What"] + tokens + ["?"]
+    aux_tokens = [t for t in aux_tokens if t not in ["longest", "shortest"]]
     aux_question = " ".join(aux_tokens)
+
+    # print(question)
+    # print(aux_question)
+    # print()
+
+    # aux_tokens = ["What"] + question_tokens[2:]
+    # aux_question = " ".join(aux_tokens)
 
     aux_program_lisp = "(select_passagespan_answer select_passage)"
     # aux_program_lisp = "(select_passage)"
@@ -666,22 +697,22 @@ def get_countselect_to_select_paired_questions(qa_dict, passage_info, qgen_predi
 
 def get_contrastive_questions(drop_dataset: Dict, qgen_model_targz: str) -> Tuple[Dict, Dict]:
     # BART based question generator trained on SQuAD
-    # qgen_predictor = None
-    qgen_predictor: QuestionGenerationPredictor = get_question_generation_predictor(qgen_model_targz)
+    qgen_predictor = None
+    # qgen_predictor: QuestionGenerationPredictor = get_question_generation_predictor(qgen_model_targz)
     total_questions = 0
 
     qtype2count = defaultdict(int)
 
     qtype2function = {
-        "numdiff": get_paired_questions_numdiff,
-        "yeardiff": get_paired_questions_yeardiff,
-        "num_minmax": get_num_minmax_paired_questions,
-        "project_minmax": get_project_minmax_paired_questions,
-        "numminmax_to_select": get_numminmax_to_select_paired_questions,
-        "projectminmax_to_select": get_projectminmax_to_select_paired_questions,
+        # "numdiff": get_paired_questions_numdiff,
+        # "yeardiff": get_paired_questions_yeardiff,
+        # "num_minmax": get_num_minmax_paired_questions,
+        # "project_minmax": get_project_minmax_paired_questions,
+        # "numminmax_to_select": get_numminmax_to_select_paired_questions,
+        # "projectminmax_to_select": get_projectminmax_to_select_paired_questions,
         "countselect_to_select": get_countselect_to_select_paired_questions,
         # # "projectselect_to_count": get_projectselect_to_count_paired_questions,
-        "datecompare": get_paired_questions_datecompare,
+        # "datecompare": get_paired_questions_datecompare,
     }
 
     print("\nPaired examples for qtypes: {}".format(qtype2function.keys()))

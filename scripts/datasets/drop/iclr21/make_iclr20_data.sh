@@ -2,18 +2,23 @@
 
 PREPROCESS_DIR=/shared/nitishg/data/drop/preprocess
 
-ICLR_SUBDATA=/shared/nitishg/data/drop/iclr21/iclr20_subsets-v2
+ICLR_SUBDATA=/shared/nitishg/data/drop/iclr21/iclr20_subsets-v3
 
-FULL_DATA_DIRNAME=iclr20_full-v2
+FULL_DATA_DIRNAME=iclr20_full-v3
 
 ICLR21_DATA_DIR=/shared/nitishg/data/drop/iclr21
 
 python -m datasets.drop.preprocess.datecomp.date_comparison_prune --input_dir ${PREPROCESS_DIR} \
                                                                   --output_dir ${ICLR_SUBDATA}/datecomp #_prune
 
-
 #python -m datasets.drop.preprocess.datecomp.date_data_augmentation --input_dir ${ICLR_SUBDATA}/datecomp_prune \
 #                                                                   --output_dir ${ICLR_SUBDATA}/datecomp
+
+python -m datasets.drop.preprocess.datecomp.reverse_eventorder --input_json ${ICLR_SUBDATA}/datecomp/drop_dataset_train.json \
+                                                               --output_json ${ICLR_SUBDATA}/datecomp/drop_dataset_train.json
+
+python -m datasets.drop.preprocess.datecomp.reverse_eventorder --input_json ${ICLR_SUBDATA}/datecomp/drop_dataset_dev.json \
+                                                               --output_json ${ICLR_SUBDATA}/datecomp/drop_dataset_dev.json
 
 # Remove temp datecomp-prune data
 # rm -r ${ICLR_SUBDATA}/datecomp_prune
@@ -21,6 +26,12 @@ python -m datasets.drop.preprocess.datecomp.date_comparison_prune --input_dir ${
 # NUM-COMPARISON
 python -m datasets.drop.preprocess.numcomp.make_numcomp  --input_dir ${PREPROCESS_DIR} \
                                                           --output_dir ${ICLR_SUBDATA}/numcomp
+
+python -m datasets.drop.preprocess.numcomp.reverse_eventorder  --input_json ${ICLR_SUBDATA}/numcomp/drop_dataset_train.json \
+                                                               --output_json ${ICLR_SUBDATA}/numcomp/drop_dataset_train.json
+
+python -m datasets.drop.preprocess.numcomp.reverse_eventorder  --input_json ${ICLR_SUBDATA}/numcomp/drop_dataset_dev.json \
+                                                               --output_json ${ICLR_SUBDATA}/numcomp/drop_dataset_dev.json
 
 # YEAR-DIFF
 python -m datasets.drop.preprocess.year_diff.year_diff  --input_dir ${PREPROCESS_DIR} \

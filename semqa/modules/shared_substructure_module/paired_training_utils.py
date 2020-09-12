@@ -8,11 +8,12 @@ import torch.nn.functional as F
 from allennlp.nn.util import move_to_device, masked_softmax
 from allennlp.data.fields.text_field import TextFieldTensors
 from allennlp.modules.text_field_embedders import TextFieldEmbedder
-from allennlp_semparse.fields.production_rule_field import ProductionRule
+from allennlp_semparse.fields.production_rule_field import ProductionRule, ProductionRuleField
 from allennlp_semparse.state_machines import ConstrainedBeamSearch
 
 from semqa.domain_languages.drop_execution_parameters import ExecutorParameters
-from semqa.domain_languages.drop_language import DropLanguage, Output
+from semqa.domain_languages.drop_language import DropLanguage, Output, PassageSpanAnswer, PassageAttention, \
+    ComposedNumber, CountNumber, PassageNumber, YearDifference
 from semqa.modules.qp_encodings import BertJointQPEncoding, QPEncoding
 from semqa.modules.symbolic.utils import compute_token_symbol_alignments
 from semqa.utils.qdmr_utils import get_postorder_function_list, get_inorder_supervision_list, Node
@@ -189,7 +190,7 @@ def compute_loss(
                     year_differences_mat=year_differences_mat[batch_idx],
                     count_num_values=language.count_num_values,
                     parameters=language.parameters,
-                    start_types=None,  # batch_start_types[i],
+                    start_types={PassageSpanAnswer, YearDifference, PassageNumber, ComposedNumber, CountNumber},
                     device_id=device_id,
                     debug=language._debug,
                     metadata=metadata[batch_idx]

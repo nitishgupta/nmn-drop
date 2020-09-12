@@ -9,13 +9,10 @@ export MKL_NUM_THREADS=4
 INCLUDE_PACKAGE=semqa
 export GPU=0
 export BEAMSIZE=1
-export DEBUG=true
-export INTERPRET=false
+export INTERPRET=true
 
 # SAVED MODEL
-MODEL_DIR=./resources/checkpoints/drop-iclr21/iclr_qdmr-v2-noexc/drop_parser_bert/Qattn_true/EXCLOSS_true/aux_false/IO_true/SHRDSUB_true/SUPEPOCHS_0_BM_1/S_42-FGS-DCYD-ND
-# ./resources/checkpoints/drop-iclr21/iclr_qdmr-v2-noexc/drop_parser_bert/Qattn_true/EXCLOSS_true/aux_false/IO_true/SHRDSUB_false/SUPEPOCHS_0_BM_1/S_42
-# ./resources/checkpoints/drop-iclr21/iclr_qdmr-v2-noexc/drop_parser_bert/Qattn_true/EXCLOSS_true/aux_false/IO_true/SHRDSUB_true/SUPEPOCHS_0_BM_1/S_42-FGS-DCYD-ND
+MODEL_DIR=./resources/checkpoints/drop-iclr21/iclr_qdmr-v3-noexc/drop_parser_bert/Qattn_true/EXCLOSS_true/aux_false/IO_true/SHRDSUB_true/SUPEPOCHS_0_BM_1/S_42-FGS-DCYD-ND-MM
 
 PREDICTION_DIR=${MODEL_DIR}/predictions
 MODEL_TAR=${MODEL_DIR}/model.tar.gz
@@ -37,15 +34,19 @@ allennlp predict --output-file ${FAITHFULNESS_JSONL_PREDICTION_FILE} \
                  --silent \
                  --batch-size 4 \
                  --use-dataset-reader \
-                 --overrides "{"model": { "beam_size": ${BEAMSIZE}, "interpret": true}}" \
+                 --overrides "{"model": { "beam_size": ${BEAMSIZE}, "interpret": true}, "validation_dataset_reader": { "mode": \"test\" }}" \
                  ${MODEL_TAR} ${FULL_VALFILE} &
 
 allennlp evaluate --output-file ${METRICS_FILE} \
                   --cuda-device ${GPU} \
                   --include-package ${INCLUDE_PACKAGE} \
-                  --overrides "{"model": {"beam_size": 1, "interpret": true} }" \
+                  --overrides "{"model": {"beam_size": 1, "interpret": true}, "validation_dataset_reader": { "mode": \"test\" }}" \
                   ${MODEL_TAR} ${FULL_VALFILE}
 
 printf "\n"
 echo -e "Execution jsonl predictions file saved at: ${FAITHFULNESS_JSONL_PREDICTION_FILE}"
 echo -e "Metrics file saved at: ${METRICS_FILE}"
+
+python -m faithfulness_drop.compute_faithfulness \
+              --nmn_pred_jsonl ${PREDICTION_DIR}/iclr21_faithul_test_predictions.jsonl \
+              --faithful_gold_json ${FULL_VALFILE}
