@@ -3,22 +3,29 @@
 DROP_PREPROCESS=/shared/nitishg/data/drop/preprocess
 QDMR_DROP_DIR=/shared/nitishg/data/drop/qdmr-processed/drop-programs
 
-QDMR_SUBSET_DIR=/shared/nitishg/data/drop/iclr21/qdmr_subsets-v3
+QDMR_SUBSET_DIR=/shared/nitishg/data/drop/iclr21/qdmr_subsets-v4
 
 QDMR_OUTPUT_DIR=/shared/nitishg/data/drop/iclr21
 
-QDMR_DATASET_DIRNAME=qdmr-v3
+QDMR_DATASET_DIRNAME=qdmr-v4
 
 python -m datasets.qdmr.process_drop_qdmr \
     --qdmr_json ${QDMR_DROP_DIR}/train.json \
     --drop_json ${DROP_PREPROCESS}/drop_dataset_train.json \
-    --output_json ${QDMR_SUBSET_DIR}/processed/drop_dataset_train.json
+    --output_json ${QDMR_SUBSET_DIR}/processed/drop_dataset_train.json \
+    --remove_filter_module
 
 
 python -m datasets.qdmr.process_drop_qdmr \
     --qdmr_json ${QDMR_DROP_DIR}/dev.json \
     --drop_json ${DROP_PREPROCESS}/drop_dataset_dev.json \
-    --output_json ${QDMR_SUBSET_DIR}/processed/drop_dataset_dev.json
+    --output_json ${QDMR_SUBSET_DIR}/processed/drop_dataset_dev.json \
+    --remove_filter_module
+
+
+python -m datasets.drop.iclr21.add_filter \
+    --input_dir ${QDMR_SUBSET_DIR}/processed \
+    --output_dir  ${QDMR_SUBSET_DIR}/processed
 
 
 printf "\n\nFiltering QDMR data\n\n"

@@ -918,7 +918,6 @@ class DROPReader(DatasetReader):
                 # Paired-question program supervision
                 paired_program_nodes.append(aux_program_node)
                 paired_program_lisps.append(aux_program_lisp)
-
                 aux_action_seq: List[str] = language.logical_form_to_action_sequence(aux_program_lisp)
                 aux_actionseq_idxs: List[int] = [action2idx_map[a] for a in aux_action_seq]
                 aux_actionseq_mask: List[int] = [1 for _ in range(len(aux_actionseq_idxs))]

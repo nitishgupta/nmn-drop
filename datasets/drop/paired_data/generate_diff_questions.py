@@ -182,7 +182,158 @@ def get_paired_questions_numdiff(qa_dict, passage_info, qgen_predictor):
     return paired_qa_dicts
 
 
-def get_paired_questions_yeardiff(qa_dict, passage_info, qgen_predictor):
+def get_strarg_paired_questions_yeardiff(qa_dict, passage_info, qgen_predictor):
+    yeardiff_lisp = "(year_difference_two_events select_passage select_passage)"
+    node = node_from_dict(qa_dict[constants.program_supervision])
+    lisp = nested_expression_to_lisp(node.get_nested_expression())
+    if lisp != yeardiff_lisp:
+        return None
+
+    select1 = node.children[0]
+    select1_arg = select1.string_arg
+    select2 = node.children[1]
+    select2_arg = select2.string_arg
+
+    if select1_arg is None or select2_arg is None:
+        return None
+
+    program_supervision_lisp = "(select_passagespan_answer (project_passage select_passage))"
+    nested_expr = lisp_to_nested_expression(program_supervision_lisp)
+    program_node: Node = nested_expression_to_tree(nested_expr)
+    aux_program_supervision = program_node.to_dict()
+
+    contrastive_question1 = select1_arg
+    contrastive_question2 = select2_arg
+    qid = qa_dict[constants.query_id]
+
+    # Contrastive Question -- 1
+    contrastive_qa_dict_1 = make_paired_qa_pair_dict(qid=qid + "-contrastive-1",
+                                                     question=contrastive_question1,
+                                                     answer_text="",
+                                                     answer_type="spans",
+                                                     program_supervision=aux_program_supervision,
+                                                     orig_program_lisp=yeardiff_lisp,
+                                                     orig_question=qa_dict[constants.question],
+                                                     origprog_postorder_node_idx=0,  # Left-select is postorder = 0
+                                                     sharedprog_postorder_node_idx=0,  # select for num(select)
+                                                     spacy_tokenizer=spacy_tokenizer)
+
+    # Contrastive Question -- 2
+    contrastive_qa_dict_2 = make_paired_qa_pair_dict(qid=qid + "-contrastive-2",
+                                                     question=contrastive_question2,
+                                                     answer_text="",
+                                                     answer_type="spans",
+                                                     program_supervision=aux_program_supervision,
+                                                     orig_program_lisp=yeardiff_lisp,
+                                                     orig_question=qa_dict[constants.question],
+                                                     origprog_postorder_node_idx=1,  # Right-select is postorder = 1
+                                                     sharedprog_postorder_node_idx=0,  # select for num(select)
+                                                     spacy_tokenizer=spacy_tokenizer)
+
+    paired_qa_dicts = [contrastive_qa_dict_1, contrastive_qa_dict_2]
+    return paired_qa_dicts
+
+
+# def get_strarg_paired_questions_yeardiff(qa_dict, passage_info, qgen_predictor):
+#     yeardiff_lisp = "(year_difference_two_events select_passage select_passage)"
+#     node = node_from_dict(qa_dict[constants.program_supervision])
+#     lisp = nested_expression_to_lisp(node.get_nested_expression())
+#     if lisp != yeardiff_lisp:
+#         return None
+#
+#     answer_dict = qa_dict[constants.answer]
+#     answer = float(answer_dict["number"])
+#     passage_date_values = passage_info[constants.passage_date_normalized_values]
+#     passage_date_objs = [Date(day=d, month=m, year=y) for (d, m, y) in passage_date_values]
+#
+#     _, yeardiff2combs = get_year_difference_candidates(passage_date_objs)
+#
+#     date1_tokenspan, date2_tokenspan = None, None
+#     if answer in yeardiff2combs and len(yeardiff2combs[answer]) == 1:
+#         date1 = yeardiff2combs[answer][0][0]
+#         date2 = yeardiff2combs[answer][0][1]
+#
+#         date1_idx = [i for i, date in enumerate(passage_date_objs) if date == date1][0]   # there should be one match
+#         date2_idx = [i for i, date in enumerate(passage_date_objs) if date == date2][0]   # there should be one match
+#
+#         # Get mention ids with this date-value
+#         men1_idxs = [i for i, entidx in enumerate(passage_info[constants.passage_date_entidx]) if entidx == date1_idx]
+#         men2_idxs = [i for i, entidx in enumerate(passage_info[constants.passage_date_entidx]) if entidx == date2_idx]
+#         date1_tokenspan, date2_tokenspan = None, None
+#         if len(men1_idxs) == 1 and len(men2_idxs) == 1:
+#             # Only proceed if single mention with that value
+#             men1_idx, men2_idx = men1_idxs[0], men2_idxs[0]
+#             # Men == ("string", (start-tokenidx, end-tokenidx _inclusive_), date_value)
+#             date1_tokenspan = passage_info[constants.passage_date_mens][men1_idx][1]
+#             date2_tokenspan = passage_info[constants.passage_date_mens][men2_idx][1]
+#
+#     if date1_tokenspan is None or date2_tokenspan is None:
+#         return None
+#
+#     passage = passage_info[constants.passage]
+#     passage_tokens = passage_info[constants.passage_tokens]
+#     passage_charidxs = passage_info[constants.passage_charidxs]
+#     qid = qa_dict[constants.query_id]
+#
+#     # Contrastive Question -- 1
+#     answer1_startchar = passage_charidxs[date1_tokenspan[0]]
+#     answer1_endchar = passage_charidxs[date1_tokenspan[1]] + len(passage_tokens[date1_tokenspan[1]])
+#     answer1_text = passage[answer1_startchar:answer1_endchar]
+#     contrastive_question1 = generate_question(qgen_predictor=qgen_predictor,
+#                                               passage=passage,
+#                                               answer_text=answer1_text,
+#                                               answer_start_charoffsets=[answer1_startchar])
+#
+#     program_supervision_lisp = "(select_passagespan_answer (project_passage select_passage))"
+#     nested_expr = lisp_to_nested_expression(program_supervision_lisp)
+#     program_node1: Node = nested_expression_to_tree(nested_expr)
+#     aux_program_supervision1 = program_node1.to_dict()
+#
+#     orig_program_lisp = yeardiff_lisp
+#
+#     contrastive_qa_dict_1 = make_paired_qa_pair_dict(qid=qid + "-contrastive-1",
+#                                                      question=contrastive_question1,
+#                                                      answer_text=answer1_text,
+#                                                      answer_type="spans",
+#                                                      program_supervision=aux_program_supervision1,
+#                                                      orig_program_lisp=orig_program_lisp,
+#                                                      orig_question=qa_dict[constants.question],
+#                                                      origprog_postorder_node_idx=0,  # Left-select is postorder = 0
+#                                                      sharedprog_postorder_node_idx=0,
+#                                                      spacy_tokenizer=spacy_tokenizer)
+#
+#     # Contrastive Question -- 2
+#     answer2_startchar = passage_charidxs[date2_tokenspan[0]]
+#     answer2_endchar = passage_charidxs[date2_tokenspan[1]] + len(passage_tokens[date2_tokenspan[1]])
+#     answer2_text = passage[answer2_startchar:answer2_endchar]
+#     contrastive_question2 = generate_question(qgen_predictor=qgen_predictor,
+#                                               passage=passage,
+#                                               answer_text=answer2_text,
+#                                               answer_start_charoffsets=[answer2_startchar])
+#
+#     program_supervision_lisp = "(select_passagespan_answer (project_passage select_passage))"
+#     nested_expr = lisp_to_nested_expression(program_supervision_lisp)
+#     program_node2: Node = nested_expression_to_tree(nested_expr)
+#     aux_program_supervision2 = program_node2.to_dict()
+#
+#     orig_program_lisp = yeardiff_lisp
+#
+#     contrastive_qa_dict_2 = make_paired_qa_pair_dict(qid=qid + "-contrastive-2",
+#                                                      question=contrastive_question2,
+#                                                      answer_text=answer2_text,
+#                                                      answer_type="spans",
+#                                                      program_supervision=aux_program_supervision2,
+#                                                      orig_program_lisp=orig_program_lisp,
+#                                                      orig_question=qa_dict[constants.question],
+#                                                      origprog_postorder_node_idx=1,     # Right-select is postorder = 1
+#                                                      sharedprog_postorder_node_idx=0,   # select for num(select)
+#                                                      spacy_tokenizer=spacy_tokenizer)
+#
+#     paired_qa_dicts = [contrastive_qa_dict_1, contrastive_qa_dict_2]
+#     return paired_qa_dicts
+
+
+def generate_paired_questions_yeardiff(qa_dict, passage_info, qgen_predictor):
     yeardiff_lisp = "(year_difference_two_events select_passage select_passage)"
     node = node_from_dict(qa_dict[constants.program_supervision])
     lisp = nested_expression_to_lisp(node.get_nested_expression())
@@ -673,15 +824,19 @@ def get_contrastive_questions(drop_dataset: Dict, qgen_model_targz: str) -> Tupl
     qtype2count = defaultdict(int)
 
     qtype2function = {
-        "numdiff": get_paired_questions_numdiff,
-        "yeardiff": get_paired_questions_yeardiff,
+        # # "projectselect_to_count": get_projectselect_to_count_paired_questions,
+        # MM
         "num_minmax": get_num_minmax_paired_questions,
         "project_minmax": get_project_minmax_paired_questions,
+        # ND
+        "numdiff": get_paired_questions_numdiff,
+        # DCYD
+        "yeardiff": generate_paired_questions_yeardiff,
+        "datecompare": get_paired_questions_datecompare,
+        # FGS
         "numminmax_to_select": get_numminmax_to_select_paired_questions,
         "projectminmax_to_select": get_projectminmax_to_select_paired_questions,
         "countselect_to_select": get_countselect_to_select_paired_questions,
-        # # "projectselect_to_count": get_projectselect_to_count_paired_questions,
-        "datecompare": get_paired_questions_datecompare,
     }
 
     print("\nPaired examples for qtypes: {}".format(qtype2function.keys()))

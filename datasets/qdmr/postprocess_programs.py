@@ -676,7 +676,7 @@ def reverse_comparenode_eventorder(qdmr_node: Node, question: str):
     return qdmr_node, change
 
 
-def get_postprocessed_dataset(dataset: Dict) -> Dict:
+def get_postprocessed_dataset(dataset: Dict, remove_filter: bool) -> Dict:
     """ Filter dataset to remove "select_passagespan_answer(select_passage)" questions.
     """
     filtered_data = {}
@@ -688,7 +688,6 @@ def get_postprocessed_dataset(dataset: Dict) -> Dict:
         "select_to_filternum": select_to_filternum,
         "add_required_minmax": add_required_minmax,
         "remove_vacuous_minmax": remove_vacuous_minmax,
-        "remove_filter_module": remove_filter_module,
         "process_project": process_project,
         "filter_to_between_filternum": filter_to_between_filternum,
         "select_to_between_filternum": select_to_between_filternum,
@@ -696,6 +695,10 @@ def get_postprocessed_dataset(dataset: Dict) -> Dict:
         "project_to_count": add_project_to_count,
         "reverse_compare_order": reverse_comparenode_eventorder,
     }
+
+    print("\nRemove filter module: {}".format(remove_filter))
+    if remove_filter:
+        qtype_to_function.update({"remove_filter_module": remove_filter_module})
 
     qtype2conversion = defaultdict(int)
 
@@ -824,7 +827,8 @@ def main(args):
         input_json = os.path.join(args.input_dir, filename)
         print(f"Input json: {input_json}")
 
-        postprocessed_dataset = get_postprocessed_dataset(dataset=read_drop_dataset(input_json))
+        postprocessed_dataset = get_postprocessed_dataset(dataset=read_drop_dataset(input_json),
+                                                          remove_filter=args.remove_filter_module)
 
         postprocessed_dataset = remove_uncompilable_programs(postprocessed_dataset)
 
@@ -842,6 +846,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_dir")
     parser.add_argument("--output_dir")
+    parser.add_argument("--remove_filter_module", action="store_true")
     args = parser.parse_args()
 
     main(args)

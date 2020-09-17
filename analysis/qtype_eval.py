@@ -38,11 +38,6 @@ def count_accuracy_distribution(pred_instances: List[NMNPredictionInstance]):
     print(countans2avgacc)
 
 
-
-
-
-
-
 def print_about_model(nmn_jsonl: str, output_file: str = None):
     qtype2lisps = OrderedDict({
         "date_compare": ["(select_passagespan_answer (compare_date_lt select_passage select_passage))",
@@ -52,25 +47,41 @@ def print_about_model(nmn_jsonl: str, output_file: str = None):
         "num_compare": ["(select_passagespan_answer (compare_num_lt select_passage select_passage))",
                         "(select_passagespan_answer (compare_num_gt select_passage select_passage))"],
         "num_minmax": ["(select_num (select_max_num select_passage))",
-                       "(select_num (select_min_num select_passage))"],
+                       "(select_num (select_min_num select_passage))",
+                       "(select_num (select_max_num (filter_passage select_passage)))",
+                       "(select_num (select_min_num (filter_passage select_passage)))"],
                        # "(select_num select_passage)"],
         "project_minmax": ["(select_passagespan_answer (project_passage (select_max_num select_passage)))",
-                           "(select_passagespan_answer (project_passage (select_min_num select_passage)))"],
+                           "(select_passagespan_answer (project_passage (select_min_num select_passage)))",
+                           "(select_passagespan_answer (project_passage (select_max_num (filter_passage select_passage))))",
+                           "(select_passagespan_answer (project_passage (select_min_num (filter_passage select_passage))))"
+                           ],
+        "minmax": ["(select_num (select_max_num select_passage))",
+                   "(select_num (select_min_num select_passage))",
+                   "(select_num (select_max_num (filter_passage select_passage)))",
+                   "(select_num (select_min_num (filter_passage select_passage)))",
+                   "(select_passagespan_answer (project_passage (select_max_num select_passage)))",
+                   "(select_passagespan_answer (project_passage (select_min_num select_passage)))",
+                   "(select_passagespan_answer (project_passage (select_max_num (filter_passage select_passage))))",
+                   "(select_passagespan_answer (project_passage (select_min_num (filter_passage select_passage))))"],
         "add_diff": ["(passagenumber_difference (select_num select_passage) (select_num select_passage))",
                      "(passagenumber_addition (select_num select_passage) (select_num select_passage))"],
-        "count": ["(aggregate_count select_passage)"]
-                  # "(aggregate_count (project_passage select_passage))"]
+        "count": ["(aggregate_count select_passage)",
+                  "(aggregate_count (filter_passage select_passage))"]
     })
 
     pred_instances: List[NMNPredictionInstance] = read_nmn_prediction_file(nmn_jsonl)
     num_q = len(pred_instances)
-    print(f"Total instances: {len(pred_instances)}")
     f1, em = avg_f1(pred_instances), avg_em(pred_instances)
     total_f1 = round_all(100.0 * f1, 1)
     total_em = round_all(100.0 * em, 1)
 
-    print(f"F1\t: {total_f1}")
-    print(f"EM\t: {total_em}")
+    metric_dict = {
+        "NMN": nmn_jsonl,
+        "NumQ": num_q,
+        "F1": total_f1,
+        "EM": total_em
+    }
 
     qtype2instances = defaultdict(list)
     for instance in pred_instances:
@@ -80,29 +91,27 @@ def print_about_model(nmn_jsonl: str, output_file: str = None):
             if pred_lisp in lisps:
                 qtype2instances[qtype].append(instance)
 
-    qtype2avgf1 = {qtype: avg_f1(instances) for qtype, instances in qtype2instances.items()}
-    # qtype2count = {qtype: len(instances) for qtype, instances in qtype2instances.items()}
-    # qtype2ratio = {qtype: float(len(instances))/num_q for qtype, instances in qtype2instances.items()}
+    qtype2avgf1 = defaultdict(float)
+    for qtype in qtype2lisps:
+        instances = qtype2instances[qtype]
+        qtype2avgf1[qtype] = round_all(100.0 * avg_f1(instances), 1)
 
+    print("--------------")
+    for key, value in metric_dict.items():
+        print(f"{key:5}\t: {value}")
+    print("--------------")
+    print()
     print("--------------")
     for qtype in qtype2lisps:
         f1 = qtype2avgf1[qtype]
-        f1 = round_all(100.0 * f1, 1)
-        print(f"{qtype}\t: {f1}")
+        print(f"{qtype:10}\t: {f1}")
     print("--------------")
 
     if output_file is not None:
         with open(output_file, 'w') as outf:
-            outf.write("NMN: {}\n".format(nmn_jsonl))
-            outf.write("NumQ: {}\n".format(num_q))
-            outf.write("F1\t: {}\n".format(total_f1))
-            outf.write("EM\t: {}\n".format(total_em))
-            outf.write("--------------\n")
-            for qtype in qtype2lisps:
-                f1 = qtype2avgf1[qtype]
-                f1 = round_all(100.0 * f1, 1)
-                outf.write(f"{qtype}\t: {f1}\n")
-            outf.write("--------------\n")
+            outf.write(json.dumps(metric_dict, indent=4))
+            outf.write("\n")
+            outf.write(json.dumps(qtype2avgf1, indent=4))
 
     count_accuracy_distribution(pred_instances)
 

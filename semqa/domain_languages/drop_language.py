@@ -226,8 +226,9 @@ class PassageNumber:
 
 
 class ComposedNumber:
-    def __init__(self, composed_number_dist, loss=0.0, debug_value=""):
+    def __init__(self, composed_number_dist, loss=0.0, debug_value="", reverse_value=None):
         self._value = composed_number_dist
+        self._reverse_value = reverse_value
         self.loss = loss
         self.debug_value = debug_value
 
@@ -1378,12 +1379,17 @@ class DropLanguage(DomainLanguage):
             number_1=passage_number_1, number_2=passage_number_2, add_sub="sub"
         )
 
+        reverese_number_difference_dist, loss, debug_value = self.number_add_sub_module(
+            number_1=passage_number_2, number_2=passage_number_1, add_sub="sub"
+        )
+
         # if self._debug:
         num_diff_output = Output(output_type="composed_numbers", values=number_difference_dist, label="num_diff")
         debug_info_dict = {"passagenumber_difference": [num_diff_output]}
         self.modules_debug_info[-1].append(debug_info_dict)
 
-        return ComposedNumber(composed_number_dist=number_difference_dist, loss=loss, debug_value=debug_value)
+        return ComposedNumber(composed_number_dist=number_difference_dist, loss=loss, debug_value=debug_value,
+                              reverse_value=reverese_number_difference_dist)
 
     @predicate
     def passagenumber_addition(

@@ -345,6 +345,7 @@ def compute_loss(
             print(program_lisp)
             continue
         """
+
         aux_language = aux_languages[i]
         sharedsub_prog_outputs: List[Dict] = aux_language.modules_debug_info[-1]
         orig_prog_outputs: List[Dict] = orig_program_outputs[batch_idx]
@@ -419,6 +420,10 @@ def get_module_output(module_outputs: Dict[str, List[Output]]) -> Tuple[str, tor
     if module_name == "select_passage":
         for output in module_outputs[module_name]:
             if output.label == "passage_attn":
+                return "passage_attn", output.values
+    elif module_name == "filter_passage":
+        for output in module_outputs[module_name]:
+            if output.label == "filtered_pattn":
                 return "passage_attn", output.values
     else:
         raise NotImplementedError

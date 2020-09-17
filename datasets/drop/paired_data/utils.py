@@ -129,7 +129,8 @@ def get_year_difference_candidates(passage_date_objs: List[Date]) -> Tuple[List[
 def make_paired_qa_pair_dict(qid: str, question: str, answer_text: str, answer_type: str,
                              program_supervision: Dict, orig_program_lisp: str, orig_question: str,
                              origprog_postorder_node_idx: int, sharedprog_postorder_node_idx: int,
-                             spacy_tokenizer: SpacyTokenizer):
+                             spacy_tokenizer: SpacyTokenizer,
+                             origprog_postorder_divnode_idx: int = -1, sharedprog_postorder_divnode_idx: int = -1):
     """Structure of DROP data:
 
     {
@@ -213,8 +214,10 @@ def make_paired_qa_pair_dict(qid: str, question: str, answer_text: str, answer_t
     extra_annotation = {
         "orig_program_lisp": orig_program_lisp,
         "orig_question": orig_question,
-        "origprog_postorder_node_idx": origprog_postorder_node_idx,  # Right-select is postorder = 0
-        "sharedprog_postorder_node_idx": sharedprog_postorder_node_idx,  # select operation for num(select)
+        "origprog_postorder_node_idx": origprog_postorder_node_idx,
+        "sharedprog_postorder_node_idx": sharedprog_postorder_node_idx,
+        "origprog_postorder_divnode_idx": origprog_postorder_divnode_idx,   # These divnodes are added later; output
+        "sharedprog_postorder_divnode_idx": sharedprog_postorder_divnode_idx,   # should be different for these nodes
     }
     qa_pair_dict.update(extra_annotation)
 

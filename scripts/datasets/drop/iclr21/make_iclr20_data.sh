@@ -2,9 +2,9 @@
 
 PREPROCESS_DIR=/shared/nitishg/data/drop/preprocess
 
-ICLR_SUBDATA=/shared/nitishg/data/drop/iclr21/iclr20_subsets-v3
+ICLR_SUBDATA=/shared/nitishg/data/drop/iclr21/iclr20_subsets-v4
 
-FULL_DATA_DIRNAME=iclr20_full-v3
+FULL_DATA_DIRNAME=iclr20_full-v4
 
 ICLR21_DATA_DIR=/shared/nitishg/data/drop/iclr21
 
@@ -81,10 +81,16 @@ rm -rf ${ICLR_SUBDATA}/temp2
 rm -rf ${ICLR_SUBDATA}/temp3
 rm -rf ${ICLR_SUBDATA}/temp4
 
-python -m datasets.drop.preprocess.postprocess --input_dir ${ICLR_SUBDATA}/drop_iclr_full_pre \
-                                               --output_dir ${ICLR_SUBDATA}/${FULL_DATA_DIRNAME}
+#### FOR NO FILTER  ######
+#python -m datasets.drop.preprocess.postprocess --input_dir ${ICLR_SUBDATA}/drop_iclr_full_pre \
+#                                               --output_dir ${ICLR_SUBDATA}/${FULL_DATA_DIRNAME}
+#
+#rm -rf ${ICLR_SUBDATA}/drop_iclr_full_pre
+#### END - FOR NO FILTER  ######
 
-rm -rf ${ICLR_SUBDATA}/drop_iclr_full_pre
+#### FOR FILTER  ######
+mv ${ICLR_SUBDATA}/drop_iclr_full_pre ${ICLR_SUBDATA}/${FULL_DATA_DIRNAME}
+#### END - FOR FILTER  ######
 
 # Copying final dataset to the outside directory
 cp -r ${ICLR_SUBDATA}/${FULL_DATA_DIRNAME} ${ICLR21_DATA_DIR}

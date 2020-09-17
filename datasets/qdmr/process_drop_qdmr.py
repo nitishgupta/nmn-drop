@@ -415,7 +415,7 @@ def main(args):
     pruned_drop_data = prune_dropdata_wprograms(drop_data, drop_passageid2qid2program)
 
     print("\nStarting post-processing to correct programs")
-    postprocessed_dataset = get_postprocessed_dataset(pruned_drop_data)
+    postprocessed_dataset = get_postprocessed_dataset(pruned_drop_data, remove_filter=args.remove_filter_module)
     postprocessed_dataset = remove_uncompilable_programs(postprocessed_dataset)
     postprocessed_dataset = update_question_attention(postprocessed_dataset)
 
@@ -434,6 +434,7 @@ if __name__ == "__main__":
     parser.add_argument("--qdmr_json")
     parser.add_argument("--drop_json")
     parser.add_argument("--output_json")
+    parser.add_argument("--remove_filter_module", action="store_true")
     args = parser.parse_args()
 
     main(args)

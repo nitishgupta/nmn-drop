@@ -2,7 +2,7 @@
 
 Working dir: `/shared/nitishg/data/drop/iclr21`
 
-### ICLR 20 DROP data-subset
+## ICLR 20 DROP data-subset
 `make_iclr20_data.sh` -- This should make directory `iclr20_full` with drop-subset used in iclr20 paper 
 (w/ execution supervision for date-compare and HMYW).
 
@@ -25,7 +25,11 @@ Number of input passages: 396
 Number of input questions: 1841
 ``` 
 
-### QDMR data
+#### ICLR20 w/ Filter
+In the `make_iclr20_data.sh` comment the `postprocessing`
+
+
+## QDMR data
 `make_qdmr_data.sh` -- outputs `qdmr-v1` directory with qdmr-drop data (w/ execution supervision)
 
 ```
@@ -36,9 +40,21 @@ Total num paras: 2756  questions:4762
 
 Dev:
 Total num paras: 229  questions:773
+
+v4 - w/ Filter
+Train:
+Total num paras: 2783  questions:4819
+Dev:
+Total num paras: 232  questions:782
 ```
 
-### Split and Merge
+#### QDMR w/ Filter
+Don't use Filter module from QDMR annotations, it's quite noisy. Use the `--remove_filter_module` arg in 
+`process_drop_qdmr.py`.
+
+After that step, use `datasets.drop.iclr21.add_filter` to add filter. Only adds in about 120ish examples though.
+
+## Split and Merge -- iclr_qdmr-v#
 `split_and_merge.sh` -- 
 1. Splits iclr20 and qdmr train data into train/dev and convert dev into test.
 2. Merge these into `iclr_qdmr-v1` dataset
@@ -68,20 +84,52 @@ iclr_qdmr-v2 merged data:
 Train: passages: 4237 questions: 18283  {'program_supervision': 18283, 'execution_supervised': 2546}
 Dev:   passages: 771  questions: 2427   {'program_supervision': 2427, 'execution_supervised': 360}
 Test:  passages: 446  questions: 2447   {'program_supervision': 2447, 'execution_supervised': 274}
+
+iclr_qdmr-v2 w/o filter merged data:
+Train: passages: 4241 questions: 18299  {'program_supervision': 18299, 'execution_supervised': 2554}
+Dev:   passages: 779  questions: 2460   {'program_supervision': 2460, 'execution_supervised': 348}
+Test:  passages: 447  questions: 2456   {'program_supervision': 2456, 'execution_supervised': 274}
 ```
 
 ## Compositional split
 
-### Complex diff split
+#### Complex diff split
 ```
 python -m datasets.compositional_split.complexdiff_qsplit \
     --input_dir /shared/nitishg/data/drop/iclr21/iclr_qdmr-v3-noexc \
     --output_dir /shared/nitishg/data/drop/iclr21/diff_compsplit-v3
 ```
 
-**Paired Data**
+#### Filter split
+```
+python -m datasets.compositional_split.filter_qsplit \
+    --input_dir /shared/nitishg/data/drop/iclr21/iclr_qdmr-v4-noexc
+    --output_dir /shared/nitishg/data/drop/iclr21/filter_compsplit-v4
+```
+
+
+## Paired Data
+Two scripts, `datasets.drop.paired_data.generate_diff_questions` and `generate_diff_questions_filter`.
+
+The question-types for which paired data needs to be generated is set manually in a dictionary in script.
+Need to figure out a better way for this
+
 ```
  python -m datasets.drop.paired_data.generate_diff_questions \
     --input_json /shared/nitishg/data/drop/iclr21/diff_compsplit-v3/drop_dataset_train.json \
     --output_json /shared/nitishg/data/drop/iclr21/diff_compsplit-v3/drop_dataset_train-FGS-DCYD-ND.json
+```
+
+## Faithful Annotations
+Two scripts, to handle filter or not. 
+
+The DROP subset being used should contain questions annotated in ACL (drop-dev-set).
+
+Since in ICLR21 splits, we've made the drop-dev as test set, we're using that for `drop_input_json`. 
+Be careful of the version being used, w/ filter or w/o filter.
+```
+python -m datasets.drop.faithful.convert_acl_annotations_filter \
+    --acl_json /shared/nitishg/data/drop/iclr21/faithful/acl_faithful_annotations.json \
+    --drop_input_json /shared/nitishg/data/drop/iclr21/iclr_qdmr-v4-noexc/drop_dataset_test.json \
+    --output_json /shared/nitishg/data/drop/iclr21/faithful/iclr21_filter_faithful.json
 ```

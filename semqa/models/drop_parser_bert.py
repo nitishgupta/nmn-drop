@@ -1009,6 +1009,12 @@ class DROPParserBERT(DROPParserBase):
                         )
                         predicted_answer = str(predicted_passage_number)
                     elif progtype == "ComposedNumber":
+                        def print_val(probs, numbers):
+                            idxx = torch.argmax(probs).detach().cpu().numpy()
+                            prob = probs[idxx]
+                            pred_ans = numbers[idxx]
+                            return prob, pred_ans
+
                         predicted_composednum_idx = torch.argmax(denotation._value).detach().cpu().numpy()
                         predicted_composed_number = instance_composed_numbers[predicted_composednum_idx]  # int/float
                         predicted_composed_number = (
@@ -1017,6 +1023,34 @@ class DROPParserBERT(DROPParserBase):
                             else predicted_composed_number
                         )
                         predicted_answer = str(predicted_composed_number)
+                        prob, pred_ans = print_val(denotation._value, instance_composed_numbers)
+                        ex0prob, ex0ans = print_val(denotation._value[1:], instance_composed_numbers[1:])
+                        predicted_composed_number = ex0ans
+                        if denotation._reverse_value is not None:
+                            rev_ex0prob, rev_ex0ans = print_val(denotation._reverse_value[1:],
+                                                                instance_composed_numbers[1:])
+                            if rev_ex0prob > ex0prob:
+                                predicted_composed_number = rev_ex0ans
+                        predicted_composed_number = (
+                            int(predicted_composed_number)
+                            if int(predicted_composed_number) == predicted_composed_number
+                            else predicted_composed_number
+                        )
+                        predicted_answer = str(predicted_composed_number)
+
+                        # if denotation._reverse_value is not None:
+                        #     print()
+                        #     print(metadata[i].get("answer_annotations", []))
+                        #     prob, pred_ans = print_val(denotation._value, instance_composed_numbers)
+                        #     print("prob: {}  pred ans: {}".format(prob, pred_ans))
+                        #     prob, pred_ans = print_val(denotation._value[1:], instance_composed_numbers[1:])
+                        #     print("EX-0 prob: {}  pred ans: {}".format(prob, pred_ans))
+                        #     prob, pred_ans = print_val(denotation._reverse_value, instance_composed_numbers)
+                        #     print("REV prob: {}  pred ans: {}".format(prob, pred_ans))
+                        #     prob, pred_ans = print_val(denotation._reverse_value[1:], instance_composed_numbers[1:])
+                        #     print("EX-0 REV prob: {}  pred ans: {}".format(prob, pred_ans))
+                        #     import pdb
+                        #     pdb.set_trace()
                     elif progtype == "CountNumber":
                         denotation: CountNumber = denotation
                         count_idx = torch.argmax(denotation._value).detach().cpu().numpy()
