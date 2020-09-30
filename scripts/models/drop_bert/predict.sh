@@ -13,18 +13,14 @@ export DEBUG=true
 export INTERPRET=false
 
 # SAVED MODEL
-MODEL_DIR=/shared/nitishg/checkpoints/drop-iclr21/iclr_qdmr-v4-noexc/drop_parser_bert/Qattn_true/EXCLOSS_true/aux_false/IO_true/SHRDSUB_false/SUPEPOCHS_0_BM_1/S_10
-# /shared/nitishg/checkpoints/drop-iclr21/iclr_qdmr-v4-noexc/drop_parser_bert/Qattn_true/EXCLOSS_true/aux_false/IO_true/SHRDSUB_false/SUPEPOCHS_0_BM_1/S_10/
-# /shared/nitishg/checkpoints/drop-iclr21/iclr_qdmr-v4-noexc/drop_parser_bert/Qattn_true/EXCLOSS_true/aux_false/IO_true/SHRDSUB_true/SUPEPOCHS_0_BM_1/S_10-FGS-DCYD-ND-MM
+MODEL_DIR=./resources/checkpoints/drop-iclr21/cntminmax-v4/drop_parser_bert/Qattn_true/EXCLOSS_true/aux_false/IO_true/SHRDSUB_true/SUPEPOCHS_0_BM_1/S_42-Max
 
 PREDICTION_DIR=${MODEL_DIR}/predictions
 MODEL_TAR=${MODEL_DIR}/model.tar.gz
 mkdir ${PREDICTION_DIR}
 
 DATASET_DIR=/shared/nitishg/data/drop/iclr21
-DATASET_NAME=dc-aug-test
-# minlt_zeroqsplit-v2
-# iclr_qdmr-v2-noexc
+DATASET_NAME=cntminmax-v4
 
 # train/dev/test
 SPLIT=test

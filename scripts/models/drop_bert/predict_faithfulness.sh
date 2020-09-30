@@ -12,14 +12,14 @@ export BEAMSIZE=1
 export INTERPRET=true
 
 # SAVED MODEL
-MODEL_DIR=./resources/checkpoints/drop-iclr21/iclr_qdmr-v4-noexc/drop_parser_bert/Qattn_true/EXCLOSS_true/aux_false/IO_true/SHRDSUB_false/SUPEPOCHS_0_BM_1/S_42
+MODEL_DIR=./resources/checkpoints/drop-iclr21/cntminmax-v4/drop_parser_bert/Qattn_true/EXCLOSS_true/aux_false/IO_true/SHRDSUB_true/SUPEPOCHS_0_BM_1/S_42-Max
 
 PREDICTION_DIR=${MODEL_DIR}/predictions
 MODEL_TAR=${MODEL_DIR}/model.tar.gz
 mkdir ${PREDICTION_DIR}
 
 DATASET_DIR=/shared/nitishg/data/drop/iclr21/
-DATASET_NAME=faithful
+DATASET_NAME=faithful-cntminmax
 FULL_VALFILE=${DATASET_DIR}/${DATASET_NAME}/iclr21_filter_faithful.json
 
 FAITHFUL_PREDICTOR=drop_faithfulness_predictor

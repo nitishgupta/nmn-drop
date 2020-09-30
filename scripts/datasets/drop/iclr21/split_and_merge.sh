@@ -2,10 +2,10 @@
 
 ROOT_DIR=/shared/nitishg/data/drop/iclr21
 
-ICLR20_DIR=${ROOT_DIR}/iclr20_full-v4
-QDMR_DIR=${ROOT_DIR}/qdmr-v4
+ICLR20_DIR=${ROOT_DIR}/iclr20_full-v5
+QDMR_DIR=${ROOT_DIR}/qdmr-v5
 
-MERGED_DATA=${ROOT_DIR}/iclr_qdmr-v4
+MERGED_DATA=${ROOT_DIR}/iclr_qdmr-v5
 
 MERGED_DATA_NOEXC=${MERGED_DATA}-noexc
 

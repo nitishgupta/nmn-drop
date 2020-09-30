@@ -36,57 +36,71 @@ FILTER_MODIFIERS = [
 ]
 
 
-def get_find_node(find_qattn):
+def stringarg_from_attention(attn, tokens):
+    string_arg = " ".join([x for i, x in enumerate(tokens) if attn[i] == 1])
+    return string_arg
+
+
+def get_find_node(find_qattn, question_tokens):
     find_node = Node(predicate="select_passage")
     find_node.supervision["question_attention_supervision"] = find_qattn
+    find_node.string_arg = stringarg_from_attention(find_qattn, question_tokens)
     return find_node
 
 
-def get_filter_find_node(find_qattn, filter_qattn):
+def get_filter_find_node(find_qattn, filter_qattn, question_tokens):
     find_node = Node(predicate="select_passage")
     find_node.supervision["question_attention_supervision"] = find_qattn
+    find_node.string_arg = stringarg_from_attention(find_qattn, question_tokens)
+
     filter_node = Node(predicate="filter_passage")
     filter_node.supervision["question_attention_supervision"] = filter_qattn
+    filter_node.string_arg = stringarg_from_attention(filter_qattn, question_tokens)
     filter_node.add_child(find_node)
+
     return filter_node
 
 
-def get_project_minmax_filterfind_node(min_or_max: MinMaxNum, filter: bool, find_qattn, filter_qattn, reloc_qattn):
+def get_project_minmax_filterfind_node(min_or_max: MinMaxNum, filter: bool, find_qattn, filter_qattn, reloc_qattn,
+                                       question_tokens):
     min_max_str = "min" if min_or_max == MinMaxNum.min else "max"
     min_max_node = Node(predicate="select_{}_num".format(min_max_str))
     if filter:
-        node = get_filter_find_node(find_qattn, filter_qattn)
+        node = get_filter_find_node(find_qattn, filter_qattn, question_tokens)
     else:
-        node = get_find_node(find_qattn)
+        node = get_find_node(find_qattn, question_tokens)
     min_max_node.add_child(node)
 
     project_node = Node(predicate="project_passage")
     project_node.supervision["question_attention_supervision"] = reloc_qattn
+    project_node.string_arg = stringarg_from_attention(reloc_qattn, question_tokens)
     project_node.add_child(min_max_node)
     return project_node
 
 
-def get_project_filterfind_node(filter: bool, find_qattn, filter_qattn, reloc_qattn):
+def get_project_filterfind_node(filter: bool, find_qattn, filter_qattn, reloc_qattn, question_tokens):
     if filter:
-        node = get_filter_find_node(find_qattn, filter_qattn)
+        node = get_filter_find_node(find_qattn, filter_qattn, question_tokens)
     else:
-        node = get_find_node(find_qattn)
+        node = get_find_node(find_qattn, question_tokens)
     project_node = Node(predicate="project_passage")
     project_node.supervision["question_attention_supervision"] = reloc_qattn
+    project_node.string_arg = stringarg_from_attention(reloc_qattn, question_tokens)
     project_node.add_child(node)
     return project_node
 
 
 def node_from_findfilter_maxminnum(find_or_filter: str, min_max_or_num: MinMaxNum,
-                                   find_qattn, filter_qattn, reloc_qattn) -> Node:
+                                   find_qattn, filter_qattn, reloc_qattn, question_tokens) -> Node:
     is_filter = True if find_or_filter == "filter" else False
     is_min_max = True if min_max_or_num in [MinMaxNum.min, MinMaxNum.max] else False
     min_or_max: MinMaxNum = None if not is_min_max else min_max_or_num
 
     if min_or_max is not None:
-        project_node = get_project_minmax_filterfind_node(min_or_max, is_filter, find_qattn, filter_qattn, reloc_qattn)
+        project_node = get_project_minmax_filterfind_node(min_or_max, is_filter, find_qattn, filter_qattn, reloc_qattn,
+                                                          question_tokens)
     else:
-        project_node = get_project_filterfind_node(is_filter, find_qattn, filter_qattn, reloc_qattn)
+        project_node = get_project_filterfind_node(is_filter, find_qattn, filter_qattn, reloc_qattn, question_tokens)
 
     return project_node
 
@@ -178,7 +192,7 @@ def preprocess_Relocate_ques_wattn(dataset):
                     relocate_program_qattn(tokenized_queslower=tokenized_ques.lower())
 
                 node: Node = node_from_findfilter_maxminnum(find_or_filter, min_max_or_num, find_qattn, filter_qattn,
-                                                            reloc_qattn)
+                                                            reloc_qattn, question_tokens)
                 program_node = Node(predicate="select_passagespan_answer")
                 program_node.add_child(node)
 

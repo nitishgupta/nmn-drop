@@ -167,28 +167,38 @@ def hmyw_program_qattn(tokenized_queslower: str):
     return find_or_filter, min_max_or_num, filter_qattn, find_qattn
 
 
-def get_find_node(find_qattn):
+def stringarg_from_attention(attn, tokens):
+    string_arg = " ".join([x for i, x in enumerate(tokens) if attn[i] == 1])
+    return string_arg
+
+
+def get_find_node(find_qattn, question_tokens):
     find_node = Node(predicate="select_passage")
     find_node.supervision["question_attention_supervision"] = find_qattn
+    find_node.string_arg = stringarg_from_attention(find_qattn, question_tokens)
     return find_node
 
 
-def get_filter_find_node(find_qattn, filter_qattn):
+def get_filter_find_node(find_qattn, filter_qattn, question_tokens):
     find_node = Node(predicate="select_passage")
     find_node.supervision["question_attention_supervision"] = find_qattn
+    find_node.string_arg = stringarg_from_attention(find_qattn, question_tokens)
+
     filter_node = Node(predicate="filter_passage")
     filter_node.supervision["question_attention_supervision"] = filter_qattn
+    filter_node.string_arg = stringarg_from_attention(filter_qattn, question_tokens)
     filter_node.add_child(find_node)
+
     return filter_node
 
 
-def get_num_minmax_filterfind_node(min_or_max: MinMaxNum, filter: bool, find_qattn, filter_qattn):
+def get_num_minmax_filterfind_node(min_or_max: MinMaxNum, filter: bool, find_qattn, filter_qattn, question_tokens):
     min_max_str = "min" if min_or_max == MinMaxNum.min else "max"
     min_max_node = Node(predicate="select_{}_num".format(min_max_str))
     if filter:
-        node = get_filter_find_node(find_qattn, filter_qattn)
+        node = get_filter_find_node(find_qattn, filter_qattn, question_tokens)
     else:
-        node = get_find_node(find_qattn)
+        node = get_find_node(find_qattn, question_tokens)
     min_max_node.add_child(node)
 
     select_num_node = Node(predicate="select_num")
@@ -197,26 +207,27 @@ def get_num_minmax_filterfind_node(min_or_max: MinMaxNum, filter: bool, find_qat
     return select_num_node
 
 
-def get_num_filterfind_node(filter: bool, find_qattn, filter_qattn):
+def get_num_filterfind_node(filter: bool, find_qattn, filter_qattn, question_tokens):
     if filter:
-        node = get_filter_find_node(find_qattn, filter_qattn)
+        node = get_filter_find_node(find_qattn, filter_qattn, question_tokens)
     else:
-        node = get_find_node(find_qattn)
+        node = get_find_node(find_qattn, question_tokens)
     select_num_node = Node(predicate="select_num")
     select_num_node.add_child(node)
     return select_num_node
 
 
 def node_from_findfilter_maxminnum(find_or_filter: str, min_max_or_num: MinMaxNum,
-                                   find_qattn, filter_qattn) -> Node:
+                                   find_qattn, filter_qattn, question_tokens) -> Node:
     is_filter = True if find_or_filter == "filter" else False
     is_min_max = True if min_max_or_num in [MinMaxNum.min, MinMaxNum.max] else False
     min_or_max: MinMaxNum = None if not is_min_max else min_max_or_num
 
     if min_or_max is not None:
-        select_num_node = get_num_minmax_filterfind_node(min_or_max, is_filter, find_qattn, filter_qattn)
+        select_num_node = get_num_minmax_filterfind_node(min_or_max, is_filter, find_qattn, filter_qattn,
+                                                         question_tokens)
     else:
-        select_num_node = get_num_filterfind_node(is_filter, find_qattn, filter_qattn)
+        select_num_node = get_num_filterfind_node(is_filter, find_qattn, filter_qattn, question_tokens)
 
     return select_num_node
 
@@ -283,7 +294,7 @@ def preprocess_HowManyYardsWasThe_ques(dataset):
                 (find_or_filter, min_max_or_num, filter_qattn, find_qattn) = hmyw_program_qattn(tokenizedques_lower)
 
                 program_node: Node = node_from_findfilter_maxminnum(find_or_filter, min_max_or_num,
-                                                                    find_qattn, filter_qattn)
+                                                                    find_qattn, filter_qattn, question_tokens)
                 qtype = str(min_max_or_num) + "_" + find_or_filter
                 qtype_dist[qtype] += 1
 

@@ -85,7 +85,7 @@ Train: passages: 4237 questions: 18283  {'program_supervision': 18283, 'executio
 Dev:   passages: 771  questions: 2427   {'program_supervision': 2427, 'execution_supervised': 360}
 Test:  passages: 446  questions: 2447   {'program_supervision': 2447, 'execution_supervised': 274}
 
-iclr_qdmr-v2 w/o filter merged data:
+iclr_qdmr-v4 w/ filter merged data:
 Train: passages: 4241 questions: 18299  {'program_supervision': 18299, 'execution_supervised': 2554}
 Dev:   passages: 779  questions: 2460   {'program_supervision': 2460, 'execution_supervised': 348}
 Test:  passages: 447  questions: 2456   {'program_supervision': 2456, 'execution_supervised': 274}
@@ -103,22 +103,76 @@ python -m datasets.compositional_split.complexdiff_qsplit \
 #### Filter split
 ```
 python -m datasets.compositional_split.filter_qsplit \
-    --input_dir /shared/nitishg/data/drop/iclr21/iclr_qdmr-v4-noexc
+    --input_dir /shared/nitishg/data/drop/iclr21/iclr_qdmr-v4-noexc \
     --output_dir /shared/nitishg/data/drop/iclr21/filter_compsplit-v4
 ```
 
 
-## Paired Data
+## Paired Data - Constructed
 Two scripts, `datasets.drop.paired_data.generate_diff_questions` and `generate_diff_questions_filter`.
 
 The question-types for which paired data needs to be generated is set manually in a dictionary in script.
 Need to figure out a better way for this
 
 ```
- python -m datasets.drop.paired_data.generate_diff_questions \
+python -m datasets.drop.paired_data.generate_diff_questions_filter \
     --input_json /shared/nitishg/data/drop/iclr21/diff_compsplit-v3/drop_dataset_train.json \
     --output_json /shared/nitishg/data/drop/iclr21/diff_compsplit-v3/drop_dataset_train-FGS-DCYD-ND.json
 ```
+
+## Paired Data - Discovered
+Find select-nodes within a single passage's questions that match enough (using bert-score and ner-match).
+Add best matching select-node, above a threshold, as paired example. 
+
+```
+python -m datasets.drop.paired_data.discover_paired_examples \
+    --input_json /shared/nitishg/data/drop/iclr21/iclr_qdmr-v4-noexc/drop_dataset_train.json \
+    --strpair_f1_tsv /shared/nitishg/data/drop/iclr21/iclr_qdmr-v4-noexc/strpair2f1.tsv \
+    --output_json /shared/nitishg/data/drop/iclr21/iclr_qdmr-v4-noexc/drop_dataset_train-FOUND-07.json
+```
+
+## Paired Data - Model-generated
+First generate augmented num-date questions for non-football passages
+```
+python -m datasets.drop.data_augmentation.generate_numdate_questions \
+    --input_json /shared/nitishg/data/drop/iclr21/iclr_qdmr-v4-noexc/drop_dataset_train.json \
+    --output_json /shared/nitishg/data/drop/iclr21/iclr_qdmr-v4-noexc/numdate_aug.json
+```
+
+Find paired examples for DROP questions from augmented questions
+```
+python -m datasets.drop.paired_data.modelgen_paired_examples \
+    --drop_json /shared/nitishg/data/drop/iclr21/iclr_qdmr-v4-noexc/drop_dataset_train.json 
+    --aug_json /shared/nitishg/data/drop/iclr21/iclr_qdmr-v4-noexc/numdate_aug.json \
+    --strpair_f1_tsv /shared/nitishg/data/drop/iclr21/iclr_qdmr-v4-noexc/numdate-aug-strpair2f1.tsv \
+    --output_json /shared/nitishg/data/drop/iclr21/iclr_qdmr-v4-noexc/drop_dataset_train-MODGEN-06.json
+```
+ 
+
+### Paired data - merge
+Merging two kinds of paired data `drop_dataset_train.json`
+```
+python -m datasets.drop.paired_data.merge_datasets \
+    --input_json1 /shared/nitishg/data/drop/iclr21/iclr_qdmr-v4-noexc/drop_dataset_train-FGS-DCYD-ND-MM-v2.json \
+    --input_json2 /shared/nitishg/data/drop/iclr21/iclr_qdmr-v4-noexc/drop_dataset_train-FOUND-06.json \
+    --output_json /shared/nitishg/data/drop/iclr21/iclr_qdmr-v4-noexc/drop_dataset_train-CONS-FOUND-06.json
+
+python -m datasets.drop.paired_data.merge_datasets \
+    --input_json1 /shared/nitishg/data/drop/iclr21/iclr_qdmr-v4-noexc/drop_dataset_train-FGS-DCYD-ND-MM-v2.json \
+    --input_json2 /shared/nitishg/data/drop/iclr21/iclr_qdmr-v4-noexc/drop_dataset_train-MODGEN-06.json \
+    --output_json /shared/nitishg/data/drop/iclr21/iclr_qdmr-v4-noexc/drop_dataset_train-CONS-MODGEN-06.json
+
+python -m datasets.drop.paired_data.merge_datasets \
+    --input_json1 /shared/nitishg/data/drop/iclr21/iclr_qdmr-v4-noexc/drop_dataset_train-FOUND-06.json \
+    --input_json2 /shared/nitishg/data/drop/iclr21/iclr_qdmr-v4-noexc/drop_dataset_train-MODGEN-06.json \
+    --output_json /shared/nitishg/data/drop/iclr21/iclr_qdmr-v4-noexc/drop_dataset_train-FOUND-MODGEN-06.json
+
+python -m datasets.drop.paired_data.merge_datasets \
+    --input_json1 /shared/nitishg/data/drop/iclr21/iclr_qdmr-v4-noexc/drop_dataset_train-CONS-MODGEN-06.json \
+    --input_json2 /shared/nitishg/data/drop/iclr21/iclr_qdmr-v4-noexc/drop_dataset_train-FOUND-06.json \
+    --output_json /shared/nitishg/data/drop/iclr21/iclr_qdmr-v4-noexc/drop_dataset_train-CONS-MODGEN-FOUND-06.json
+```
+
 
 ## Faithful Annotations
 Two scripts, to handle filter or not. 

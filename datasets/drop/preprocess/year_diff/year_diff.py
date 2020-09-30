@@ -43,6 +43,59 @@ def is_single_event_yeardiff_question(question_lower: str):
 
     return single_event_ques
 
+COUNTS_DICT = defaultdict(int)
+def get_two_diff_string_args(question, question_tokens):
+    global COUNTS_DICT
+    COUNTS_DICT["total"] += 1
+    if "How many years passed between" in question:
+        pruned_question = question.replace("How many years passed between ", "")
+        # How many years passed between Event1 and Event2?
+        events = pruned_question.split(" and ")
+        if len(events) != 2:
+            return None
+        event1, event2 = events[1][:-1], events[0]      # removing ? from events[1]
+        COUNTS_DICT["passed between"] += 1
+        return [event1, event2]
+    elif "How many years after" in question:
+        pruned_question = question.replace("How many years after ", "")
+        # How many years after Event1 did Event2?
+        events = pruned_question.split(" did ")
+        if len(events) == 2:
+            event1, event2 = events[1][:-1], events[0]  # removing ? from events[1]
+            COUNTS_DICT["How many years after"] += 1
+            return [event1, event2]
+        else:
+            # How many years after Event1 was Event2?
+            events = pruned_question.split(" was ")
+            if len(events) == 2:
+                event1, event2 = events[1][:-1], events[0]  # removing ? from events[1]
+                COUNTS_DICT["How many years after"] += 1
+                return [event1, event2]
+            else:
+                return None
+    elif "How many years was it between" in question:
+        pruned_question = question.replace("How many years was it between ", "")
+        # How many years was it between Event1 and Event2?
+        events = pruned_question.split(" and ")
+        if len(events) != 2:
+            return None
+        event1, event2 = events[1][:-1], events[0]  # removing ? from events[1]
+        COUNTS_DICT["years was it between"] += 1
+        return [event1, event2]
+
+    elif "How many years was it from " in question:
+        pruned_question = question.replace("How many years was it from ", "")
+        # How many years was it between Event1 and Event2?
+        events = pruned_question.split(" and ")
+        if len(events) != 2:
+            return None
+        event1, event2 = events[1][:-1], events[0]  # removing ? from events[1]
+        COUNTS_DICT["years was it from"] += 1
+        return [event1, event2]
+    else:
+        return None
+
+
 
 def program_supervision_node(is_single_event_ques: bool) -> Node:
     year_two_diff_lisp = "(year_difference_two_events select_passage select_passage)"
@@ -75,11 +128,20 @@ def prune_YearDiffQues(dataset):
             total_ques += 1
 
             question = question_answer[constants.question]
+            question_tokens = question_answer[constants.question_tokens]
             question_lower = question.lower()
 
             if any(span in question_lower for span in YEAR_DIFF_NGRAMS):
                 single_event_ques: bool = is_single_event_yeardiff_question(question_lower)
                 program_node = program_supervision_node(single_event_ques)
+                if not single_event_ques:
+                    events = get_two_diff_string_args(question, question_tokens)
+                    if events is not None:
+                        string_arg1, string_arg2 = events
+                        # Adding Left select and right select string args
+                        program_node.children[0].string_arg = string_arg1
+                        program_node.children[1].string_arg = string_arg2
+
                 question_answer[constants.program_supervision] = program_node.to_dict()
 
                 new_qa_pairs.append(question_answer)
@@ -93,6 +155,7 @@ def prune_YearDiffQues(dataset):
     print(f"Passages original:{num_passages}  After Pruning:{num_passages_after_prune}")
     print(f"Questions original:{total_ques}  After pruning:{after_pruning_ques}")
     print(f"Qtype dict: {qtype_dist}")
+    print(COUNTS_DICT)
 
     return new_dataset
 

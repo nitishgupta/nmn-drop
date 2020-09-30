@@ -157,11 +157,11 @@ def get_date_questions(passage_id: str, passage_info: Dict, max_num_ques: int,
     return aux_qa_dicts
 
 
-def get_contrastive_questions(drop_dataset: Dict, qgen_model_targz: str, max_num_ques: int = 3) -> Tuple[Dict, Dict]:
+def get_augmentation_questions(drop_dataset: Dict, qgen_model_targz: str, max_num_ques: int = 10) -> Tuple[Dict, Dict]:
     # BART based question generator trained on SQuAD
     # qgen_predictor = None
     qgen_predictor: QuestionGenerationPredictor = get_question_generation_predictor(qgen_model_targz)
-    total_questions = 0
+    football_events = ["touchdown", "field goal", "interception"]
 
     qtype2count = defaultdict(int)
 
@@ -184,7 +184,9 @@ def get_contrastive_questions(drop_dataset: Dict, qgen_model_targz: str, max_num
         if passages_done % 100 == 0:
             print("passages_done: {}".format(passages_done))
 
-        if "history" not in passage_id:
+        # Filter football passages based on nfl passage_id is not foolproof
+        passage_text = passage_info[constants.passage]
+        if any([x in passage_text for x in football_events]):
             continue
 
         aux_qa_dicts = []
@@ -226,7 +228,7 @@ def main(args):
     print(f"Reading dataset: {input_json}")
     input_dataset = read_drop_dataset(input_json)
 
-    output_dataset, stats_dict = get_contrastive_questions(input_dataset, qgen_model_targz)
+    output_dataset, stats_dict = get_augmentation_questions(input_dataset, qgen_model_targz)
     output_json = args.output_json
 
     output_dir, output_filename = os.path.split(output_json)

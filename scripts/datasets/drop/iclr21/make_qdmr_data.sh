@@ -3,11 +3,11 @@
 DROP_PREPROCESS=/shared/nitishg/data/drop/preprocess
 QDMR_DROP_DIR=/shared/nitishg/data/drop/qdmr-processed/drop-programs
 
-QDMR_SUBSET_DIR=/shared/nitishg/data/drop/iclr21/qdmr_subsets-v4
+QDMR_SUBSET_DIR=/shared/nitishg/data/drop/iclr21/qdmr_subsets-v5
 
 QDMR_OUTPUT_DIR=/shared/nitishg/data/drop/iclr21
 
-QDMR_DATASET_DIRNAME=qdmr-v4
+QDMR_DATASET_DIRNAME=qdmr-v5
 
 python -m datasets.qdmr.process_drop_qdmr \
     --qdmr_json ${QDMR_DROP_DIR}/train.json \

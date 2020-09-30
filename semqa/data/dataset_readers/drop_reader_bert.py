@@ -834,6 +834,7 @@ class DROPReader(DatasetReader):
             paired_program_lisp: Union[None, List[List[str]]] = None,   # Lisp repr. for paired programs
             paired_orig_program_lisp: Union[None, List[str]] = None,    # Listp repr. for original ques' program
             orig_paired_postorder_sharednode_idx: Union[List[List[Tuple[int, int]]], None] = None,
+            orig_paired_postorder_divnode_idx: Union[List[List[Tuple[int, int]]], None] = None,
             """
             num_paired_examples = 0
             qp_textfields: List[TextField] = []
@@ -846,6 +847,7 @@ class DROPReader(DatasetReader):
             paired_action_seqs = []
             aux_function2actionidx_maps = []
             orig_paired_postorder_sharednode_idxs = []
+            orig_paired_postorder_divnode_idxs = []
             paired_example_masks = []
             for paired_qa_dict in shared_substructure_annotations:
                 aux_question: str = paired_qa_dict[constants.question]
@@ -856,6 +858,8 @@ class DROPReader(DatasetReader):
                 orig_program_lisp: str = paired_qa_dict["orig_program_lisp"]
                 origprog_postorder_node_idx: int = paired_qa_dict["origprog_postorder_node_idx"]
                 sharedprog_postorder_node_idx: int = paired_qa_dict["sharedprog_postorder_node_idx"]
+                origprog_postorder_divnode_idx: int = paired_qa_dict.get("origprog_postorder_divnode_idx", -1)
+                sharedprog_postorder_divnode_idx: int = paired_qa_dict.get("sharedprog_postorder_divnode_idx", -1)
 
                 # Paired question tokenization and processing
                 aux_question_wps, aux_q_tokenidx2wpidx, aux_q_wpidx2tokenidx = tokenize_bert(self._tokenizer,
@@ -931,6 +935,8 @@ class DROPReader(DatasetReader):
                 fields["paired_orig_program_lisp"] = MetadataField(orig_program_lisp)
                 orig_paired_postorder_sharednode_idxs.append((origprog_postorder_node_idx,
                                                               sharedprog_postorder_node_idx))
+                orig_paired_postorder_divnode_idxs.append((origprog_postorder_divnode_idx,
+                                                           sharedprog_postorder_divnode_idx))
                 paired_example_masks.append(1)
                 self.num_w_ss += 1
 
@@ -945,6 +951,7 @@ class DROPReader(DatasetReader):
             fields["paired_action_seqs"] = MetadataField(paired_action_seqs)
             fields["paired_function2actionidx_maps"] = MetadataField(aux_function2actionidx_maps)
             fields["orig_paired_postorder_sharednode_idx"] = MetadataField(orig_paired_postorder_sharednode_idxs)
+            fields["orig_paired_postorder_divnode_idx"] = MetadataField(orig_paired_postorder_divnode_idxs)
             fields["paired_example_mask"] = ArrayField(np.array(paired_example_masks), padding_value=0)
 
         # elif not self.shared_substructure:
@@ -994,6 +1001,7 @@ class DROPReader(DatasetReader):
             fields["paired_function2actionidx_maps"] = MetadataField([None])
             fields["paired_orig_program_lisp"] = MetadataField(None)
             fields["orig_paired_postorder_sharednode_idx"] = MetadataField([(-1, -1)])
+            fields["orig_paired_postorder_divnode_idx"] = MetadataField([(-1, -1)])
             fields["paired_example_mask"] = ArrayField(np.array([0]), padding_value=0)
         # else:
         #     return None

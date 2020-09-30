@@ -2,9 +2,9 @@
 
 PREPROCESS_DIR=/shared/nitishg/data/drop/preprocess
 
-ICLR_SUBDATA=/shared/nitishg/data/drop/iclr21/iclr20_subsets-v4
+ICLR_SUBDATA=/shared/nitishg/data/drop/iclr21/iclr20_subsets-v5
 
-FULL_DATA_DIRNAME=iclr20_full-v4
+FULL_DATA_DIRNAME=iclr20_full-v5
 
 ICLR21_DATA_DIR=/shared/nitishg/data/drop/iclr21
 
@@ -84,7 +84,6 @@ rm -rf ${ICLR_SUBDATA}/temp4
 #### FOR NO FILTER  ######
 #python -m datasets.drop.preprocess.postprocess --input_dir ${ICLR_SUBDATA}/drop_iclr_full_pre \
 #                                               --output_dir ${ICLR_SUBDATA}/${FULL_DATA_DIRNAME}
-#
 #rm -rf ${ICLR_SUBDATA}/drop_iclr_full_pre
 #### END - FOR NO FILTER  ######
 

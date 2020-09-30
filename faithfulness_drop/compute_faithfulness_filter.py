@@ -579,7 +579,10 @@ def compute_faithfulness_score(nmn_predictions: List[NMNPredictionInstance], fai
     AVG_MODULE_FAITHFULNESS_LOSS = {}
     for module_name, module_loss in MODULEWISE_INTERPRETABILITY.items():
         module_count = MODULEWISE_COUNT[module_name]
-        avg_module_loss = module_loss / module_count
+        if module_count > 0:
+            avg_module_loss = module_loss / module_count
+        else:
+            avg_module_loss = 0
         AVG_MODULE_FAITHFULNESS_LOSS[module_name] = avg_module_loss
 
     AVG_MODULE_FAITHFULNESS_LOSS = round_all(AVG_MODULE_FAITHFULNESS_LOSS, 1)

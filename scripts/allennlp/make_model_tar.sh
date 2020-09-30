@@ -1,6 +1,6 @@
 #!/usr/bin/env
 
-SERIALIZATION_DIR=./resources/checkpoints/drop-iclr21/filter_compsplit-v4/drop_parser_bert/Qattn_true/EXCLOSS_true/aux_false/IO_true/SHRDSUB_true/SUPEPOCHS_0_BM_1/S_10-FGS-DCYD-ND
+SERIALIZATION_DIR=./resources/checkpoints/drop-iclr21/iclr_qdmr-v4-noexc/drop_parser_bert/Qattn_true/EXCLOSS_true/aux_false/IO_true/SHRDSUB_true/SUPEPOCHS_0_BM_1/S_10-CONS-FOUND-06
 WEIGHTS_TH=best.th
 
 MODEL_ARCHIVE=${SERIALIZATION_DIR}/model.tar.gz

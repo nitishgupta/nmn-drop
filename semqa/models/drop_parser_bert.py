@@ -305,6 +305,7 @@ class DROPParserBERT(DROPParserBase):
         paired_program_lisp: Union[None, List[List[str]]] = None,  # Lisp repr. for paired programs
         paired_orig_program_lisp: Union[None, List[str]] = None,  # Listp repr. for original ques' program
         orig_paired_postorder_sharednode_idx: Union[List[List[Tuple[int, int]]], None] = None,
+        orig_paired_postorder_divnode_idx: Union[List[List[Tuple[int, int]]], None] = None,
     ) -> Dict[str, torch.Tensor]:
 
         if self.training:
@@ -727,6 +728,7 @@ class DROPParserBERT(DROPParserBase):
                 paired_program_lisp=paired_program_lisp,
                 paired_orig_program_lisp=paired_orig_program_lisp,
                 orig_paired_postorder_sharednode_idx=orig_paired_postorder_sharednode_idx,
+                orig_paired_postorder_divnode_idx=orig_paired_postorder_divnode_idx,
                 paired_action_seqs=paired_action_seqs,
                 paired_passage_span_answer=paired_passage_span_answer,
                 paired_passage_span_answer_mask=paired_passage_span_answer_mask,

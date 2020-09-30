@@ -42,6 +42,7 @@ def compute_loss(
         paired_program_lisp: List[List[Optional[str]]],
         paired_orig_program_lisp: List[Optional[str]],
         orig_paired_postorder_sharednode_idx: List[Union[List[Tuple[int, int]], None]],
+        orig_paired_postorder_divnode_idx: List[Union[List[Tuple[int, int]], None]],
         paired_action_seqs,
         paired_passage_span_answer,
         paired_passage_span_answer_mask,
@@ -106,6 +107,7 @@ def compute_loss(
     flat_aux_program_nodes: List[Node] = []
     flat_aux_func2actionidx_mapping: List[List[int]] = []
     flat_orig_sharedsub_postorder_nodeidxs: List[Tuple[int, int]] = []
+    flat_orig_sharedsub_postorder_divnode_idxs: List[Tuple[int, int]] = []
     flat_aux_action_seqs = []
     flat_aux_passage_span_answer = []
     flat_aux_passage_span_answer_mask = []
@@ -132,6 +134,7 @@ def compute_loss(
             flat_aux_program_nodes.append(paired_program_nodes[bidx][i])
             flat_aux_func2actionidx_mapping.append(paired_function2actionidx_maps[bidx][i])
             flat_orig_sharedsub_postorder_nodeidxs.append(orig_paired_postorder_sharednode_idx[bidx][i])
+            flat_orig_sharedsub_postorder_divnode_idxs.append(orig_paired_postorder_divnode_idx[bidx][i])
             flat_aux_action_seqs.append(paired_action_seqs[bidx][i])
             flat_aux_passage_span_answer.append(paired_passage_span_answer[bidx, i, :, :].unsqueeze(0))
             flat_aux_passage_span_answer_mask.append(paired_passage_span_answer_mask[bidx, i, :].unsqueeze(0))
@@ -282,7 +285,8 @@ def compute_loss(
             log_likelihood = torch.sum(pred_count_logprobs * gold_count_dist)
             denotation_loss = -1.0 * (log_likelihood + prog_log_prob)
         else:
-            raise NotImplementedError
+            # raise NotImplementedError
+            pass
 
         paired_denotation_loss += denotation_loss
 
@@ -371,6 +375,31 @@ def compute_loss(
         # Ideally we would perform a masked_log, but due to clamping masked values are 1e-20
         paired_loss += (F.kl_div(orig_output_tensor.log(), sharedsub_output_tensor, reduction="mean") +
                  F.kl_div(sharedsub_output_tensor.log(), orig_output_tensor, reduction="mean"))
+
+        # Divergent nodes
+        orig_divnode_idx, sharedsub_divnode_idx = flat_orig_sharedsub_postorder_divnode_idxs[i]
+        if orig_divnode_idx == -1 or sharedsub_divnode_idx == -1:
+            continue
+
+        orig_output_type, orig_output_tensor = get_module_output(orig_prog_outputs[orig_divnode_idx])
+        sharedsub_output_type, sharedsub_output_tensor = get_module_output(
+            sharedsub_prog_outputs[sharedsub_divnode_idx])
+
+        if orig_output_type != sharedsub_output_type:
+            logger.warning(f"Orig output type ({orig_output_type}) is not the same as "
+                           f"sharedsub output type ({sharedsub_output_type})")
+            continue
+
+        if orig_output_tensor.size() != sharedsub_output_tensor.size():
+            # Needed when sharedsub passage get's less padding than the original
+            length = sharedsub_output_tensor.size()[0]
+            orig_output_tensor = orig_output_tensor[:length]
+
+        # We would like to maximize div-loss for these nodes
+        div_loss = -1.0 * (F.kl_div(orig_output_tensor.log(), sharedsub_output_tensor, reduction="mean") +
+                           F.kl_div(sharedsub_output_tensor.log(), orig_output_tensor, reduction="mean"))
+
+        paired_loss += div_loss
 
     return paired_loss, paired_denotation_loss
 

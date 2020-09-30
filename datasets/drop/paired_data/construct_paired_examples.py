@@ -97,12 +97,10 @@ def get_numminmaxfilter_to_paired_questions(qa_dict, passage_info, qgen_predicto
     min_lisp = "(select_num (select_min_num (filter_passage select_passage)))"
 
     orig_program_lisp = None
-    if program_lisp == min_lisp:
-        prog_type = "min"
-        orig_program_lisp = min_lisp
-    elif program_lisp == max_lisp:
+    if program_lisp == max_lisp:
         prog_type = "max"
-        orig_program_lisp = max_lisp
+    elif program_lisp == min_lisp:
+        prog_type = "min"
     else:
         prog_type = None
 
@@ -503,8 +501,8 @@ def get_contrastive_questions(drop_dataset: Dict, qgen_model_targz: str) -> Tupl
         "numminmax_to_select": get_numminmax_to_select_paired_questions,
         "projectminmaxfilter_to_select": get_projectminmaxfilter_to_paired_questions,
         "projectminmax_to_select": get_projectminmax_to_select_paired_questions,
-        "countfilterselect_to_select": get_countfilterselect_to_paired_questions,
-        "countselect_to_select": get_countselect_to_select_paired_questions,
+        # "countfilterselect_to_select": get_countfilterselect_to_paired_questions,
+        # "countselect_to_select": get_countselect_to_select_paired_questions,
         # DV - Divergent
         # "numminmaxfilter_divergent": get_numminmaxfilter_divergent_paired_questions,
         # "projectminmaxfilter_divergent": get_projectminmaxfilter_divergent_paired_questions,

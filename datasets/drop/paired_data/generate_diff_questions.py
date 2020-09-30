@@ -567,12 +567,12 @@ def get_numminmax_to_select_paired_questions(qa_dict, passage_info, qgen_predict
     min_lisp = "(select_num (select_min_num select_passage))"
 
     orig_program_lisp = None
-    if program_lisp == min_lisp:
-        prog_type = "min"
-        orig_program_lisp = min_lisp
-    elif program_lisp == max_lisp:
+    if program_lisp == max_lisp:
         prog_type = "max"
         orig_program_lisp = max_lisp
+    elif program_lisp == min_lisp:
+        prog_type = "min"
+        orig_program_lisp = min_lisp
     else:
         prog_type = None
 
