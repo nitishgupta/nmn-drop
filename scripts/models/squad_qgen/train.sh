@@ -24,7 +24,7 @@ export MASKQ=false
 export BS=6
 export BEAMSIZE=1
 
-export EPOCHS=5
+export EPOCHS=1
 
 export SEED=42
 
@@ -32,7 +32,7 @@ export SEED=42
 CHECKPOINT_ROOT=./resources/checkpoints
 SERIALIZATION_DIR_ROOT=${CHECKPOINT_ROOT}
 MODEL_DIR=squad-qgen
-SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/BS_${BS}/BEAM_${BEAMSIZE}/MASKQ_${MASKQ}/S_${SEED}_E5
+SERIALIZATION_DIR=${SERIALIZATION_DIR_ROOT}/${MODEL_DIR}/BS_${BS}/BEAM_${BEAMSIZE}/MASKQ_${MASKQ}/S_${SEED}
 
 #######################################################################################################################
 
