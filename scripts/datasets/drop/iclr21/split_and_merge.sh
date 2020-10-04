@@ -10,13 +10,13 @@ MERGED_DATA=${ROOT_DIR}/iclr_qdmr-v5
 MERGED_DATA_NOEXC=${MERGED_DATA}-noexc
 
 # Splitting ICLR20 into 90 / 10
-python -m datasets.drop.split_dev \
+python -m datasets.drop.iclr21.split_dev \
   --input_dir ${ICLR20_DIR} \
   --keeporig_dirname original \
   --dev_perc 0.1
 
 # Splitting QDMR into 85 / 15 -- since QDMR is 4762/773(15%) train/dev
-python -m datasets.drop.split_dev \
+python -m datasets.drop.iclr21.split_dev \
   --input_dir ${QDMR_DIR} \
   --keeporig_dirname original \
   --dev_perc 0.15

@@ -109,30 +109,34 @@ python -m datasets.compositional_split.filter_qsplit \
 
 
 ## Paired Data - Constructed
-Two scripts, `datasets.drop.paired_data.generate_diff_questions` and `generate_diff_questions_filter`.
+Main script -- `construct_paired_examples.py`
+Helper script contains some useful functions -- `datasets.drop.paired_data.generate_diff_questions`
 
 The question-types for which paired data needs to be generated is set manually in a dictionary in script.
 Need to figure out a better way for this
 
 ```
-python -m datasets.drop.paired_data.generate_diff_questions_filter \
-    --input_json /shared/nitishg/data/drop/iclr21/diff_compsplit-v3/drop_dataset_train.json \
-    --output_json /shared/nitishg/data/drop/iclr21/diff_compsplit-v3/drop_dataset_train-FGS-DCYD-ND.json
+python -m datasets.drop.paired_data.construct_paired_examples \
+    --input_json /shared/nitishg/data/drop/iclr21/iclr_qdmr-v4-noexc/drop_dataset_train.json \
+    --output_json /shared/nitishg/data/drop/iclr21/iclr_qdmr-v4-noexc/drop_dataset_train-CONS.json
 ```
 
-## Paired Data - Discovered
-Find select-nodes within a single passage's questions that match enough (using bert-score and ner-match).
+## Paired Data - Found within the dataset
+Find find-nodes within a single passage's questions that match enough (using bert-score and ner-match).
 Add best matching select-node, above a threshold, as paired example. 
 
 ```
 python -m datasets.drop.paired_data.discover_paired_examples \
     --input_json /shared/nitishg/data/drop/iclr21/iclr_qdmr-v4-noexc/drop_dataset_train.json \
     --strpair_f1_tsv /shared/nitishg/data/drop/iclr21/iclr_qdmr-v4-noexc/strpair2f1.tsv \
-    --output_json /shared/nitishg/data/drop/iclr21/iclr_qdmr-v4-noexc/drop_dataset_train-FOUND-07.json
+    --output_json /shared/nitishg/data/drop/iclr21/iclr_qdmr-v4-noexc/drop_dataset_train-FOUND-06.json
 ```
 
 ## Paired Data - Model-generated
 First generate augmented num-date questions for non-football passages
+
+This requires `model.tar.gz` for a pre-trained BART-based question-generation model.
+Currently this model path is hardcoded.
 ```
 python -m datasets.drop.data_augmentation.generate_numdate_questions \
     --input_json /shared/nitishg/data/drop/iclr21/iclr_qdmr-v4-noexc/drop_dataset_train.json \

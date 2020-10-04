@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
 DROP_PREPROCESS=/shared/nitishg/data/drop/preprocess
+
+# See https://github.com/nitishgupta/qdmr/blob/emnlp-20/scripts/drop-iclr21.sh for creating the below
 QDMR_DROP_DIR=/shared/nitishg/data/drop/qdmr-processed/drop-programs
 
 QDMR_SUBSET_DIR=/shared/nitishg/data/drop/iclr21/qdmr_subsets-v5
@@ -33,10 +35,6 @@ python -m datasets.qdmr.filter_dataset \
     --input_dir ${QDMR_SUBSET_DIR}/processed \
     --output_dir ${QDMR_SUBSET_DIR}/${QDMR_DATASET_DIRNAME} \
 
-#printf "\n\nPost-processing QDMR data\n"
-#python -m datasets.qdmr.postprocess_programs \
-#    --input_dir ${QDMR_SUBSET_DIR}/filtered \
-#    --output_dir ${QDMR_SUBSET_DIR}/${QDMR_DATASET_DIRNAME}
 
 printf "\n\nAdding intermediate execution supervision\n"
 # Avoid num_comparison supervision for it is noisy and hurts performance
